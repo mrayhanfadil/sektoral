@@ -28,7 +28,11 @@ INK = "#1a1a1a"
 MUT = "#555555"
 
 PAGE_NUM = ('@page{size:A4;margin:12mm 12mm 14mm}'
-            '@page{@bottom-right{content:"Halaman " counter(page);'
+            '@page{@bottom-left{content:"sektoral";'
+            'font-family:\'Poppins\',sans-serif;font-size:7pt;color:' + MUT + '}'
+            '@bottom-center{content:"Lihat pengungkapan penting di bagian akhir laporan ini";'
+            'font-family:\'Poppins\',sans-serif;font-size:7pt;color:' + MUT + '}'
+            '@bottom-right{content:"Halaman " counter(page);'
             'font-family:\'Poppins\',sans-serif;font-size:7.2pt;color:' + MUT + '}}')
 
 FONT_FACES = (
@@ -64,8 +68,6 @@ CSS = (FONT_FACES + PAGE_NUM +
        "caption{text-align:left;font-weight:700;font-size:7.8pt;color:" + NAVY + ";margin-bottom:2px;font-family:'Poppins',sans-serif}"
        ".src{font-size:6.7pt;color:" + MUT + ";margin:2px 0 6px;line-height:1.3}"
        ".page{page-break-before:always}"
-       ".foot{font-size:7pt;color:" + MUT + ";border-top:1px solid #d0d7de;margin-top:8px;"
-       "padding-top:3px;display:flex;justify-content:space-between}"
        ".small{font-size:7.5pt;color:" + MUT + "}"
        ".grid-2{display:flex;gap:12px;width:100%;margin:4px 0;box-sizing:border-box}"
        ".grid-col{flex:1 1 0;min-width:0;box-sizing:border-box}")
@@ -109,12 +111,6 @@ def _table(ex):
 
 def _kv(k, v):
     return f"<div class='kv'><span>{html.escape(k)}</span><b>{html.escape(v)}</b></div>"
-
-
-def _foot():
-    return ("<div class='foot'><span>sektoral</span>"
-            "<span>Lihat pengungkapan penting di bagian akhir laporan ini</span>"
-            "<span></span></div>")
 
 
 def _topbar(date):
@@ -221,13 +217,12 @@ def render(doc):
     h.append("</div></div>")
     by_n = {e["n"]: e for e in doc["exhibits"]}
     h.append(_table(by_n[1]))
-    h.append(_foot())
 
     for b in doc["bagian"]:
         h.append(f"<div class='page'>{_topbar(m['tanggal'])}")
         h.append(f"<h2 class='sec'>{html.escape(b['judul'])}</h2>")
         h.append(_render_page_content(b))
-        h.append(_foot() + "</div>")
+        h.append("</div>")
 
     h.append(f"<div class='page'>{_topbar(m['tanggal'])}"
              "<h2 class='sec'>Pengungkapan</h2>"
@@ -238,6 +233,6 @@ def render(doc):
              "menjamin hasil di masa depan.</p><h2 class='sec'>Catatan metodologi</h2><ul>")
     for c in doc["catatan_metodologi"]:
         h.append(f"<li class='small'>{html.escape(c)}</li>")
-    h.append("</ul>" + _foot() + "</div></body></html>")
+    h.append("</ul></div></body></html>")
     return "\n".join(h)
 
