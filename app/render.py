@@ -8,6 +8,7 @@ import base64
 import html
 from pathlib import Path
 from . import cache as cache_mod
+from . import fmt
 
 FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 
@@ -82,7 +83,7 @@ def _price_chart(ticker):
                 pts[r["date"]] = float(r["close"])
     dates = sorted(pts)
     if len(dates) < 2:
-        return "<p class='small'>[Grafik harga tidak tersedia di cache]</p>"
+        return "<p class='small'>[Grafik harga tidak tersedia — data harian kosong]</p>"
     W, H, P = 220, 85, 6
     vs = [pts[d] for d in dates]
     lo, hi = min(vs), max(vs)
@@ -90,13 +91,14 @@ def _price_chart(ticker):
     xy = [(P + i * (W - 2 * P) / (len(vs) - 1), H - P - (v - lo) / span * (H - 2 * P))
           for i, v in enumerate(vs)]
     line = " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+    d0, d1 = dates[0][:7], dates[-1][:7]
     return (f"<svg width='{W}' height='{H + 14}'><polyline points='{line}' "
             f"fill='none' stroke='{ROYAL_BLUE}' stroke-width='1.5'/>"
-            f"<text x='{P}' y='{H + 11}' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>{dates[0]}</text>"
-            f"<text x='{W - P - 52}' y='{H + 11}' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>{dates[-1]}</text>"
-            f"<text x='{P}' y='10' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>{hi:,.0f}</text></svg>"
+            f"<text x='{P}' y='{H + 11}' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>{d0}</text>"
+            f"<text x='{W - P - 52}' y='{H + 11}' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>{d1}</text>"
+            f"<text x='{P}' y='10' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>Rp{fmt.rp(round(hi))}</text></svg>"
             f"<p class='src'>Harga {html.escape(ticker)} {len(dates)} hari bursa terakhir "
-            f"di cache. Overlay IHSG tidak ditampilkan (window indeks di cache beda periode).</p>")
+            f"dari data lokal. Overlay IHSG absen (window indeks beda periode).</p>")
 
 
 def _table(ex):

@@ -3,6 +3,9 @@ import re
 
 from . import cache as cache_mod
 from . import fmt
+from . import methodnote
+from . import scrub
+from . import valtables
 
 MAX_PARA = 150
 
@@ -219,7 +222,7 @@ def build(intake, fc, va, g1):
         E("Operasional tambang", "tabel",
           {"cols": ["Metrik", f"{mo['year']} / terakhir"],
            "rows": mrows},
-          note="Source: Sectors mining endpoints, Sektoral Estimates "
+          note="Source: Sectors mining data, Sektoral Estimates "
                "(umur cadangan)")
         cup_s = (f"USD {fmt._id(cup['last'])}/ton per {cup['date']} "
                  f"(rata-rata 12 bln USD {fmt._id(cup['avg12'])})" if cup else "-")
@@ -287,6 +290,24 @@ def build(intake, fc, va, g1):
                                         for gg in (0.015, 0.025, 0.035)])
     E("Sensitivitas TP (WACC x g)", "tabel",
       {"cols": ["TP (Rp)", "g 1,5%", "g 2,5%", "g 3,5%"], "rows": sens_tp_rows})
+    for _vex in [valtables.fcff_exhibit(intake, fc, va)]:
+        E(_vex["judul"], _vex["tipe"], _vex["data"], _vex.get("catatan_sumber") or
+          "Source: Company, Sektoral Estimates")
+    _wacc = valtables.wacc_exhibit(intake, fc, va)
+    E(_wacc["judul"], _wacc["tipe"], _wacc["data"], _wacc.get("catatan_sumber") or
+      "Source: Company, Sektoral Estimates")
+    _sens5 = valtables.sens_matrix_5x3(intake, fc, va)
+    E(_sens5["judul"], _sens5["tipe"], _sens5["data"], _sens5.get("catatan_sumber") or
+      "Source: Company, Sektoral Estimates")
+    _is_bank = "bank" in ((intake.get("sub_sector") or "") + " " +
+                          (intake.get("industry") or "")).lower()
+    if _is_bank and intake.get("payout") is not None:
+        for _vex in [valtables.ddm_exhibits(
+                intake["payout"], (intake.get("roe_fwd") or 0.12),
+                (intake["annuals"][-1].get("equity") or 0) / intake["shares"],
+                va["wacc_inputs"]["re"])]:
+            E(_vex["judul"], _vex["tipe"], _vex["data"], _vex.get("catatan_sumber") or
+              "Source: Company, Sektoral Estimates")
     E("Peer", "tabel",
       {"cols": ["Peer", "PER TTM", "PBV"],
        "rows": [[c["symbol"], fmt.mult(c["pe"] or 0), fmt.mult(c["pb"] or 0)]
@@ -300,6 +321,11 @@ def build(intake, fc, va, g1):
 
     by_title = {e["judul"].split(". ", 1)[-1]: e for e in exh}
     get = by_title.get
+    drv = (f"pertumbuhan pendapatan ke Rp{fmt.miliar(f3['revenue'])} miliar dan margin "
+           f"EBITDA {fmt.pct(f3['margin'])} pada {f3['label']}")
+    lim = ("proksi Gordon + exit multiple tanpa DCF umur tambang" if mo else
+           "asumsi terminal growth dan exit multiple pada model generik")
+    xtra = methodnote.extreme_tp_lines(va["upside"], va["tp"], intake["price"], drv, lim)
     bagian = [
         {"halaman": 2, "judul": "Industri dan makro: permintaan ke depan",
          "paragraf": [p_ind1, p_ind2, p_ind3] + ([p_mine] if p_mine else []),
@@ -318,7 +344,7 @@ def build(intake, fc, va, g1):
          "exhibit": [get("Katalis"), get("Kepemilikan")]},
         {"halaman": 5, "judul": "Valuasi",
          "paragraf": [f"TP Rp{tp_s} adalah rerata Gordon Rp{fmt.rp(va['ps_gordon'])} dan "
-                      f"exit Rp{fmt.rp(va['ps_exit'])} (WACC {fmt.pct(va['wacc'])})."],
+                      f"exit Rp{fmt.rp(va['ps_exit'])} (WACC {fmt.pct(va['wacc'])})."] + xtra,
          "exhibit": [get("Ringkasan DCF"), get("Proyeksi FCFF"),
                      get("Sensitivitas TP (WACC x g)"), get("Peer")]},
         {"halaman": 6, "judul": "Laporan keuangan",
@@ -334,6 +360,7 @@ def build(intake, fc, va, g1):
         assert fmt.words(para) <= MAX_PARA, f"paragraf cover {fmt.words(para)} kata"
 
     g32 = va["g3"].get("G3.2_skala")
+    mnotes = methodnote.methodology_notes(intake, fc, va, intake.get("mineops"))
     metodo = (["Angka bersumber dari snapshot cache Sectors (salinan lokal yang bisa "
                "kedaluwarsa; pembacaan tidak memakai kuota API). Tanpa angka karangan "
                "di luar asumsi berlabel pada tabel Asumsi."]
@@ -343,7 +370,9 @@ def build(intake, fc, va, g1):
               + [f"{k}: {v[1]} (dicatat sebagai keterbatasan)"
                  for k, v in va["g3"].items()
                  if isinstance(v, tuple) and "gagal" in v[0] and k != "G3.2_skala"]
-              + va["notes"][:3])[:5]
+              + mnotes[:2]
+              + [methodnote.capex_impact_line(False, "volume penjualan dan jadwal smelter")]
+              )[:6]
     return {
         "meta": {"ticker": t, "emiten": name, "tanggal": intake["price_date"],
                  "rating": rating, "tp": va["tp"], "harga": intake["price"],
@@ -387,28 +416,36 @@ def _headline(intake, fc):
 
 
 def _katalis(intake):
-    rows, scored = [], []
+    rows = []
     for nw in intake["news"] or []:
-        title = str(nw.get("title") or "tanpa judul")
+        title = scrub.clean_title(str(nw.get("title") or ""), 90)
+        if not title:
+            continue
         txt = f"{title} {nw.get('body') or ''}".lower()
-        score = (1 if any(k in txt for k in ["revenue", "growth", "expansion", "capex",
-                                            "project", "dividend", "contract"]) else 0)
-        score += (1 if any(k in txt for k in ["guidance", "target", "forecast"]) else 0)
-        score += 1  # kebaruan: item cache terbaru
-        ts = str(nw.get("timestamp") or "")[:10] or "tanpa tanggal"
-        src_raw = str(nw.get("source") or "tak dikenal")
-        src = re.sub(r"^https?://", "", src_raw).split("/")[0][:28]
-        scored.append((score, _word_cut(title, 64), ts, src))
-    scored.sort(key=lambda x: -x[0])
-    for s, title, ts, src in scored[:5]:
-        rows.append([title, ts, f"kurasi skor {s}/9 ({src}); kaitkan ke driver "
-                                "sebelum masuk model", "Netral"])
+        if any(k in txt for k in ["revenue", "growth", "expansion", "project"]):
+            why = "terkait ekspansi dan pertumbuhan pendapatan"
+        elif "dividend" in txt:
+            why = "terkait kebijakan dividen"
+        elif "contract" in txt:
+            why = "terkait kontrak baru"
+        elif any(k in txt for k in ["guidance", "target", "forecast"]):
+            why = "terkait panduan kinerja"
+        else:
+            why = "konteks sentimen sektor"
+        ts = str(nw.get("timestamp") or "")[:10] or "-"
+        rows.append([title, ts, why, "Netral"])
+        if len(rows) >= 5:
+            break
     for c in (intake["corp_actions"] or [])[:2]:
-        if isinstance(c, dict):
-            act = _word_cut(c.get("action", c.get("type", "aksi korporasi")), 64)
-            ts = str(c.get("date") or "")[:10] or "tanpa tanggal"
-            rows.append([act, ts, "aksi korporasi tercatat", "Netral"])
-    return rows or [["Belum ada katalis terkurasi dari cache", "-", "-", "-"]]
+        if not isinstance(c, dict):
+            continue
+        act = scrub.clean_title(str(c.get("action") or c.get("type") or ""), 90)
+        if not act:
+            continue
+        ts = str(c.get("date") or "")[:10] or "-"
+        rows.append([act, ts, "tercatat di keterbukaan emiten", "Netral"])
+    rows = scrub.scrub_table_rows(rows)
+    return rows or [scrub.catalyst_fallback()]
 
 
 def _is(F, kind):
