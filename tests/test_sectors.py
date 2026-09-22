@@ -49,12 +49,12 @@ def test_hit_tanpa_network(db):
     assert r["source"] == "cache" and r["payload"] == {"data": [1]}
 
 
-def test_stale_dilayani_tanpa_key(db):
+def test_lama_tetap_dilayani_tanpa_key(db):
     seed(db, S.cache_key("/daily/AMMN/", {}), "/daily/AMMN/", {"old": 1},
          stale=True)
     cli = S.Client(key=None, db=db)
     r = cli.get("/daily/AMMN/")
-    assert r["source"] == "stale" and r["expired"] is True
+    assert r["source"] == "cache" and r["expired"] is False  # never-expired
 
 
 def test_miss_tanpa_key_gagal_keras(db):

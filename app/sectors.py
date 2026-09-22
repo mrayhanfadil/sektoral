@@ -2,8 +2,9 @@
 
 Disiplin:
 - Kunci HANYA dari env SECTORS_API_KEY (tidak pernah dari file repo, tidak pernah di-commit).
-- Cache-first: upstream hanya dipanggil saat miss/expired, kecuali refresh=True.
-- Stale dilayani dengan flag, tidak pernah diam-diam diganti default.
+- Cache-first: upstream hanya dipanggil saat MISS atau refresh=True eksplisit.
+- Cache TIDAK PERNAH expired: baris lama tetap dilayani apa adanya.
+  Kolom expires_at hanya info umur, tidak pernah memicu fetch otomatis.
 - Error upstream selalu keras (exception), tidak pernah fallback diam-diam.
 - Setiap panggilan upstream dicatat di credit_log.jsonl (bukti kredit).
 
@@ -146,25 +147,20 @@ class Client:
 
     def get(self, endpoint: str, params: dict | None = None,
             ttl: int | None = None, refresh: bool = False) -> dict:
-        """Return {payload, source: live|cache|stale, cache_key}. Error selalu keras."""
+        """Return {payload, source: live|cache, cache_key}. Error selalu keras.
+
+        Kebijakan never-expired: baris cache selalu menang kecuali
+        refresh=True eksplisit. Upstream tidak pernah dipanggil diam-diam.
+        """
         params = params or {}
         key = cache_key(endpoint, params)
         if not refresh:
             row = read_row(self.db, key)
-            if row and not row["expired"]:
+            if row:
                 self.hits += 1
                 return {"payload": row["payload"], "source": "cache",
                         "cache_key": key, "expired": False}
-            if row:  # stale dilayani, tapi tetap coba refresh bila ada key
-                if not self.key:
-                    return {"payload": row["payload"], "source": "stale",
-                            "cache_key": key, "expired": True}
-        else:
-            row = None
         payload = self._fetch_live(endpoint, params)
         write_row(self.db, key, endpoint, payload, ttl or ttl_for(endpoint))
-        out = {"payload": payload, "source": "live", "cache_key": key,
-               "expired": False}
-        if row:
-            out["stale_replaced"] = True
-        return out
+        return {"payload": payload, "source": "live", "cache_key": key,
+                "expired": False}

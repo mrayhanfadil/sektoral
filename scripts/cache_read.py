@@ -1,7 +1,8 @@
-"""Cache-only reader for data/sectors_cache.db. Local SQLite, no network, no credits.
+"""Cache reader for data/sectors_cache.db. Local SQLite, no network, no credits.
 
-Stale rows are served (expired flag reported) — matches the old
-SECTORS_STALE_OK=1 discipline. Never calls upstream.
+Kebijakan never-expired: semua baris dilayani apa adanya. Kolom expires_at
+hanya info umur (ditampilkan sebagai age), tidak pernah menandai data basi.
+Never calls upstream.
 """
 import argparse
 import json
@@ -40,8 +41,8 @@ def list_keys(endpoint, limit):
     args.append(limit)
     now = time.time()
     for r in c.execute(q, args):
-        flag = "EXPIRED" if r["expires_at"] < now else "live"
-        print(f"[{flag}] {r['cache_key']} fetched={r['fetched_at']:.0f}")
+        age_d = (now - r["fetched_at"]) / 86400
+        print(f"[age {age_d:.0f}d] {r['cache_key']} fetched={r['fetched_at']:.0f}")
 
 
 def get(key):
@@ -58,8 +59,7 @@ def get(key):
             "cache_key": key,
             "endpoint": r["endpoint"],
             "fetched_at": r["fetched_at"],
-            "expires_at": r["expires_at"],
-            "expired": r["expires_at"] < time.time(),
+            "age_days": round((time.time() - r["fetched_at"]) / 86400, 1),
             "payload": json.loads(r["payload_json"]),
         },
         indent=1,
