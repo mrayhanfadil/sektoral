@@ -1,0 +1,50 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node
+node_modules/
+dist/
+.next/
+out/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.python-version
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Build outputs
+build/
+target/
+*.o
+*.so
+
+# Secrets — must NEVER land in the repo
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials.json
+
+# Logs / runtime
+*.log
+logs/
+*.pid
+
+# Local notes
+TODO.local.md
+*.local.*
