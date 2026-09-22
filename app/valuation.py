@@ -4,6 +4,31 @@ from . import fmt
 BAND_BUY, BAND_SELL = 0.15, -0.10
 
 
+def _core(fc, shares, wacc, g, exit_mult, net_debt):
+    """Satu basis perhitungan; dipakai TP base, downside, dan grid sensitivitas."""
+    dfs = [(1 + wacc) ** (i + 0.5) for i in range(3)]
+    pv_exp = sum(r["fcf"] / d for r, d in zip(fc["rows"], dfs))
+    f_last = fc["rows"][-1]
+    tv = f_last["fcf"] * (1 + g) / (wacc - g)
+    pv_tv = tv / dfs[-1]
+    ev_g = pv_exp + pv_tv
+    ps_g = (ev_g - net_debt) / shares
+    ev_x = f_last["ebitda"] * exit_mult
+    ps_x = (ev_x - net_debt) / ((1 + wacc) ** 3 * shares)
+    return {"pv_exp": pv_exp, "pv_tv": pv_tv, "ev_g": ev_g, "ps_g": ps_g,
+            "ps_x": ps_x, "tv_share": pv_tv / ev_g, "f_last": f_last}
+
+
+def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
+    """Grid TP 3x3 (WACC±1pp × g ∈ {1,5; 2,5; 3,5}%), rerata Gordon + exit."""
+    out = {}
+    for dw in (-0.01, 0.0, 0.01):
+        for gg in (0.015, 0.025, 0.035):
+            c = _core(fc, intake["shares"], wacc + dw, gg, exit_mult, net_debt)
+            out[(round(dw, 3), gg)] = round((c["ps_g"] + c["ps_x"]) / 2 / 10) * 10
+    return out
+
+
 def build(intake, fc):
     g3, notes = {}, []
     t = intake["ticker"]
@@ -38,32 +63,19 @@ def build(intake, fc):
     if intake.get("peer_median_pe"):
         exit_basis += f"; silang cek median PER peer {intake['peer_median_pe']:.1f}x"
 
-    # --- DCF Gordon, konvensi mid-year
-    dfs = [(1 + wacc) ** (i + 0.5) for i in range(3)]
-    pv_exp = sum(r["fcf"] / d for r, d in zip(fc["rows"], dfs))
-    f_last = fc["rows"][-1]
-    tv = f_last["fcf"] * (1 + g) / (wacc - g)
-    pv_tv = tv / dfs[-1]
-    ev_g = pv_exp + pv_tv
+    # --- DCF Gordon + exit, konvensi mid-year, satu basis untuk semua TP
     net_debt = fc["base"]["debt"] - fc["base"]["cash"]
-    ps_g = (ev_g - net_debt) / intake["shares"]
-
-    # --- exit multiple
-    ev_x = f_last["ebitda"] * exit_mult
-    ps_x = (ev_x - net_debt) / ((1 + wacc) ** 3 * intake["shares"])
+    core = _core(fc, intake["shares"], wacc, g, exit_mult, net_debt)
+    pv_exp, pv_tv = core["pv_exp"], core["pv_tv"]
+    ev_g, ps_g, ps_x = core["ev_g"], core["ps_g"], core["ps_x"]
+    f_last = core["f_last"]
     tp = round((ps_g + ps_x) / 2 / 10) * 10
     upside = tp / intake["price"] - 1
     rating = "Buy" if upside > BAND_BUY else ("Sell" if upside < BAND_SELL else "Hold")
 
-    # --- downside: basis SAMA dengan TP (rerata Gordon + exit), WACC+1pp, g-1pp
-    w2 = wacc + 0.01
-    g_d = g - 0.01
-    tv2 = f_last["fcf"] * (1 + g_d) / (w2 - g_d)
-    dfs2 = [(1 + w2) ** (i + 0.5) for i in range(3)]
-    ps_g2 = ((sum(r["fcf"] / d for r, d in zip(fc["rows"], dfs2)) + tv2 / dfs2[-1])
-             - net_debt) / intake["shares"]
-    ps_x2 = (ev_x - net_debt) / ((1 + w2) ** 3 * intake["shares"])
-    tp_down = round((ps_g2 + ps_x2) / 2 / 10) * 10
+    # --- downside + grid: basis SAMA dengan TP (rerata Gordon + exit)
+    grid = tp_grid(intake, fc, wacc, g, exit_mult, net_debt)
+    tp_down = grid[(0.01, 0.015)]
 
     eq_dcf = ev_g - net_debt
     ratio = eq_dcf / intake["market_cap"]
@@ -86,5 +98,6 @@ def build(intake, fc):
             "exit_basis": exit_basis},
             "pv_explicit": pv_exp, "pv_terminal": pv_tv, "tv_share": pv_tv / ev_g,
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
-            "ps_exit": ps_x, "tp": tp, "tp_down": tp_down, "upside": upside,
+            "ps_exit": ps_x, "tp": tp, "tp_down": tp_down, "tp_grid": grid,
+            "upside": upside,
             "rating": rating, "implied": impl, "g3": g3, "notes": notes}
