@@ -136,7 +136,9 @@ def _render_page_content(b):
             res.append(f"<div class='grid-2'>"
                        f"<div class='grid-col'>{_table(exs[0])}</div>"
                        f"<div class='grid-col'>{_table(exs[1])}</div>"
-                       f"</div>")
+                       "</div>")
+            for e in exs[2:]:
+                res.append(_table(e))
         elif exs:
             for e in exs:
                 res.append(_table(e))

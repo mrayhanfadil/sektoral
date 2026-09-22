@@ -76,3 +76,20 @@ def test_mining_calls_dengan_slug():
     calls = T.mining_calls("AMMN", "pt-amman-mineral-internasional-tbk")
     eps = [e for e, _ in calls]
     assert any("performance" in e for e in eps)
+
+
+def test_mineops_ammn_dari_cache():
+    from app import mineops
+    m = mineops.load("AMMN")
+    assert m is not None
+    assert m["year"] == 2024
+    assert m["comms"]["Copper"]["prod"] == 179.1
+    assert m["comms"]["Gold"]["prod"] == 463.5
+    assert 70 < m["reserve_life_cu_yr"] < 80
+    assert m["cu_price"]["n"] >= 30 and m["au_price"]["n"] >= 30
+
+
+def test_mineops_non_tambang_none():
+    from app import mineops
+    assert mineops.load("BBCA") is None
+    assert mineops.load("ZZZZ") is None
