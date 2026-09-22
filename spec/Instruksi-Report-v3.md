@@ -206,8 +206,46 @@ Penomoran exhibit mengikuti urutan global laporan.
 - Jalur alternatif (Inverse Cost of Equity): baris Forward ROAE (mis.
   FY26F), Fair Value P/BV = (ROAE - g) / (CoE - g), BVPS forecast,
   Fair Value = Fair Value P/BV x BVPS.
+- *Exhibit Cost of Equity Components.* Via CAPM: Risk-free rate, Beta, ERP,
+  hasil Cost of Equity. Via band method (pola BBTN): CoE mean 5 tahun, SD
+  5 tahun, jumlah SD dari mean yang dipakai (mis. mean atau -0,5SD sesuai
+  view risiko), CoE yang dipakai di valuasi.
+- *Exhibit Sensitivity Analysis.* Grid Cost of Equity x Long-term Growth,
+  atau CoE x Forward ROE bila pakai Inverse CoE; isi cell = Fair Value per
+  Share.
+- Narasi: fokus ke ROE trajectory sebagai driver utama (bukan cash flow
+  generation seperti DCF), dan sustainability payout ratio ke depan
+  mengingat kebutuhan modal untuk pertumbuhan kredit/aset bank.
 
-**Opsi C — RNAV (property/resources):** menyusul (struktur dikirim terpisah).
+**Opsi C — RNAV (property/plantation/resources dengan aset dominan).**
+- *Exhibit Asset Breakdown and RNAV Bridge.* Blok 1 per-aset: nama
+  aset/proyek/tambang/landbank, ukuran (hectare cadangan ton/barrel atau
+  kapasitas produksi sesuai jenis aset), NAV per aset (DCF per proyek atau
+  appraisal independen), % kepemilikan emiten, NAV attributable (= NAV per
+  aset x % kepemilikan). Blok 2 bridge: Sum of NAV (+) Cash & Equivalents
+  (-) Total Debt (-) Corporate overhead (PV biaya korporat tak
+  teratribusi) = Total RNAV (bold) / saham beredar = RNAV per share (-)
+  Discount to RNAV (%) sebagai judgment call analis = Target Price (bold,
+  highlight) = RNAV per share x (1 - discount%).
+- *Exhibit Discount Rate per Aset.* Bila tiap aset di-DCF terpisah dengan
+  risk profile berbeda, breakdown WACC/discount rate per aset (proyek
+  matang vs development stage bisa beda signifikan).
+- *Exhibit Sensitivity Analysis.* Grid Discount to RNAV (%) x Discount
+  rate/WACC; bila driver utama harga jual per unit (komoditas/properti),
+  grid Discount to RNAV x asumsi harga per unit.
+- Narasi: besaran discount to RNAV WAJIB dijustifikasi eksplisit —
+  idealnya basis pembanding (discount historis emiten sejenis / rata-rata
+  sektor); bila tidak ada, state sebagai pure judgment assumption, jangan
+  disajikan seolah angka final berdasar.
+
+**Catatan lintas ketiga opsi:** sumber tiap komponen Risk-free rate, Beta,
+ERP wajib dicatat (INDOGB 10Y untuk Rf IDR, US Treasury untuk Rf USD bila
+functional currency emiten USD seperti GMFI, Damodaran untuk ERP, Bloomberg
+untuk Beta) agar traceable saat review internal maupun eksternal.
+**Kasus khusus E&P/PSC:** modifikasi tambahan dari Opsi A standar karena
+perpetual-growth DCF tidak defensible untuk cadangan terbatas (finite
+reserve life, prinsip established §4.1); didiskusikan terpisah bila ada
+emiten E&P yang memakai template ini.
 
 ### 4.6 GATE 3: cek kewajaran valuasi
 
