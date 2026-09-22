@@ -25,25 +25,28 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / "data" / "sectors_cache.db"
 CREDIT_LOG = ROOT / "data" / "credit_log.jsonl"
 
-# TTL per prefix, diadopsi dari sectors-hackathon server/sectors.py
+# TTL per prefix, mirror sectors-hackathon server/sectors.py (+3 endpoint baru
+# yang kita pakai). Sejak never-expired, ini hanya stempel info umur.
 TTL_BY_PREFIX = [
     ("/daily/", 6 * 3600),
     ("/index-daily/", 6 * 3600),
-    ("/financials/", 6 * 3600),
+    ("/idx-total/", 6 * 3600),
+    ("/broker-summary/", 6 * 3600),
+    ("/foreign-flow/", 6 * 3600),
+    ("/financials/quarterly/", 12 * 3600),
+    ("/company/get_quarterly_financial_dates/", 12 * 3600),
+    ("/company/get-segments/", 12 * 3600),
+    ("/company/shareholders-composition/", 12 * 3600),
+    ("/company/corporate-actions/", 12 * 3600),
     ("/company/report/", 12 * 3600),
     ("/news/", 12 * 3600),
     ("/filings/", 12 * 3600),
     ("/suspensions/", 12 * 3600),
-    ("/foreign-flow/", 12 * 3600),
-    ("/broker-summary/", 12 * 3600),
     ("/broker-activity/", 12 * 3600),
     ("/brokers/", 12 * 3600),
     ("/subsector/report/", 24 * 3600),
     ("/subsectors/", 24 * 3600),
     ("/companies/", 24 * 3600),
-    ("/company/corporate-actions/", 24 * 3600),
-    ("/company/shareholders-composition/", 24 * 3600),
-    ("/company/get-segments/", 24 * 3600),
     ("/listing-performance/", 24 * 3600),
     ("/free-float/", 24 * 3600),
     ("/mining/", 24 * 3600),
