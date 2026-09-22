@@ -1,4 +1,6 @@
 """TAHAP 4: NARASI & LAYOUT. Prosa templat deterministik dari angka model."""
+import re
+
 from . import fmt
 
 MAX_PARA = 150
@@ -7,6 +9,14 @@ MAX_PARA = 150
 def _trim(s, cap=30):
     w = s.split()
     return " ".join(w[:cap]) if len(w) > cap else s
+
+
+def _word_cut(s, cap=64):
+    s = str(s).strip()
+    if len(s) <= cap:
+        return s
+    cut = s[:cap + 1].rfind(" ")
+    return s[:cut].rstrip() if cut > 0 else s[:cap]
 
 
 def build(intake, fc, va, g1):
@@ -85,7 +95,7 @@ def build(intake, fc, va, g1):
 
     exh, n = [], [0]
 
-    def E(judul, tipe, data, note="Source: Company, Estimates"):
+    def E(judul, tipe, data, note="Source: Company, Sektoral Estimates"):
         n[0] += 1
         exh.append({"n": n[0], "judul": judul, "tipe": tipe, "data": data,
                     "catatan_sumber": note})
@@ -102,8 +112,27 @@ def build(intake, fc, va, g1):
     kf_cols = ["Key Financials"] + [str(a["year"]) for a in A[-2:]] + [r["label"] for r in F]
     E("Key Financials", "tabel", {"cols": kf_cols, "rows": kf_rows})
 
+    hist3 = A[-3:]
+    hist_rows = [
+        ["Pendapatan"] + [fmt.miliar(a["revenue"]) for a in hist3],
+        ["EBITDA"] + [fmt.miliar(a["ebitda"] or 0) for a in hist3],
+        ["Margin EBITDA"] + [fmt.pct((a["ebitda"] or 0) / a["revenue"]) for a in hist3],
+        ["Laba bersih"] + [fmt.miliar(a["earnings"] or 0) for a in hist3],
+    ]
+    E("Kinerja historis", "tabel",
+      {"cols": ["Rp miliar"] + [str(a["year"]) for a in hist3],
+       "rows": hist_rows})
+
     asu_cols = ["Driver", "Satuan"] + [r["label"] for r in F] + ["Dasar"]
-    asu_rows = [[d, s, fmt._id(f, 1), fmt._id(s2, 1), fmt._id(t3, 1), b]
+
+    def _disp(satuan, v):
+        if satuan == "Rp 0":
+            return "Rp0"
+        if satuan in ("Rp",):
+            return "Rp" + fmt.miliar(v) + " miliar"
+        return fmt._id(v, 1) + "%"
+
+    asu_rows = [[d, s, _disp(s, f), _disp(s, s2), _disp(s, t3), b]
                 for d, s, f, s2, t3, b in fc["assumptions"]]
     E("Asumsi forecast", "tabel", {"cols": asu_cols, "rows": asu_rows})
 
@@ -119,9 +148,8 @@ def build(intake, fc, va, g1):
                            "rows": kat})
     E("Kepemilikan", "tabel",
       {"cols": ["Pemegang saham", "Porsi"],
-       "rows": [[h.get("name", h.get("shareholder", "?")),
-                 fmt.pct((h.get("percentage") or h.get("pct") or 0) / 100
-                         if (h.get("percentage") or 0) > 1 else (h.get("percentage") or 0))]
+       "rows": [[h.get("name", "?"),
+                 fmt.pct(float(h.get("share_percentage") or 0))]
                 for h in (intake["major_holders"] or [])[:5]] or [["Tidak ada di cache", "-"]]})
 
     E("Ringkasan DCF", "tabel",
@@ -137,12 +165,13 @@ def build(intake, fc, va, g1):
     E("Proyeksi FCFF", "tabel",
       {"cols": ["Rp miliar"] + [r["label"] for r in F],
        "rows": [["FCFF", *[fmt.miliar(r["fcf"]) for r in F]]]})
+    grid = va.get("tp_grid") or {}
+    sens_tp_rows = []
+    for dw, wlabel in ((-0.01, "WACC -1pp"), (0.0, "WACC base"), (0.01, "WACC +1pp")):
+        sens_tp_rows.append([wlabel] + [f"Rp{fmt.rp(grid.get((dw, gg), 0))}"
+                                        for gg in (0.015, 0.025, 0.035)])
     E("Sensitivitas TP (WACC x g)", "tabel",
-      {"cols": ["TP (Rp)", "g 1,5%", "g 2,5%", "g 3,5%"],
-       "rows": [[f"WACC {fmt.pct(va['wacc']-0.01, 0)}", "lihat model", f"Rp{tp_s}", "lihat model"],
-                [f"WACC {fmt.pct(va['wacc'], 0)}", "lihat model", f"Rp{tp_s}", "lihat model"],
-                [f"WACC {fmt.pct(va['wacc']+0.01, 0)}", "lihat model",
-                 f"Rp{fmt.rp(va['tp_down'])}", "lihat model"]]})
+      {"cols": ["TP (Rp)", "g 1,5%", "g 2,5%", "g 3,5%"], "rows": sens_tp_rows})
     E("Peer", "tabel",
       {"cols": ["Peer", "PER TTM", "PBV"],
        "rows": [[c["symbol"], fmt.mult(c["pe"] or 0), fmt.mult(c["pb"] or 0)]
@@ -154,40 +183,50 @@ def build(intake, fc, va, g1):
     # verify exhibit numbering sequential
     assert [e["n"] for e in exh] == list(range(1, len(exh) + 1))
 
+    by_title = {e["judul"].split(". ", 1)[-1]: e for e in exh}
+    get = by_title.get
     bagian = [
         {"halaman": 2, "judul": "Industri dan makro: permintaan ke depan",
          "paragraf": [f"Sub-sektor {intake.get('sub_sector') or '-'} menopang tesis volume. "
                       "Pandangan Kami: jalur harga dan permintaan yang dipakai forecast "
                       f"sejalan dengan CAGR historis {fmt.pct(rev_cagr)}."],
-         "exhibit": [exh[1]]},
+         "exhibit": [get("Kinerja historis")]},
         {"halaman": 3, "judul": "Asumsi forecast dan sensitivitas",
          "paragraf": ["Tiap tahun forecast berbeda drivernya: " +
                       ", ".join(f"{r['label']} tumbuh {fmt.pct(r['revenue']/F[i-1]['revenue']-1) if i else fmt.pct(r['revenue']/rev_last-1)}"
                                 for i, r in enumerate(F)) + "."],
-         "exhibit": [exh[1], exh[2]]},
+         "exhibit": [get("Asumsi forecast"), get("Sensitivitas EBITDA terhadap harga/permintaan")]},
         {"halaman": 4, "judul": "Katalis, risiko, kepemilikan",
          "paragraf": [f"Risiko utama: {r3}. Arah neto insider dan arus asing "
                       "tercatat di tabel kepemilikan sebagai konteks."],
-         "exhibit": [exh[3], exh[4]]},
+         "exhibit": [get("Katalis"), get("Kepemilikan")]},
         {"halaman": 5, "judul": "Valuasi",
          "paragraf": [f"TP Rp{tp_s} adalah rerata Gordon Rp{fmt.rp(va['ps_gordon'])} dan "
                       f"exit Rp{fmt.rp(va['ps_exit'])} (WACC {fmt.pct(va['wacc'])})."],
-         "exhibit": [exh[5], exh[6], exh[7], exh[8]]},
+         "exhibit": [get("Ringkasan DCF"), get("Proyeksi FCFF"),
+                     get("Sensitivitas TP (WACC x g)"), get("Peer")]},
         {"halaman": 6, "judul": "Laporan keuangan",
          "paragraf": ["Kas adalah satu-satunya penyeimbang neraca; D&A, capex, dan tarif "
                       "pajak identik di IS, CF, dan DCF."],
-         "exhibit": [exh[9], exh[10], exh[11]]},
+         "exhibit": [get("Laba rugi"), get("Neraca"), get("Arus kas")]},
     ]
+    assert all(b["exhibit"] and all(e is not None for e in b["exhibit"]) for b in bagian)
     for b in bagian:
         for p in b["paragraf"]:
             assert fmt.words(p) <= 400, "paragraf kepanjangan"
     for para in (p1, p2, p3):
         assert fmt.words(para) <= MAX_PARA, f"paragraf cover {fmt.words(para)} kata"
 
-    metodo = (["Angka bersumber dari cache Sectors (snapshot, stale-ok); tanpa estimasi "
-               "karangan di luar asumsi berlabel pada tabel Asumsi."]
-              + [f"{k}: {v}" if isinstance(v, str) else f"{k}: {v[0]} ({v[1]})"
-                 for k, v in va["g3"].items() if isinstance(v, tuple) and "gagal" in v[0]]
+    g32 = va["g3"].get("G3.2_skala")
+    metodo = (["Angka bersumber dari snapshot cache Sectors (salinan lokal yang bisa "
+               "kedaluwarsa; pembacaan tidak memakai kuota API). Tanpa angka karangan "
+               "di luar asumsi berlabel pada tabel Asumsi."]
+              + ([f"skala valuasi: {g32[1]} (ambang 20-300% dari market cap, "
+                  "dicatat sebagai keterbatasan)"]
+                 if isinstance(g32, tuple) and "gagal" in g32[0] else [])
+              + [f"{k}: {v[1]} (dicatat sebagai keterbatasan)"
+                 for k, v in va["g3"].items()
+                 if isinstance(v, tuple) and "gagal" in v[0] and k != "G3.2_skala"]
               + va["notes"][:3])[:5]
     return {
         "meta": {"ticker": t, "emiten": name, "tanggal": intake["price_date"],
@@ -206,6 +245,12 @@ def build(intake, fc, va, g1):
                          for d, s, f, s2, t3, b in fc["assumptions"]],
         "log_gate": {"G1": g1["G1"], "G2": fc["g2"], "G3": {k: (v if isinstance(v, str) else v[0])
                                                           for k, v in va["g3"].items()}},
+        "method": "DCF (FCFF, Rp)",
+        "fy26": {"Pendapatan": fmt.miliar(f1["revenue"]),
+                 "EBITDA": fmt.miliar(f1["ebitda"]),
+                 "Laba bersih": fmt.miliar(f1["net"])},
+        "holders": [[h.get("name", "?"), fmt.pct(float(h.get("share_percentage") or 0))]
+                    for h in (intake["major_holders"] or [])[:4]],
         "catatan_metodologi": metodo,
         "exhibits": exh,
     }
@@ -227,20 +272,25 @@ def _headline(intake, fc):
 def _katalis(intake):
     rows, scored = [], []
     for nw in intake["news"] or []:
-        txt = f"{nw.get('title','')} {nw.get('content','') or nw.get('description','')}".lower()
+        title = str(nw.get("title") or "tanpa judul")
+        txt = f"{title} {nw.get('body') or ''}".lower()
         score = (1 if any(k in txt for k in ["revenue", "growth", "expansion", "capex",
                                             "project", "dividend", "contract"]) else 0)
         score += (1 if any(k in txt for k in ["guidance", "target", "forecast"]) else 0)
         score += 1  # kebaruan: item cache terbaru
-        scored.append((score, nw))
+        ts = str(nw.get("timestamp") or "")[:10] or "tanpa tanggal"
+        src_raw = str(nw.get("source") or "tak dikenal")
+        src = re.sub(r"^https?://", "", src_raw).split("/")[0][:28]
+        scored.append((score, _word_cut(title, 64), ts, src))
     scored.sort(key=lambda x: -x[0])
-    for s, nw in scored[:5]:
-        rows.append([str(nw.get("title", "?"))[:60], str(nw.get("date", "?"))[:10],
-                     f"skor kurasi {s}/9; kaitkan ke driver sebelum masuk model",
-                     "Netral"])
+    for s, title, ts, src in scored[:5]:
+        rows.append([title, ts, f"kurasi skor {s}/9 ({src}); kaitkan ke driver "
+                                "sebelum masuk model", "Netral"])
     for c in (intake["corp_actions"] or [])[:2]:
-        rows.append([str(c.get("action", c.get("type", "?"))), str(c.get("date", "?")),
-                     "aksi korporasi tercatat", "Netral"])
+        if isinstance(c, dict):
+            act = _word_cut(c.get("action", c.get("type", "aksi korporasi")), 64)
+            ts = str(c.get("date") or "")[:10] or "tanpa tanggal"
+            rows.append([act, ts, "aksi korporasi tercatat", "Netral"])
     return rows or [["Belum ada katalis terkurasi dari cache", "-", "-", "-"]]
 
 

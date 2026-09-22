@@ -10,10 +10,16 @@ from pathlib import Path
 
 from . import forecast, intake, narrative, render, valuation
 
+PDF_OK = True
+try:
+    from . import pdf as pdf_mod
+except Exception:
+    pdf_mod = None
+
 OUT = Path(__file__).resolve().parent.parent / "out"
 
 
-def build(ticker, outdir=OUT):
+def build(ticker, outdir=OUT, want_pdf=False):
     doc_in, g1 = intake.load(ticker)
     fc = forecast.build(doc_in)
     va = valuation.build(doc_in, fc)
@@ -31,6 +37,11 @@ def build(ticker, outdir=OUT):
         bad = {k: v for k, v in flat.items() if "gagal" in v and "dilabeli" not in v}
         print(f"  {stage}: {'OK' if not bad else 'GAGAL ' + str(bad)} "
               f"({len(flat)} cek)")
+    if want_pdf:
+        if pdf_mod is None:
+            print("  pdf: Playwright tidak tersedia, HTML saja")
+        else:
+            print(f"  pdf: {pdf_mod.to_pdf(t, outdir)}")
     return doc
 
 
@@ -38,9 +49,10 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("ticker")
     p.add_argument("--out", default=str(OUT))
+    p.add_argument("--pdf", action="store_true")
     a = p.parse_args()
     try:
-        build(a.ticker, Path(a.out))
+        build(a.ticker, Path(a.out), want_pdf=a.pdf)
     except ValueError as e:
         sys.exit(f"refused: {e}")
 
