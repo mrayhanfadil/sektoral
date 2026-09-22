@@ -24,7 +24,7 @@ Two ways, same key (from sectors.app/api, Insider plan or hackathon onboarding):
 - REST catalog: `docs/rest/idx-screener.md`, `idx-company.md`, `idx-financials-transactions.md`, `idx-rankings-brokers-news.md`, `sgx.md`, `klse.md`, `mining.md`
 - Agent recipes: `docs/recipes/` (01–06 + human-agent framework)
 
-Billing: 2xx billed per endpoint cost, 404 on addressed resource bills 1, routing 404 / 4xx / 5xx free. Natural-language `?q=` costs 3, structured `where` costs 1. Budget in `credit-calculator.md`; runtime discipline in `docs/guides/credit-burn-discipline.md` (cache-first, SQLite mirror, `SECTORS_CACHE_ONLY` / `SECTORS_OFFLINE`).
+Billing: 2xx billed per endpoint cost, 404 on addressed resource bills 1, routing 404 / 4xx / 5xx free. Natural-language `?q=` costs 3, structured `where` costs 1. Budget in `credit-calculator.md`.
 
 ## Repo structure
 
@@ -40,7 +40,6 @@ sektoral/
 │   ├── mcp/                       ← setup, tools, claude, chatgpt
 │   ├── rest/                      ← per-endpoint catalog
 │   ├── recipes/                   ← agent recipes 01–06
-│   └── guides/                    ← valuation, credit discipline, docker, house format
 ├── .env.example
 └── .gitignore
 ```
@@ -62,7 +61,6 @@ Product code lives under `experiment/<track-slug>/` once a track locks (see hack
 - `rules.md`, `tracks/`, `submission-checklist.md`, `ideas-seed.md` — from `references/mcp-and-recipes-2026-08-29` + planning commit `4aad52e`
 - `docs/mcp/`, `docs/recipes/`, `docs/sectors-api-and-mcp.md` — same MCP branch
 - `docs/rest/` — from `references/rest-catalog-2026-08-29`
-- `docs/guides/` — from live `sectors-hackathon` docs (valuation-framework, credit-burn-discipline, docker, sectors-swap, DECISIONS, house-report-format)
 - `.env.example`, `.gitignore` — hackathon root
 
-Full product implementation (11-agent ADK, FastAPI BE, React FE, 600+ tests) stays in `sectors-hackathon:feat/institutional-report` until a track is chosen to port.
+Hackathon guides only — no product code, no product learnings.
