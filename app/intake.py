@@ -1,6 +1,7 @@
-"""TAHAP 1: INTAKE & VALIDASI DATA (GATE 1). Cache-only, stale-ok."""
+"""TAHAP 1: INTAKE & VALIDASI DATA (GATE 1). Cache-only, never-expired."""
 import time
 from . import cache
+from . import mineops
 
 
 def _num(x, default=None):
@@ -132,6 +133,7 @@ def load(ticker):
         "peers": peers, "peer_median_pe": peer_median_pe,
         "peer_median_pb": peer_median_pb,
         "forward_pe_cache": _num(val.get("forward_pe")),
+        "mineops": mineops.load(t),
     }
     return intake, {"G1": g1, "catatan": notes, "fetched_at": time.time()}
 

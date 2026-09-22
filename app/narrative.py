@@ -194,6 +194,50 @@ def build(intake, fc, va, g1):
       {"cols": ["Rp miliar"] + [str(a["year"]) for a in hist3],
        "rows": hist_bs_rows})
 
+    mo = intake.get("mineops")
+    p_mine = None
+    if mo:
+        cu, au = mo["comms"].get("Copper") or {}, mo["comms"].get("Gold") or {}
+        cup, aup = mo.get("cu_price") or {}, mo.get("au_price") or {}
+        mrows = [
+            ["Produksi Cu", f"{fmt._id(cu.get('prod') or 0)} kton ({mo['year']})"],
+            ["Produksi Au", f"{fmt._id(au.get('prod') or 0)} koz ({mo['year']})"],
+            ["Kadar Cu / Au",
+             f"{fmt._id(cu.get('cu_grade') or 0, 2)}% / {fmt._id(au.get('au_grade') or 0, 2)} g/t"],
+            ["Cadangan terkandung",
+             f"Cu {fmt._id(cu.get('cu_cont_mt') or 0)} kton; "
+             f"Au {fmt._id(au.get('au_cont_koz') or 0)} koz"],
+            ["Umur cadangan Cu",
+             f"~{mo['reserve_life_cu_yr']:.0f} tahun ({mo['reserve_life_basis']})"]
+            if mo.get("reserve_life_cu_yr") else ["Umur cadangan Cu", "-"],
+            ["Harga Cu terakhir",
+             f"USD {fmt._id(cup.get('last') or 0)}/ton ({cup.get('date') or '-'})"],
+            ["Harga Au terakhir",
+             f"USD {fmt._id(aup.get('last') or 0)}/ton ({aup.get('date') or '-'})"],
+            ["Blok operasi", ", ".join(cu.get("blocks") or []) or "-"],
+        ]
+        E("Operasional tambang", "tabel",
+          {"cols": ["Metrik", f"{mo['year']} / terakhir"],
+           "rows": mrows},
+          note="Source: Sectors mining endpoints, Sektoral Estimates "
+               "(umur cadangan)")
+        cup_s = (f"USD {fmt._id(cup['last'])}/ton per {cup['date']} "
+                 f"(rata-rata 12 bln USD {fmt._id(cup['avg12'])})" if cup else "-")
+        aup_s = (f"USD {fmt._id(aup['last'])}/ton per {aup['date']} "
+                 f"(rata-rata 12 bln USD {fmt._id(aup['avg12'])})" if aup else "-")
+        p_mine = (f"Operasional {mo['year']}: produksi tembaga "
+                  f"{fmt._id(cu.get('prod') or 0)} kton dan emas "
+                  f"{fmt._id(au.get('prod') or 0)} koz dari "
+                  f"{', '.join(cu.get('blocks') or ['-'])} pada kadar "
+                  f"{fmt._id(cu.get('cu_grade') or 0, 2)}% Cu dan "
+                  f"{fmt._id(au.get('au_grade') or 0, 2)} g/t Au. Cadangan "
+                  f"terkandung {fmt._id(cu.get('cu_cont_mt') or 0)} kton Cu dan "
+                  f"{fmt._id(au.get('au_cont_koz') or 0)} koz Au memberi umur "
+                  f"cadangan sekitar {mo['reserve_life_cu_yr']:.0f} tahun pada "
+                  f"laju produksi saat ini. Harga acuan: tembaga {cup_s}, emas "
+                  f"{aup_s}. Data volume penjualan dan jadwal belanja modal "
+                  f"smelter tidak ada di cache sehingga tidak dimodelkan.")
+
     asu_cols = ["Driver", "Satuan"] + [r["label"] for r in F] + ["Dasar"]
 
     def _disp(satuan, v):
@@ -258,8 +302,11 @@ def build(intake, fc, va, g1):
     get = by_title.get
     bagian = [
         {"halaman": 2, "judul": "Industri dan makro: permintaan ke depan",
-         "paragraf": [p_ind1, p_ind2, p_ind3],
-         "exhibit": [get("Kinerja historis"), get("Neraca dan arus kas historis")]},
+         "paragraf": [p_ind1, p_ind2, p_ind3] + ([p_mine] if p_mine else []),
+         "exhibit": [e for e in
+                     [get("Kinerja historis"),
+                      get("Neraca dan arus kas historis"),
+                      get("Operasional tambang")] if e is not None]},
         {"halaman": 3, "judul": "Asumsi forecast dan sensitivitas",
          "paragraf": ["Tiap tahun forecast berbeda drivernya: " +
                       ", ".join(f"{r['label']} tumbuh {fmt.pct(r['revenue']/F[i-1]['revenue']-1) if i else fmt.pct(r['revenue']/rev_last-1)}"
