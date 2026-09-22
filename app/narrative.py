@@ -1,6 +1,7 @@
 """TAHAP 4: NARASI & LAYOUT. Prosa templat deterministik dari angka model."""
 import re
 
+from . import cache as cache_mod
 from . import fmt
 
 MAX_PARA = 150
@@ -93,6 +94,65 @@ def build(intake, fc, va, g1):
           f"Risiko utama: {r3}.")
     p3t = "TP Rp" + tp_s + " dengan upside " + upside_s
 
+    # Left rail market data calculations: ADTV & Free Float
+    daily_pts = {}
+    for _, p in cache_mod.payloads(f"/daily/{t}/"):
+        for r in (p.get("data") or []):
+            d, c, v = r.get("date"), r.get("close"), r.get("volume")
+            if d and c is not None and v is not None:
+                daily_pts[d] = float(v) * float(c)
+    if daily_pts:
+        adtv_val = sum(daily_pts.values()) / len(daily_pts)
+        adtv_str = fmt.miliar(adtv_val)
+    else:
+        adtv_val = None
+        adtv_str = "-"
+
+    maj_holders = intake.get("major_holders") or []
+    pub_holder = next((h for h in maj_holders if str(h.get("name", "")).strip().lower() in ("public", "masyarakat")), None)
+    if pub_holder and pub_holder.get("share_percentage") is not None:
+        ff_pct = float(pub_holder["share_percentage"])
+        ff_str = fmt.pct(ff_pct)
+    else:
+        ff_str = "-"
+
+    top_non_pub = [[h.get("name", "?"), fmt.pct(float(h.get("share_percentage") or 0))]
+                   for h in maj_holders
+                   if str(h.get("name", "")).strip().lower() not in ("public", "masyarakat")][:2]
+    holders_display = top_non_pub if top_non_pub else [
+        [h.get("name", "?"), fmt.pct(float(h.get("share_percentage") or 0))]
+        for h in maj_holders[:2]
+    ]
+
+    # Page 2 rich industry and historical data
+    min_eb_mg = fmt.pct(min((a["ebitda"] or 0) / a["revenue"] for a in A))
+    max_eb_mg = fmt.pct(max((a["ebitda"] or 0) / a["revenue"] for a in A))
+    c_list = [a["capex_out"] for a in A if a.get("capex_out")]
+    avg_capex = fmt.miliar(sum(c_list) / len(c_list)) if c_list else "-"
+
+    p_ind1 = (f"Emiten beroperasi pada sektor {intake.get('industry') or 'terkait'} "
+              f"(sub-sektor {intake.get('sub_sector') or '-'}). Rekam jejak historis "
+              f"dari tahun {A[0]['year']} hingga {last['year']} membukukan pertumbuhan "
+              f"pendapatan dengan CAGR {fmt.pct(rev_cagr)}, dari Rp{fmt.miliar(A[0]['revenue'])} miliar "
+              f"menjadi Rp{fmt.miliar(rev_last)} miliar. Margin EBITDA berfluktuasi antara "
+              f"{min_eb_mg} hingga {max_eb_mg} (posisi {last['year']} pada level {m_last}), "
+              f"mencerminkan elastisitas operasional dan siklus harga. Total ekuitas bertumbuh ke "
+              f"Rp{fmt.miliar(last['equity'] or 0)} miliar dengan akumulasi aset "
+              f"Rp{fmt.miliar(last['assets'] or 0)} miliar pada penutupan {last['year']}.")
+
+    p_ind2 = (f"Pandangan Kami: proyeksi periode {F[0]['label']}-{F[-1]['label']} tidak "
+              "mengasumsikan akselerasi volume di luar rekam jejak historis, melainkan "
+              "menumpukan ekspansi laba pada utilisasi kapasitas dan stabilitas biaya "
+              f"operasional. Permintaan di sub-sektor {intake.get('sub_sector') or '-'} memberikan "
+              "visibilitas pendapatan tahunan, sementara penyelesaian siklus belanja modal "
+              "besar menopang pemulihan arus kas bebas menuju margin EBITDA "
+              f"{fmt.pct(F[-1]['margin'])} pada {F[-1]['label']}.")
+
+    p_ind3 = ("Dinamika neraca dan arus kas historis menunjukkan disiplin pendanaan selama "
+              f"periode ekspansi. Realisasi belanja modal rata-rata Rp{avg_capex} miliar per "
+              "tahun berhasil diserap tanpa mengorbankan solvabilitas dasar, meletakkan "
+              f"fondasi neraca yang solid untuk mendukung proyeksi {F[0]['label']}.")
+
     exh, n = [], [0]
 
     def E(judul, tipe, data, note="Source: Company, Sektoral Estimates"):
@@ -122,6 +182,17 @@ def build(intake, fc, va, g1):
     E("Kinerja historis", "tabel",
       {"cols": ["Rp miliar"] + [str(a["year"]) for a in hist3],
        "rows": hist_rows})
+
+    hist_bs_rows = [
+        ["Kas & setara kas"] + [fmt.miliar(a["cash"] or 0) for a in hist3],
+        ["Total utang"] + [fmt.miliar(a["total_debt"] or 0) for a in hist3],
+        ["Total ekuitas"] + [fmt.miliar(a["equity"] or 0) for a in hist3],
+        ["Capex"] + [f"({fmt.miliar(a['capex_out'])})" if a["capex_out"] else ("-" if a["capex_out"] is None else "0,0")
+                     for a in hist3],
+    ]
+    E("Neraca dan arus kas historis", "tabel",
+      {"cols": ["Rp miliar"] + [str(a["year"]) for a in hist3],
+       "rows": hist_bs_rows})
 
     asu_cols = ["Driver", "Satuan"] + [r["label"] for r in F] + ["Dasar"]
 
@@ -187,10 +258,8 @@ def build(intake, fc, va, g1):
     get = by_title.get
     bagian = [
         {"halaman": 2, "judul": "Industri dan makro: permintaan ke depan",
-         "paragraf": [f"Sub-sektor {intake.get('sub_sector') or '-'} menopang tesis volume. "
-                      "Pandangan Kami: jalur harga dan permintaan yang dipakai forecast "
-                      f"sejalan dengan CAGR historis {fmt.pct(rev_cagr)}."],
-         "exhibit": [get("Kinerja historis")]},
+         "paragraf": [p_ind1, p_ind2, p_ind3],
+         "exhibit": [get("Kinerja historis"), get("Neraca dan arus kas historis")]},
         {"halaman": 3, "judul": "Asumsi forecast dan sensitivitas",
          "paragraf": ["Tiap tahun forecast berbeda drivernya: " +
                       ", ".join(f"{r['label']} tumbuh {fmt.pct(r['revenue']/F[i-1]['revenue']-1) if i else fmt.pct(r['revenue']/rev_last-1)}"
@@ -237,7 +306,9 @@ def build(intake, fc, va, g1):
                                {"judul": p3t, "isi": p3}],
                   "data_pasar": {"harga": intake["price"], "tp": va["tp"],
                                  "saham": intake["shares"],
-                                 "market_cap": intake["market_cap"]},
+                                 "market_cap": intake["market_cap"],
+                                 "adtv": adtv_str,
+                                 "free_float": ff_str},
                   "key_financials": kf_rows},
         "bagian": bagian,
         "tabel_asumsi": [{"driver": d, "satuan": s, "FY26F": f, "FY27F": s2,
@@ -249,8 +320,7 @@ def build(intake, fc, va, g1):
         "fy26": {"Pendapatan": fmt.miliar(f1["revenue"]),
                  "EBITDA": fmt.miliar(f1["ebitda"]),
                  "Laba bersih": fmt.miliar(f1["net"])},
-        "holders": [[h.get("name", "?"), fmt.pct(float(h.get("share_percentage") or 0))]
-                    for h in (intake["major_holders"] or [])[:4]],
+        "holders": holders_display,
         "catatan_metodologi": metodo,
         "exhibits": exh,
     }
