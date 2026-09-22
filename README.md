@@ -62,6 +62,28 @@ curl -s -H "Authorization: $SECTORS_API_KEY" "https://api.sectors.app/v2/compani
 
 Product code lives under `experiment/<track-slug>/` once a track locks (see hackathon `merge-plan.md` — not copied as history, only as guide).
 
+## Sistem ringan v3 (app/)
+
+Pipeline deterministik sesuai `spec/Instruksi-Report-v3.md`, contoh layout
+`spec/GMFI-Company-Update-contoh.pdf`. Tanpa agen, tanpa LLM, tanpa upstream.
+
+```bash
+python3 -m app.build AMMN --out out   # JSON + HTML printable
+python3 -m pytest tests/ -q
+```
+
+- `app/cache.py` intake hanya dari `data/sectors_cache.db` (stale-ok, 0 kredit).
+  Ticker tanpa data cache ditolak keras (`no verified assumptions`).
+- `app/forecast.py` driver generik 3 tahun (CAGR historis, margin + operating
+  leverage, sustaining = D&A, kas satu-satunya penyeimbang) + GATE 2.
+- `app/valuation.py` DCF FCFF + terminal Gordon dibobot sama dengan exit
+  EV/EBITDA 8x, WACC satu mata uang, skenario downside + GATE 3.
+- `app/narrative.py` JSON §7 (headline ≤10 kata, bullet ≤30, paragraf 90-160,
+  exhibit bernomor, tanpa istilah pipeline) + `app/render.py` HTML.
+- Status 22 Sep 2026: AMMN/BBCA/ADRO/RATU build hijau; MTEL (tanpa
+  outstanding_shares) dan CDIA (2 annual) ditolak jujur. Paragraf cover 90-104
+  kata (spec 110-150, residual v1).
+
 ## Adopted from hackathon
 
 - `rules.md`, `tracks/`, `submission-checklist.md`, `ideas-seed.md` — from `references/mcp-and-recipes-2026-08-29` + planning commit `4aad52e`
