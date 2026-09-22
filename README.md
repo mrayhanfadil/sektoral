@@ -21,8 +21,10 @@ Two ways, same key (from sectors.app/api, Insider plan or hackathon onboarding):
 - Start: `docs/sectors-api-and-mcp.md` (v2 only — v1 is 410 Gone, tickers without `.JK`)
 - MCP setup per client: `docs/mcp/setup.md` + `docs/mcp/tools.md`
 - Claude web / ChatGPT OAuth path: `docs/mcp/claude-integration.md`, `docs/mcp/chatgpt-integration.md`
-- REST catalog: `docs/rest/idx-screener.md`, `idx-company.md`, `idx-financials-transactions.md`, `idx-rankings-brokers-news.md`, `sgx.md`, `klse.md`, `mining.md`
+- REST catalog: `docs/rest/` — idx-screener, idx-company, idx-financials-transactions, idx-rankings-brokers-news, sgx, klse, mining + mining 3-file split (commodities-trade, companies, sites-licenses)
 - Agent recipes: `docs/recipes/` (01–06 + human-agent framework)
+- Cookbooks: `docs/cookbook/` (00-quickstart + excel, sheets, looker, n8n, sectorscan, gnn, portfolio, banking, R, api-security) + `docs/cookbook-v2/` (01–08 worked Python: screener → error-handling)
+- Sectors ops: `docs/sectors/` (swap, valuation-framework, credit-burn-discipline) + `docs/integration/` (client/cache gates, credit policy, financial-tools + MCP snapshots, offline toggle, backfill/harvest, conftest discipline — snapshots, not runnable product)
 
 Billing: 2xx billed per endpoint cost, 404 on addressed resource bills 1, routing 404 / 4xx / 5xx free. Natural-language `?q=` costs 3, structured `where` costs 1. Budget in `credit-calculator.md`.
 
@@ -40,6 +42,10 @@ sektoral/
 │   ├── mcp/                       ← setup, tools, claude, chatgpt
 │   ├── rest/                      ← per-endpoint catalog
 │   ├── recipes/                   ← agent recipes 01–06
+│   ├── cookbook/                  ← 14 cookbooks + quickstart
+│   ├── cookbook-v2/               ← 8 worked Python recipes
+│   ├── sectors/                   ← swap, valuation, credit discipline
+│   ├── integration/               ← sectors client/tools snapshots (ref only)
 ├── .env.example
 └── .gitignore
 ```
@@ -60,7 +66,10 @@ Product code lives under `experiment/<track-slug>/` once a track locks (see hack
 
 - `rules.md`, `tracks/`, `submission-checklist.md`, `ideas-seed.md` — from `references/mcp-and-recipes-2026-08-29` + planning commit `4aad52e`
 - `docs/mcp/`, `docs/recipes/`, `docs/sectors-api-and-mcp.md` — same MCP branch
-- `docs/rest/` — from `references/rest-catalog-2026-08-29`
+- `docs/rest/` — from `references/rest-catalog-2026-08-29` + mining 3-file split from `references/rest-idx-mining-2026-08-29`
+- `docs/cookbook/` — from `references/cookbook-idx-mining-2026-08-29`
+- `docs/cookbook-v2/` — from `audit/f2-cookbook-2026-08-29`
+- `docs/sectors/` + `docs/integration/` — live `sectors-hackathon` sectors ops (snapshot @614aca7, ref only)
 - `.env.example`, `.gitignore` — hackathon root
 
-Hackathon guides only — no product code, no product learnings.
+Hackathon guides + all Sectors info — no runnable product, integration files are snapshots.
