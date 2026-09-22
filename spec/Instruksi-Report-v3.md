@@ -163,7 +163,53 @@ Nyatakan sekali metode yang dipakai dan alasannya dalam satu kalimat.
 - Band rating (sesuaikan kebijakan internal): Buy > +15%, Hold -10% sampai +15%, Sell < -10%.
 - TP EKSTREM: bila |upside| > 50%, rating wajib disertai satu kalimat tesis eksplisit yang mengaitkan angka ke driver fundamental (bukan ke mekanika model), PLUS satu kalimat keterbatasan model yang paling memengaruhi TP tersebut. TP dalam yang murni akibat rumus (mis. ekuitas DCF kecil vs market cap tanpa tesis bearish) tidak boleh disajikan sebagai keyakinan analis.
 
-### 4.5 GATE 3: cek kewajaran valuasi
+### 4.5 Struktur exhibit valuasi per opsi (satu opsi aktif per laporan)
+
+Metode dipilih analis berdasarkan karakteristik emiten (bank = DDM,
+property/resources = RNAV, general corporate = DCF), bukan otomatis.
+Penomoran exhibit mengikuti urutan global laporan.
+
+**Opsi A — DCF (FCFF-based).**
+- *Exhibit FCFF Forecast and Terminal Value*, satu tabel tiga blok. Blok 1
+  (explicit, umumnya 5 tahun): Revenue, EBIT, Tax on EBIT (= EBIT x
+  (1 - tarif efektif), bukan tarif statutory), NOPAT, (+) D&A, (-) Capex,
+  (-/+) ΔNWC, FCFF (bold), FCFF growth (%) yoy, Discount Factor
+  (1/(1+WACC)^n), PV of FCFF (bold). Blok 2 (terminal): Terminal FCFF
+  (= FCFF terakhir x (1+g)), Terminal Growth eksplisit (cap: tidak lebih
+  tinggi dari long-term GDP growth atau risk-free rate), Terminal Value
+  undiscounted, Discount Factor terminal, PV of Terminal Value. Bila
+  cross-check Gordon vs Exit Multiple, tampil berdampingan dua kolom dalam
+  blok yang sama. Blok 3 (bridge): Sum PV FCFF (+) PV Terminal Value =
+  Enterprise Value (bold) (-) Net Debt pada tanggal valuasi (+/-) Minority
+  Interest / Non-Operating Assets = Equity Value (bold) / saham beredar =
+  Fair Value per Share (bold, highlight).
+- *Exhibit WACC Components*, dua kolom (parameter, nilai): CoE via CAPM
+  (risk-free, Beta, ERP, hasil CoE); CoD (pre-tax dari kupon/pinjaman
+  existing, tarif efektif, after-tax); struktur modal (bobot D dan E atas
+  market value bila memungkinkan); WACC final bold di baris terbawah.
+- *Exhibit Sensitivity Analysis*: matriks baris WACC (-1%, -0,5%, base,
+  +0,5%, +1%) x kolom Terminal Growth / Exit Multiple, isi = Fair Value
+  per Share; base case highlight beda warna.
+- Narasi terpadu di bawah ketiga exhibit: parameter paling sensitif,
+  justifikasi growth/margin dikaitkan ke driver bisnis di halaman
+  industri (bukan angka berdiri sendiri), dan gap material Gordon vs Exit
+  Multiple WAJIB di-flag sebagai unresolved assumption yang di-disclose,
+  bukan dirata-rata diam-diam (§4.4).
+
+**Opsi B — DDM (bank/institusi keuangan).**
+- *Exhibit Dividend Forecast and Terminal Value.* Blok 1: Net Profit,
+  Payout Ratio (%) dari payout historis/kebijakan diumumkan, DPS, DPS
+  growth (%), Discount Factor memakai Cost of Equity (bukan WACC — DDM
+  adalah valuasi ekuitas langsung), PV of DPS. Blok 2: Terminal DPS,
+  Terminal Growth, Terminal Value, PV of Terminal Value, Fair Value per
+  Share (Gordon: Terminal DPS x (1+g) / (CoE-g)).
+- Jalur alternatif (Inverse Cost of Equity): baris Forward ROAE (mis.
+  FY26F), Fair Value P/BV = (ROAE - g) / (CoE - g), BVPS forecast,
+  Fair Value = Fair Value P/BV x BVPS.
+
+**Opsi C — RNAV (property/resources):** menyusul (struktur dikirim terpisah).
+
+### 4.6 GATE 3: cek kewajaran valuasi
 
 | # | Cek | Ambang batas |
 |---|---|---|
