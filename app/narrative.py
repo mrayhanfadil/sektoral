@@ -4,6 +4,7 @@ import re
 from . import cache as cache_mod
 from . import fmt
 from . import methodnote
+from . import rnav
 from . import scrub
 from . import valtables
 
@@ -312,6 +313,35 @@ def build(intake, fc, va, g1):
       {"cols": ["Peer", "PER TTM", "PBV"],
        "rows": [[c["symbol"], fmt.mult(c["pe"] or 0), fmt.mult(c["pb"] or 0)]
                 for c in intake["peers"][:8]] or [["Tanpa peer di cache", "-", "-"]]})
+    br = fc.get("bridge")
+    if br and br.get("gross_usd_bn"):
+        E("Jembatan pendapatan tambang", "tabel",
+          {"cols": ["Uraian", "Nilai"],
+           "rows": [["Nilai logam bruto (produksi x harga 12 bln, USD miliar)",
+                      f"{br['gross_usd_bn']:.2f}"],
+                     [f"Pendapatan {F[0]['label']} (USD miliar, {rnav.FX_BASIS})",
+                      f"{br['fy1_usd_bn']:.2f}"],
+                     ["Payability tersirat (tercatat/bruto)", fmt.pct(br["payability"])],
+                     ["Selisih vs bruto (ambang penjelasan 25%)", fmt.pct(br["gap_pct"])]]},
+          note="Source: Sectors mining data, Sektoral Estimates; selisih = "
+               "payability/TC-RC/royalti/mix, bukan error model")
+    lom = va.get("lom")
+    p_lom = None
+    if lom:
+        assets = [{"nama": s["nama"], "nav": s["nav_rpbn"],
+                   "kepemilikan": s["kepemilikan"], "ukuran": s["ukuran"]}
+                  for s in lom["streams"]]
+        _rn = valtables.rnav_exhibits(assets, fc["base"]["cash"], fc["base"]["debt"],
+                                      0, intake["shares"], 0.0)
+        E(_rn["judul"], _rn["tipe"], _rn["data"],
+          (_rn.get("catatan_sumber") or "Source: Company, Sektoral Estimates") +
+          "; diskon 0% (tanpa basis pembanding discount)")
+        p_lom = (f"Silang cek umur tambang: NAV LoM Rp{fmt.rp(round(lom['rnav_ps']))}/saham "
+                 f"(anuitas produksi flat sampai cadangan habis, tanpa terminal, diskon "
+                 f"{fmt.pct(va['wacc'])}; {lom['margin_basis']}) vs TP DCF Rp{tp_s}. "
+                 f"NAV LoM di atas TP karena horizon {(mo.get('reserve_life_cu_yr') or 0):.0f} tahun "
+                 f"menangkap nilai cadangan yang dipotong terminal Gordon; TP dipakai "
+                 f"dengan kesadaran keterbatasan itu.")
     E("Laba rugi", "tabel", _is(F, "laba"))
     E("Neraca", "tabel", _is(F, "neraca"))
     E("Arus kas", "tabel", _is(F, "kas"))
@@ -344,9 +374,17 @@ def build(intake, fc, va, g1):
          "exhibit": [get("Katalis"), get("Kepemilikan")]},
         {"halaman": 5, "judul": "Valuasi",
          "paragraf": [f"TP Rp{tp_s} adalah rerata Gordon Rp{fmt.rp(va['ps_gordon'])} dan "
-                      f"exit Rp{fmt.rp(va['ps_exit'])} (WACC {fmt.pct(va['wacc'])})."] + xtra,
-         "exhibit": [get("Ringkasan DCF"), get("Proyeksi FCFF"),
-                     get("Sensitivitas TP (WACC x g)"), get("Peer")]},
+                      f"exit Rp{fmt.rp(va['ps_exit'])} (WACC {fmt.pct(va['wacc'])})."] + xtra +
+                      ([p_lom] if p_lom else []),
+         "exhibit": [e for e in
+                     [get("Ringkasan DCF"), get("Proyeksi FCFF"),
+                      get("Sensitivitas TP (WACC x g)"),
+                      get("Prakiraan FCFF, Nilai Terminal, dan Jembatan Nilai Wajar"),
+                      get("Komponen WACC"),
+                      get("Sensitivitas Nilai Wajar per Saham (Rp)"),
+                      get("Jembatan pendapatan tambang"),
+                      get("Rincian Aset dan Jembatan RNAV"),
+                      get("Peer")] if e is not None]},
         {"halaman": 6, "judul": "Laporan keuangan",
          "paragraf": ["Kas adalah satu-satunya penyeimbang neraca; D&A, capex, dan tarif "
                       "pajak identik di IS, CF, dan DCF."],

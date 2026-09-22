@@ -36,8 +36,8 @@ def test_tp_ekstrem_ada_tesis(tmp_path):
     d = _doc(tmp_path)
     assert abs(d["meta"]["upside_persen"]) > 50
     val_sec = next(b for b in d["bagian"] if b["judul"] == "Valuasi")
-    assert len(val_sec["paragraf"]) >= 3  # base + tesis + keterbatasan
-    assert "keterbatasan utama" in val_sec["paragraf"][-1].lower()
+    assert len(val_sec["paragraf"]) >= 3  # base + tesis + keterbatasan (+ LoM)
+    assert any("keterbatasan utama" in p.lower() for p in val_sec["paragraf"])
 
 
 def test_katalis_tidak_mengandung_skor(tmp_path):
