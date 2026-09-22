@@ -131,7 +131,11 @@ class Client:
         url = BASE + endpoint
         if params:
             url += "?" + urllib.parse.urlencode(params)
-        req = urllib.request.Request(url, headers={"Authorization": self.key})
+        req = urllib.request.Request(
+            url,
+            headers={"Authorization": self.key,
+                     "User-Agent": "sektoral/1.0 (+cache-first research snapshot)",
+                     "Accept": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 body = r.read()

@@ -36,11 +36,11 @@ def mining_calls(ticker: str, slug: str | None) -> list[tuple[str, dict]]:
     else:
         calls.append(("/mining/companies/",
                       {"keyword": ticker, "limit": 20}))
-    calls += [("/mining/sites/", {"keyword": ticker, "limit": 20}),
-              ("/mining/total-production/", {"commodity": "Copper"}),
-              ("/mining/total-production/", {"commodity": "Gold"}),
-              ("/mining/exports/", {"commodity": "Copper"}),
-              ("/mining/exports/", {"commodity": "Gold"})]
+    calls += [("/mining/sites/", {"commodity_type": "Copper", "limit": 20}),
+              ("/mining/total-production/", {"commodity_type": "Copper"}),
+              ("/mining/total-production/", {"commodity_type": "Gold"}),
+              ("/mining/exports/", {"commodity_type": "Copper", "year": 2024}),
+              ("/mining/exports/", {"commodity_type": "Gold", "year": 2024})]
     return calls
 
 
