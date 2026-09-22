@@ -1,5 +1,6 @@
 """TAHAP 3: VALUATION ENGINE (GATE 3). Satu mata uang, TP = rerata Gordon + exit."""
 from . import fmt
+from . import rnav
 
 BAND_BUY, BAND_SELL = 0.15, -0.10
 
@@ -93,6 +94,13 @@ def build(intake, fc):
     impl = {"per": tp / (f_last["net"] / intake["shares"]) if f_last["net"] > 0 else None,
             "ev_ebitda": (tp * intake["shares"] + net_debt) / f_last["ebitda"]
             if f_last["ebitda"] > 0 else None}
+    lom = None
+    if is_miner and intake.get("mineops"):
+        # fc/base dalam Rupiah → konversi ke Rp miliar untuk rnav.
+        lom = rnav.build(intake["mineops"], fc["rows"][0]["margin"], wacc,
+                         fc["base"]["cash"] / 1e9, fc["base"]["debt"] / 1e9,
+                         fc["rows"][0]["revenue"] / 1e9)
+        lom["rnav_ps"] = lom["rnav_rpbn"] * 1e9 / intake["shares"]
     return {"method": method, "wacc": wacc, "wacc_inputs": {"rf": rf, "erp": erp,
             "beta": beta, "re": re, "rd_after_tax": rd, "g": g, "exit_mult": exit_mult,
             "exit_basis": exit_basis},
@@ -100,4 +108,4 @@ def build(intake, fc):
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
             "ps_exit": ps_x, "tp": tp, "tp_down": tp_down, "tp_grid": grid,
             "upside": upside,
-            "rating": rating, "implied": impl, "g3": g3, "notes": notes}
+            "rating": rating, "implied": impl, "lom": lom, "g3": g3, "notes": notes}

@@ -1,0 +1,51 @@
+"""Batch D: LoM RNAV + revenue bridge nyambung ke forecast."""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from app import mineops, rnav  # noqa: E402
+
+
+def test_nav_stream_anuitas_tanpa_terminal():
+    s = rnav.nav_stream(100.0, 1000.0, 10.0, 0.5, 0.10)
+    assert s["life"] == 10.0
+    assert s["annual_cf"] == 100 * 10 * 0.5
+    exp = 500 * (1 - 1.1 ** -10) / 0.10
+    assert abs(s["pv"] - exp) < 1e-6
+    # Terbukti tanpa terminal: PV < CF flat 10 thn + 1 thn penuh sekalipun.
+    assert s["pv"] < 500 * 10
+
+
+def test_nav_stream_tanpa_produksi():
+    assert rnav.nav_stream(0, 1000.0, 10.0, 0.5, 0.10)["pv"] is None
+
+
+def test_ammn_dua_aliran_material():
+    mo = mineops.load("AMMN")
+    r = rnav.build(mo, 0.52, 0.105, 20000, 60000, 36200)
+    assert len(r["streams"]) == 2
+    assert all(s["nav_rpbn"] > 10000 for s in r["streams"])
+    assert r["total_nav_rpbn"] == sum(s["nav_rpbn"] for s in r["streams"])
+    assert "Rp16.000" in r["fx_basis"]
+
+
+def test_bridge_flag_ammn():
+    mo = mineops.load("AMMN")
+    r = rnav.build(mo, 0.52, 0.105, 20000, 60000, 36200)
+    b = r["bridge"]
+    assert 0.4 < b["payability"] < 0.8  # payability parsial, bukan 100%
+    assert b["needs_explanation"] is True
+
+
+def test_forecast_g28_hanya_tambang():
+    from app import forecast, intake
+    fam, _ = intake.load("AMMN")
+    f = forecast.build(fam)
+    assert f["bridge"] is not None
+    assert f["g2"]["G2.8_bridge"][0] == "dilabeli"
+    fbb, _ = intake.load("BBCA")
+    fb = forecast.build(fbb)
+    assert fb["bridge"] is None
+    assert "G2.8_bridge" not in fb["g2"]

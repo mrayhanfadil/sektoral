@@ -1,5 +1,6 @@
 """TAHAP 2: FORECAST ENGINE (GATE 2). Generik, berbasis driver, tiga tahun."""
 from . import fmt
+from . import rnav
 
 
 def _mean(xs):
@@ -114,7 +115,25 @@ def build(intake):
                                        for r in rows) else "gagal-dilabeli"
     g2["G2.1_runrate"] = "dilabeli"
     g2["G2.3_leverage"] = "lolos"
+    bridge = None
+    mo = intake.get("mineops")
     g2["catatan"] = ["G2.1: tanpa interim terstruktur di cache; diuji saat rilis tersedia."]
-    return {"rows": rows, "assumptions": assumptions, "g2": g2,
+    if mo:
+        # rows revenue dalam Rupiah → konversi ke USD via FX asumsi.
+        gross = rnav.metal_gross_usd(mo)
+        rep_usd = rows[0]["revenue"] / rnav.FX_USDIDR
+        pay = rep_usd / gross if gross else None
+        gap = abs(1 - pay) if pay is not None else None
+        bridge = {"gross_usd_bn": gross / 1e9 if gross else None,
+                  "fy1_usd_bn": rep_usd / 1e9, "payability": pay,
+                  "gap_pct": gap,
+                  "needs_explanation": gap is not None and gap > 0.25}
+        g2["G2.8_bridge"] = ("dilabeli",
+            f"nilai logam bruto USD{gross/1e9:.2f} miliar vs pendapatan "
+            f"{rows[0]['label']} USD{rep_usd/1e9:.2f} miliar (payability "
+            f"{pay*100:.0f}%, {rnav.FX_BASIS})")
+        g2["catatan"].append("G2.8: selisih bruto-vs-tercatat mencerminkan "
+            "payability/TC-RC/royalti/mix; dijelaskan di narasi valuasi.")
+    return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "base": {"cash": cash0, "debt": debt0, "equity": eq0,
                      "other_liab": oth_liab, "noncash": nc0}}
