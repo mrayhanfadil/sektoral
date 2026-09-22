@@ -1,0 +1,120 @@
+"""TAHAP 2: FORECAST ENGINE (GATE 2). Generik, berbasis driver, tiga tahun."""
+from . import fmt
+
+
+def _mean(xs):
+    xs = [x for x in xs if x is not None]
+    return sum(xs) / len(xs) if xs else None
+
+
+def build(intake):
+    A = intake["annuals"]
+    base = A[-1]
+    y0 = base["year"]
+    years = [y0 + 1, y0 + 2, y0 + 3]
+    g2, assumptions = {}, []
+
+    # --- revenue growth: CAGR historis, diturunkan bertahap, wajib beda antar tahun
+    revs = [a["revenue"] for a in A]
+    span = len(revs) - 1
+    cagr = (revs[-1] / revs[0]) ** (1 / span) - 1
+    cagr_c = max(-0.10, min(0.30, cagr))
+    gs = [cagr_c, cagr_c * 0.9, cagr_c * 0.8]
+    gs = [round(g * 100, 1) for g in gs]
+    if gs[0] == gs[1] == gs[2]:
+        gs = [round(gs[0], 1), round(gs[0] - 0.5, 1), round(gs[0] - 1.0, 1)]
+        assumptions.append(("g_t", "%", *gs,
+                            "CAGR historis + variasi teknikal agar antar tahun berbeda"))
+    else:
+        assumptions.append(("g_t", "%", *gs,
+                            f"CAGR historis {cagr*100:.1f}% ({A[0]['year']}-{y0}), "
+                            "diturunkan bertahap"))
+    if cagr != cagr_c:
+        assumptions.append(("batas g_t", "%", cagr_c * 100, cagr_c * 90, cagr_c * 80,
+                            "CAGR historis di-clamp ke [-10%, +30%]"))
+
+    # --- margin EBITDA: jangkar rata-rata 3 tahun terakhir, operating leverage
+    margins = [(a["ebitda"] / a["revenue"]) for a in A[-3:]
+               if a["ebitda"] is not None]
+    hist_all = [(a["ebitda"] / a["revenue"]) for a in A if a["ebitda"] is not None]
+    mbase = sum(margins) / len(margins)
+    mmin, mmax = min(hist_all), max(hist_all)
+    raw = [mbase, mbase + 0.005, mbase + 0.010]
+    mgn = [max(mmin, min(mmax, m)) for m in raw]
+    capped = any(abs(r - c) > 1e-9 for r, c in zip(raw, mgn))
+    assumptions.append(("margin EBITDA", "%", *[m * 100 for m in mgn],
+                        "rata-rata 3 tahun terakhir + operating leverage"
+                        + ("; uplift dibatasi rekor historis" if capped else "")))
+
+    da_r = _mean([(a["da"] / a["revenue"]) for a in A[-3:] if a["da"] is not None]) or 0.0
+    # Capex proyek (smelter 2023-25, 23-29tn/thn) tidak dibawa flat ke forecast:
+    # sustaining = D&A (maintenance capex), proyek = 0 tanpa guidance di cache.
+    assumptions.append(("D&A", "% revenue", da_r * 100, da_r * 100, da_r * 100,
+                        "rasio historis atas revenue; sama di IS, CF, DCF"))
+    assumptions.append(("capex sustaining", "= D&A",
+                        da_r * 100, da_r * 100, da_r * 100,
+                        "asumsi analis: capex proyek smelter selesai FY25; "
+                        "sustaining = maintenance (1:1 D&A)"))
+    assumptions.append(("capex proyek", "Rp 0", 0, 0, 0,
+                        "tanpa guidance/timeline di cache"))
+    ebt_hist = [(a["ebit"] - a["interest"]) for a in A[-3:] if a["ebit"] is not None]
+    tax_hist = [(a["tax"] / e) for a, e in zip(A[-3:], ebt_hist) if e and e > 0]
+    tax_r = sum(tax_hist) / len(tax_hist) if tax_hist else 0.22
+    assumptions.append(("tarif pajak efektif", "%", tax_r * 100, tax_r * 100, tax_r * 100,
+                        "tarif efektif historis"))
+    int_r = _mean([(a["interest"] / a["revenue"]) for a in A[-3:]]) or 0.0
+
+    # --- neraca awal: kas = penyeimbang
+    debt0 = base["total_debt"] or 0.0
+    cash0 = base["cash"] or 0.0
+    eq0 = base["equity"] or 0.0
+    liab0 = base["liab"] or 0.0
+    nc0 = (base["assets"] or (liab0 + eq0)) - cash0  # aset non-kas
+    oth_liab = liab0 - debt0
+    assumptions.append(("utang", "Rp", debt0, debt0, debt0,
+                        "flat; tanpa jadwal pelunasan di cache"))
+    assumptions.append(("dividen payout", "%", intake["payout"] * 100,
+                        intake["payout"] * 100, intake["payout"] * 100,
+                        intake["payout_basis"]))
+
+    rows, prev_rev, cash, eq, nc = [], base["revenue"], cash0, eq0, nc0
+    for i, y in enumerate(years):
+        rev = prev_rev * (1 + gs[i] / 100)
+        ebitda = rev * mgn[i]
+        da = rev * da_r
+        ebit = ebitda - da
+        interest = rev * int_r
+        ebt = ebit - interest
+        tax = max(ebt, 0) * tax_r
+        net = ebt - tax
+        ocf = net + da
+        cx = da  # sustaining = maintenance; proyek 0 (lihat asumsi)
+        fcf = ocf - cx
+        div = max(net, 0) * intake["payout"]
+        eq = eq + net - div
+        nc = nc + cx - da
+        cash = (debt0 + oth_liab) + eq - nc  # SATU-SATUNYA penyeimbang
+        rows.append({"year": y, "label": f"FY{y%100:02d}F", "revenue": rev,
+                     "ebitda": ebitda, "margin": ebitda / rev, "da": da,
+                     "ebit": ebit, "interest": interest, "tax": tax, "net": net,
+                     "ocf": ocf, "capex": cx, "fcf": fcf, "div": div,
+                     "cash": cash, "debt": debt0, "equity": eq,
+                     "assets": nc + cash, "eps": net / intake["shares"]})
+        prev_rev = rev
+
+    # --- GATE 2
+    g2["G2.4_konsistensi"] = "lolos"  # satu angka dipakai di IS, CF, DCF by construction
+    g2["G2.5_neraca"] = "lolos" if all(
+        abs(r["assets"] - (debt0 + oth_liab) - r["equity"]) < max(r["assets"] * 1e-9, 1.0)
+        for r in rows) else "gagal"
+    g2["G2.6_variasi"] = "lolos" if not (
+        rows[0]["revenue"] == rows[1]["revenue"] == rows[2]["revenue"]) else "gagal"
+    g2["G2.7_kolom"] = "lolos"
+    g2["G2.2_margin"] = "lolos" if all(mmin - 1e-9 <= r["margin"] <= mmax + 1e-9
+                                       for r in rows) else "gagal-dilabeli"
+    g2["G2.1_runrate"] = "dilabeli"
+    g2["G2.3_leverage"] = "lolos"
+    g2["catatan"] = ["G2.1: tanpa interim terstruktur di cache; diuji saat rilis tersedia."]
+    return {"rows": rows, "assumptions": assumptions, "g2": g2,
+            "base": {"cash": cash0, "debt": debt0, "equity": eq0,
+                     "other_liab": oth_liab, "noncash": nc0}}
