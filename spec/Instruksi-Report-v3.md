@@ -152,6 +152,7 @@ Nyatakan sekali metode yang dipakai dan alasannya dalam satu kalimat.
 - Beta: beta unlevered peer regional, di-relever ke target D/E emiten. Cost of debt harus berbasis pasar, bukan bunga pihak berelasi yang di bawah pasar.
 
 ### 4.3 Mekanika DCF
+- Parameter kunci FIX (keputusan analis, berlaku semua laporan sampai diubah eksplisit): terminal growth g = 3,5%, Equity Risk Premium = 4%. Keduanya tampil di exhibit komponen WACC/CoE dan diuji di matriks sensitivitas, bukan disembunyikan.
 - Terminal FCFF = FCFF eksplisit terakhir x (1 + g). Verifikasi hasil perkaliannya, jangan biarkan formula salah menghasilkan angka lebih kecil dari FCFF terakhir sendiri.
 - Diskonto ke tanggal valuasi (konvensi mid-year lebih disarankan, nyatakan konvensi yang dipakai).
 - Utang bersih memakai posisi neraca terbaru, disesuaikan dengan kejadian setelah tanggal neraca bila material.

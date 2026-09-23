@@ -176,7 +176,7 @@ def sens_matrix_5x3(intake, fc, val):
                     "rerata Gordon + exit, basis sama dengan TP")
 
 
-def ddm_exhibits(payout, roae_fwd, bvps, coe, g=0.025):
+def ddm_exhibits(payout, roae_fwd, bvps, coe, g=0.035):
     """Opsi B: blok dividen Gordon + baris Inverse CoE dalam satu exhibit."""
     eps = roae_fwd * bvps
     dps = eps * payout

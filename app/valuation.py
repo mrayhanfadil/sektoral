@@ -21,10 +21,10 @@ def _core(fc, shares, wacc, g, exit_mult, net_debt):
 
 
 def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
-    """Grid TP 3x3 (WACC±1pp × g ∈ {1,5; 2,5; 3,5}%), rerata Gordon + exit."""
+    """Grid TP 3x3 (WACC±1pp × g ∈ {2,5; 3,5; 4,5}%), rerata Gordon + exit."""
     out = {}
     for dw in (-0.01, 0.0, 0.01):
-        for gg in (0.015, 0.025, 0.035):
+        for gg in (0.025, 0.035, 0.045):
             c = _core(fc, intake["shares"], wacc + dw, gg, exit_mult, net_debt)
             out[(round(dw, 3), gg)] = round((c["ps_g"] + c["ps_x"]) / 2 / 10) * 10
     return out
@@ -50,7 +50,7 @@ def build(intake, fc):
     notes.append("model dibangun di mata uang pelaporan (Rp); FX = 1.")
 
     # --- WACC IDR: INDOGB 10Y sudah memuat risiko negara, tanpa CRP ganda
-    rf, erp, beta = 0.065, 0.05, 1.1
+    rf, erp, beta = 0.065, 0.04, 1.1
     re = rf + beta * erp
     teff = fc["rows"][0]["tax"] / max(fc["rows"][0]["ebit"] - fc["rows"][0]["interest"], 1)
     teff = max(0.0, min(0.35, teff))
@@ -58,7 +58,7 @@ def build(intake, fc):
     D = fc["base"]["debt"] + fc["base"]["other_liab"]
     E = intake["market_cap"]
     wacc = (re * E + rd * D) / max(E + D, 1)
-    g = 0.025  # terminal growth, wajib < rf
+    g = 0.035  # terminal growth FIX analis, wajib < rf
     exit_mult = 8.0
     exit_basis = "asumsi analis 8,0x (tanpa EV/EBITDA peer di cache)"
     if intake.get("peer_median_pe"):
@@ -76,7 +76,7 @@ def build(intake, fc):
 
     # --- downside + grid: basis SAMA dengan TP (rerata Gordon + exit)
     grid = tp_grid(intake, fc, wacc, g, exit_mult, net_debt)
-    tp_down = grid[(0.01, 0.015)]
+    tp_down = grid[(0.01, 0.025)]
 
     eq_dcf = ev_g - net_debt
     ratio = eq_dcf / intake["market_cap"]
