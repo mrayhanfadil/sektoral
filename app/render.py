@@ -1,4 +1,4 @@
-"""Renderer HTML tiru-layout contoh GMFI (8 halaman). Brand Sektoral, bukan BRIDS.
+"""Renderer HTML laporan multipage A4. Brand Sektoral, bukan BRIDS.
 
 Struktur: header → rating → cover 2 kolom (data pasar + narasi) → Key
 Financials → halaman 2-6 → metodologi + disclaimer. Chart SVG native dari
@@ -6,6 +6,7 @@ cache daily. Nomor halaman via CSS counter. Cetak via app/pdf.py (A4).
 """
 import base64
 import html
+import re
 from pathlib import Path
 from . import cache as cache_mod
 from . import fmt
@@ -61,17 +62,51 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".bullets{margin:4px 0 6px 14px;padding:0;font-size:7.9pt}.bullets li{margin-bottom:3px}"
        "h2.sec{font-size:11pt;color:" + ROYAL_BLUE + ";font-weight:700;margin:10px 0 5px}"
        "h3.sub{font-size:8.8pt;color:" + NAVY + ";font-weight:700;margin:5px 0 2px}"
-       "table{border-collapse:collapse;width:100%;font-size:7.2pt;margin:3px 0 2px;font-family:'Poppins',sans-serif}"
-       "th,td{border:1px solid #d8dee4;padding:2.5px 5px;text-align:right;overflow-wrap:break-word;word-break:normal}"
-       "th:first-child,td:first-child{text-align:left}"
-       "th{background:" + NAVY + ";color:#fff;font-weight:700}"
-       "tr:nth-child(even) td{background:#f8fafc}"
-       "caption{text-align:left;font-weight:700;font-size:7.8pt;color:" + NAVY + ";margin-bottom:2px;font-family:'Poppins',sans-serif}"
+       ".exhibit{margin:7px 0 8px}"
+       ".exhibit.keep{break-inside:avoid-page;page-break-inside:avoid}"
+       ".exhibit-table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.2pt;"
+       "margin:0;font-family:'Poppins',sans-serif}"
+       ".exhibit-table th,.exhibit-table td{border:1px solid #d8e2ed;padding:3px 5px;"
+       "vertical-align:top;line-height:1.35;overflow-wrap:break-word;word-break:normal}"
+       ".exhibit-table thead{display:table-header-group}"
+       ".exhibit-table tbody{display:table-row-group}"
+       ".exhibit-table tbody.block{break-inside:avoid-page;page-break-inside:avoid}"
+       ".exhibit-table tr{break-inside:avoid-page;page-break-inside:avoid}"
+       ".exhibit-table thead th{background:" + NAVY + ";color:#fff;font-weight:700;"
+       "vertical-align:bottom}"
+       ".exhibit-table .cell-text{text-align:left}"
+       ".exhibit-table .cell-num{text-align:right;font-variant-numeric:tabular-nums}"
+       ".exhibit-table .cell-date{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}"
+       ".exhibit-table .cell-num.short{white-space:nowrap}"
+       ".exhibit-table tbody tr:nth-child(even) td{background:#f8fafc}"
+       ".exhibit-table tbody tr.section-row th{background:#e8f0fa;color:" + NAVY + ";"
+       "text-align:left;font-weight:700;border-top:1.5px solid " + ROYAL_BLUE + ";"
+       "padding:4px 5px;break-after:avoid-page}"
+       ".exhibit-table tbody tr.total-row td{background:#eef4fb;font-weight:700;"
+       "border-top:1px solid #9bb3d3}"
+       ".exhibit-table caption{text-align:left;font-weight:700;font-size:7.8pt;"
+       "color:" + NAVY + ";margin-bottom:3px;font-family:'Poppins',sans-serif}"
        ".src{font-size:6.7pt;color:" + MUT + ";margin:2px 0 6px;line-height:1.3}"
        ".page{page-break-before:always}"
        ".small{font-size:7.5pt;color:" + MUT + "}"
        ".grid-2{display:flex;gap:12px;width:100%;margin:4px 0;box-sizing:border-box}"
-       ".grid-col{flex:1 1 0;min-width:0;box-sizing:border-box}")
+       ".grid-col{flex:1 1 0;min-width:0;box-sizing:border-box}"
+       "@media screen{body{max-width:980px;margin:0 auto;padding:28px 34px;"
+       "box-sizing:border-box;font-size:12px;line-height:1.5}"
+       ".page{page-break-before:auto;border-top:1px solid #d8e2ed;margin-top:28px;padding-top:18px}"
+       ".exhibit{overflow-x:auto}.exhibit-table{min-width:620px;font-size:11px}"
+       ".exhibit-table th,.exhibit-table td{padding:6px 8px}"
+       ".exhibit-table caption{font-size:12px;margin-bottom:5px}"
+       ".src{font-size:10px;line-height:1.4}"
+       ".grid-col .exhibit-table{min-width:0}}"
+       "@media screen and (max-width:720px){body{padding:16px}"
+       ".cover,.grid-2{flex-direction:column}.left,.right{width:100%}"
+       ".exhibit-table,.grid-col .exhibit-table{min-width:680px}"
+       ".exhibit-table th,.exhibit-table td{padding:5px 6px}"
+       ".exhibit::before{content:'Geser tabel untuk kolom lainnya →';display:block;"
+       "text-align:right;font-size:10px;color:" + MUT + ";margin-bottom:2px}}"
+       "@media print{.exhibit{overflow:visible}.exhibit-table{min-width:0}"
+       ".page{page-break-before:always}}")
 
 
 def _price_chart(ticker):
@@ -101,13 +136,71 @@ def _price_chart(ticker):
             f"dari data lokal. Overlay IHSG absen (window indeks beda periode).</p>")
 
 
+def _column_widths(cols):
+    """Reserve room for descriptive fields and stable widths for figures."""
+    labels = [str(col).strip().lower() for col in cols]
+    if len(cols) == 2 and "terakhir" in labels[1]:
+        return [31, 69]
+    if len(cols) == 2:
+        return [78, 22]
+    if "dasar" in labels and len(cols) == 6:
+        return [18, 10, 11, 11, 11, 39]
+    if {"katalis", "waktu", "kenapa penting", "arah"}.issubset(labels):
+        return [50, 13, 28, 9]
+    return {3: [42, 29, 29], 4: [34, 22, 22, 22],
+            5: [48, 12, 12, 12, 16],
+            6: [34, 13.2, 13.2, 13.2, 13.2, 13.2]}.get(
+                len(cols), [100 / len(cols)] * len(cols))
+
+
+def _column_kinds(cols, rows):
+    kinds = []
+    for index, col in enumerate(cols):
+        label = str(col).strip().lower()
+        values = [str(row[index]).strip() for row in rows if index < len(row) and row[index] != ""]
+        if index == 0 or label in {"dasar", "kenapa penting", "arah", "tahap"} or "terakhir" in label:
+            kinds.append("text")
+        elif label == "waktu" or (values and all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) for v in values)):
+            kinds.append("date")
+        elif values and sum(bool(re.match(r"^(?:Rp|USD\s*)?[\d(~−-]|^n\.a\.$", v))
+                            for v in values) >= len(values) / 2:
+            kinds.append("num")
+        else:
+            kinds.append("text")
+    return kinds
+
+
 def _table(ex):
-    d = ex["data"]
-    rows = "".join("<tr>" + "".join(f"<td>{html.escape(str(c))}</td>" for c in r)
-                   + "</tr>" for r in d["rows"])
-    head = "".join(f"<th>{html.escape(str(c))}</th>" for c in d["cols"])
-    return (f"<div><table><caption>Exhibit {ex['n']}. {html.escape(ex['judul'])}</caption>"
-            f"<tr>{head}</tr>{rows}</table>"
+    data = ex["data"]
+    cols, rows = data["cols"], data["rows"]
+    widths = _column_widths(cols)
+    kinds = _column_kinds(cols, rows)
+    colgroup = "".join(f"<col style='width:{width}%'>" for width in widths)
+    head = "".join(f"<th scope='col' class='cell-{kind}'>{html.escape(str(col))}</th>"
+                   for col, kind in zip(cols, kinds))
+    groups = [[]]
+    for row in rows:
+        cells = [str(row[i]) if i < len(row) else "" for i in range(len(cols))]
+        if cells[0].startswith("Blok ") and all(not cell for cell in cells[1:]):
+            if groups[-1]:
+                groups.append([])
+            groups[-1].append("<tr class='section-row'>"
+                              f"<th scope='rowgroup' colspan='{len(cols)}'>{html.escape(cells[0])}</th></tr>")
+            continue
+        total = bool(re.match(r"^(?:Jumlah |Total |\(=\) |FCFF$|PV FCFF$|Laba bersih$|TP final$|WACC$)",
+                              cells[0], re.I))
+        classes = " class='total-row'" if total else ""
+        rendered = []
+        for cell, kind in zip(cells, kinds):
+            short = " short" if kind == "num" and len(cell) <= 13 and " " not in cell else ""
+            rendered.append(f"<td class='cell-{kind}{short}'>{html.escape(cell)}</td>")
+        groups[-1].append(f"<tr{classes}>" + "".join(rendered) + "</tr>")
+    body = "".join(f"<tbody class='block'>{''.join(group)}</tbody>" for group in groups if group)
+    keep = " keep" if len(rows) <= 14 else ""
+    return (f"<div class='exhibit{keep}'><table class='exhibit-table'>"
+            f"<caption>Exhibit {ex['n']}. {html.escape(ex['judul'])}</caption>"
+            f"<colgroup>{colgroup}</colgroup><thead><tr>{head}</tr></thead>"
+            f"{body}</table>"
             f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
 
 
@@ -239,4 +332,3 @@ def render(doc):
         h.append(f"<li class='small'>{html.escape(c)}</li>")
     h.append("</ul></div></body></html>")
     return "\n".join(h)
-
