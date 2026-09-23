@@ -102,7 +102,7 @@ def test_sens_base_cell():
 
 
 def test_ddm_exact():
-    bvps, coe, roae, payout, g = 1_000.0, 0.12, 0.15, 0.40, 0.025
+    bvps, coe, roae, payout, g = 1_000.0, 0.12, 0.15, 0.40, 0.035
     ex = V.ddm_exhibits(payout, roae, bvps, coe)
     _shape(ex)
     by = {r[0]: r[1] for r in ex["data"]["rows"]}

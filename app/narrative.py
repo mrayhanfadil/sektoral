@@ -289,9 +289,9 @@ def build(intake, fc, va, g1, method="auto"):
     sens_tp_rows = []
     for dw, wlabel in ((-0.01, "WACC -1pp"), (0.0, "WACC base"), (0.01, "WACC +1pp")):
         sens_tp_rows.append([wlabel] + [f"Rp{fmt.rp(grid.get((dw, gg), 0))}"
-                                        for gg in (0.015, 0.025, 0.035)])
+                                        for gg in (0.025, 0.035, 0.045)])
     E("Sensitivitas TP (WACC x g)", "tabel",
-      {"cols": ["TP (Rp)", "g 1,5%", "g 2,5%", "g 3,5%"], "rows": sens_tp_rows})
+      {"cols": ["TP (Rp)", "g 2,5%", "g 3,5%", "g 4,5%"], "rows": sens_tp_rows})
     for _vex in [valtables.fcff_exhibit(intake, fc, va)]:
         E(_vex["judul"], _vex["tipe"], _vex["data"], _vex.get("catatan_sumber") or
           "Source: Company, Sektoral Estimates")
