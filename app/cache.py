@@ -29,8 +29,44 @@ def payloads(endpoint):
 
 
 def first(endpoint):
+    """Return the most recently fetched snapshot for an endpoint."""
     rows = payloads(endpoint)
-    return rows[0][1] if rows else None
+    return rows[-1][1] if rows else None
+
+
+def company_report(ticker):
+    """Return the newest report snapshot with the inputs needed by the model.
+
+    Sectors may cache partial responses for the same endpoint/parameters. Do
+    not let a newer overview-only response hide an older full company report.
+    """
+    rows = payloads(f"/company/report/{str(ticker).strip().upper()}/")
+    if not rows:
+        return None
+    for _, payload in reversed(rows):
+        if not isinstance(payload, dict):
+            continue
+        overview = payload.get("overview") or {}
+        valuation = payload.get("valuation") or {}
+        try:
+            price = float(overview.get("last_close_price") or
+                          valuation.get("last_close_price"))
+        except (TypeError, ValueError):
+            continue
+        history = ((payload.get("financials") or {}).get("historical_financials") or [])
+        usable = [row for row in history if isinstance(row, dict) and
+                  isinstance(row.get("year"), (int, float)) and
+                  _positive_number(row.get("revenue"))]
+        if price > 0 and len(usable) >= 3:
+            return payload
+    return rows[-1][1]
+
+
+def _positive_number(value):
+    try:
+        return float(value) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 def endpoints():

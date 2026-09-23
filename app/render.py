@@ -1,6 +1,6 @@
 """Renderer HTML laporan multipage A4. Brand Sektoral, bukan BRIDS.
 
-Struktur: header → rating → cover 2 kolom (data pasar + narasi) → Key
+Struktur: header → status → cover 2 kolom (data pasar + narasi) → Key
 Financials → halaman 2-6 → metodologi + disclaimer. Chart SVG native dari
 cache daily. Nomor halaman via CSS counter. Cetak via app/pdf.py (A4).
 """
@@ -20,83 +20,102 @@ def _b64_font(filename):
     return base64.b64encode(p.read_bytes()).decode("ascii") if p.exists() else ""
 
 
-_POP_REG = _b64_font("Poppins-Regular.ttf")
-_POP_BOLD = _b64_font("Poppins-Bold.ttf")
-_POP_ITA = _b64_font("Poppins-Italic.ttf")
+_ROB_REG = _b64_font("Roboto-Regular.ttf")
+_ROB_BOLD = _b64_font("Roboto-Bold.ttf")
+_ROB_ITA = _b64_font("Roboto-Italic.ttf")
 
-NAVY = "#002060"
-ROYAL_BLUE = "#0F4C9C"
+# Sectoral branding spec: primary blue, white paper, near-black-ink text,
+# light-gray rules, light-blue even rows, Roboto only.
+PRIMARY = "#0928B1"
 PAPER = "#ffffff"
-INK = "#1a1a1a"
+INK = "#333333"
+RULE = "#D9D9D9"
+EVEN_ROW = "#B4C7FF"
 MUT = "#555555"
+# Categorical chart series, in order.
+SERIES = ["#0928B1", "#B4C7FF", "#3ED628", "#1DCD9F", "#0047AB", "#7596FF"]
+ISSUER_COLOR = SERIES[0]
+INDEX_COLOR = SERIES[3]
+
+# Use the canonical wordmark from sectors-hackathon/assets/brand/sectoral-logo.svg.
+LOGO_PATH = Path(__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg"
+LOGO_SVG = LOGO_PATH.read_text(encoding="utf-8")
 
 PAGE_NUM = ('@page{size:A4;margin:12mm 12mm 14mm}'
             '@page{@bottom-left{content:"sektoral";'
-            'font-family:\'Poppins\',sans-serif;font-size:7pt;color:' + MUT + '}'
+            "font-family:'Roboto',sans-serif;font-size:7pt;color:" + MUT + '}'
             '@bottom-center{content:"Lihat pengungkapan penting di bagian akhir laporan ini";'
-            'font-family:\'Poppins\',sans-serif;font-size:7pt;color:' + MUT + '}'
+            "font-family:'Roboto',sans-serif;font-size:7pt;color:" + MUT + '}'
             '@bottom-right{content:"Halaman " counter(page);'
-            'font-family:\'Poppins\',sans-serif;font-size:7.2pt;color:' + MUT + '}}')
+            "font-family:'Roboto',sans-serif;font-size:7.2pt;color:" + MUT + '}}')
 
 FONT_FACES = (
-    f"@font-face{{font-family:'Poppins';src:url('data:font/truetype;charset=utf-8;base64,{_POP_REG}') format('truetype');font-weight:400;font-style:normal;}}\n"
-    f"@font-face{{font-family:'Poppins';src:url('data:font/truetype;charset=utf-8;base64,{_POP_BOLD}') format('truetype');font-weight:700;font-style:normal;}}\n"
-    f"@font-face{{font-family:'Poppins';src:url('data:font/truetype;charset=utf-8;base64,{_POP_BOLD}') format('truetype');font-weight:800;font-style:normal;}}\n"
-    f"@font-face{{font-family:'Poppins';src:url('data:font/truetype;charset=utf-8;base64,{_POP_ITA}') format('truetype');font-weight:400;font-style:italic;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_REG}') format('truetype');font-weight:400;font-style:normal;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_BOLD}') format('truetype');font-weight:700;font-style:normal;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_BOLD}') format('truetype');font-weight:800;font-style:normal;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_ITA}') format('truetype');font-weight:400;font-style:italic;}}\n"
 )
 
 CSS = (FONT_FACES + PAGE_NUM +
-       "body{font-family:'Poppins',sans-serif;color:" + INK + ";background:" + PAPER +
+       "body{font-family:'Roboto',sans-serif;color:" + INK + ";background:" + PAPER +
        ";font-size:8.1pt;line-height:1.42;margin:0}"
-       ".topbar{display:flex;justify-content:space-between;border-bottom:2px solid "
-       + ROYAL_BLUE + ";padding-bottom:3px;font-size:8.1pt;color:" + ROYAL_BLUE + ";font-weight:600}"
-       ".rating{font-weight:800;font-size:22pt;color:" + NAVY + ";margin:2px 0 0;line-height:1.1}"
+       ".topbar{display:flex;justify-content:space-between;align-items:center;"
+       "border-bottom:2px solid "
+       + PRIMARY + ";padding-bottom:3px;font-size:8.1pt;color:" + PRIMARY + ";font-weight:600}"
+       ".brandmark{vertical-align:-4px;margin-right:3px}"
+       ".wordmark{display:flex;align-items:center}.wordmark svg{display:block;width:84px;height:18px}"
        ".status{font-size:8.5pt;color:" + MUT + ";margin-bottom:3px}"
        ".draft-banner{background:#fff3e8;border:1px solid #bb4d00;color:#803400;"
        "font-weight:700;padding:5px 8px;margin:5px 0;font-size:8.5pt}"
        ".cover{display:flex;gap:12px;margin-top:3px}"
        ".left{width:32%;font-size:7.8pt}"
        ".right{width:68%}"
-       ".kv{display:flex;justify-content:space-between;align-items:baseline;padding:2px 0;border-bottom:1px dotted #ccc}"
+       ".kv{display:flex;justify-content:space-between;align-items:baseline;padding:2px 0;border-bottom:1px dotted " + RULE + "}"
        ".kv span{padding-right:4px}.kv b{font-weight:700;color:" + INK + ";white-space:nowrap}"
-       ".panel{background:#f2f5f9;padding:5px 6px;border:1px solid #d5dfea;border-radius:2px}"
-       "h1.emit{font-size:12.8pt;margin:0 0 2px;color:" + NAVY + ";font-weight:700}"
-       ".headline{font-size:10.8pt;font-weight:700;color:" + ROYAL_BLUE + ";margin:2px 0 4px}"
+       ".panel{background:" + PAPER + ";padding:5px 6px;border:1px solid " + RULE + ";border-radius:2px}"
+       "h1.emit{font-size:12.8pt;margin:0 0 2px;color:" + PRIMARY + ";font-weight:700}"
+       ".headline{font-size:10.8pt;font-weight:700;color:" + PRIMARY + ";margin:2px 0 4px}"
        ".bullets{margin:4px 0 6px 14px;padding:0;font-size:7.9pt}.bullets li{margin-bottom:3px}"
-       "h2.sec{font-size:11pt;color:" + ROYAL_BLUE + ";font-weight:700;margin:10px 0 5px}"
-       "h3.sub{font-size:8.8pt;color:" + NAVY + ";font-weight:700;margin:5px 0 2px}"
+       "h2.sec{font-size:11pt;color:" + PRIMARY + ";font-weight:700;margin:10px 0 5px}"
+       "h3.sub{font-size:8.8pt;color:" + PRIMARY + ";font-weight:700;margin:5px 0 2px}"
        ".exhibit{margin:7px 0 8px}"
        ".exhibit.keep{break-inside:avoid-page;page-break-inside:avoid}"
        ".exhibit-table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.2pt;"
-       "margin:0;font-family:'Poppins',sans-serif}"
-       ".exhibit-table th,.exhibit-table td{border:1px solid #d8e2ed;padding:3px 5px;"
+       "margin:0;font-family:'Roboto',sans-serif}"
+       ".exhibit-table th,.exhibit-table td{border:1px solid " + RULE + ";padding:3px 5px;"
        "vertical-align:top;line-height:1.35;overflow-wrap:break-word;word-break:normal}"
        ".exhibit-table thead{display:table-header-group}"
        ".exhibit-table tbody{display:table-row-group}"
        ".exhibit-table tbody.block{break-inside:avoid-page;page-break-inside:avoid}"
        ".exhibit-table tr{break-inside:avoid-page;page-break-inside:avoid}"
-       ".exhibit-table thead th{background:" + NAVY + ";color:#fff;font-weight:700;"
+       ".exhibit-table thead th{background:" + PRIMARY + ";color:#fff;font-weight:700;"
        "vertical-align:bottom}"
        ".exhibit-table .cell-text{text-align:left}"
        ".exhibit-table .cell-num{text-align:right;font-variant-numeric:tabular-nums}"
        ".exhibit-table .cell-date{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}"
        ".exhibit-table .cell-num.short{white-space:nowrap}"
-       ".exhibit-table tbody tr:nth-child(even) td{background:#f8fafc}"
-       ".exhibit-table tbody tr.section-row th{background:#e8f0fa;color:" + NAVY + ";"
-       "text-align:left;font-weight:700;border-top:1.5px solid " + ROYAL_BLUE + ";"
+       ".exhibit-table tbody tr:nth-child(even) td{background:" + EVEN_ROW + "}"
+       ".exhibit-table tbody tr.section-row th{background:" + EVEN_ROW + ";color:" + PRIMARY + ";"
+       "text-align:left;font-weight:700;border-top:1.5px solid " + PRIMARY + ";"
        "padding:4px 5px;break-after:avoid-page}"
-       ".exhibit-table tbody tr.total-row td{background:#eef4fb;font-weight:700;"
-       "border-top:1px solid #9bb3d3}"
+       ".exhibit-table tbody tr.total-row td{background:" + PAPER + ";font-weight:700;"
+       "border-top:1px solid " + RULE + "}"
        ".exhibit-table caption{text-align:left;font-weight:700;font-size:7.8pt;"
-       "color:" + NAVY + ";margin-bottom:3px;font-family:'Poppins',sans-serif}"
+       "color:" + PRIMARY + ";margin-bottom:3px;font-family:'Roboto',sans-serif}"
        ".src{font-size:6.7pt;color:" + MUT + ";margin:2px 0 6px;line-height:1.3}"
+       ".research-card{border:1px solid " + RULE + ";"
+       "padding:7px 9px;margin:9px 0;break-inside:avoid-page;page-break-inside:avoid}"
+       ".research-card h3{color:" + PRIMARY + ";font-size:9pt;margin:0 0 4px}"
+       ".research-card p{margin:3px 0;line-height:1.42}"
+       ".research-card .research-cite{font-size:6.7pt;color:" + MUT + ";"
+       "margin-top:6px;overflow-wrap:anywhere}"
        ".page{page-break-before:always}"
        ".small{font-size:7.5pt;color:" + MUT + "}"
        ".grid-2{display:flex;gap:12px;width:100%;margin:4px 0;box-sizing:border-box}"
        ".grid-col{flex:1 1 0;min-width:0;box-sizing:border-box}"
        "@media screen{body{max-width:980px;margin:0 auto;padding:28px 34px;"
        "box-sizing:border-box;font-size:12px;line-height:1.5}"
-       ".page{page-break-before:auto;border-top:1px solid #d8e2ed;margin-top:28px;padding-top:18px}"
+       ".page{page-break-before:auto;border-top:1px solid " + RULE + ";margin-top:28px;padding-top:18px}"
        ".exhibit{overflow-x:auto}.exhibit-table{min-width:620px;font-size:11px}"
        ".exhibit-table th,.exhibit-table td{padding:6px 8px}"
        ".exhibit-table caption{font-size:12px;margin-bottom:5px}"
@@ -108,7 +127,11 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table th,.exhibit-table td{padding:5px 6px}"
        ".exhibit::before{content:'Geser tabel untuk kolom lainnya →';display:block;"
        "text-align:right;font-size:10px;color:" + MUT + ";margin-bottom:2px}}"
-       "@media print{.exhibit{overflow:visible}.exhibit-table{min-width:0}"
+       "@media print{body,body *{font-family:'Roboto',sans-serif!important;"
+       "font-variant-ligatures:none;font-feature-settings:'liga' 0,'clig' 0}"
+       "@media print{h1,h2,h3{font-weight:400!important}"
+       ".exhibit{overflow:visible}.exhibit-table{min-width:0}"
+       ".research-summary{display:none!important}"
        ".page{page-break-before:always}}")
 
 
@@ -182,8 +205,8 @@ def _price_chart(ticker, as_of):
     ticks = sorted(ticks)
     grid = "".join(
         f"<line x1='{x0}' x2='{x1}' y1='{xy(dates[0], tick)[1]:.1f}' "
-        f"y2='{xy(dates[0], tick)[1]:.1f}' stroke='{'#aebfd3' if tick == 100 else '#e4ebf3'}' "
-        f"stroke-width='{'1' if tick == 100 else '0.7'}'/>"
+        f"y2='{xy(dates[0], tick)[1]:.1f}' stroke='{'#000000' if tick == 100 else '#E6E6E6'}' "
+        f"stroke-width='{'1.2' if tick == 100 else '0.5'}'/>"
         f"<text x='26' y='{xy(dates[0], tick)[1] + 2.5:.1f}' text-anchor='end' "
         f"font-size='7.5' fill='{MUT}'>{tick}</text>"
         for tick in ticks if lower <= tick <= upper)
@@ -201,12 +224,12 @@ def _price_chart(ticker, as_of):
         "style='display:block;width:100%;height:auto' role='img' aria-labelledby='price-chart-title'>"
         f"<title id='price-chart-title'>Kinerja harga {safe_ticker} dan IHSG, "
         f"{dates[0].isoformat()} sampai {dates[-1].isoformat()}, awal 100</title>"
-        f"{grid}{polyline(ihsg, '#D27A30', '4 3')}{polyline(issuer, ROYAL_BLUE)}"
+        f"{grid}{polyline(ihsg, INDEX_COLOR, '4 3')}{polyline(issuer, ISSUER_COLOR)}"
         f"<text x='{x0}' y='105' font-size='7.5' fill='{MUT}'>{dates[0]:%Y-%m}</text>"
         f"<text x='{x1}' y='105' text-anchor='end' font-size='7.5' fill='{MUT}'>{dates[-1]:%Y-%m}</text>"
-        f"<line x1='32' x2='44' y1='120' y2='120' stroke='{ROYAL_BLUE}' stroke-width='2'/>"
+        f"<line x1='32' x2='44' y1='120' y2='120' stroke='{ISSUER_COLOR}' stroke-width='2'/>"
         f"<text x='48' y='123' font-size='8' fill='{INK}'>{safe_ticker} {pct(issuer_return)}%</text>"
-        "<line x1='135' x2='147' y1='120' y2='120' stroke='#D27A30' stroke-width='2' stroke-dasharray='4 3'/>"
+        f"<line x1='135' x2='147' y1='120' y2='120' stroke='{INDEX_COLOR}' stroke-width='2' stroke-dasharray='4 3'/>"
         f"<text x='151' y='123' font-size='8' fill='{INK}'>IHSG {pct(ihsg_return)}%</text>"
         f"<text x='32' y='140' font-size='7.8' fill='{MUT}'>Selisih {pct(spread)} poin persentase</text>"
         "</svg>"
@@ -270,7 +293,7 @@ def _table(ex):
             groups[-1].append("<tr class='section-row'>"
                               f"<th scope='rowgroup' colspan='{len(cols)}'>{html.escape(cells[0])}</th></tr>")
             continue
-        total = bool(re.match(r"^(?:Jumlah |Total |\(=\) |FCFF$|PV FCFF$|Laba bersih$|TP final$|WACC$)",
+        total = bool(re.match(r"^(?:Jumlah |Total |\(=\) |FCFF$|PV FCFF$|Laba bersih$|Nilai skenario gabungan$|WACC$)",
                               cells[0], re.I))
         classes = " class='total-row'" if total else ""
         rendered = []
@@ -293,14 +316,15 @@ def _kv(k, v):
 
 def _topbar(date):
     return ("<div class='topbar'><span>Equity Research - Company Update | "
-            f"{html.escape(str(date))}</span><span>Sektoral</span></div>")
+            f"{html.escape(str(date))}</span><span class='wordmark' "
+            f"aria-label='Sectoral'>{LOGO_SVG}</span></div>")
 
 
 def _draft_banner(meta):
     if meta.get("status") != "draft_non_distributable":
         return ""
-    return ("<div class='draft-banner'>DRAFT NON-DISTRIBUTABLE — "
-            "target harga dan rating ditahan sampai data dan valuasi tervalidasi.</div>")
+    return ("<div class='draft-banner'>DRAFT: BUKTI BELUM LENGKAP — "
+            "skenario nilai belum disajikan sampai data dan model tervalidasi.</div>")
 
 
 def _render_page_content(b):
@@ -309,7 +333,20 @@ def _render_page_content(b):
     paras = b.get("paragraf") or []
 
     res = []
-    if b.get("layout") == "stack":
+    if b.get("layout") == "research_cards":
+        for p in paras:
+            res.append(f"<p>{html.escape(p)}</p>")
+        for card in b.get("research_cards") or []:
+            refs = "; ".join(card.get("citations") or [])
+            res.append("<article class='research-card'>"
+                       f"<h3>{html.escape(card['title'])}</h3>"
+                       f"<p><b>Observasi.</b> {html.escape(card['observation'])}</p>"
+                       f"<p><b>Kaitan.</b> {html.escape(card['implication'])}</p>"
+                       f"<p><b>Batasan.</b> {html.escape(card['caveat'])}</p>"
+                       f"<p class='research-cite'><b>Rujukan cache:</b> {html.escape(refs)}</p>"
+                       "</article>")
+
+    elif b.get("layout") == "stack":
         for p in paras:
             res.append(f"<p>{html.escape(p)}</p>")
         for e in exs:
@@ -367,21 +404,15 @@ def _render_page_content(b):
 
 def render(doc):
     m, cov = doc["meta"], doc["cover"]
-    up = m["upside_persen"]
-    ups = (f"{up:,.1f}".replace(",", "_").replace(".", ",").replace("_", ".") + "%"
-           if up is not None else "n.a.")
     h = [f"<html><head><meta charset='utf-8'><style>{CSS}</style></head><body>"]
     h.append(_topbar(m["tanggal"]))
     h.append(_draft_banner(m))
-    h.append(f"<div class='rating'>{html.escape(m['rating'])}</div>"
-             f"<div class='status'>{'(Inisiasi)' if m.get('status') != 'draft_non_distributable' else 'Status: draft'}</div>")
+    report_status = "DRAFT: BUKTI BELUM LENGKAP" if m.get("status") == "draft_non_distributable" else "Analisis skenario informasional"
+    h.append(f"<div class='status'>{html.escape(report_status)}</div>")
     h.append("<div class='cover'><div class='left'>")
     h.append(f"<div class='small'>Valuasi: {html.escape(doc.get('method', 'DCF'))}</div>"
              "<div class='panel'>")
     h.append(_kv("Harga Terakhir (Rp)", f"{m['harga']:,.0f}"))
-    h.append(_kv("Target Harga (Rp)", f"{m['tp']:,}" if m.get("tp") is not None else "Ditahan"))
-    h.append(_kv("TP Sebelumnya (Rp)", "n.a."))
-    h.append(_kv("Upside/Downside", ups))
     h.append(_kv("Jumlah Saham (juta)", f"{cov['data_pasar']['saham']/1e6:,.0f}"))
     h.append(_kv("Kap. Pasar (Rp miliar)", f"{cov['data_pasar']['market_cap']/1e9:,.0f}"))
     h.append(_kv("Rata-rata T/O Harian (Rp miliar)", str(cov["data_pasar"].get("adtv", "-"))))
@@ -413,7 +444,8 @@ def render(doc):
     h.append(_table(by_n[1]))
 
     for b in doc["bagian"]:
-        h.append(f"<div class='page'>{_topbar(m['tanggal'])}")
+        page_class = "page research-summary" if b.get("layout") == "research_cards" else "page"
+        h.append(f"<div class='{page_class}'>{_topbar(m['tanggal'])}")
         h.append(_draft_banner(m))
         h.append(f"<h2 class='sec'>{html.escape(b['judul'])}</h2>")
         h.append(_render_page_content(b))
@@ -423,8 +455,8 @@ def render(doc):
              f"{_draft_banner(m)}"
              "<h2 class='sec'>Pengungkapan</h2>"
              "<p class='small'>Laporan ini adalah alat informasi dan analisis, bukan "
-             "rekomendasi, prediksi, atau saran investasi. Data bersumber dari Sectors "
-             "(sectors.app) dan IDX; akurasi tunduk pada kualitas data sumber. Keputusan "
+             "rekomendasi, prediksi, atau saran investasi. Input laporan berasal dari "
+             "sectors cache (sectors.app); akurasi tunduk pada kualitas data sumber. Keputusan "
              "investasi sepenuhnya tanggung jawab pembaca. Performa masa lalu tidak "
              "menjamin hasil di masa depan.</p><h2 class='sec'>Catatan metodologi</h2><ul>")
     for c in doc["catatan_metodologi"]:

@@ -9,6 +9,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 NEWS_ANALYSIS_DIR = ROOT / "data" / "news_analysis"
+_ADVICE = re.compile(
+    r"\b(buy|sell|hold|recommend\w*|beli|jual|tahan|rekomendasi|target price|price target|"
+    r"target harga|harga target|nilai wajar|fair value)\b", re.I)
 
 
 def relevant_rows(ticker, payload, as_of=None, limit=10):
@@ -46,6 +49,9 @@ def validate_analysis(ticker, rows, news_rows, as_of=None):
         if not all(isinstance(row.get(field), str) and row[field].strip()
                    for field in ("summary", "connection", "caveat", "source", "timestamp")):
             continue
+        if _ADVICE.search(" ".join(row[field] for field in
+                                   ("summary", "connection", "caveat"))):
+            continue
         if "/news/" not in row["source"] or not _valid_iso_day(row["timestamp"]):
             continue
         if as_of and row["timestamp"][:10] > str(as_of)[:10]:
@@ -58,6 +64,10 @@ def validate_analysis(ticker, rows, news_rows, as_of=None):
                         (not item.get("source") or item["source"] in row["source"]) and
                         str(item.get("timestamp") or "") == row["timestamp"]), None)
         if article is None:
+            continue
+        # A third-party recommendation headline must not become public-facing
+        # content through the provenance/source column either.
+        if _ADVICE.search(str(article.get("title") or "")):
             continue
         cached_urls = {str(item.get("source")) for item in news_rows
                        if isinstance(item, dict) and item.get("source")}

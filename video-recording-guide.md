@@ -1,97 +1,52 @@
 # Video recording guide
 
-> Two videos required (rules §08): a 60-second teaser (public, on social media) and a judging video of up to three minutes. Both must be accessible — inaccessible videos are not judged.
+The submission needs two real product recordings: a public teaser of up to 60 seconds and a judging walkthrough of up to three minutes. The main demo should use Sektoral's local browser UI: enter ticker → watch status → open report or agent trace. Record a fresh run from the current checkout and use only outputs it actually produced.
 
-## F1 audit gap that motivated this file
+## Before recording
 
-Gap **G-6**: "How do we use the videos we record? The submission checklist asks for two videos. Nothing in the repo tells the team how to record, host (YouTube unlisted vs Vimeo vs Drive), or test accessibility."
+1. From the repository root, start the local UI with `python3 -m app.web`, then open `http://127.0.0.1:8765`. The server binds to localhost by default.
+2. Confirm `.env` has the configured LLM key and that the selected ticker has useful rows in `data/sectors_cache.db`. Do not show `.env` or the key. The run needs network access to the LLM endpoint, while market data comes only from the local Sectors cache; the workflow does not call Sectors upstream.
+3. On the landing page, select **Coba riset emiten**, enter the ticker on `/research`, and click **Mulai riset**. Keep the actual status visible, including a partial result or error. When completed, open **Buka company update** and **Lihat jejak agent**.
+4. Check the actual report and trace for the selected run. The generated files are in `out/demo/<job-id>/` as `<TICKER>.html`, `<TICKER>-trace.html`, and `<TICKER>-trace.json`. Explain only sources, claims, and evidence gaps visible in those artifacts.
+5. The BBCA CLI and browser workflows completed end-to-end QA on this working checkout. Confirm the frozen submission checkout and regenerate its artifacts before recording. Do not combine unrelated runs, invent agent steps, or pass off a stale artifact as the fresh result.
 
-## Hard requirements (rules §08)
+For a terminal-only run, the one-command workflow is `python3 -m app.research BBCA --out out/demo --pdf` (replace the ticker as needed). Omit `--pdf` if PDF support is unavailable; HTML is the default. To capture the real browser workflow, run `python3 scripts/record_demo.py --ticker BBCA`; it opens the landing page, follows the CTA, submits a live job, and saves the raw recording under `out/demo-video/`. The video should still foreground the browser workflow.
 
-- **60-second teaser** — screen recording of the product working, published publicly on YouTube or social media.
-- **Judging video** — up to 3 minutes, full walkthrough of problem, intended audience, core workflow. Accepted formats:
-  - YouTube (public or unlisted)
-  - Vimeo
-  - Google Drive (link sharing enabled)
-  - Loom
-- **Inaccessible videos are not judged.** Test on a fresh browser / incognito window before submitting.
+## Judging video — target 2:45, maximum 3:00
 
-## Recommended stack (zero-budget)
-
-| Component | Tool | Cost |
-|---|---|---|
-| Screen recorder | OBS Studio (Linux/Mac/Win) | Free |
-| Webcam (optional) | Built-in laptop cam | Free |
-| Mic | Built-in mic + noise suppression (OBS has it) | Free |
-| Editor (basic cuts) | DaVinci Resolve or Kdenlive | Free |
-| Hosting (judging video) | YouTube unlisted | Free |
-| Hosting (teaser) | YouTube public OR TikTok/Instagram Reels | Free |
-
-## Recording workflow
-
-### Before recording
-
-- [ ] **Disable notifications.** OS-level "Do Not Disturb" + browser profile in incognito with no notifications.
-- [ ] **Pre-fill test data.** Have one ticker + one good answer ready to demo end-to-end without thinking aloud on camera.
-- [ ] **Pick the one visual frame that opens.** The 3-min judging video's first 5 seconds carry the whole real-world-usability story. For Asing Radar: a screenshot of yesterday's foreign-flow Telegram message.
-
-### Teaser (60s)
-
-| Time | What to show |
+| Time | Screen and narration |
 |---|---|
-| 0–5s | The visual frame (one screenshot of the product output, full screen, big text overlay). |
-| 5–20s | Problem statement in 1-2 sentences. |
-| 20–45s | Live product demo — one short scenario end-to-end, no narration gaps. |
-| 45–55s | Call to action: what to do next, where to sign up. |
-| 55–60s | Track name + repo link on screen. |
+| 0:00–0:15 | Show the Sektoral landing page. Say: “Equity analysts need to connect company data to evidence they can check. Sektoral helps Indonesian equity analysts turn cached Sectors data into a sourced company update, with evidence gaps visible.” |
+| 0:15–0:35 | Enter the ticker used for the real run and click **Mulai riset**. Say that this run reads the ticker's Sectors data already in the local cache; the LLM helps the agent reason over that evidence. |
+| 0:35–1:00 | Show the actual status page as it moves through processing to completion. Explain the UI's displayed state. If the run is partial, keep the partial label on screen and say what the page tells you. |
+| 1:00–1:40 | Open **Lihat jejak agent**. Show the selected cache endpoints and one actual observation, implication, caveat, and citation (endpoint, field path, and value). Describe what the source supports without adding facts from outside the cache. |
+| 1:40–2:20 | Open **Buka company update**. Follow the cited evidence into the report and show a relevant section. If the report marks a draft, partial section, or limitation, explain that evidence gap instead of presenting the output as complete. |
+| 2:20–2:40 | Return briefly to the browser status or trace. Explain that market data is read from the local Sectors cache and that each run leaves a report and trace to review. Do not imply a live Sectors API call. |
+| 2:40–2:55 | Close: “Sektoral is an information and analysis tool, not investment advice.” Show the public repository URL and AI Agents & Assistants track. |
 
-### Judging video (up to 3 min)
+If the LLM run takes longer than the available time, keep the submitted video within three minutes and preserve truthful sequencing. Show the real status/result relationship; do not splice artifacts from different runs or hide a failure as a successful completion.
 
-| Time | What to show |
+## Public teaser — 60 seconds
+
+| Time | Screen and narration |
 |---|---|
-| 0–15s | Problem + audience. (Judge §09: real-world usability.) |
-| 15–45s | Live core workflow end-to-end. (One run, no skipped steps.) |
-| 45–90s | Why this is interesting — the Sectors data dependency, the novel interpretation. (Judge §09: technical depth.) |
-| 90–120s | "What I'd do next" — one honest 30-day roadmap sentence. |
-| 120–150s | Outro + repo link + social post URL. |
+| 0:00–0:07 | Show the actual browser landing page. On-screen title: “Sourced company updates from cached Sectors data.” |
+| 0:07–0:17 | Say: “Sektoral is for Indonesian equity analysts who need to see what company data supports—and where the evidence runs out.” |
+| 0:17–0:31 | Enter the demo ticker, click **Mulai riset**, and show the actual status page. Keep the ticker and status visible. |
+| 0:31–0:48 | Open the report or trace produced by that run. Show one real citation and its corresponding insight, or the visible partial/missing-evidence state if the run is incomplete. |
+| 0:48–1:00 | End card: Sektoral, AI Agents & Assistants, team name, public repository URL, and “Information and analysis only; not investment advice.” |
 
-For Track 02 (Asing Radar), the 3-min video can be **mostly silent**: screen recording of a real Telegram channel where the bot has been posting for 2 weeks, with a 30-second voice-over intro.
+The teaser must show the product working and be publicly accessible on YouTube or social media. A teaser can use a pre-run artifact only if it is clearly the output of a real run from the submitted build; do not present it as a different run.
 
-### After recording
+## Recording and access checks
 
-- [ ] **Export at 1080p / 30fps, mp4 (H.264).** Some platforms reject MOV or WEBM. mp4 is the universal safe choice.
-- [ ] **Closed captions if you speak.** YouTube auto-captions are good; review them once.
-- [ ] **Watch on a fresh device.** Test the public link in an incognito window with no cookies — judges see what the public sees.
-- [ ] **Verify on mobile.** 60% of judges will watch on phone. Make sure text is readable at 360p.
-- [ ] **Mute the tab audio before screen recording.** Background music copyright can get you auto-muted.
+- Screen recording with clear voice-over is sufficient. Keep the browser, report, and trace legible on a phone.
+- Hide `.env`, API keys, personal information, and unrelated desktop notifications. Avoid copyrighted music or footage you are not allowed to use.
+- The judging video may be public or unlisted on YouTube, or hosted on Vimeo, Google Drive with link sharing enabled, or Loom. Open the final URL in a private/incognito browser while signed out and play it through.
+- The teaser must be public on YouTube or social media. Verify it from a signed-out browser too.
+- Add captions or reviewed subtitles, especially for Indonesian company names and technical terms. Check that each video stays within its time limit and the audio is intelligible.
+- The judging video should identify the problem, intended audience, and core workflow. The social post is a separate required submission item; include its URL in the portal.
 
-## Hosting checklist (run the night before submit)
+## Required social post
 
-For both videos:
-
-- [ ] Public URL works without login (test in incognito)
-- [ ] Video plays to completion on slow 4G (test with throttling)
-- [ ] Closed captions are visible (or auto-generated review accepted)
-- [ ] Description includes: team name, track, repo URL, problem statement one-liner, social post URL
-- [ ] Thumbnail is one strong frame, not the auto-generated placeholder
-- [ ] Comments are not disabled (judges may want to ask)
-
-## Social post (also required by rules §08)
-
-- Post the teaser on **at least one social channel** — Twitter/X is the easiest (tag @sectors or @sectorsapp).
-- Make sure to include `#sectorshackathon` if a hashtag is being tracked.
-- Save the URL — paste into submission portal "Social media post" field.
-
-## Common pitfalls
-
-- **Wrong format.** MOV from QuickTime, WEBM from OBS default — both rejected by some platforms. Always export to mp4.
-- **No audio.** A 3-min video with no voice-over is technically allowed but judges weight storytelling (30%) — silence hurts.
-- **Cuts too fast.** Showing every endpoint for 5 seconds each is the #1 way to get a 30% technical depth score. Pick ONE flow, narrate it.
-- **B-roll over narration.** If voice is talking and screen is doing something unrelated, judges can't follow. Sync cuts to narration beats.
-
-## What NOT to do
-
-- ❌ Record with the live Sectors dashboard in the same frame as your code. (It looks like you're claiming their UI is your product.)
-- ❌ Use copyrighted music or stock footage with no license.
-- ❌ Apologize in the video ("sorry, this is rough, we ran out of time"). Replace with "what I'd do next" framing.
-- ❌ Promise features you haven't built. Judges will check the repo.
+Publish one project post on **Instagram, LinkedIn, Threads, or TikTok**. Tag the official Sectors account and use the [official thumbnail template](https://www.canva.com/design/DAHUfZI9dJI/rcFmHic2Nn5Hdqj7DLwfmw/edit). The rules say “official Sectors account” without specifying a handle; select the verified/current official account on the channel you use. Save the public post URL for the submission form. Twitter/X alone is not one of the channels listed in the current rules.

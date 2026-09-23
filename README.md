@@ -1,103 +1,64 @@
 # Sektoral
 
-IDX intelligence on the Sectors licensed dataset. Product continuation of the
-Sectors Hackathon 2026 work — clean repo, docs-first, no frozen product code.
+Sektoral helps Indonesian equity analysts turn fragmented company data into a sourced company update, while showing what the evidence supports and where it is still incomplete.
 
-Origin: `mrayhanfadil/sectors-hackathon` (planning + `feat/institutional-report`
-product). This repo adopts the hackathon guides + data-access docs so future
-work starts from one place.
+## How it works
 
-## Data access — Sectors API / MCP
+The local browser flow is simple: enter an IDX ticker, follow its research status, then open the company update and agent trace. Behind the form, the research agent selects reads from the ticker's locally cached Sectors data and creates an evidence-linked brief. A deterministic validator checks its citations before the report builder creates the update. If the cache cannot support all sections, the UI labels the result partial and the report shows its evidence limits.
 
-Two ways, same key (from sectors.app/api, Insider plan or hackathon onboarding):
+Sectors data is the product's only market-data source. The research run reads `data/sectors_cache.db`; it does not call Sectors upstream or fetch market data from the web. The LLM endpoint is used for agent reasoning, not as a market-data source. No brokerage connection or trade execution is part of the product.
 
-| | REST | MCP |
-|---|---|---|
-| Base | `https://api.sectors.app/v2/...` | `https://sectors-mcp.supertype.ai/mcp` |
-| Auth | `Authorization: <key>` (raw, no Bearer) | `Authorization: Bearer <key>` |
-| Use | cron / automation / scripts | AI agent (Claude Code, Cursor, VS Code, Windsurf) |
-| Coverage | IDX + SGX + KLSE + mining + brokers + filings + news | same, 65+ tools |
-
-- Start: `docs/sectors-api-and-mcp.md` (v2 only — v1 is 410 Gone, tickers without `.JK`)
-- MCP setup per client: `docs/mcp/setup.md` + `docs/mcp/tools.md`
-- Claude web / ChatGPT OAuth path: `docs/mcp/claude-integration.md`, `docs/mcp/chatgpt-integration.md`
-- REST catalog: `docs/rest/` — idx-screener, idx-company, idx-financials-transactions, idx-rankings-brokers-news, sgx, klse, mining + mining 3-file split (commodities-trade, companies, sites-licenses)
-- Agent recipes: `docs/recipes/` (01–06 + human-agent framework)
-- Cookbooks: `docs/cookbook/` (00-quickstart + excel, sheets, looker, n8n, sectorscan, gnn, portfolio, banking, R, api-security) + `docs/cookbook-v2/` (01–08 worked Python: screener → error-handling)
-- Sectors ops: `docs/sectors/` (swap, valuation-framework, credit-burn-discipline) + `docs/integration/` (client/cache gates, credit policy, financial-tools + MCP snapshots, offline toggle, backfill/harvest, conftest discipline — snapshots, not runnable product)
-
-Billing: 2xx billed per endpoint cost, 404 on addressed resource bills 1, routing 404 / 4xx / 5xx free. Natural-language `?q=` costs 3, structured `where` costs 1. Budget in `credit-calculator.md`.
-
-## Repo structure
-
-```
-sektoral/
-├── README.md
-├── rules.md, submission-checklist.md, credit-calculator.md
-├── onboarding-blocker.md, team-roster.md, video-recording-guide.md
-├── disclaimer-template.md, merge-plan.md, ideas-seed.md
-├── tracks/                        ← 3 hackathon track briefs
-├── docs/
-│   ├── sectors-api-and-mcp.md     ← start here
-│   ├── mcp/                       ← setup, tools, claude, chatgpt
-│   ├── rest/                      ← per-endpoint catalog
-│   ├── recipes/                   ← agent recipes 01–06
-│   ├── cookbook/                  ← 14 cookbooks + quickstart
-│   ├── cookbook-v2/               ← 8 worked Python recipes
-│   ├── sectors/                   ← swap, valuation, credit discipline
-│   ├── integration/               ← sectors client/tools snapshots (ref only)
-├── .env.example
-└── .gitignore
-```
+The product provides information and analysis for research. It does not give investment recommendations or financial advice. Outputs should be read as analytical scenarios, not instructions to buy, sell, or hold a security.
 
 ## Quickstart
 
-```bash
-cp .env.example .env   # fill SECTORS_API_KEY, never commit .env
-# MCP (Claude Code):
-claude mcp add -t http sectors https://sectors-mcp.supertype.ai/mcp -H "Authorization: Bearer $SECTORS_API_KEY"
-# REST smoke:
-curl -s -H "Authorization: $SECTORS_API_KEY" "https://api.sectors.app/v2/companies/?limit=1" | head -c 500
-```
-
-Product code lives under `experiment/<track-slug>/` once a track locks (see hackathon `merge-plan.md` — not copied as history, only as guide).
-
-## Sistem ringan v3 (app/)
-
-Pipeline deterministik sesuai `spec/Instruksi-Report-v3.md`, contoh layout
-`spec/GMFI-Company-Update-contoh.pdf`. Tanpa agen, tanpa LLM, tanpa upstream.
+From the repository root, copy `.env.example` to `.env` and set `MINIMAX_API_KEY` (or `SEKTORAL_LLM_API_KEY`) for the research agent. Never commit `.env` or share it in a recording. The workflow uses the local Sectors cache and does not need a Sectors API key at run time.
 
 ```bash
-python3 -m app.build AMMN --out out   # JSON + HTML printable
-python3 -m pytest tests/ -q
+python3 -m app.web
 ```
 
-- `app/cache.py` intake hanya dari `data/sectors_cache.db` (stale-ok, 0 kredit).
-  Ticker tanpa data cache ditolak keras (`no verified assumptions`).
-- Report builder tidak membaca PDF benchmark, `data/drivers/`, atau profile lokal;
-  hanya angka di sectors cache yang boleh jadi input. Artikel `/news/` boleh dipakai
-  agent bila tercache, dengan parafrasa, hubungan ke tesis/driver, caveat, dan
-  provenance cache. Agent tidak membuka URL artikel.
-- `app/forecast.py` saat ini masih memakai driver generik 3 tahun (CAGR historis,
-  margin + operating leverage, sustaining = D&A); belum production-grade untuk
-  emiten tambang. Rebuild AMMN direncanakan berbasis operasi pada `docs/plans/2026-09-23-ammn-issuer-specific-rebuild.md`.
-- `app/valuation.py` saat ini masih DCF 3 tahun + terminal Gordon dirata-rata dengan
-  exit EV/EBITDA; ini bukan metode produksi yang dapat diterima untuk finite-life
-  mining. Instruksi v3.2 menetapkan LoM/SOTP sebagai valuasi inti.
-- `app/narrative.py` JSON §7 (headline ≤10 kata, bullet ≤30, paragraf 90-160,
-  exhibit bernomor, tanpa istilah pipeline) + `app/render.py` HTML.
-- Status 22 Sep 2026: AMMN/BBCA/ADRO/RATU build hijau; MTEL (tanpa
-  outstanding_shares) dan CDIA (2 annual) ditolak jujur. Paragraf cover 90-104
-  kata (spec 110-150, residual v1).
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten**, enter a ticker, and select **Mulai riset**. Follow the status page, then open **Buka company update** or **Lihat jejak agent** when the run finishes. If evidence is incomplete, the UI says the analysis is partial. The browser server binds to localhost by default. The agent needs network access to its configured LLM endpoint, but market data comes only from the local Sectors cache. The BBCA CLI and browser workflows have been end-to-end tested on this working checkout; rerun QA on the frozen submission checkout before recording or submitting.
 
-## Adopted from hackathon
+For a terminal-only run, use the one-command CLI below. It writes the HTML report and trace to `out/demo/`; `--pdf` is optional and requires PDF support. Omit it to use HTML only.
 
-- `rules.md`, `tracks/`, `submission-checklist.md`, `ideas-seed.md` — from `references/mcp-and-recipes-2026-08-29` + planning commit `4aad52e`
-- `docs/mcp/`, `docs/recipes/`, `docs/sectors-api-and-mcp.md` — same MCP branch
-- `docs/rest/` — from `references/rest-catalog-2026-08-29` + mining 3-file split from `references/rest-idx-mining-2026-08-29`
-- `docs/cookbook/` — from `references/cookbook-idx-mining-2026-08-29`
-- `docs/cookbook-v2/` — from `audit/f2-cookbook-2026-08-29`
-- `docs/sectors/` + `docs/integration/` — live `sectors-hackathon` sectors ops (snapshot @614aca7, ref only)
-- `.env.example`, `.gitignore` — hackathon root
+```bash
+python3 -m app.research BBCA --out out/demo --pdf
+```
 
-Hackathon guides + all Sectors info — no runnable product, integration files are snapshots.
+Replace `BBCA` with another IDX ticker when its required rows are present in the local cache. The deterministic report builder without agent research remains available as `python3 -m app.build BBCA --out out/demo`.
+
+## Evidence and draft policy
+
+- Inputs are limited to the Sectors rows already present in `data/sectors_cache.db`. Missing ticker data is not silently replaced with web research, memory, analyst assumptions, or another local dataset.
+- The agent may select only cache endpoints available for that ticker. The host executes the reads and records them in the trace.
+- When current ticker-specific news is cached alongside relevant quarterly metrics, the agent paraphrases the article and connects it to the operating context in a single cited insight. The host withholds that link if the evidence or citation does not validate.
+- A validation gate checks the research brief's citations against rows actually read. Failed validation or insufficient evidence must remain visible as a partial result or a clear missing-evidence result; do not present it as a completed conclusion.
+- Do not record an old artifact as if it came from the current integrated command. Generate the demo output afresh and show the browser status and resulting report/trace.
+- No output is an investment recommendation. Remove recommendation labels and price targets from any public-facing demo view unless the team has reviewed them against the hackathon's no-financial-advice rule.
+
+## Project map
+
+| Path | Purpose |
+|---|---|
+| `app/` | Deterministic report intake, forecast, valuation, narrative, and rendering |
+| `agents/research/` | Cache-constrained research agent, evidence checks, and trace data |
+| `data/sectors_cache.db` | Local Sectors cache used as the only market-data source |
+| `spec/` | Report and output requirements |
+| `docs/` | Sectors API/MCP reference, recipes, and implementation notes |
+| `video-recording-guide.md` | Real-workflow video scripts and recording checks |
+| `submission-checklist.md` | Hackathon submission requirements and deadline checklist |
+
+## Sectors API and MCP reference
+
+The product's demo path reads the local cache. The API and MCP guides below are reference material for cache intake and other Sectors integrations; do not imply that the integrated report run calls an upstream endpoint live.
+
+- [Sectors API and MCP overview](docs/sectors-api-and-mcp.md)
+- [MCP setup](docs/mcp/setup.md) and [tool catalogue](docs/mcp/tools.md)
+- [REST endpoint reference](docs/rest/)
+- [Agent recipes](docs/recipes/)
+- [Cookbooks](docs/cookbook/) and [worked Python examples](docs/cookbook-v2/)
+
+## Hackathon submission
+
+The declared track is **AI Agents & Assistants**: custom-built agent logic and an AI/LLM component must be central to the product. Before submission, check the [official rules](https://hackathon.sectors.app/rules) and [track requirements](https://hackathon.sectors.app/tracks/ai-agents-assistants), then use the [submission checklist](submission-checklist.md). The repository must be public at submission and remain public through at least 7 January 2027 (90 days after the announced 9 October winners date).

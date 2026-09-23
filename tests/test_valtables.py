@@ -64,11 +64,11 @@ def test_fcff_bridge_ties():
         val["ev_gordon"])
     assert abs(val["ev_gordon"] - (val["pv_explicit"] + val["pv_terminal"])) \
         < max(val["ev_gordon"] * 1e-9, 1.0)
-    assert by["(=) Nilai Wajar per Saham Gordon (Rp)"][-1] == fmt.rp(
+    assert by["(=) Nilai skenario per Saham Gordon (Rp)"][-1] == fmt.rp(
         val["ps_gordon"])
     tp = round((val["ps_gordon"] + val["ps_exit"]) / 2 / 10) * 10
     assert tp == val["tp"]
-    assert by["Nilai Wajar per Saham rata-rata Gordon+exit (Rp)"][-1] == \
+    assert by["Nilai skenario gabungan per saham Gordon+exit (Rp)"][-1] == \
         fmt.rp(val["tp"])
     # FCFF baris = fcf forecast tiap tahun (persis, bukan turunan ulang).
     fcff_row = [r for r in ex["data"]["rows"] if r[0] == "FCFF"][0]
@@ -109,11 +109,11 @@ def test_ddm_exact():
     by = {r[0]: r[1] for r in ex["data"]["rows"]}
     pbv = (roae - g) / (coe - g)
     assert by["Fair P/BV (= (ROAE-g)/(CoE-g))"] == fmt.mult(pbv, dec=2)
-    assert by["Nilai Wajar (= P/BV x BVPS, Rp)"] == fmt.rp(pbv * bvps)
+    assert by["Nilai skenario (= P/BV x BVPS, Rp)"] == fmt.rp(pbv * bvps)
     dps_t = roae * bvps * payout * (1 + g)
     tv = dps_t / (coe - g)
     assert by["Terminal Value (= DPS terminal/(CoE-g), Rp)"] == fmt.rp(tv)
-    assert by["Nilai Wajar per Saham Gordon (Rp)"] == fmt.rp(tv / (1 + coe))
+    assert by["Nilai skenario per Saham Gordon (Rp)"] == fmt.rp(tv / (1 + coe))
 
 
 def test_rnav_exact():
@@ -128,5 +128,5 @@ def test_rnav_exact():
     rnav = total + cash - debt - ovh
     assert by["Jumlah NAV atribuibel (Rp miliar)"] == fmt.miliar(total)
     assert by["(=) Total RNAV (Rp miliar)"] == fmt.miliar(rnav)
-    assert by["(=) Target Price (= RNAVps x (1-diskon), Rp)"] == \
+    assert by["(=) Nilai skenario (= RNAVps x (1-diskon), Rp)"] == \
         fmt.rp(rnav / SHARES * (1 - disc))

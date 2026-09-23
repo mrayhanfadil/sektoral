@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from app import cache as report_cache
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 CACHE_DB = ROOT / "data" / "sectors_cache.db"
@@ -37,6 +38,8 @@ def cache_get(ticker, endpoint):
     Global cached news is narrowed to rows that explicitly name the requested
     ticker in their symbols list; the agent never receives unrelated headlines.
     """
+    if endpoint == f"/company/report/{ticker.upper()}/":
+        return report_cache.company_report(ticker)
     con = sqlite3.connect(f"file:{CACHE_DB}?mode=ro", uri=True)
     try:
         as_of = None
