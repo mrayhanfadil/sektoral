@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import forecast, intake, narrative, render, valuation
+from . import forecast, intake, narrative, render, report_contract, valuation
 
 PDF_OK = True
 try:
@@ -20,6 +20,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None):
     fc = forecast.build(doc_in)
     va = valuation.build(doc_in, fc)
     doc = narrative.build(doc_in, fc, va, g1, method=method)
+    report_contract.validate_or_raise(doc)
     outdir.mkdir(parents=True, exist_ok=True)
     t = doc["meta"]["ticker"]
     (outdir / f"{t}.json").write_text(json.dumps(doc, indent=1))

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "ticker": "BBRI",
+  "reporting_currency": "IDR",
+  "latest_actual": {
+    "period": "1H26",
+    "period_end": "2026-06-30",
+    "published_at": "2026-08-31",
+    "source_title": "PT Bank Rakyat Indonesia (Persero) Tbk Laporan Keuangan Konsolidasian 30 Juni 2026",
+    "source_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202608/20260831171524-64205-0/FinancialStatement-2026-II-BBRI.pdf",
+    "page": "XBRL statement of profit or loss",
+    "unit": "IDR; reported in millions of Rupiah",
+    "metrics": {
+      "revenue": 107923454000000,
+      "net_interest_income": 80530442000000,
+      "net_profit": 31182586000000,
+      "net_profit_attributable": 30865402000000
+    },
+    "prior_year": {
+      "period": "1H25",
+      "revenue": 102376278000000,
+      "net_interest_income": 73274572000000,
+      "net_profit": 26533147000000,
+      "net_profit_attributable": 26276701000000
+    }
+  },
+  "balance_sheet": {
+    "period_end": "2026-06-30",
+    "source_pages": [1, 2],
+    "total_assets": 2352000000000000,
+    "loans": 1580420000000000,
+    "deposits": 1581000000000000
+  },
+  "operating_context": [
+    {
+      "fact": "Laba bersih konsolidasian BRI pada semester I-2026 tumbuh 17,5% yoy menjadi Rp31,18 triliun ditopang pertumbuhan pendapatan bunga bersih 9,9% yoy.",
+      "source_title": "PT Bank Rakyat Indonesia (Persero) Tbk Laporan Keuangan Konsolidasian 30 Juni 2026",
+      "source_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202608/20260831171524-64205-0/FinancialStatement-2026-II-BBRI.pdf",
+      "published_at": "2026-08-31"
+    }
+  ]
+}

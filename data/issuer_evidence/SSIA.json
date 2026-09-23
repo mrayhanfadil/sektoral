@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "ticker": "SSIA",
+  "reporting_currency": "IDR",
+  "source_type": "issuer_press_release",
+  "verification_note": "Reported figures verified against the issuer release; interim financial statement not cross-checked.",
+  "latest_actual": {
+    "period": "1H26",
+    "period_end": "2026-06-30",
+    "published_at": "2026-08-04",
+    "source_title": "PT Surya Semesta Internusa Tbk 1H26 Results – Resilience Translated into Results",
+    "source_url": "https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf",
+    "page": 2,
+    "unit": "IDR; reported in billions of Rupiah",
+    "metrics": {
+      "revenue": 3353500000000,
+      "gross_profit": 1086200000000,
+      "ebitda": 692500000000,
+      "net_profit": 262600000000
+    },
+    "prior_year": {
+      "period": "1H25",
+      "revenue": 2117200000000,
+      "gross_profit": 441800000000,
+      "ebitda": 106000000000,
+      "net_profit": -32300000000
+    }
+  },
+  "balance_sheet": {
+    "period_end": "2026-06-30",
+    "source_pages": [2],
+    "cash": 1093000000000,
+    "total_assets": 13026800000000,
+    "total_liabilities": 4544400000000,
+    "total_debt": 2269100000000,
+    "non_controlling_interest": 2698000000000,
+    "equity_attributable": 5784400000000
+  },
+  "revenue_breakdown": {
+    "source_page": 2,
+    "segments": [
+      {"name": "Konstruksi", "current": 1700200000000,
+        "prior": 1700500000000},
+      {"name": "Properti", "current": 1267000000000,
+        "prior": 338700000000},
+      {"name": "Perhotelan", "current": 471100000000,
+        "prior": 220900000000}
+    ]
+  },
+  "operating_context": [
+    {
+      "fact": "Pendapatan konsolidasi 1H26 tumbuh 58,4% yoy menjadi Rp3.353,5 miliar ditopang pengakuan penjualan lahan industri di Subang Smartpolitan dan Suryacipta Karawang.",
+      "source_title": "PT Surya Semesta Internusa Tbk 1H26 Results – Resilience Translated into Results",
+      "source_url": "https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf",
+      "published_at": "2026-08-04"
+    }
+  ]
+}

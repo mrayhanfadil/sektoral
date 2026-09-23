@@ -77,7 +77,7 @@ def _draft_value(value):
     return "-" if value is None else fmt.miliar(value)
 
 
-def _build_general_draft(intake, fc, va, g1):
+def _build_general_draft(intake, fc, va, g1, method="auto"):
     """Company-update shaped evidence brief while the production model is gated."""
     ticker = intake["ticker"]
     mining = intake.get("model_profile") == "finite_life_mining"
@@ -95,6 +95,11 @@ def _build_general_draft(intake, fc, va, g1):
                            fmt._id(value / scale, 1))
     money_phrase = lambda value: (f"US${money(value)} juta" if currency == "USD"
                                   else f"Rp{money(value)} miliar")
+    source_page = actual.get("page")
+    page_reference = (f"hlm. {source_page}"
+                      if isinstance(source_page, int) or
+                      (isinstance(source_page, str) and source_page.replace("-", "").isdigit())
+                      else f"rujukan {source_page}")
     pct_change = lambda now, prior: (fmt.pct(now / prior - 1)
                                      if now is not None and prior is not None and
                                      prior > 0 and now >= 0 else "n.m." if
@@ -119,48 +124,59 @@ def _build_general_draft(intake, fc, va, g1):
 
         def per_share(key):
             shares = balance.get("shares_issued")
-            return [(f"({fmt._id(abs(row[key]) / shares *
-                                 (100 if currency == 'USD' else 1), 2)})"
-                     if row[key] < 0 else
-                     fmt._id(row[key] / shares * (100 if currency == "USD" else 1), 2))
-                    if row.get(key) is not None and shares else "-"
-                    for row in history]
+            factor = 100 if currency == "USD" else 1
+            result = []
+            for row in history:
+                value = row.get(key)
+                if value is None or not shares:
+                    result.append("-")
+                    continue
+                formatted = fmt._id(abs(value) / shares * factor, 2)
+                result.append(f"({formatted})" if value < 0 else formatted)
+            return result
 
+        F = fc.get("rows") or []
+        f_labels = [r["label"] for r in F] if F else [f"FY{(int(history[-1]['year']) + 1 + i)%100:02d}F" for i in range(5)]
+        f_dashes = ["-"] * len(f_labels)
+        total_cols_dash = ["-"] * (len(history) + len(f_labels))
         key_rows = [
-            [f"Pendapatan ({unit})"] + values("revenue") + ["-", "-", "-"],
-            ["Pertumbuhan pendapatan (%)"] + growth("revenue") + ["-", "-", "-"],
-            [f"EBITDA ({unit})"] + values("ebitda") + ["-", "-", "-"],
-            ["Pertumbuhan EBITDA (%)"] + growth("ebitda") + ["-", "-", "-"],
-            [f"Laba bersih ({unit})"] + values("net_profit") + ["-", "-", "-"],
-            ["Pertumbuhan laba bersih (%)"] + growth("net_profit") + ["-", "-", "-"],
+            [f"Pendapatan ({unit})"] + values("revenue") + f_dashes,
+            ["Pertumbuhan pendapatan (%)"] + growth("revenue") + f_dashes,
+            [f"EBITDA ({unit})"] + values("ebitda") + f_dashes,
+            ["Pertumbuhan EBITDA (%)"] + growth("ebitda") + f_dashes,
+            [f"Laba bersih ({unit})"] + values("net_profit") + f_dashes,
+            ["Pertumbuhan laba bersih (%)"] + growth("net_profit") + f_dashes,
             ["EPS (US$ sen)" if currency == "USD" else "EPS (Rp)"] +
-            per_share("net_profit_attributable") + ["-", "-", "-"],
+            per_share("net_profit_attributable") + f_dashes,
             ["BVPS (US$ sen)" if currency == "USD" else "BVPS (Rp)"] +
-            per_share("equity_attributable") + ["-", "-", "-"],
-            ["DPS"] + ["-"] * 5,
-            ["PER (x)"] + ["-"] * 5,
-            ["PBV (x)"] + ["-"] * 5,
-            ["Dividend yield (%)"] + ["-"] * 5,
-            ["EV/EBITDA (x)"] + ["-"] * 5,
+            per_share("equity_attributable") + f_dashes,
+            ["DPS"] + total_cols_dash,
+            ["PER (x)"] + total_cols_dash,
+            ["PBV (x)"] + total_cols_dash,
+            ["Dividend yield (%)"] + total_cols_dash,
+            ["EV/EBITDA (x)"] + total_cols_dash,
         ]
         key_note = (f"Sumber: {evidence.get('annual_source_title') or actual.get('source_title')}; "
                     "angka FY24–FY25 ditampilkan dalam US$ juta. "
                     "EPS/BVPS historis memakai laba/ekuitas pemilik induk dan jumlah "
-                    "saham 1H26 sebagai basis pro forma; FY26F–FY28F belum diterbitkan.")
+                    f"saham 1H26 sebagai basis pro forma; {f_labels[0]}–{f_labels[-1]} belum diterbitkan.")
     else:
         cached = intake.get("annuals") or []
         history = cached[-2:]
+        F = fc.get("rows") or []
+        f_labels = [r["label"] for r in F] if F else ["FY26F", "FY27F", "FY28F", "FY29F", "FY30F"]
+        f_dashes = ["-"] * len(f_labels)
         key_rows = [[f"Pendapatan ({unit})"] +
-                    [money(row.get("revenue")) for row in history] + ["-", "-", "-"],
+                    [money(row.get("revenue")) for row in history] + f_dashes,
                     [f"EBITDA ({unit})"] +
-                    [money(row.get("ebitda")) for row in history] + ["-", "-", "-"],
+                    [money(row.get("ebitda")) for row in history] + f_dashes,
                     [f"Laba bersih ({unit})"] +
-                    [money(row.get("earnings")) for row in history] + ["-", "-", "-"]]
+                    [money(row.get("earnings")) for row in history] + f_dashes]
         key_note = ("Sumber: Sectors cache, company/report. Kolom forecast dan "
                     "multiple belum tersedia karena model belum lolos validasi.")
     years = [str(row["year"]) for row in history]
     add("Key Financials", ["Tahun buku 31 Des"] + years +
-        ["FY26F", "FY27F", "FY28F"], key_rows, key_note)
+        f_labels, key_rows, key_note)
 
     actual_rows = []
     if actual:
@@ -181,7 +197,7 @@ def _build_general_draft(intake, fc, va, g1):
         add("Hasil interim resmi dan perubahan yoy",
             ["Metrik", previous.get("period", "Periode lalu"),
              actual["period"], "yoy"], actual_rows,
-            f"Sumber: {actual['source_title']}, hlm. {actual['page']}; "
+            f"Sumber: {actual['source_title']}, {page_reference}; "
             f"{actual['source_url']}")
         metrics = actual["metrics"]
         prior_metrics = actual.get("prior_year") or {}
@@ -207,7 +223,7 @@ def _build_general_draft(intake, fc, va, g1):
         add("Rasio yang menjelaskan kualitas hasil",
             ["Rasio", previous.get("period", "Periode lalu"), actual["period"]],
             diagnostic_rows,
-            f"Sumber: {actual['source_title']}, hlm. {actual['page']}; "
+            f"Sumber: {actual['source_title']}, {page_reference}; "
             "rasio dihitung dari angka resmi, nilai negatif ditampilkan sebagai '-'.")
         chart_metrics = [
             {"label": "Pendapatan", "prior": prior_metrics.get("revenue"),
@@ -224,7 +240,7 @@ def _build_general_draft(intake, fc, va, g1):
             "tipe": "bar_chart", "data": {"unit": unit, "rows": chart_metrics,
                                          "prior_label": previous.get("period", "1H25"),
                                          "current_label": actual["period"]},
-            "catatan_sumber": (f"Sumber: {actual['source_title']}, hlm. {actual['page']}; "
+            "catatan_sumber": (f"Sumber: {actual['source_title']}, {page_reference}; "
                                "grafik memakai nilai absolut dari angka yang dilaporkan.")})
     else:
         quarter = intake.get("latest_quarterly_actual") or {}
@@ -279,15 +295,24 @@ def _build_general_draft(intake, fc, va, g1):
     if balance:
         debt = balance.get("total_debt")
         if debt is None:
-            debt = sum(balance.get(k, 0) for k in
-                       ("loans_current", "loans_noncurrent", "lease_current",
-                        "lease_noncurrent"))
+            components = [balance.get(k) for k in
+                          ("loans_current", "loans_noncurrent", "lease_current",
+                           "lease_noncurrent")]
+            debt = sum(value for value in components if value is not None) \
+                if all(value is not None for value in components) else None
+        equity = balance.get("total_equity")
+        if equity is None and balance.get("equity_attributable") is not None and \
+                balance.get("non_controlling_interest") is not None:
+            equity = balance["equity_attributable"] + balance["non_controlling_interest"]
+        shares = balance.get("shares_issued")
+        balance_unit = "US$ juta" if currency == "USD" else "Rp miliar"
         add("Posisi neraca interim", ["Metrik", balance["period_end"]],
-            [["Kas (US$ juta)", money(balance.get("cash"))],
-             ["Pinjaman berbunga (US$ juta)", money(debt)],
-             ["Total ekuitas (US$ juta)", money(balance.get("total_equity"))],
-             ["Saham diterbitkan (juta)", fmt._id(balance["shares_issued"] / 1e6, 1)]],
-            f"Sumber: {actual['source_title']}; lihat hlm. " +
+            [[f"Kas ({balance_unit})", money(balance.get("cash"))],
+             [f"Pinjaman berbunga ({balance_unit})", money(debt)],
+             [f"Total ekuitas ({balance_unit})", money(equity)],
+             ["Saham diterbitkan (juta)",
+              fmt._id(shares / 1e6, 1) if shares is not None else "-"]],
+            f"Sumber: {actual['source_title']}; lihat rujukan " +
             ", ".join(str(p) for p in balance.get("source_pages", [])) + ".")
 
     if mining:
@@ -321,14 +346,14 @@ def _build_general_draft(intake, fc, va, g1):
                  "Nilai opsi belum layak dihitung tanpa capex, jadwal dan risiko proyek."]]
         else:
             watch_rows = [
-                ["Volume pekerjaan", "Reparasi dan overhaul naik 66,0% yoy di 1H26.",
-                 "Pantau order engine dan airframe serta pemanfaatan hanggar."],
-                ["Mix biaya", "Beban material 43,2% dari pendapatan versus 28,4% di 1H25.",
-                 "Pantau kontribusi pekerjaan padat suku cadang ke margin."],
-                ["Konsentrasi", "Garuda dan Citilink 67,3% dari pendapatan 1H26.",
-                 "Pantau jadwal armada dan kualitas piutang pelanggan terkait."],
-                ["Neraca", "Utang bersih US$321,4 juta per akhir Juni 2026.",
-                 "Pantau bunga, pelunasan dan capex ekspansi."]]
+                ["Pendapatan", "Pecah perubahan hasil menjadi volume, harga dan mix.",
+                 "Butuh data operasi yang terhubung ke laporan keuangan."],
+                ["Margin", "Pisahkan perubahan harga, biaya produksi dan biaya tetap.",
+                 "Jangan ekstrapolasi margin tanpa jembatan operasional."],
+                ["Kas dan capex", "Arus kas dan belanja modal belum direkonsiliasi ke forecast.",
+                 "Butuh jadwal modal kerja, capex, bunga dan pajak."],
+                ["Forecast", "Driver tahunan belum didukung bukti yang tervalidasi.",
+                 "Rating dan target harga tetap ditahan."]]
         add("Katalis, risiko, dan indikator pemantauan",
             ["Tema", "Bukti terkini", "Implikasi yang diuji"], watch_rows,
             f"Sumber fakta: {actual['source_title']}; kolom implikasi adalah "
@@ -351,16 +376,21 @@ def _build_general_draft(intake, fc, va, g1):
                    f"{fmt.pct(current['revenue']/prior_full['revenue'])} dari FY25; "
                    "perbandingan ini bukan pengganti uji terhadap forecast FY26F. "
                    if current.get("revenue") and prior_full.get("revenue") else "")
-        lead = (f"{ticker} mencatat pendapatan {actual['period']} "
-                f"{money_phrase(current.get('revenue'))} ({pct_change(current.get('revenue'), prior.get('revenue'))} yoy), "
-                f"EBITDA {money_phrase(current.get('ebitda'))}, dan laba bersih "
-                f"{money_phrase(current.get('net_profit'))}. " +
-                (f"Laba usaha naik {pct_change(current.get('operating_profit'), prior.get('operating_profit'))} "
-                 f"ke {money_phrase(current.get('operating_profit'))}, sedangkan "
-                 f"laba bersih naik {pct_change(current.get('net_profit'), prior.get('net_profit'))}. "
-                 if current.get("operating_profit") is not None else
-                 f"EBITDA naik {pct_change(current.get('ebitda'), prior.get('ebitda'))}; "
-                 "laba bersih berbalik dari rugi pada periode pembanding. ") +
+        financial_fact_labels = (
+            ("pendapatan", "revenue"), ("EBITDA", "ebitda"),
+            ("laba usaha", "operating_profit"), ("laba bersih", "net_profit"),
+        )
+        lead_facts = []
+        for label, key in financial_fact_labels:
+            value = current.get(key)
+            if value is None:
+                continue
+            fact = f"{label} {money_phrase(value)}"
+            prior_value = prior.get(key)
+            if prior_value is not None:
+                fact += f" ({pct_change(value, prior_value)} yoy)"
+            lead_facts.append(fact)
+        lead = (f"{ticker} mencatat " + ", ".join(lead_facts) + ". " +
                 f"{material_mix}{runrate}"
                 f"Hasil ini berasal dari laporan resmi terbit {actual['published_at']}.")
         operating = evidence.get("operating_context") or []
@@ -368,10 +398,10 @@ def _build_general_draft(intake, fc, va, g1):
         if revenue_breakdown and not mining:
             segment = (revenue_breakdown.get("segments") or [None])[0]
             customer_rows = revenue_breakdown.get("major_customers") or []
-            segment_text = (f"Reparasi dan overhaul tumbuh "
-                            f"{pct_change(segment['current'], segment['prior'])} "
-                            f"ke {money_phrase(segment['current'])}, menjelaskan sebagian besar "
-                            "kenaikan pendapatan. " if segment else "")
+            segment_text = (f"Segmen {segment['name']} tumbuh "
+                            f"{pct_change(segment.get('current'), segment.get('prior'))} "
+                            f"ke {money_phrase(segment.get('current'))}. "
+                            if segment else "")
             customer_text = (f"Garuda dan Citilink menyumbang "
                              f"{fmt.pct(sum(c['current'] for c in customer_rows)/current['revenue'])} "
                              "pendapatan 1H26; konsentrasi pelanggan ini menjadi risiko "
@@ -388,20 +418,31 @@ def _build_general_draft(intake, fc, va, g1):
                        "belum lengkap untuk membangun proyeksi life of mine.")
         else:
             outlook = (f"{driver} {segment_text}{milestone}{customer_text}"
-                       "KPI untuk tesis berikutnya adalah volume pekerjaan dan porsi beban "
-                       "material dalam pendapatan. Dampak tahunan ke margin, capex dan arus kas "
-                       "belum direkonsiliasi ke forecast.")
+                       "Forecast memerlukan driver pendapatan dan biaya, capex, modal kerja, "
+                       "pajak dan utang yang dapat ditelusuri ke sumber dan tahun fiskal.")
         if balance:
             debt = balance.get("total_debt")
             if debt is None:
-                debt = sum(balance.get(key, 0) for key in
-                           ("loans_current", "loans_noncurrent", "lease_current",
-                            "lease_noncurrent"))
+                debt_components = [balance.get(key) for key in
+                                   ("loans_current", "loans_noncurrent", "lease_current",
+                                    "lease_noncurrent")]
+                if all(value is not None for value in debt_components):
+                    debt = sum(debt_components)
+            cash = balance.get("cash")
+            if cash is not None and debt is not None:
+                net_debt_text = f"utang bersih {money_phrase(debt - cash)}"
+                position_text = (f"Kas {money_phrase(cash)} dan pinjaman berbunga "
+                                 f"{money_phrase(debt)} menyiratkan {net_debt_text}.")
+            else:
+                cash_text = money_phrase(cash) if cash is not None else "belum tersedia"
+                debt_text = money_phrase(debt) if debt is not None else "belum tersedia"
+                position_text = (f"Kas {cash_text}; pinjaman berbunga {debt_text}; "
+                                 "utang bersih belum dapat dihitung dari data yang tersedia.")
+            equity = balance.get("total_equity")
+            equity_text = money_phrase(equity) if equity is not None else "belum tersedia"
             valuation_text = (
-                f"Kas {money_phrase(balance.get('cash'))} dan pinjaman berbunga "
-                f"{money_phrase(debt)} menyiratkan utang bersih "
-                f"{money_phrase(debt-balance['cash'])} per {balance['period_end']}. "
-                f"Ekuitas tercatat {money_phrase(balance.get('total_equity'))}. " +
+                f"{position_text} Per {balance.get('period_end', 'tanggal laporan')}. "
+                f"Ekuitas tercatat {equity_text}. " +
                 ("SOTP yang dapat dipakai sebagai target perlu LoM Batu Hijau, "
                  "arus kas smelter/PMR, biaya penyelesaian proyek, nilai Elang yang "
                  "disesuaikan risiko, dan rekonsiliasi utang bersih. " if mining else
@@ -435,18 +476,15 @@ def _build_general_draft(intake, fc, va, g1):
                              "konsentrat naik 81% yoy dan produksi katoda 48.756 ton.")
         else:
             result_paragraphs = [
-                "Reparasi dan overhaul menyumbang US$220,4 juta dari total US$270,3 "
-                "juta pendapatan 1H26, atau sekitar 81,6%. Pertumbuhan segmen itu "
-                "menjelaskan hampir seluruh kenaikan nominal pendapatan, sementara "
-                "line maintenance bertambah lebih lambat. Pemisahan volume kerja, "
-                "harga dan mix masih diperlukan untuk proyeksi yang dapat diuji.",
-                "Margin laba usaha naik ke 10,3% dari 8,6%, namun beban material "
-                "naik jauh lebih cepat daripada pendapatan. Selisih laba usaha dan "
-                "laba bersih melebar menjadi US$17,0 juta dari US$6,6 juta. "
-                "Jembatan beban keuangan, pajak dan komponen lain perlu dipisahkan "
-                "sebelum kenaikan laba 1H26 diterjemahkan menjadi estimasi FY26F."]
-            second_bullet = ("Reparasi dan overhaul naik 66% yoy; beban material "
-                             "mencapai 43,2% pendapatan.")
+                "Angka interim menunjukkan hasil yang dilaporkan untuk periode tersebut, "
+                "tetapi tidak dengan sendirinya menetapkan lintasan tahunan. Perubahan "
+                "mix, biaya, modal kerja dan unsur non-operasional perlu direkonsiliasi "
+                "dengan laporan sebelum forecast dibuat.",
+                "Bukti yang tersedia belum menyediakan jembatan terukur dari volume, "
+                "harga atau mix ke margin, capex dan arus kas. Driver tersebut tetap "
+                "ditandai belum terverifikasi dan tidak diisi dari CAGR historis."]
+            second_bullet = ("Pisahkan driver pendapatan, biaya, modal kerja dan capex "
+                             "sebelum hasil interim diterjemahkan menjadi forecast.")
     else:
         lead = ("Hasil interim terbaru dan tanggal publikasi belum dapat "
                 "dibuktikan dari data yang tersedia.")
@@ -480,6 +518,113 @@ def _build_general_draft(intake, fc, va, g1):
                      {"Pemeriksaan sebelum rating dan target harga",
                       "Katalis, risiko, dan indikator pemantauan"}]},
     ]
+
+    method = (method or "auto").lower()
+    method_select = method
+    _is_bank = "bank" in ((intake.get("sub_sector") or "") + " " +
+                          (intake.get("industry") or "")).lower() or \
+               intake.get("model_profile") == "financial_ddm" or method == "ddm"
+
+    if _is_bank and va.get("wacc_inputs"):
+        A = intake.get("annuals") or []
+        F = fc.get("rows") or []
+        _re, _g = va["wacc_inputs"]["re"], va["wacc_inputs"]["g"]
+        _nets = [r["net"] for r in F] if F else [0, 0, 0]
+        _bvps = (A[-1].get("equity") or 0) / intake["shares"] if (A and intake.get("shares")) else 0
+        _roae = _nets[0] / F[0]["equity"] if (F and F[0].get("equity")) else 0.12
+        _roe_h = [(a.get("earnings") or 0) / a["equity"] for a in A[-3:]
+                  if a.get("equity")]
+        _vb = ddm.value_bank(_nets, None, intake.get("dps_hist") or [],
+                             intake["shares"], _re, _g, _roae, _bvps)
+        wi = va["wacc_inputs"]
+        add("Komponen Cost of Equity", ["Komponen", "Nilai"],
+            [["Jalur CAPM:", ""],
+             ["Risk-free rate (INDOGB 10Y)", fmt.pct(wi["rf"])],
+             ["Beta (Bloomberg)", fmt.mult(wi["beta"])],
+             ["Equity Risk Premium (Damodaran)", fmt.pct(wi["erp"])],
+             ["(=) Cost of Equity dipakai", fmt.pct(wi["re"])],
+             ["Jalur band (pola BBTN):", ""],
+             ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di cache)"],
+             ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di cache)"],
+             ["Offset dari mean", "n.a.: dipakai hasil CAPM"]],
+            "Source: Company, Sektoral Estimates; Rf = INDOGB 10Y, "
+            "ERP = Damodaran, Beta = Bloomberg")
+
+        _cg_rows = []
+        for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
+            _cg_rows.append(
+                [f"CoE {fmt.pct(_re + _d)}" + (" (base)" if _d == 0 else "")] +
+                [fmt.rp(round(ddm.value_bank(
+                    _nets, None, intake.get("dps_hist") or [],
+                    intake["shares"], _re + _d, _gg, _roae,
+                    _bvps)["tp_gordon"] / 10) * 10) +
+                 (" *" if _d == 0 and _gg == _g else "")
+                 for _gg in (_g - 0.01, _g, _g + 0.01)])
+        add("Sensitivitas DDM (CoE x g)",
+            ["CoE / g"] + [f"g {fmt.pct(_gg)}" for _gg in (_g - 0.01, _g, _g + 0.01)],
+            _cg_rows,
+            "Source: Sektoral Estimates; sel = Nilai Wajar/saham Gordon; "
+            "base (*) = CoE dan g terpakai")
+
+        _cr_rows = []
+        for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
+            _cr_rows.append(
+                [f"CoE {fmt.pct(_re + _d)}" + (" (base)" if _d == 0 else "")] +
+                [fmt.rp(round(((_rr - _g) / (_re + _d - _g)) * _bvps / 10) * 10)
+                 for _rr in (_roae - 0.04, _roae, _roae + 0.04)])
+        add("Sensitivitas Inverse CoE (CoE x ROE)",
+            ["CoE / ROE"] + [f"ROE {fmt.pct(_rr)}" for _rr in
+                             (_roae - 0.04, _roae, _roae + 0.04)],
+            _cr_rows,
+            "Source: Sektoral Estimates; sel = P/BV wajar x BVPS; "
+            "Fair P/BV = (ROE-g)/(CoE-g)")
+
+        _roe_tr = ("naik" if _roe_h and _roae >= _roe_h[0] else "melandai")
+        p_ddm = (f"Driver utama valuasi bank ini adalah lintasan ROE, bukan arus kas: "
+                 f"ROAE historis {fmt.pct(_roe_h[0]) if _roe_h else '-'} {_roe_tr} ke {fmt.pct(_roae)} "
+                 f"forward bila laba {(F[0]['label'] if F else 'FY26F')} tercapai. DDM Gordon memberi "
+                 f"Rp{fmt.rp(round(_vb['tp_gordon'] / 10) * 10)}/saham pada payout "
+                 f"{fmt.pct(_vb['payout_used'])} ({intake.get('payout_basis')}); silang cek "
+                 f"Inverse CoE Rp{fmt.rp(round(_vb['tp_inverse'] / 10) * 10)}/saham "
+                 f"(P/BV wajar {fmt.mult(_vb['fair_pbv'], 2)}x). Payout {fmt.pct(_vb['payout_used'])} "
+                 f"dinilai sustain sepanjang kebutuhan modal pertumbuhan kredit/aset "
+                 f"tidak menuntut retensi di atas level historis; "
+                 f"{intake.get('dps_basis')}.")
+
+        sections.append({
+            "halaman": len(sections) + 2,
+            "judul": "Skenario nilai",
+            "layout": "stack",
+            "paragraf": [p_ddm],
+            "exhibit": [e for e in exhibits if e["judul"] in {
+                "Komponen Cost of Equity",
+                "Sensitivitas DDM (CoE x g)",
+                "Sensitivitas Inverse CoE (CoE x ROE)",
+            }],
+        })
+
+    if method == "ddm":
+        method_label = "DDM (dividen, Rp)"
+    elif method == "dcf":
+        method_label = "DCF (FCFF, Rp)"
+    elif method == "rnav":
+        method_label = "RNAV LoM (Rp)"
+    elif _is_bank:
+        method_label = "DDM (dividen, Rp)"
+    elif mining:
+        method_label = "SOTP/LoM (belum lengkap)"
+    else:
+        method_label = "DCF FCFF (belum lengkap)"
+
+    catatan = [
+        "DRAFT NON-DISTRIBUTABLE: rating dan target harga belum disajikan.",
+        f"Hasil interim {actual.get('period', 'terbaru')} memakai sumber resmi "
+        "bila tersedia; forecast tidak diturunkan otomatis dari CAGR historis.",
+        "Tanda '-' berarti angka tidak tersedia atau belum tervalidasi, bukan nol.",
+    ]
+    if method != "auto":
+        catatan.insert(0, f"metode valuasi dipilih analis: {method_label}.")
+
     return {
         "meta": {"ticker": ticker, "emiten": intake["name"],
                  "tanggal": intake["as_of"], "harga": intake["price"],
@@ -501,7 +646,7 @@ def _build_general_draft(intake, fc, va, g1):
                                   "market_cap": intake["price"] *
                                   balance.get("shares_issued", intake["shares"]),
                                   "adtv": "-", "free_float": "-"},
-                  "key_financials": key_rows},
+                   "key_financials": key_rows},
         "bagian": sections,
         "tabel_asumsi": [], "exhibits": exhibits,
         "log_gate": {"G1": g1.get("G1", {}), "G2": fc.get("g2", {}),
@@ -509,16 +654,10 @@ def _build_general_draft(intake, fc, va, g1):
                      "release": {"status": "draft_non_distributable",
                                  "blocker_count": len(blockers),
                                  "blockers": blockers}},
-        "method": ("SOTP/LoM (belum lengkap)" if mining else
-                   "DDM/residual income (belum lengkap)" if
-                   intake.get("model_profile") == "financial_ddm" else
-                   "DCF FCFF (belum lengkap)"),
-        "method_select": "auto", "holders": [],
-        "catatan_metodologi": [
-            "DRAFT NON-DISTRIBUTABLE: rating dan target harga belum disajikan.",
-            f"Hasil interim {actual.get('period', 'terbaru')} memakai sumber resmi "
-            "bila tersedia; forecast tidak diturunkan otomatis dari CAGR historis.",
-            "Tanda '-' berarti angka tidak tersedia atau belum tervalidasi, bukan nol."],
+        "method": method_label,
+        "method_select": method_select,
+        "holders": [],
+        "catatan_metodologi": catatan,
     }
 
 
@@ -568,7 +707,7 @@ def _rnav_exhibit(lom, cash_idr, debt_idr, shares, discount_pct=0.0):
         assets, cash_idr, debt_idr, 0, shares, discount_pct)
 
 
-def _build_draft(intake, fc, va, g1):
+def _build_draft(intake, fc, va, g1, method="auto"):
     """Build a clearly non-distributable evidence/status report.
 
     Do not expose the legacy DCF target or imply that the historical-CAGR
@@ -578,7 +717,7 @@ def _build_draft(intake, fc, va, g1):
     """
     if (intake.get("model_profile") != "finite_life_mining" or
             intake.get("official_evidence")):
-        return _build_general_draft(intake, fc, va, g1)
+        return _build_general_draft(intake, fc, va, g1, method=method)
     t, name = intake["ticker"], intake["name"]
     release_result = va.get("release") or {}
     blockers = release_result.get("blockers") or [
@@ -794,9 +933,14 @@ def _build_draft(intake, fc, va, g1):
         "log_gate": {"G1": g1.get("G1", {}), "G2": fc.get("g2", {}),
                      "G3": {}, "release": {"status": release_result.get("status"),
                                               "blocker_count": len(blockers)}},
-        "method": "SOTP/LoM (belum lengkap)",
-        "method_select": "auto", "holders": [],
-        "catatan_metodologi": [
+        "method": ("DDM (dividen, Rp)" if method == "ddm" else
+                   "DCF (FCFF, Rp)" if method == "dcf" else
+                   "RNAV LoM (Rp)" if method == "rnav" else
+                   "SOTP/LoM (belum lengkap)"),
+        "method_select": method, "holders": [],
+        "catatan_metodologi": (
+            [f"metode valuasi dipilih analis: {'DDM (dividen, Rp)' if method == 'ddm' else 'DCF (FCFF, Rp)' if method == 'dcf' else 'RNAV LoM (Rp)'}."] if method != "auto" else []
+        ) + [
             "DRAFT NON-DISTRIBUTABLE: skenario nilai belum disajikan karena bukti belum lengkap.",
             "SOTP/LoM memerlukan NAV per aset, kepemilikan, net debt, minority interest, "
             "overhead korporat dan saham terdilusi dengan provenance.",
@@ -818,7 +962,7 @@ def build(intake, fc, va, g1, method="auto"):
     if method == "rnav" and not intake.get("mineops"):
         raise ValueError("method rnav ditolak: tanpa overlay operasional di cache")
     if (va.get("release") or {}).get("status") != "distributable":
-        return _build_draft(intake, fc, va, g1)
+        return _build_draft(intake, fc, va, g1, method=method)
     t, name = intake["ticker"], intake["name"]
     A, F = intake["annuals"], fc["rows"]
     last, rev_last = A[-1], A[-1]["revenue"]
@@ -846,8 +990,8 @@ def build(intake, fc, va, g1, method="auto"):
     headline = _headline(intake, fc)
     b1 = _trim(f"Laba {F[0]['label']} diproyeksikan Rp{fmt.miliar(f1['net'])} miliar "
                f"dengan margin EBITDA {mg}, didorong pertumbuhan pendapatan {rev_g}.", 30)
-    b2 = _trim(f"Driver utama {F[1]['label']}-{F[2]['label']} adalah volume dan operating "
-               f"leverage menuju margin {fmt.pct(F[2]['margin'])}.", 30)
+    b2 = _trim(f"Driver utama {F[1]['label']}-{F[-1]['label']} adalah volume dan operating "
+               f"leverage menuju margin {fmt.pct(F[-1]['margin'])}.", 30)
     b3 = _trim(f"{va['rating']} dengan Target Harga Rp{modeled_value_s} "
                f"(upside/downside {fmt.pct(va['upside'])}) berdasarkan {va['method']}.", 30)
 
@@ -1043,8 +1187,8 @@ def build(intake, fc, va, g1, method="auto"):
             return "Rp" + fmt.miliar(v) + " miliar"
         return fmt._id(v, 1) + "%"
 
-    asu_rows = [[d, s, _disp(s, f), _disp(s, s2), _disp(s, t3), b]
-                for d, s, f, s2, t3, b in fc["assumptions"]]
+    asu_rows = [[row[0], row[1]] + [_disp(row[1], v) for v in row[2:-1]] + [row[-1]]
+                for row in fc["assumptions"]]
     E("Asumsi forecast", "tabel", {"cols": asu_cols, "rows": asu_rows})
 
     # G2.3: operating leverage — ±10% revenue mengalir penuh ke EBITDA
@@ -1122,7 +1266,7 @@ def build(intake, fc, va, g1, method="auto"):
                      ["Jalur band (pola BBTN):", ""],
                      ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di cache)"],
                      ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di cache)"],
-                     ["Offset dari mean", "n.a. — dipakai hasil CAPM"]]},
+                     ["Offset dari mean", "n.a.: dipakai hasil CAPM"]]},
           note="Source: Company, Sektoral Estimates; Rf = INDOGB 10Y, "
                "ERP = Damodaran, Beta = Bloomberg")
         _cg_rows = []
@@ -1202,7 +1346,7 @@ def build(intake, fc, va, g1, method="auto"):
            "rows": [[s["nama"].split(" (")[0], "produksi", fmt.pct(va["wacc"]),
                      f"{(s['life'] or 0):.0f}"] for s in lom["streams"]]},
           note="Source: Sektoral Estimates; satu tarif (WACC model) untuk "
-               "semua aset tahap produksi — tidak ada diferensiasi "
+               "semua aset tahap produksi; tidak ada diferensiasi "
                "matang-vs-development di cache")
         _dp_rows = []
         for _dd in (0.0, 0.10, 0.20, 0.30):
@@ -1325,9 +1469,16 @@ def build(intake, fc, va, g1, method="auto"):
                                  "free_float": ff_str},
                   "key_financials": kf_rows},
         "bagian": bagian,
-        "tabel_asumsi": [{"driver": d, "satuan": s, "FY26F": f, "FY27F": s2,
-                          "FY28F": t3, "dasar": b}
-                         for d, s, f, s2, t3, b in fc["assumptions"]],
+        "tabel_asumsi": [
+            {
+                "driver": item[0],
+                "satuan": item[1],
+                **{F[i]["label"]: item[2 + i] for i in range(len(F)) if 2 + i < len(item) - 1},
+                **({"FY26F": item[2], "FY27F": item[3], "FY28F": item[4]} if len(item) >= 6 else {}),
+                "dasar": item[-1],
+            }
+            for item in fc["assumptions"]
+        ],
         "log_gate": {"G1": g1["G1"], "G2": fc["g2"], "G3": {k: (v if isinstance(v, str) else v[0])
                                                           for k, v in va["g3"].items()}},
         "method": "DCF (FCFF, Rp)" if method == "auto" else method_label,

@@ -68,7 +68,8 @@ def fcff_exhibit(intake, fc, val):
     ps_x = (ev_x - net_debt) / ((1 + wacc) ** len(rows3) * shares)
 
     cols = ["Uraian"] + labels + ["Terminal / Total"]
-    B = lambda t: [t, "", "", "", ""]  # noqa: E731
+    n_pad = len(labels)
+    B = lambda t: [t] + [""] * (n_pad + 1)  # noqa: E731
     R = []
     R.append(B("Blok 1: FCFF eksplisit (Rp miliar)"))
     R.append(["Pendapatan"] + [fmt.miliar(r["revenue"]) for r in rows3] + [""])
@@ -88,32 +89,32 @@ def fcff_exhibit(intake, fc, val):
              + [_df4(p["df"]) for p in per] + [""])
     R.append(["PV FCFF"] + [fmt.miliar(p["pv"]) for p in per] + [""])
     R.append(B("Blok 2: Nilai terminal Gordon"))
-    R.append(["FCFF terminal (= FCFF terakhir x (1+g))", "", "", "",
-              fmt.miliar(term_fcf)])
-    R.append(["Pertumbuhan terminal g (di bawah risk-free)", "", "", "",
-              fmt.pct(g)])
-    R.append(["Terminal Value (undiscounted)", "", "", "", fmt.miliar(tv)])
-    R.append(["Faktor diskonto terminal", "", "", "", _df4(df_t)])
-    R.append(["PV Terminal Value", "", "", "", fmt.miliar(pv_tv)])
+    R.append(["FCFF terminal (= FCFF terakhir x (1+g))"] + [""] * n_pad +
+              [fmt.miliar(term_fcf)])
+    R.append(["Pertumbuhan terminal g (di bawah risk-free)"] + [""] * n_pad +
+              [fmt.pct(g)])
+    R.append(["Terminal Value (undiscounted)"] + [""] * n_pad + [fmt.miliar(tv)])
+    R.append(["Faktor diskonto terminal"] + [""] * n_pad + [_df4(df_t)])
+    R.append(["PV Terminal Value"] + [""] * n_pad + [fmt.miliar(pv_tv)])
     R.append(B("Blok 3: Jembatan ke nilai skenario"))
-    R.append(["Jumlah PV FCFF (Rp miliar)", "", "", "",
-              fmt.miliar(val["pv_explicit"])])
-    R.append(["(+) PV Terminal Value (Rp miliar)", "", "", "",
-              fmt.miliar(val["pv_terminal"])])
-    R.append(["(=) Enterprise Value (Rp miliar)", "", "", "", fmt.miliar(ev)])
-    R.append(["(-) Utang bersih tanggal valuasi (Rp miliar)", "", "", "",
-              fmt.miliar(net_debt)])
-    R.append(["(+/-) Minority Interest / Aset non-operasi (Rp miliar)", "", "", "",
-              "0 (tidak ada di cache)"])
-    R.append(["(=) Nilai Ekuitas Gordon (Rp miliar)", "", "", "", fmt.miliar(eq)])
-    R.append(["(/) Saham beredar (saham)", "", "", "", fmt.rp(shares)])
-    R.append(["(=) Nilai skenario per Saham Gordon (Rp)", "", "", "",
-              fmt.rp(val["ps_gordon"])])
+    R.append(["Jumlah PV FCFF (Rp miliar)"] + [""] * n_pad +
+              [fmt.miliar(val["pv_explicit"])])
+    R.append(["(+) PV Terminal Value (Rp miliar)"] + [""] * n_pad +
+              [fmt.miliar(val["pv_terminal"])])
+    R.append(["(=) Enterprise Value (Rp miliar)"] + [""] * n_pad + [fmt.miliar(ev)])
+    R.append(["(-) Utang bersih tanggal valuasi (Rp miliar)"] + [""] * n_pad +
+              [fmt.miliar(net_debt)])
+    R.append(["(+/-) Minority Interest / Aset non-operasi (Rp miliar)"] + [""] * n_pad +
+              ["0 (tidak ada di cache)"])
+    R.append(["(=) Nilai Ekuitas Gordon (Rp miliar)"] + [""] * n_pad + [fmt.miliar(eq)])
+    R.append(["(/) Saham beredar (saham)"] + [""] * n_pad + [fmt.rp(shares)])
+    R.append(["(=) Nilai skenario per Saham Gordon (Rp)"] + [""] * n_pad +
+              [fmt.rp(val["ps_gordon"])])
     R.append([f"Silang cek: EV exit (EBITDA x {fmt.mult(exit_mult)}) "
-              "(Rp miliar)", "", "", "", fmt.miliar(ev_x)])
-    R.append(["Nilai per saham exit (Rp)", "", "", "", fmt.rp(ps_x)])
-    R.append(["Nilai skenario gabungan per saham Gordon+exit (Rp)", "", "", "",
-              fmt.rp(val["tp"])])
+              "(Rp miliar)"] + [""] * n_pad + [fmt.miliar(ev_x)])
+    R.append(["Nilai per saham exit (Rp)"] + [""] * n_pad + [fmt.rp(ps_x)])
+    R.append(["Nilai skenario gabungan per saham Gordon+exit (Rp)"] + [""] * n_pad +
+              [fmt.rp(val["tp"])])
     return _exhibit("Proyeksi FCFF, Nilai Terminal, dan Jembatan Nilai Skenario",
                     cols, R,
                     "Source: Company, Sektoral Estimates; Delta NWC = plug "

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "ticker": "INET",
+  "reporting_currency": "IDR",
+  "latest_actual": {
+    "period": "1H26",
+    "period_end": "2026-06-30",
+    "published_at": "2026-09-11",
+    "source_title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+    "source_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+    "page": "4-5",
+    "unit": "IDR; reported in exact Rupiah",
+    "metrics": {
+      "revenue": 926453327140,
+      "gross_profit": 122106633456,
+      "operating_profit": 71362909254,
+      "net_profit": 34210434283,
+      "net_profit_attributable": 33671188228
+    },
+    "prior_year": {
+      "period": "1H25",
+      "revenue": 45002355760,
+      "gross_profit": 16783732569,
+      "operating_profit": 9899975077,
+      "net_profit": 7657637678,
+      "net_profit_attributable": 7652194508
+    }
+  },
+  "balance_sheet": {
+    "period_end": "2026-06-30",
+    "source_pages": [1, 2, 3],
+    "cash": 4336912848074,
+    "total_assets": 6111011414909,
+    "total_equity": 3808927328480,
+    "shares_issued": 22374111088
+  },
+  "operating_context": []
+}

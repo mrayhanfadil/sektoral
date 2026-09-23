@@ -1,0 +1,178 @@
+"""Focused test suite for official issuer interim evidence packs.
+
+Validates that each ticker evidence pack:
+1. Conforms to schema_version 1.
+2. Contains verified provenance: official source_title, stable HTTPS source_url, exact page,
+   period, period_end, and publication date.
+3. Ensures strict date consistency (period_end <= published_at <= report as_of date).
+4. Verifies presence and numeric typing of required financial metrics (revenue, net_profit).
+5. Validates integration with app.issuer_evidence and app.intake.
+"""
+from datetime import date
+import json
+from pathlib import Path
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from app import intake, issuer_evidence  # noqa: E402
+from app.release import assess_release  # noqa: E402
+
+EVIDENCE_DIR = ROOT / "data" / "issuer_evidence"
+TARGET_TICKERS = ["BBRI", "INET", "JPFA", "POWR", "SIDO", "SSIA"]
+VERIFIED_TICKERS = ["BBRI", "INET", "JPFA", "POWR", "SSIA"]
+ALL_KNOWN_TICKERS = ["AMMN", "BBRI", "GMFI", "INET", "JPFA", "POWR", "SIDO", "SSIA"]
+REPORT_AS_OF = "2026-09-22"
+
+VERIFIED_PRIMARY = {
+    "BBRI": {
+        "source_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202608/20260831171524-64205-0/FinancialStatement-2026-II-BBRI.pdf",
+        "metrics": {"revenue": 107_923_454_000_000, "net_interest_income": 80_530_442_000_000,
+                    "net_profit": 31_182_586_000_000, "net_profit_attributable": 30_865_402_000_000},
+    },
+    "INET": {
+        "source_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+        "metrics": {"revenue": 926_453_327_140, "gross_profit": 122_106_633_456,
+                    "operating_profit": 71_362_909_254, "net_profit": 34_210_434_283,
+                    "net_profit_attributable": 33_671_188_228},
+    },
+    "JPFA": {
+        "source_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+        "metrics": {"revenue": 35_355_127_000_000, "gross_profit": 7_625_189_000_000,
+                    "net_profit": 2_684_344_000_000, "net_profit_attributable": 2_475_417_000_000},
+    },
+    "POWR": {
+        "source_url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+        "metrics": {"revenue": 274_783_475, "operating_profit": 60_493_834,
+                    "net_profit": 37_140_130},
+    },
+    "SIDO": {
+        "source_url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+        "metrics": {"revenue": 1_466_658_000_000, "gross_profit": 740_745_000_000,
+                    "net_profit": 333_653_000_000, "net_profit_attributable": 333_653_000_000},
+    },
+    "SSIA": {
+        "source_url": "https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf",
+        "metrics": {"revenue": 3_353_500_000_000, "gross_profit": 1_086_200_000_000,
+                    "ebitda": 692_500_000_000, "net_profit": 262_600_000_000},
+    },
+}
+
+
+@pytest.mark.parametrize("ticker", ALL_KNOWN_TICKERS)
+def test_evidence_file_exists_and_parses_json(ticker):
+    file_path = EVIDENCE_DIR / f"{ticker}.json"
+    assert file_path.exists(), f"Evidence file missing: {file_path}"
+    data = json.loads(file_path.read_text(encoding="utf-8"))
+    assert isinstance(data, dict), f"Evidence for {ticker} must be a JSON object"
+
+
+@pytest.mark.parametrize("ticker", ALL_KNOWN_TICKERS)
+def test_evidence_schema_identity(ticker):
+    file_path = EVIDENCE_DIR / f"{ticker}.json"
+    data = json.loads(file_path.read_text(encoding="utf-8"))
+    assert data.get("schema_version") == 1
+    assert data.get("ticker") == ticker
+    assert data.get("reporting_currency") in {"IDR", "USD"}
+
+
+@pytest.mark.parametrize("ticker", ALL_KNOWN_TICKERS)
+def test_evidence_latest_actual_provenance(ticker):
+    file_path = EVIDENCE_DIR / f"{ticker}.json"
+    data = json.loads(file_path.read_text(encoding="utf-8"))
+    actual = data.get("latest_actual")
+    assert isinstance(actual, dict), f"Missing latest_actual in {ticker}"
+
+    required_fields = ["period", "period_end", "published_at", "source_title", "source_url", "page", "unit", "metrics"]
+    for field in required_fields:
+        assert actual.get(field), f"Missing field '{field}' in {ticker}.latest_actual"
+
+    # HTTPS URL requirement
+    assert actual["source_url"].startswith("https://"), f"{ticker} source_url must be HTTPS"
+
+    # Valid page number or label
+    assert (isinstance(actual["page"], int) and actual["page"] > 0) or (
+        isinstance(actual["page"], str) and actual["page"].strip()
+    )
+
+    # Date ordering
+    period_end = date.fromisoformat(actual["period_end"])
+    published_at = date.fromisoformat(actual["published_at"])
+    as_of = date.fromisoformat(REPORT_AS_OF)
+
+    assert period_end <= published_at, f"{ticker}: period_end ({period_end}) must be <= published_at ({published_at})"
+    assert published_at <= as_of, f"{ticker}: published_at ({published_at}) must be <= as_of ({as_of})"
+
+
+@pytest.mark.parametrize("ticker", TARGET_TICKERS)
+def test_evidence_points_to_verified_document_and_exact_reported_values(ticker):
+    actual = json.loads((EVIDENCE_DIR / f"{ticker}.json").read_text(encoding="utf-8"))["latest_actual"]
+    expected = VERIFIED_PRIMARY[ticker]
+    assert actual["source_url"] == expected["source_url"]
+    for metric, exact_value in expected["metrics"].items():
+        assert actual["metrics"].get(metric) == exact_value, (
+            f"{ticker}.{metric}: expected {exact_value}, got {actual['metrics'].get(metric)}"
+        )
+
+
+@pytest.mark.parametrize("ticker", ALL_KNOWN_TICKERS)
+def test_evidence_metrics_numeric_and_complete(ticker):
+    file_path = EVIDENCE_DIR / f"{ticker}.json"
+    data = json.loads(file_path.read_text(encoding="utf-8"))
+    actual = data.get("latest_actual", {})
+    metrics = actual.get("metrics", {})
+
+    assert isinstance(metrics, dict) and metrics, f"{ticker} metrics must be a non-empty dictionary"
+
+    # Required financial metrics
+    assert "revenue" in metrics, f"{ticker} missing 'revenue' metric"
+    assert "net_profit" in metrics, f"{ticker} missing 'net_profit' metric"
+
+    for key, val in metrics.items():
+        assert isinstance(val, (int, float)) and not isinstance(val, bool), (
+            f"{ticker} metric {key} must be numeric, got {type(val)}: {val}"
+        )
+
+
+@pytest.mark.parametrize("ticker", VERIFIED_TICKERS)
+def test_evidence_loader_integration(ticker):
+    loaded = issuer_evidence.load(ticker, REPORT_AS_OF)
+    assert loaded is not None, f"issuer_evidence.load failed for {ticker}"
+    assert loaded["ticker"] == ticker
+    assert loaded["latest_actual"]["published_at"] <= REPORT_AS_OF
+
+
+def test_sido_unverified_publication_date_is_not_loaded():
+    pack = json.loads((EVIDENCE_DIR / "SIDO.json").read_text(encoding="utf-8"))
+    assert pack["evidence_status"] == "blocked"
+    assert "publication date" in pack["evidence_status_reason"].lower()
+    assert issuer_evidence.load("SIDO", REPORT_AS_OF) is None
+    intake_data, _ = intake.load("SIDO")
+    assert intake_data["official_evidence"] is None
+
+
+@pytest.mark.parametrize("ticker", VERIFIED_TICKERS)
+def test_intake_loads_official_evidence_for_target_tickers(ticker):
+    intake_data, _ = intake.load(ticker)
+    assert intake_data["official_evidence"] is not None
+    assert intake_data["latest_official_actual"] is not None
+    assert intake_data["latest_official_actual"]["period"] == "1H26"
+    assert intake_data["latest_official_actual"]["metrics"]["revenue"] > 0
+    assert intake_data["latest_official_actual"]["metrics"]["net_profit"] > 0
+
+
+@pytest.mark.parametrize("ticker", VERIFIED_TICKERS)
+def test_release_assessment_official_actual_blockers_cleared(ticker):
+    intake_data, _ = intake.load(ticker)
+    profile = intake_data["model_profile"]
+    forecast = {"forecast_basis": "driver_forecast", "production_ready": True}
+    sotp_result = "draft" if profile == "financial_ddm" else None
+
+    result = assess_release(profile, intake_data, forecast, sotp_result)
+    assert "latest official interim actual is missing or unverified" not in result["blockers"]
+    assert "latest official interim actual has incomplete provenance" not in result["blockers"]
+    assert "latest official interim revenue/net profit are missing" not in result["blockers"]
+    assert "latest official interim dates are inconsistent" not in result["blockers"]

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "ticker": "JPFA",
+  "reporting_currency": "IDR",
+  "latest_actual": {
+    "period": "1H26",
+    "period_end": "2026-06-30",
+    "published_at": "2026-08-20",
+    "source_title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+    "source_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+    "page": "4-5",
+    "unit": "IDR; reported in millions of Rupiah",
+    "metrics": {
+      "revenue": 35355127000000,
+      "gross_profit": 7625189000000,
+      "net_profit": 2684344000000,
+      "net_profit_attributable": 2475417000000
+    },
+    "prior_year": {
+      "period": "1H25",
+      "revenue": 27481591000000,
+      "gross_profit": 5277911000000,
+      "net_profit": 1362274000000,
+      "net_profit_attributable": 1236264000000
+    }
+  },
+  "balance_sheet": {
+    "period_end": "2026-06-30",
+    "source_pages": [1, 2, 3],
+    "total_assets": 45145132000000,
+    "total_liabilities": 23811080000000,
+    "total_equity": 21334052000000,
+    "shares_issued": 11726575201,
+    "shares_outstanding": 11704870701
+  },
+  "operating_context": []
+}
