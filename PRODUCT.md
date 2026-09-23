@@ -24,12 +24,12 @@ The current demo is a local browser workflow: enter an IDX ticker, follow resear
 
 ## Capabilities and Constraints
 
-- Market data is read only from `data/sectors_cache.db`, the local Sectors cache.
+- Market prices are read from `data/sectors_cache.db`; the report builder can also use dated official issuer facts in `data/issuer_evidence/`.
 - The research agent may select only cache endpoints available for the ticker. The host executes reads and records them in the trace.
 - The LLM is used for agent reasoning, not as a market-data source.
 - Citation validation checks the brief against rows actually read. Insufficient evidence remains visibly partial or missing; it is not silently replaced with web research, memory, analyst assumptions, or another dataset.
 - The app has no brokerage connection or trade execution.
-- Outputs are information and analytical scenarios, not investment recommendations or financial advice.
+- Draft outputs withhold target prices and ratings. Buy, Hold or Sell requires a completed production forecast and valuation gate.
 
 ## Brand Commitments
 

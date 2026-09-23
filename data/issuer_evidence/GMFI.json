@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "ticker": "GMFI",
+  "reporting_currency": "USD",
+  "annual_actuals": [
+    {"year": 2024, "revenue": 421223186, "ebitda": 60698852,
+     "net_profit": 26900045, "net_profit_attributable": 26891116,
+     "equity": -257901303, "equity_attributable": -258067606,
+     "shares_issued": 28233511500},
+    {"year": 2025, "revenue": 491882794, "ebitda": 79901974,
+     "net_profit": 33967745, "net_profit_attributable": 33949155,
+     "equity": 114567060, "equity_attributable": 114386092,
+     "shares_issued": 120022868424}
+  ],
+  "latest_actual": {
+    "period": "1H26",
+    "period_end": "2026-06-30",
+    "published_at": "2026-09-18",
+    "source_title": "GMFI Interim Consolidated Financial Statements, 30 June 2026",
+    "source_url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+    "page": 15,
+    "unit": "USD",
+    "metrics": {
+      "revenue": 270288955,
+      "ebitda": 34815811,
+      "operating_profit": 27841904,
+      "net_profit": 10814513,
+      "material_expense": 116652145,
+      "depreciation": 6973907,
+      "finance_cost": 8274699
+    },
+    "prior_year": {
+      "period": "1H25",
+      "revenue": 178955312,
+      "ebitda": 25037161,
+      "operating_profit": 15386869,
+      "net_profit": 8765419,
+      "material_expense": 50750761,
+      "depreciation": 9650292
+    }
+  },
+  "balance_sheet": {
+    "period_end": "2026-06-30",
+    "source_pages": [12, 13, 14],
+    "cash": 42367700,
+    "total_equity": 144620090,
+    "loans_current": 19583737,
+    "loans_noncurrent": 343276540,
+    "lease_current": 901125,
+    "lease_noncurrent": 14340,
+    "shares_issued": 124835258434
+  },
+  "revenue_breakdown": {
+    "source_page": 96,
+    "segments": [
+      {"name": "Reparasi dan overhaul", "current": 220448696, "prior": 132835695},
+      {"name": "Line maintenance", "current": 38206133, "prior": 34632441},
+      {"name": "Operasi lainnya", "current": 11634126, "prior": 11487176}
+    ],
+    "major_customers": [
+      {"name": "Garuda Indonesia", "current": 108259004, "prior": 77768860},
+      {"name": "Citilink", "current": 73696636, "prior": 39521693}
+    ]
+  },
+  "operating_context": [
+    {
+      "fact": "Pertumbuhan Time Material Basis dari pelanggan Garuda Group dan non-Grup pada reaktivasi airframe serta pekerjaan engine lessor.",
+      "source_title": "GMF Bukukan Pertumbuhan Pendapatan 51%, Pertahankan Kinerja Positif",
+      "source_url": "https://www.gmf-aeroasia.co.id/gmf-bukukan-pertumbuhan-pendapatan-51",
+      "published_at": "2026-09-18"
+    },
+    {
+      "fact": "Fasilitas Pondok Cabe mulai dimanfaatkan untuk maintenance pesawat ATR.",
+      "source_title": "GMF Bukukan Pertumbuhan Pendapatan 51%, Pertahankan Kinerja Positif",
+      "source_url": "https://www.gmf-aeroasia.co.id/gmf-bukukan-pertumbuhan-pendapatan-51",
+      "published_at": "2026-09-18"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "ticker": "AMMN",
+  "reporting_currency": "USD",
+  "annual_source_title": "AMMAN FY 2025 Earnings Release",
+  "annual_source_url": "https://www.amman.co.id/earnings-release",
+  "annual_actuals": [
+    {"year": 2024, "revenue": 2664000000, "ebitda": 1426000000,
+     "net_profit": 642000000, "net_profit_attributable": 636895000,
+     "equity": 5248000000, "equity_attributable": 5159842000},
+    {"year": 2025, "revenue": 1847000000, "ebitda": 1057000000,
+     "net_profit": 258000000, "net_profit_attributable": 248979000,
+     "equity": 5431000000, "equity_attributable": 5338096000}
+  ],
+  "latest_actual": {
+    "period": "1H26",
+    "period_end": "2026-06-30",
+    "published_at": "2026-09-21",
+    "source_title": "AMMAN H1 2026 Earnings Release",
+    "source_url": "https://www.amman.co.id/earnings-release",
+    "page": 3,
+    "unit": "USD; reported financial highlights rounded to US$ millions",
+    "metrics": {
+      "revenue": 2052000000,
+      "ebitda": 1128000000,
+      "net_profit": 504000000,
+      "capital_expenditure": 130000000,
+      "operating_cash_flow": 763000000
+    },
+    "prior_year": {
+      "period": "1H25",
+      "revenue": 183000000,
+      "ebitda": 86000000,
+      "net_profit": -146000000,
+      "capital_expenditure": 719000000,
+      "operating_cash_flow": -644000000
+    }
+  },
+  "balance_sheet": {
+    "period_end": "2026-06-30",
+    "source_pages": [3, 108],
+    "cash": 819000000,
+    "total_debt": 5845000000,
+    "total_equity": 5861000000,
+    "shares_issued": 72412413856
+  },
+  "operating_metrics": [
+    {"name": "Fresh ore mined (juta ton)", "prior": 6, "current": 66, "decimals": 0},
+    {"name": "Mill throughput (juta ton)", "prior": 16, "current": 20, "decimals": 0},
+    {"name": "Kadar tembaga (%)", "prior": 0.33, "current": 0.52, "decimals": 2},
+    {"name": "Kadar emas (g/t)", "prior": 0.14, "current": 0.65, "decimals": 2},
+    {"name": "Konsentrat diproduksi (dmt)", "prior": 191657, "current": 347307, "decimals": 0},
+    {"name": "Tembaga dalam konsentrat (Mlbs)", "prior": 89, "current": 211, "decimals": 0},
+    {"name": "Emas dalam konsentrat (oz)", "prior": 59578, "current": 346354, "decimals": 0},
+    {"name": "Katoda tembaga (ton)", "prior": 19805, "current": 48756, "decimals": 0},
+    {"name": "Emas murni (oz)", "prior": null, "current": 122131, "decimals": 0}
+  ],
+  "revenue_breakdown": {
+    "source_page": 4,
+    "segments": [
+      {"name": "Katoda tembaga", "current": 663000000},
+      {"name": "Emas murni", "current": 311000000},
+      {"name": "Penjualan konsentrat", "current": 1078000000}
+    ]
+  },
+  "management_guidance": [
+    {"name": "Tembaga dalam konsentrat (Mlbs)", "value": 485},
+    {"name": "Emas dalam konsentrat (koz)", "value": 775},
+    {"name": "Katoda tembaga (kt)", "value": 130},
+    {"name": "Emas murni (koz)", "value": 350}
+  ],
+  "operating_context": [
+    {
+      "fact": "Akses bijih segar Phase 8 meningkat menjadi 66 juta ton dari 6 juta ton; kadar dan volume olah yang lebih tinggi menaikkan produksi konsentrat 81% yoy.",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/earnings-release",
+      "published_at": "2026-09-21"
+    },
+    {
+      "fact": "Smelter dan PMR memperoleh Project Acceptance Certificate pada Juli 2026; perluasan processing plant menghasilkan first ore to mill pada Agustus 2026.",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/earnings-release",
+      "published_at": "2026-09-21"
+    }
+  ]
+}

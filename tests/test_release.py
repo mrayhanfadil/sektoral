@@ -157,10 +157,25 @@ def test_incomplete_sotp_blocks_even_when_other_mining_inputs_pass():
     assert "SOTP incomplete: target_price_idr must be finite and present" in result["blockers"]
 
 
-def test_non_mining_profile_is_not_blocked_by_mining_only_checks():
+def test_non_mining_profile_requires_official_actual_and_driver_forecast():
     result = assess_release("going_concern_fcff", None, None, None)
 
-    assert result == {"status": "distributable", "blockers": []}
+    assert result["status"] == "draft_non_distributable"
+    assert "latest official interim actual is missing or unverified" in result["blockers"]
+    assert "sourced operating and cash-flow forecast is incomplete" in result["blockers"]
+
+
+def test_sourced_going_concern_can_clear_non_mining_release_gate():
+    intake = {"as_of": "2026-09-22", "latest_official_actual": {
+        "period": "1H26", "period_end": "2026-06-30",
+        "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
+        "metrics": {"revenue": 100, "net_profit": 8}}}
+    forecast = {"forecast_basis": "driver_forecast", "production_ready": True}
+
+    assert assess_release("going_concern_fcff", intake, forecast, None) == {
+        "status": "distributable", "blockers": []}
+    assert assess_release("financial_ddm", intake, forecast, None)["status"] == \
+        "draft_non_distributable"
 
 
 def test_unknown_profile_fails_closed():

@@ -48,16 +48,15 @@ def build(intake):
                         + ("; uplift dibatasi rekor historis" if capped else "")))
 
     da_r = _mean([(a["da"] / a["revenue"]) for a in A[-3:] if a["da"] is not None]) or 0.0
-    # Capex proyek (smelter 2023-25, 23-29tn/thn) tidak dibawa flat ke forecast:
-    # sustaining = D&A (maintenance capex), proyek = 0 tanpa guidance di cache.
+    # This is a historical screening calculation, not a released cash-flow
+    # forecast. Project capex and maintenance spend need sourced schedules.
     assumptions.append(("D&A", "% revenue", da_r * 100, da_r * 100, da_r * 100,
                         "rasio historis atas revenue; sama di IS, CF, DCF"))
     assumptions.append(("capex sustaining", "= D&A",
                         da_r * 100, da_r * 100, da_r * 100,
-                        "asumsi analis: capex proyek smelter selesai FY25; "
-                        "sustaining = maintenance (1:1 D&A)"))
+                        "screen historis; kebutuhan maintenance belum tervalidasi"))
     assumptions.append(("capex proyek", "Rp 0", 0, 0, 0,
-                        "tanpa guidance/timeline di cache"))
+                        "placeholder perhitungan screen; nilai proyek tidak diketahui"))
     ebt_hist = [(a["ebit"] - a["interest"]) for a in A[-3:] if a["ebit"] is not None]
     tax_hist = [(a["tax"] / e) for a, e in zip(A[-3:], ebt_hist) if e and e > 0]
     tax_r = sum(tax_hist) / len(tax_hist) if tax_hist else 0.22
@@ -144,10 +143,14 @@ def build(intake):
         g2["catatan"].append(
             "G2.9: forecast fisik-ke-keuangan belum dihitung; angka CAGR hanya "
             "screening proxy dan tidak layak menjadi forecast produksi.")
+    else:
+        g2["G2.9_driver_forecast"] = "gagal"
+        g2["catatan"].append(
+            "G2.9: angka CAGR dan capex=D&A hanyalah screen; forecast driver, "
+            "modal kerja, serta jadwal utang belum direkonsiliasi.")
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "operating_bridge": operating_bridge,
-            "forecast_basis": ("historical_screening_proxy" if is_mining else
-                               "historical_fcff_screen"),
-            "production_ready": not is_mining,
+            "forecast_basis": "historical_screening_proxy",
+            "production_ready": False,
             "base": {"cash": cash0, "debt": debt0, "equity": eq0,
                      "other_liab": oth_liab, "noncash": nc0}}

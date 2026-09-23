@@ -1,8 +1,10 @@
-"""TAHAP 1: INTAKE & VALIDASI DATA (GATE 1). Cache-only, never-expired."""
+"""TAHAP 1: intake data pasar dari cache dan fakta emiten dari rilis resmi lokal."""
 import time
+from datetime import date
 from . import cache
 from . import mineops
 from . import model_profiles
+from . import issuer_evidence
 from . import news as news_context
 from . import research_context
 
@@ -16,7 +18,7 @@ def _num(x, default=None):
         return default
 
 
-def load(ticker):
+def load(ticker, as_of=None):
     """Build typed inputs from cache. Returns (intake, g1_log)."""
     t = ticker.upper()
     g1 = {}
@@ -44,6 +46,10 @@ def load(ticker):
     price_date = ov.get("latest_close_date") or val.get("latest_close_date")
     if price is None:
         raise ValueError(f"no last_close_price in cache for {t}")
+    report_date = as_of or price_date
+    if date.fromisoformat(str(report_date)[:10]) < date.fromisoformat(str(price_date)[:10]):
+        raise ValueError("report date cannot precede the cached market price date")
+    official_evidence = issuer_evidence.load(t, report_date) if report_date else None
 
     hist = fin.get("historical_financials") or []
     annuals = []
@@ -158,7 +164,7 @@ def load(ticker):
         "ticker": t, "name": rep.get("company_name", t),
         "model_profile": profile, "model_profile_basis": profile_basis,
         "currency": "Rp", "fx": 1.0,
-        "price": price, "price_date": price_date, "as_of": price_date,
+        "price": price, "price_date": price_date, "as_of": report_date,
         "shares": shares, "market_cap": market_cap,
         "annuals": annuals, "base_year": base["year"],
         "payout": payout, "payout_basis": payout_basis,
@@ -181,10 +187,26 @@ def load(ticker):
         "mineops": mineops.load(t),
         "quarterly_actuals": quarterly_rows,
         "latest_quarterly_actual": latest_quarter,
+        "official_evidence": official_evidence,
+        "latest_official_actual": ((official_evidence or {}).get("latest_actual")),
         # Report inputs intentionally come only from sectors_cache. These
         # release-gate inputs remain absent until the cache itself contains
         # enough date/source/coverage metadata to support them.
-        "latest_interim_actuals": None,
+        "latest_interim_actuals": (
+            {"period": official_evidence["latest_actual"]["period"],
+             "status": "reported actual", "source_type": "official_issuer",
+             "source": official_evidence["latest_actual"]["source_url"],
+             "source_date": official_evidence["latest_actual"]["published_at"],
+             "page": official_evidence["latest_actual"]["page"],
+             "is_latest": True,
+             "metrics": {
+                 metric: {"value": official_evidence["latest_actual"]["metrics"][key],
+                          "unit": official_evidence["latest_actual"]["unit"]}
+                 for metric, key in (("revenue", "revenue"), ("ebitda", "ebitda"),
+                                     ("net_profit", "net_profit"),
+                                     ("capex", "capital_expenditure"))
+                 if key in official_evidence["latest_actual"]["metrics"]}}
+            if official_evidence and profile == "finite_life_mining" else None),
         "operating_bridge": None,
         "sotp_assets": None,
         "sotp_bridge": None,

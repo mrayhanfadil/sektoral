@@ -41,7 +41,8 @@ def test_ammn_end_to_end(tmp_path):
     assert doc["log_gate"]["release"]["blocker_count"] > 0
     html = (tmp_path / "AMMN.html").read_text()
     assert "DRAFT NON-DISTRIBUTABLE" in html
-    assert "Target Harga" not in html
+    assert "Target Harga (Rp)" in html
+    assert "Rating ditahan hingga pemeriksaan selesai" in html
 
 
 def test_unknown_ticker_refused(tmp_path):

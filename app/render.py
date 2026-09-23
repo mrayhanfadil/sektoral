@@ -64,7 +64,9 @@ CSS = (FONT_FACES + PAGE_NUM +
        + PRIMARY + ";padding-bottom:3px;font-size:8.1pt;color:" + PRIMARY + ";font-weight:600}"
        ".brandmark{vertical-align:-4px;margin-right:3px}"
        ".wordmark{display:flex;align-items:center}.wordmark svg{display:block;width:84px;height:18px}"
-       ".status{font-size:8.5pt;color:" + MUT + ";margin-bottom:3px}"
+       ".status{font-size:10.5pt;color:" + PRIMARY + ";font-weight:700;margin:5px 0 2px}"
+       ".rating-label{font-size:15pt;color:" + PRIMARY + ";font-weight:700;line-height:1.1}"
+       ".rating-detail{font-size:7.5pt;color:" + MUT + ";margin:1px 0 5px}"
        ".draft-banner{background:#fff3e8;border:1px solid #bb4d00;color:#803400;"
        "font-weight:700;padding:5px 8px;margin:5px 0;font-size:8.5pt}"
        ".cover{display:flex;gap:12px;margin-top:3px}"
@@ -103,6 +105,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table caption{text-align:left;font-weight:700;font-size:7.8pt;"
        "color:" + PRIMARY + ";margin-bottom:3px;font-family:'Roboto',sans-serif}"
        ".src{font-size:6.7pt;color:" + MUT + ";margin:2px 0 6px;line-height:1.3}"
+       ".metric-chart{display:block;width:100%;height:180px;border:1px solid " + RULE + ";}"
        ".research-card{border:1px solid " + RULE + ";"
        "padding:7px 9px;margin:9px 0;break-inside:avoid-page;page-break-inside:avoid}"
        ".research-card h3{color:" + PRIMARY + ";font-size:9pt;margin:0 0 4px}"
@@ -310,13 +313,61 @@ def _table(ex):
             f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
 
 
+def _bar_chart(ex):
+    data = ex["data"]
+    rows = data["rows"]
+    peak = max((row.get(key) or 0 for row in rows for key in ("prior", "current")),
+               default=1) / 1e6
+    peak = max(peak, 1)
+    parts = [f"<div class='exhibit keep'><h3 class='sub'>Exhibit {ex['n']}. "
+             f"{html.escape(ex['judul'])}</h3>",
+             "<svg class='metric-chart' viewBox='0 0 780 205' role='img' "
+             f"aria-label='{html.escape(ex['judul'])}'>",
+             "<line x1='35' x2='750' y1='164' y2='164' stroke='#747474' stroke-width='1'/>" ]
+    centers = [145, 390, 635] if len(rows) == 3 else [270, 520]
+    for center, row in zip(centers, rows):
+        for x, key, color in ((center - 70, "prior", "#8295C2"),
+                              (center + 7, "current", PRIMARY)):
+            value = max(0, (row.get(key) or 0) / 1e6)
+            height = max(1.5, 112 * value / peak)
+            y = 164 - height
+            label = f"{value:,.0f}".replace(",", ".")
+            parts.append(f"<rect x='{x}' y='{y:.1f}' width='63' height='{height:.1f}' "
+                         f"fill='{color}'/>")
+            parts.append(f"<text x='{x + 31.5}' y='{max(13, y - 5):.1f}' "
+                         f"text-anchor='middle' font-size='13' fill='{INK}'>{label}</text>")
+        parts.append(f"<text x='{center}' y='185' text-anchor='middle' "
+                     f"font-size='13' fill='{INK}'>{html.escape(row['label'])}</text>")
+    parts.append("<rect x='34' y='15' width='12' height='12' fill='#8295C2'/>")
+    parts.append(f"<text x='51' y='26' font-size='13'>{html.escape(data['prior_label'])}</text>")
+    parts.append(f"<rect x='130' y='15' width='12' height='12' fill='{PRIMARY}'/>")
+    parts.append(f"<text x='147' y='26' font-size='13'>{html.escape(data['current_label'])}</text>")
+    parts.append(f"<text x='745' y='26' text-anchor='end' font-size='12' "
+                 f"fill='{MUT}'>{html.escape(data['unit'])}</text>")
+    parts.append("</svg>")
+    parts.append(f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
+    return "".join(parts)
+
+
+def _exhibit(ex):
+    return _bar_chart(ex) if ex.get("tipe") == "bar_chart" else _table(ex)
+
+
 def _kv(k, v):
     return f"<div class='kv'><span>{html.escape(k)}</span><b>{html.escape(v)}</b></div>"
 
 
-def _topbar(date):
-    return ("<div class='topbar'><span>Equity Research - Company Update | "
-            f"{html.escape(str(date))}</span><span class='wordmark' "
+def _topbar(report_date):
+    try:
+        day = date.fromisoformat(str(report_date)[:10])
+        weekdays = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
+        months = ("Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                  "Juli", "Agustus", "September", "Oktober", "November", "Desember")
+        display_date = f"{weekdays[day.weekday()]}, {day.day} {months[day.month-1]} {day.year}"
+    except ValueError:
+        display_date = str(report_date)
+    return ("<div class='topbar'><span>Equity Research – Company Update<br>"
+            f"{html.escape(display_date)}</span><span class='wordmark' "
             f"aria-label='Sectoral'>{LOGO_SVG}</span></div>")
 
 
@@ -350,7 +401,7 @@ def _render_page_content(b):
         for p in paras:
             res.append(f"<p>{html.escape(p)}</p>")
         for e in exs:
-            res.append(_table(e))
+            res.append(_exhibit(e))
 
     elif halaman == 2:
         if len(paras) >= 2:
@@ -407,12 +458,25 @@ def render(doc):
     h = [f"<html><head><meta charset='utf-8'><style>{CSS}</style></head><body>"]
     h.append(_topbar(m["tanggal"]))
     h.append(_draft_banner(m))
-    report_status = "DRAFT: BUKTI BELUM LENGKAP" if m.get("status") == "draft_non_distributable" else "Analisis skenario informasional"
-    h.append(f"<div class='status'>{html.escape(report_status)}</div>")
+    report_status = (m.get("rating") or
+                     ("Dalam peninjauan" if m.get("status") == "draft_non_distributable"
+                      else "Analisis skenario informasional"))
     h.append("<div class='cover'><div class='left'>")
+    h.append(f"<div class='rating-label'>{html.escape(report_status)}</div>")
+    h.append("<div class='rating-detail'>" +
+             ("Inisiasi" if m.get("rating") else "Rating ditahan hingga pemeriksaan selesai") +
+             "</div>")
     h.append(f"<div class='small'>Valuasi: {html.escape(doc.get('method', 'DCF'))}</div>"
              "<div class='panel'>")
-    h.append(_kv("Harga Terakhir (Rp)", f"{m['harga']:,.0f}"))
+    price_label = (f"Harga Terakhir (Rp; {m['harga_tanggal']})"
+                   if m.get("harga_tanggal") and m.get("harga_tanggal") != m["tanggal"]
+                   else "Harga Terakhir (Rp)")
+    h.append(_kv(price_label, f"{m['harga']:,.0f}"))
+    h.append(_kv("Target Harga (Rp)",
+                 f"{m['tp']:,.0f}" if m.get("rating") and m.get("tp") is not None else "-"))
+    h.append(_kv("TP Sebelumnya (Rp)", str(m.get("tp_sebelumnya") or "n.a.")))
+    h.append(_kv("Upside/Downside", f"{m['upside_persen']:.1f}%".replace(".", ",")
+                 if m.get("rating") and m.get("upside_persen") is not None else "-"))
     h.append(_kv("Jumlah Saham (juta)", f"{cov['data_pasar']['saham']/1e6:,.0f}"))
     h.append(_kv("Kap. Pasar (Rp miliar)", f"{cov['data_pasar']['market_cap']/1e9:,.0f}"))
     h.append(_kv("Rata-rata T/O Harian (Rp miliar)", str(cov["data_pasar"].get("adtv", "-"))))
@@ -430,7 +494,8 @@ def render(doc):
         h.append("</div>")
     h.append(f"<h3 class='sub'>{html.escape(m['ticker'])} vs IHSG (awal = 100)</h3>")
     h.append(_price_chart(m["ticker"], m["tanggal"]))
-    h.append("<div class='small'>Analis Sektoral<br>Tim Riset Sektoral</div>")
+    h.append("<div class='small'>Tim Riset Sektoral<br>"
+             "Snapshot otomatis dari data bersumber</div>")
     h.append("</div><div class='right'>")
     h.append(f"<h1 class='emit'>{html.escape(m['emiten'])} ({html.escape(m['ticker'])} IJ)</h1>")
     h.append(f"<div class='headline'>{html.escape(cov['headline'])}</div><ul class='bullets'>")
@@ -451,14 +516,18 @@ def render(doc):
         h.append(_render_page_content(b))
         h.append("</div>")
 
+    disclosure = ("Laporan ini memuat rekomendasi model bersyarat berdasarkan "
+                  "asumsi dan sumber yang dinyatakan; keputusan investasi menjadi "
+                  "tanggung jawab pembaca. Kinerja masa lalu tidak menjamin hasil ke depan."
+                  if m.get("rating") else
+                  "Dokumen ini adalah bahan riset dalam peninjauan. Rating dan target "
+                  "harga belum diterbitkan karena syarat data atau model belum terpenuhi. "
+                  "Keputusan investasi menjadi tanggung jawab pembaca.")
     h.append(f"<div class='page'>{_topbar(m['tanggal'])}"
              f"{_draft_banner(m)}"
              "<h2 class='sec'>Pengungkapan</h2>"
-             "<p class='small'>Laporan ini adalah alat informasi dan analisis, bukan "
-             "rekomendasi, prediksi, atau saran investasi. Input laporan berasal dari "
-             "sectors cache (sectors.app); akurasi tunduk pada kualitas data sumber. Keputusan "
-             "investasi sepenuhnya tanggung jawab pembaca. Performa masa lalu tidak "
-             "menjamin hasil di masa depan.</p><h2 class='sec'>Catatan metodologi</h2><ul>")
+             f"<p class='small'>{html.escape(disclosure)}</p>"
+             "<h2 class='sec'>Catatan metodologi</h2><ul>")
     for c in doc["catatan_metodologi"]:
         h.append(f"<li class='small'>{html.escape(c)}</li>")
     h.append("</ul></div></body></html>")

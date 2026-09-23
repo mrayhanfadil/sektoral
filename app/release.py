@@ -3,8 +3,8 @@
 The mining contract is intentionally explicit so callers cannot interpret an
 absent value as zero:
 
-All factual provenance must point to ``sectors_cache``. External documents,
-URLs, broker estimates, and local driver/profile files are outside this gate.
+Interim actuals may use ``sectors_cache`` provenance or a dated official issuer
+release. That evidence alone does not approve a production forecast or valuation.
 
 * ``intake["latest_interim_actuals"]`` contains period, actual status, source,
   publication date, page, and metrics for revenue, EBITDA, net profit and capex.
@@ -16,8 +16,8 @@ URLs, broker estimates, and local driver/profile files are outside this gate.
   in its value and source.
 * ``sotp_result`` is the result from ``app.sotp.calculate_sotp``.
 
-Only the explicit ``finite_life_mining`` model profile applies these checks.
-Other profiles are unaffected by mining-specific release requirements.
+Only the explicit ``finite_life_mining`` profile applies the physical-chain
+checks. Other profiles have their own interim and forecast requirements.
 """
 from __future__ import annotations
 
@@ -50,10 +50,19 @@ OPERATING_BRIDGE_STAGES = (
 )
 
 _ACTUAL_STATUSES = {"actual", "reported actual", "actual reported"}
-_ALLOWED_SOURCE_TYPES = {"sectors_cache"}
+_ALLOWED_SOURCE_TYPES = {"sectors_cache", "official_issuer"}
 _INTERIM_PERIOD = re.compile(
     r"^(?:1Q|2Q|3Q|1H|2H|9M)[ -]?(?:\d{2}|\d{4})$", re.IGNORECASE
 )
+
+
+def _date(value):
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
 _FINANCIAL_METRICS = ("revenue", "ebitda", "net_profit", "capex")
 _EVIDENCE_FIELDS = (
     "claim", "value", "unit", "period", "status", "source",
@@ -147,12 +156,13 @@ def _check_latest_interim_actuals(intake: object) -> list[str]:
         blockers.append("latest interim actuals must be explicitly labeled actual")
     source_type = str(actuals.get("source_type", "")).strip().lower()
     if source_type not in _ALLOWED_SOURCE_TYPES:
-        blockers.append(
-            "latest interim actuals require sectors_cache as the sole data source")
+        blockers.append("latest interim actuals require a verified source type")
     if not _text(actuals.get("source")):
         blockers.append("latest interim actuals require a source")
-    elif not _cache_provenance(actuals.get("source")):
+    elif source_type == "sectors_cache" and not _cache_provenance(actuals.get("source")):
         blockers.append("latest interim actuals source must identify sectors_cache provenance")
+    elif source_type == "official_issuer" and not str(actuals.get("source")).startswith("https://"):
+        blockers.append("latest interim official source must use HTTPS")
     if not _source_date(actuals.get("source_date")):
         blockers.append("latest interim actuals require source_date in YYYY-MM-DD format")
     if "page" not in actuals or not _page(actuals.get("page")):
@@ -308,6 +318,31 @@ def assess_release(profile, intake, forecast, sotp_result):
             blockers.append(
                 "mining forecast is not a verified physical-driver production forecast")
         blockers.extend(_check_sotp(sotp_result, intake))
+    elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
+        actual = intake.get("latest_official_actual") if isinstance(intake, Mapping) else None
+        if not isinstance(actual, Mapping):
+            blockers.append("latest official interim actual is missing or unverified")
+        elif not all(actual.get(key) for key in
+                     ("period", "period_end", "published_at", "source_url", "metrics")):
+            blockers.append("latest official interim actual has incomplete provenance")
+        else:
+            report_date = _date((intake or {}).get("as_of"))
+            publication = _date(actual.get("published_at"))
+            period_end = _date(actual.get("period_end"))
+            if not publication or not period_end or period_end > publication or (
+                    report_date and publication > report_date):
+                blockers.append("latest official interim dates are inconsistent")
+            metrics = actual.get("metrics")
+            if (not isinstance(metrics, Mapping) or
+                    any(not isinstance(metrics.get(key), (int, float)) for key in
+                        ("revenue", "net_profit"))):
+                blockers.append("latest official interim revenue/net profit are missing")
+        if (not isinstance(forecast, Mapping) or
+                forecast.get("forecast_basis") != "driver_forecast" or
+                forecast.get("production_ready") is not True):
+            blockers.append("sourced operating and cash-flow forecast is incomplete")
+        if normalized_profile == "financial_ddm":
+            blockers.append("financial DDM/residual-income primary valuation is not implemented")
     return {
         "status": "draft_non_distributable" if blockers else "distributable",
         "blockers": blockers,
