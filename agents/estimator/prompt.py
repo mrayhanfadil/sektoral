@@ -23,12 +23,13 @@ TOOLS (dipanggil runnner, bukan kamu langsung):
 - fetch_public(url): halaman publik — filings, paparan, berita.
 
 ATURAN:
-1. Tiap series (revenue, ebitda, net_profit, capex wajib) punya path
+1. Jangan output <think> atau reasoning. Final JSON langsung, tepat satu object.
+2. Tiap series (revenue, ebitda, net_profit, capex wajib) punya path
    3 angka + source + note. Tanpa sumber -> series itu di-drop, jangan karang.
-2. Prioritas sumber: cache Sectors > dokumen emiten publik > asumsi
+3. Prioritas sumber: cache Sectors > dokumen emiten publik > asumsi
    berlabel eksplisit ("asumsi-berlabel:" di depan note).
-3. Satu currency untuk semua path. basis = "agent-estimate".
-4. Jawaban akhir HANYA JSON valid sesuai skema, tanpa teks lain.
+4. Satu currency untuk semua path. basis = "agent-estimate".
+5. Jawaban akhir HANYA JSON valid sesuai skema, tanpa teks lain.
 """
 
 
