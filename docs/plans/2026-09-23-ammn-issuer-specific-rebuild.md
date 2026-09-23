@@ -1,10 +1,17 @@
-# Mining Model Framework Rebuild - AMMN as First Issuer
+# Ticker-Agnostic Valuation Framework - AMMN Mining Pilot
 
 > **For Hermes:** implement sequentially by gates; no report release until every P0 gate passes. Preserve unrelated worktree changes and verify every derived value against sourced inputs.
 
-**Goal:** Replace the generic CAGR/short-horizon path for mining issuers with a reusable, sourced, operations-led model and controlled finite-life valuation. AMMN is the first implementation and regression fixture, not a special case in shared code or instructions.
+**Goal:** Route issuers to a suitable valuation/forecast profile without ticker-specific branches. Implement the mining finite-life profile with AMMN as the first pilot, while preserving distinct DCF, DDM/residual-income, and historical-relative methods for issuers whose business economics fit them.
 
-**Architecture:** Keep the deterministic, cache-only pipeline. Dispatch by configured business/model profile (for example, `mining`), never by ticker. Define a versioned operating-input contract shared across issuers and store issuer facts/estimates in ticker-keyed profiles. Load interim statements using each issuer's fiscal calendar and release dates; calculate physical-to-financial drivers and finite-life asset NAV from generic asset/process collections; fail closed when profile-required inputs, units, freshness, or reconciliations are invalid. Keep shared code and report instructions free of issuer names, projects, dates, and figures.
+**Architecture:** Keep the deterministic, cache-only pipeline. Dispatch by configured business/model profile, never by ticker. Share intake, provenance, period, unit, and release controls; route the forecast and valuation to `finite_life_mining` (LoM/SOTP), `going_concern_fcff` (DCF), or `financial_ddm` (DDM/residual income) as appropriate. Historical-relative multiples are a separate cross-check, not a primary method selected by ticker or an automatic blend. Define versioned issuer input contracts, with facts/estimates stored in ticker-keyed profiles. Load interim statements using each issuer's fiscal calendar; fail closed when profile-required inputs, units, freshness, or reconciliations are invalid. Keep shared code and report instructions free of issuer names, projects, dates, and figures.
+
+**Method references supplied by the user:**
+- [DCF valuation tool](https://github.com/abidamassi/dcf-valuation-tool): FCFF/WACC workflow for non-financial going concerns; use as a method/reference profile, subject to this pipeline's sourced-input and release gates.
+- [DDM tool](https://github.com/abidamassi/ddm_tool): dividend-based equity valuation with Cost of Equity and residual-income/P/BV cross-checks; use only when dividend history and payout economics support it.
+- [Relative historical tool](https://github.com/abidamassi/relativepeers): issuer-versus-own-history multiples and sector scorecard; classify as a historical-multiple cross-check, not peer valuation and not a substitute for finite-life asset NAV.
+
+These repositories are methodology references, not runtime dependencies or permission to bypass the cache-only/source-provenance controls. Reimplement or adapt only the required model logic into the existing pipeline after reviewing its assumptions and gates.
 
 **Tech Stack:** Python stdlib, SQLite cache, JSON inputs, pytest, existing HTML/PDF renderer.
 
@@ -21,7 +28,7 @@
 | D5 | No averaging of methods when fair values diverge >30%; explain/reconcile first | Existing rule already requires investigation | Convenient arithmetic mean | If unresolved, select the defensible primary method and disclose cross-check only |
 | D6 | Model-control failures are release blockers, not footnotes | RNAV contradiction, NWC plug, debt/interest mismatch, unit errors and stale inputs invalidate outputs | Preserve output with caveats | Fail closed can delay the report; report the exact missing evidence instead |
 | D7 | Catalyst inclusion requires a company-specific earnings/valuation transmission path | Daily stock/commodity moves and index flows do not establish issuer catalysts | Fill page with news irrespective of earnings relevance | Real milestones with uncertain dates are shown as windows and marked unconfirmed |
-| D8 | Shared procedures and model engine are ticker-agnostic; issuer facts, model profile and disclosed assumptions are input data | Reuse comes from a stable contract and profile dispatch, while evidence varies by issuer | Hardcode issuer names, projects, dates, or figures into shared prompt/code | Add schema, profile-dispatch, cross-issuer fixture and genericity tests |
+| D8 | Shared procedures and model engine are ticker-agnostic; issuer facts, model profile and disclosed assumptions are input data | Reuse comes from stable contracts and profile dispatch, while evidence varies by issuer | Hardcode issuer names, projects, dates, or figures into shared prompt/code | Add schema, method-routing, cross-issuer fixture and genericity tests |
 
 ---
 
@@ -61,6 +68,20 @@ The versioned issuer profile should have extensible sections for:
 - `corporate`: latest net debt, corporate costs, minority interests/ownership, and non-operating items.
 
 Do not require a field merely because it exists for the AMMN pilot. Model-profile rules declare required and optional fields, supported valuation methods, and applicable unit/freshness checks.
+
+The model registry must explicitly route supported archetypes: finite-life mining to physical-driver forecast + LoM/SOTP; non-financial going concerns to FCFF DCF; financial/dividend issuers to DDM and/or residual income/P/BV when payout and capital economics support them. Historical-relative multiples are optional cross-checks for any profile with valid history. Unsupported/ambiguous profiles fail with an explicit `unsupported_model_profile`, never a guessed method or ticker-name branch.
+
+### Task 0.3: Define model-profile registry and routing
+
+**Files:**
+- Create: `app/model_profiles.py`
+- Modify: `app/forecast.py`
+- Modify: `app/valuation.py`
+- Test: `tests/test_model_profiles.py`
+
+Create an explicit profile registry separating issuer identity from business archetype and valuation method. Route mining, general going-concern, and financial/dividend fixtures to the appropriate engine. Preserve relative historical multiple outputs as named cross-checks only; no automatic averaging with primary fair value. Profile selection must be supplied by configuration or derived from verified business metadata, never from hardcoded ticker comparisons.
+
+**Gate:** test at least one issuer fixture per supported profile and an unknown profile. Financial issuers must not enter enterprise-value DCF; finite-life assets must not receive perpetual going-concern terminals; historical-relative value must not silently become the primary TP.
 
 Schema validation must reject missing provenance for used material inputs, incompatible units, stale critical inputs under the selected profile, duplicate/overlapping assets, invalid ownership/attribution, and company guidance presented as actual. `null` means unavailable; zero is a real sourced or explicitly justified assumption, never a missing-data fallback.
 
@@ -215,6 +236,7 @@ Add revenue/EBITDA/net profit and growth, EPS and growth, BVPS, DPS, PER, PBV, d
 
 The tests must prove:
 - latest official interim actual is selected according to issuer fiscal calendar and release policy; AMMN's 1H26 case is one regression fixture.
+- profile routing sends finite-life mining to LoM/SOTP, non-financial going concerns to FCFF DCF, and dividend-eligible financial issuers to DDM/residual income as configured; unknown profiles fail closed.
 - two mining issuer profiles with different asset/process/product configurations pass without ticker-specific branches; existing non-mining profiles retain their existing model dispatch.
 - Every critical manual input has verifiable provenance and correct period/unit.
 - Driver chain is complete and reconciles to reported/sourced revenue within defined, disclosed bridge tolerances.
@@ -223,6 +245,7 @@ The tests must prove:
 - profile-declared commodity/price/quantity units catch deliberate swaps; stale market inputs fail configured freshness gates.
 - FCFF, debt, interest, NWC, NAV/share, SOTP and sensitivities reconcile; sensitivity base equals TP and downside is lower.
 - No unsupported Gordon/perpetual terminal value is used for finite-life primary valuation; going-concern profiles retain their applicable methods.
+- Historical-relative multiples are labeled as own-history cross-checks, filtered for invalid denominators/structural breaks, and never automatically averaged into the primary TP.
 - Catalysts each map to a dated/conditioned earnings driver; noise is excluded.
 - Shared system instruction and shared model code contain no issuer-specific names, dates, projects, or figures; issuer-specific information is loaded from profiles.
 - PDF text scan finds no internal strings; all pages have no clipping/overlap and useful page density.
