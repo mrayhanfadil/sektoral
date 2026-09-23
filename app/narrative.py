@@ -1163,6 +1163,16 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
         forecast_values = [{"year": scenario["year"], **full}] + (forward or {}).get("rows", [])
         history = (intake.get("official_evidence") or {}).get("annual_actuals") or []
         prior = next((row for row in history if row.get("year") == scenario["year"] - 1), {})
+        attributable_share = None
+        if prior.get("net_profit") and prior.get("net_profit_attributable") is not None:
+            attributable_share = prior["net_profit_attributable"] / prior["net_profit"]
+        fx_rate = value.get("fx", {}).get("rate")
+        current_ev_usd = None
+        if fx_rate and fx_rate > 0 and value.get("net_debt_usd") is not None:
+            current_ev_usd = (
+                intake["price"] * value["shares"] / fx_rate
+                + value["net_debt_usd"]
+                + value.get("minority_interest_usd", 0))
         for row in rows:
             key = ("revenue" if row[0].startswith("Pendapatan") else
                    "ebitda" if row[0].startswith("EBITDA") else
@@ -1184,6 +1194,25 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
                     elif previous_value and previous_value > 0:
                         row[index] = fmt.pct(current_value / previous_value - 1)
                     previous_value = current_value
+            elif row[0].startswith("EPS") and attributable_share is not None:
+                for index, projection in enumerate(forecast_values, start=3):
+                    if index >= len(row) or projection.get("net_profit") is None:
+                        break
+                    eps_cents = (projection["net_profit"] * attributable_share /
+                                 value["shares"] * 100)
+                    row[index] = fmt._id(eps_cents, 2)
+            elif row[0].startswith("PER") and attributable_share is not None and fx_rate:
+                for index, projection in enumerate(forecast_values, start=3):
+                    if index >= len(row) or not projection.get("net_profit"):
+                        break
+                    eps_rupiah = (projection["net_profit"] * attributable_share /
+                                  value["shares"] * fx_rate)
+                    row[index] = fmt.mult(intake["price"] / eps_rupiah, 1)
+            elif row[0].startswith("EV/EBITDA") and current_ev_usd is not None:
+                for index, projection in enumerate(forecast_values, start=3):
+                    if index >= len(row) or not projection.get("ebitda"):
+                        break
+                    row[index] = fmt.mult(current_ev_usd / projection["ebitda"], 1)
         doc["exhibits"][0]["catatan_sumber"] = (
             f"Sumber aktual: {(intake.get('official_evidence') or {}).get('annual_source_title')}; "
             f"{forecast_label} adalah estimasi Sektoral dari rilis interim "
@@ -1192,7 +1221,11 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
                "bukan jadwal produksi LoM. " if forward else
                "FY27F-FY30F belum dimodelkan karena asumsi lanjutan belum tervalidasi. ")
             + "EPS/BVPS historis memakai jumlah saham "
-            f"per {value['balance_period']} sebagai basis pro forma.")
+            f"per {value['balance_period']} sebagai basis pro forma. EPS forecast "
+            "mengasumsikan porsi laba pemilik induk sama dengan FY terakhir; PER "
+            f"memakai harga {intake['price_date']} dan kurs {value['fx']['date']}; "
+            "EV/EBITDA memakai harga kini, neraca interim, dan kurs tersebut. "
+            "DPS/yield dan PBV forecast tidak dihitung tanpa asumsi dividen dan ekuitas.")
     doc["fy26"] = {
         "Pendapatan": fmt._id(scenario["full_year"]["revenue"] * value["fx"]["rate"] / 1e9, 0),
         "EBITDA": fmt._id(scenario["full_year"]["ebitda"] * value["fx"]["rate"] / 1e9, 0),
