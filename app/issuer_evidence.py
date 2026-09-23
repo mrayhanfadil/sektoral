@@ -19,6 +19,8 @@ def load(ticker, as_of):
     actual = data.get("latest_actual") or {}
     if data.get("ticker") != ticker.upper() or data.get("schema_version") != 1:
         raise ValueError(f"invalid issuer evidence identity: {path}")
+    if data.get("evidence_status") == "blocked":
+        return None
     if not all(actual.get(key) for key in
                ("period", "period_end", "published_at", "source_title", "source_url", "page")):
         raise ValueError(f"incomplete official actual provenance: {path}")

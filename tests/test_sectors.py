@@ -93,3 +93,68 @@ def test_mineops_non_tambang_none():
     from app import mineops
     assert mineops.load("BBCA") is None
     assert mineops.load("ZZZZ") is None
+
+
+def test_keyless_503_behavior(db):
+    cli = S.Client(key=None, db=db)
+    with pytest.raises(S.SectorsNotConfigured) as exc_info:
+        cli.get("/daily/ZZZZ/")
+    assert exc_info.value.status_code == 503
+    assert "tanpa SECTORS_API_KEY" in str(exc_info.value)
+
+
+def test_minimal_sections():
+    # String input with duplicates and extra spaces
+    res = S.minimal_sections("overview, peers, overview, valuation,  peers ")
+    assert res == "overview,peers,valuation"
+
+    # List input
+    res_list = S.minimal_sections(["overview", "peers", "overview"])
+    assert res_list == "overview,peers"
+
+    # Empty raises ValueError
+    with pytest.raises(ValueError, match="At least one section"):
+        S.minimal_sections("")
+
+
+def test_credit_policy_budget_rules():
+    import docs.integration.credit_policy as cp
+
+    # Rule: 1 credit per endpoint / section, 3 for NL, 1 for 404
+    assert cp.COST_PER_ENDPOINT == 1
+    assert cp.COST_PER_SECTION == 1
+    assert cp.COST_NL_QUERY == 3
+    assert cp.COST_404_LOOKUP == 1
+
+    # Rule: Reject or warn against natural language queries (?q=)
+    with pytest.warns(cp.NLQueryWarning, match="costs 3 credits"):
+        cp.check_query_params({"q": "best mining stocks in Indonesia"})
+    with pytest.raises(ValueError, match="costs 3 credits"):
+        cp.check_query_params({"q": "best mining stocks"}, strict=True)
+    # Structured queries pass silently
+    cp.check_query_params({"where": "market_cap > 1000000"})
+
+    # Rule: Validate ticker existence before dispatch (404 penalty)
+    assert cp.validate_ticker("BBCA") == "BBCA"
+    assert cp.validate_ticker("bbca.jk") == "BBCA"
+    with pytest.raises(ValueError, match="Invalid IDX ticker"):
+        cp.validate_ticker("TOOLONG123")
+    with pytest.raises(ValueError, match="Invalid ticker"):
+        cp.validate_ticker("")
+
+    # Rule: Check quarterly-financial-dates before pulling full quarterly
+    with pytest.raises(ValueError, match="quarterly-financial-dates"):
+        cp.check_quarterly_dates_first("BBCA", None)
+    assert cp.check_quarterly_dates_first("BBCA", ["2024-Q1", "2024-Q2"]) is True
+    assert cp.check_quarterly_dates_first("BBCA", []) is False
+
+    # Rule: Prefer minimal sections= parameter over bloated payloads
+    deduped = cp.validate_minimal_sections("overview, peers, overview, valuation")
+    assert deduped == ["overview", "peers", "valuation"]
+    with pytest.warns(UserWarning, match="exceeds recommended minimal limit"):
+        cp.validate_minimal_sections("overview,peers,future,valuation,financials,dividend,ownership,management")
+
+    # Rule: Assert total dry-run budget for a quintet harvest remains < 100 credits
+    total = cp.assert_quintet_budget()
+    assert total < 100
+    assert total == 97

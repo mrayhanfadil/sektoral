@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "ticker": "SIDO",
+  "reporting_currency": "IDR",
+  "evidence_status": "blocked",
+  "evidence_status_reason": "Publication date for the mirrored statement was not independently verified.",
+  "latest_actual": {
+    "period": "1H26",
+    "period_end": "2026-06-30",
+    "published_at": "2026-07-31",
+    "source_title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
+    "source_url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+    "page": "3-4",
+    "unit": "IDR; reported in millions of Rupiah",
+    "metrics": {
+      "revenue": 1466658000000,
+      "gross_profit": 740745000000,
+      "net_profit": 333653000000,
+      "net_profit_attributable": 333653000000
+    },
+    "prior_year": {
+      "period": "1H25",
+      "revenue": 1828705000000,
+      "gross_profit": 1040968000000,
+      "net_profit": 600468000000,
+      "net_profit_attributable": 600468000000
+    }
+  },
+  "balance_sheet": {
+    "period_end": "2026-06-30",
+    "source_pages": [1, 2],
+    "cash": 475644000000,
+    "total_assets": 3260699000000,
+    "total_liabilities": 265525000000,
+    "total_equity": 2995174000000,
+    "shares_issued": 30000000000
+  },
+  "operating_context": [
+    {
+      "fact": "Penjualan 1H26 tercatat sebesar Rp1.466.658 juta dengan laba bersih Rp333.653 juta.",
+      "source_title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
+      "source_url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+      "published_at": "2026-07-31"
+    }
+  ]
+}

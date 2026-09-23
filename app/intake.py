@@ -53,6 +53,7 @@ def load(ticker, as_of=None):
 
     hist = fin.get("historical_financials") or []
     annuals = []
+    da_invalid_years = []
     for h in sorted(hist, key=lambda r: r.get("year", 0)):
         rev = _num(h.get("revenue"))
         if rev is None or rev <= 0:
@@ -65,15 +66,46 @@ def load(ticker, as_of=None):
         capex_raw = _num(h.get("capital_expenditure"))
         capex_out = -capex_raw if capex_raw is not None and capex_raw < 0 else (
             capex_raw if capex_raw else None)
+
+        # Sourced depreciation metric if present in cache row
+        sourced_da = _num(h.get("depreciation"))
+        if sourced_da is None:
+            sourced_da = _num(h.get("depreciation_and_amortization"))
+        if sourced_da is None:
+            sourced_da = _num(h.get("amortization"))
+        if sourced_da is None:
+            sourced_da = _num(h.get("da"))
+
+        if sourced_da is not None and sourced_da >= 0:
+            da = sourced_da
+        elif ebitda is not None and ebit is not None:
+            diff = ebitda - ebit
+            if diff >= 0 and not (ebitda == 0 and ebit > 0):
+                da = diff
+            else:
+                # ebitda == 0 with positive ebit or ebitda < ebit yields invalid D&A.
+                # Never hide this with max(0, ...) or assume a value; preserve None.
+                da = None
+                da_invalid_years.append(h.get("year"))
+        else:
+            da = None
+
+        # Cash: check cash_and_equivalents, total_cash_and_due_from_banks, cash_only
+        cash_val = _num(h.get("cash_and_equivalents"))
+        if cash_val is None:
+            cash_val = _num(h.get("total_cash_and_due_from_banks"))
+        if cash_val is None:
+            cash_val = _num(h.get("cash_only"))
+
         annuals.append({
             "year": h.get("year"), "revenue": rev, "ebitda": ebitda,
             "ebit": ebit, "earnings": earn, "tax": tax, "interest": interest,
-            "da": (ebitda - ebit) if ebitda is not None and ebit is not None else None,
+            "da": da,
             "capex_out": capex_out,
             "fcf": _num(h.get("free_cash_flow")),
             "ocf": _num(h.get("operating_cash_flow")),
             "total_debt": _num(h.get("total_debt")),
-            "cash": _num(h.get("cash_and_equivalents")),
+            "cash": cash_val,
             "equity": _num(h.get("total_equity")),
             "assets": _num(h.get("total_assets")),
             "liab": _num(h.get("total_liabilities")),
@@ -92,7 +124,17 @@ def load(ticker, as_of=None):
                      f"data saham tahun dasar {base['year']} tidak ada di cache.")
     market_cap = price * shares
 
-    # G1: scale sanity — revenue per share vs price must be same order of magnitude
+    if da_invalid_years:
+        years_str = ", ".join(str(y) for y in sorted(set(da_invalid_years)))
+        notes.append(
+            f"D&A tahun {years_str} tidak valid di cache "
+            f"(EBITDA <= EBIT atau EBITDA 0 dengan EBIT positif); status D&A dan arus kas tidak lengkap."
+        )
+
+    if base.get("cash") is None:
+        notes.append(f"posisi kas tahun dasar {base['year']} tidak tersedia di cache; kas berstatus n.a.")
+
+    # G1: scale sanity - revenue per share vs price must be same order of magnitude
     rps = base["revenue"] / shares
     g1["G1_skala"] = "lolos" if 0.01 <= rps / price <= 100 else "gagal"
     if g1["G1_skala"] == "gagal":
@@ -109,12 +151,12 @@ def load(ticker, as_of=None):
     if recon_n == 0:
         notes.append("kaki arus kas tidak lengkap di cache; rekonsiliasi kas tidak diuji.")
 
-    # G1: interim freshness — structured interim not required by spec; label only
+    # G1: interim freshness - structured interim not required by spec; label only
     g1["G1_periode"] = "dilabeli"
     notes.append(f"basis tahunan terakhir {base['year']} dipakai sebagai tahun dasar; "
                  "rilis interim hanya konteks narasi.")
 
-    # G1: non-recurring — not detectable from cache granularity
+    # G1: non-recurring - not detectable from cache granularity
     g1["G1_nonrecurring"] = "dilabeli"
     notes.append("tidak ada item non-recurring teridentifikasi dari granularitas cache; "
                  "laba dilaporkan = laba inti.")

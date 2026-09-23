@@ -262,7 +262,7 @@ def _price_chart(ticker, as_of):
         f"<text x='32' y='140' font-size='7.8' fill='{MUT}'>Selisih {pct(spread)} poin persentase</text>"
         "</svg>"
         f"<p class='src'>Sumber: Sectors cache; {len(dates)} tanggal sama "
-        f"({dates[0].isoformat()}–{dates[-1].isoformat()}). "
+        f"({dates[0].isoformat()} - {dates[-1].isoformat()}). "
         "Kinerja harga, awal = 100; tidak termasuk dividen.</p>")
 
 
@@ -277,13 +277,21 @@ def _column_widths(cols):
         return [30, 70]
     if len(cols) == 2:
         return [78, 22]
-    if "dasar" in labels and len(cols) == 6:
-        return [18, 10, 11, 11, 11, 39]
+    if "dasar" in labels and len(cols) >= 6:
+        driver_w = 18
+        dasar_w = 34
+        satuan_w = 8
+        remaining = 100 - driver_w - dasar_w - satuan_w
+        n_years = len(cols) - 3
+        year_w = remaining / n_years
+        return [driver_w, satuan_w] + [year_w] * n_years + [dasar_w]
     if {"katalis", "waktu", "kenapa penting", "arah"}.issubset(labels):
         return [50, 13, 28, 9]
     return {3: [42, 29, 29], 4: [34, 22, 22, 22],
             5: [48, 12, 12, 12, 16],
-            6: [34, 13.2, 13.2, 13.2, 13.2, 13.2]}.get(
+            6: [34, 13.2, 13.2, 13.2, 13.2, 13.2],
+            7: [34, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0],
+            8: [26, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 20.0]}.get(
                 len(cols), [100 / len(cols)] * len(cols))
 
 
@@ -296,7 +304,7 @@ def _column_kinds(cols, rows):
             kinds.append("text")
         elif label == "waktu" or (values and all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) for v in values)):
             kinds.append("date")
-        elif values and sum(bool(re.match(r"^(?:Rp|USD\s*)?[\d(~−-]|^n\.a\.$", v))
+        elif values and sum(bool(re.match(r"^(?:Rp|USD\s*)?[\d(~−-]|^n\.a\.$|^n\.m\.$", v))
                             for v in values) >= len(values) / 2:
             kinds.append("num")
         else:
@@ -391,7 +399,7 @@ def _topbar(report_date):
         display_date = f"{weekdays[day.weekday()]}, {day.day} {months[day.month-1]} {day.year}"
     except ValueError:
         display_date = str(report_date)
-    return ("<div class='topbar'><span>Equity Research – Company Update<br>"
+    return ("<div class='topbar'><span>Equity Research - Company Update<br>"
             f"{html.escape(display_date)}</span><span class='wordmark' "
             f"aria-label='Sectoral'>{LOGO_SVG}</span></div>")
 
@@ -433,7 +441,7 @@ def _report_header(report_date, meta):
 def _draft_banner(meta):
     if meta.get("status") != "draft_non_distributable":
         return ""
-    return ("<div class='draft-banner'>DRAFT: BUKTI BELUM LENGKAP — "
+    return ("<div class='draft-banner'>DRAFT: BUKTI BELUM LENGKAP: "
             "skenario nilai belum disajikan sampai data dan model tervalidasi.</div>")
 
 
@@ -530,16 +538,20 @@ def render(doc):
     price_label = (f"Harga Terakhir (Rp; {m['harga_tanggal']})"
                    if m.get("harga_tanggal") and m.get("harga_tanggal") != m["tanggal"]
                    else "Harga Terakhir (Rp)")
-    h.append(_kv(price_label, f"{m['harga']:,.0f}"))
+    harga_val = f"{m['harga']:,.0f}" if m.get("harga") is not None else "n.a."
+    h.append(_kv(price_label, harga_val))
     h.append(_kv("Target Harga (Rp)",
                  f"{m['tp']:,.0f}" if m.get("rating") and m.get("tp") is not None else "-"))
     h.append(_kv("TP Sebelumnya (Rp)", str(m.get("tp_sebelumnya") or "n.a.")))
     h.append(_kv("Upside/Downside", f"{m['upside_persen']:.1f}%".replace(".", ",")
                  if m.get("rating") and m.get("upside_persen") is not None else "-"))
-    h.append(_kv("Jumlah Saham (juta)", f"{cov['data_pasar']['saham']/1e6:,.0f}"))
-    h.append(_kv("Kap. Pasar (Rp miliar)", f"{cov['data_pasar']['market_cap']/1e9:,.0f}"))
-    h.append(_kv("Rata-rata T/O Harian (Rp miliar)", str(cov["data_pasar"].get("adtv", "-"))))
-    h.append(_kv("Free Float (%)", str(cov["data_pasar"].get("free_float", "-"))))
+    dp = cov.get("data_pasar") or {}
+    saham_val = f"{dp['saham']/1e6:,.0f}" if dp.get("saham") is not None else "n.a."
+    mcap_val = f"{dp['market_cap']/1e9:,.0f}" if dp.get("market_cap") is not None else "n.a."
+    h.append(_kv("Jumlah Saham (juta)", saham_val))
+    h.append(_kv("Kap. Pasar (Rp miliar)", mcap_val))
+    h.append(_kv("Rata-rata T/O Harian (Rp miliar)", str(dp.get("adtv", "-"))))
+    h.append(_kv("Free Float (%)", str(dp.get("free_float", "-"))))
     for holder in (doc.get("holders") or [])[:2]:
         h.append(_kv(str(holder[0])[:22], str(holder[1])))
     h.append("</div>")
@@ -549,7 +561,8 @@ def render(doc):
                  "<div class='small'>FY26F: Sektoral Estimates (Rp miliar)</div>")
         for k in ("Pendapatan", "EBITDA", "Laba bersih"):
             if k in f1:
-                h.append(_kv(k, f1[k]))
+                v = f1[k]
+                h.append(_kv(k, "n.a." if v is None else str(v)))
         h.append("</div>")
     h.append(f"<h3 class='sub'>{html.escape(m['ticker'])} vs IHSG (awal = 100)</h3>")
     h.append(_price_chart(m["ticker"], m["tanggal"]))
@@ -590,4 +603,5 @@ def render(doc):
     for c in doc["catatan_metodologi"]:
         h.append(f"<li class='small'>{html.escape(c)}</li>")
     h.append("</ul></div></body></html>")
-    return "\n".join(h)
+    out = "\n".join(h)
+    return out.replace("\u2014", " - ").replace("\u2013", "-")

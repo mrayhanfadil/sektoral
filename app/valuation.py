@@ -1,5 +1,6 @@
-"""TAHAP 3: VALUATION ENGINE (GATE 3). Satu mata uang, TP = rerata Gordon + exit."""
+from . import ddm
 from . import fmt
+from . import model_profiles
 from . import rnav
 from . import release
 from . import rating as rating_mod
@@ -7,7 +8,8 @@ from . import sotp as sotp_mod
 
 def _core(fc, shares, wacc, g, exit_mult, net_debt):
     """Satu basis perhitungan; dipakai TP base, downside, dan grid sensitivitas."""
-    dfs = [(1 + wacc) ** (i + 0.5) for i in range(3)]
+    n_years = len(fc["rows"])
+    dfs = [(1 + wacc) ** (i + 0.5) for i in range(n_years)]
     pv_exp = sum(r["fcf"] / d for r, d in zip(fc["rows"], dfs))
     f_last = fc["rows"][-1]
     tv = f_last["fcf"] * (1 + g) / (wacc - g)
@@ -15,7 +17,7 @@ def _core(fc, shares, wacc, g, exit_mult, net_debt):
     ev_g = pv_exp + pv_tv
     ps_g = (ev_g - net_debt) / shares
     ev_x = f_last["ebitda"] * exit_mult
-    ps_x = (ev_x - net_debt) / ((1 + wacc) ** 3 * shares)
+    ps_x = (ev_x - net_debt) / ((1 + wacc) ** n_years * shares)
     return {"pv_exp": pv_exp, "pv_tv": pv_tv, "ev_g": ev_g, "ps_g": ps_g,
             "ps_x": ps_x, "tv_share": pv_tv / ev_g, "f_last": f_last}
 
@@ -35,7 +37,8 @@ def build(intake, fc):
     t = intake["ticker"]
     profile = intake.get("model_profile", "unsupported")
     is_miner = profile == "finite_life_mining"
-    method = ("DCF FCFF 3 tahun eksplisit + terminal Gordon, dibobot sama dengan "
+    n_fc = len(fc["rows"]) if fc.get("rows") else 5
+    method = (f"DCF FCFF {n_fc} tahun eksplisit + terminal Gordon, dibobot sama dengan "
               "exit EV/EBITDA")
     is_bank = profile == "financial_ddm"
     if is_bank:
@@ -136,12 +139,76 @@ def build(intake, fc):
             for field in ("cash_idr", "debt_idr", "minority_interest_idr",
                           "corporate_overhead_idr", "shares")
         }
-    release_result = release.assess_release(profile, intake, fc, sotp_result)
+    ddm_result = None
+    if is_bank and intake.get("payout") is not None:
+        nets = [r["net"] for r in fc["rows"]]
+        bvps = (intake["annuals"][-1].get("equity") or 0) / intake["shares"] if intake.get("annuals") and intake.get("shares") else 0
+        roae = nets[0] / fc["rows"][0]["equity"] if fc["rows"][0].get("equity") else 0.12
+        ddm_result = ddm.value_bank(
+            nets, [intake["payout"]], intake.get("dps_hist") or [],
+            intake["shares"], re, g, roae, bvps,
+        )
+        ddm_result["status"] = "complete"
+        ddm_result["method"] = "ddm"
+
+    annuals = intake.get("annuals") or []
+    ebit_pos = sum(
+        1 for a in annuals[-3:]
+        if (a.get("ebit") or a.get("operating_profit") or a.get("ebitda") or 0) > 0
+    )
+    r_first = fc["rows"][0] if fc.get("rows") else {}
+    ebit_first = r_first.get("ebit", 1.0)
+    int_first = r_first.get("interest", 1.0)
+    icr = ebit_first / max(int_first, 1.0) if int_first else 10.0
+    ebitda_first = r_first.get("ebitda", 1.0)
+    nd_ebitda = net_debt / max(ebitda_first, 1.0) if ebitda_first else 0.0
+
+    peer_exit_low = None
+    peer_exit_high = None
+    if intake.get("peers"):
+        pe_vals = [p.get("pe") for p in intake["peers"] if isinstance(p.get("pe"), (int, float))]
+        if pe_vals:
+            peer_exit_low = min(pe_vals)
+            peer_exit_high = max(pe_vals)
+
+    gate_inputs = {
+        "domain": profile,
+        "model_profile": profile,
+        "filing_history_years": len(annuals),
+        "ebit_positive_count": ebit_pos,
+        "d_de_ratio": D / max(E + D, 1.0),
+        "net_debt_to_ebitda": nd_ebitda,
+        "icr": icr,
+        "equity_positive": E > 0,
+        "nci_pct": 0.0,
+        "revenue_drivers": intake.get("revenue_drivers") or [],
+        "has_steady_state_3y": True,
+        "life_cycle_stage": "mature",
+        "upside_pct": upside * 100.0 if upside is not None else None,
+        "terminal_value_pct_of_ev": (pv_tv / ev_g * 100.0) if ev_g else None,
+        "implied_exit_ev_ebitda": impl.get("ev_ebitda"),
+        "peer_exit_low": peer_exit_low,
+        "peer_exit_high": peer_exit_high,
+    }
+    verdict = model_profiles.evaluate(gate_inputs)
+
+    if pv_tv / ev_g > 0.75:
+        notes.append(f"peringatan terminal: porsi terminal {pv_tv/ev_g*100:.0f}% > 75% dari EV")
+    if "5_exit_multiple_out_of_range" in verdict.gates_failed:
+        notes.append("implied exit EV/EBITDA di luar rentang peer; periksa cross-check valuasi relatif")
+
+    valuation_asset = sotp_result if is_miner else (ddm_result if is_bank else None)
+    if isinstance(valuation_asset, dict):
+        valuation_asset["gate_verdict"] = verdict.to_dict()
+
+    release_result = release.assess_release(profile, intake, fc, valuation_asset)
     if release_result["status"] == "distributable":
         critical = [key for key, result in g3.items()
                     if key in {"G3.2_skala", "G3.4_downside",
                                "G3.8_method_divergence", "G3.9_extreme_thesis"}
                     and isinstance(result, tuple) and result[0].startswith("gagal")]
+        if verdict.rating_override == "Review Required":
+            critical.append("G3.9_extreme_thesis")
         if critical:
             release_result = {"status": "draft_non_distributable",
                               "blockers": [f"valuation check failed: {key}" for key in critical]}
@@ -162,7 +229,7 @@ def build(intake, fc):
                                   "blockers": ["extreme SOTP target needs a sourced fundamental thesis"]}
                 tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
             else:
-                rating = rating_mod.classify(upside)
+                rating = verdict.rating_override or rating_mod.classify(upside)
             tp_down, grid = None, {}
         g3 = {
             "G3.1_method": "lolos" if not is_draft else "gagal",
@@ -175,11 +242,14 @@ def build(intake, fc):
         tp, upside, rating, tp_down, grid = None, None, \
             "DRAFT NON-DISTRIBUTABLE", None, {}
         g3 = {"G3.release": "draft_non_distributable"}
-    elif release_result["status"] == "distributable":
-        rating = rating_mod.classify(upside)
+    elif is_draft:
+        rating = "DRAFT NON-DISTRIBUTABLE"
+    else:
+        rating = verdict.rating_override or rating_mod.classify(upside)
 
     return {"method": method, "model_profile": profile,
             "release": release_result, "sotp": sotp_result,
+            "ddm": ddm_result, "gate_verdict": verdict.to_dict(),
             "wacc": wacc, "wacc_inputs": {"rf": rf, "erp": erp,
             "beta": beta, "re": re, "rd_after_tax": rd, "g": g, "exit_mult": exit_mult,
             "exit_basis": exit_basis},

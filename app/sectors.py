@@ -59,6 +59,35 @@ class SectorsError(RuntimeError):
     pass
 
 
+class SectorsNotConfigured(SectorsError):
+    """Raised when SECTORS_API_KEY is missing - wire to HTTP 503, not fallback."""
+
+    status_code = 503
+
+    def __init__(self, msg: str = "tanpa SECTORS_API_KEY: mode snapshot, upstream ditolak"):
+        super().__init__(msg)
+        self.status_code = 503
+
+
+def minimal_sections(sections: str | list[str]) -> str:
+    """Normalize and deduplicate sections parameter to prevent bloated payloads."""
+    if isinstance(sections, str):
+        parts = [s.strip().lower() for s in sections.split(",") if s.strip()]
+    elif isinstance(sections, (list, tuple, set)):
+        parts = [str(s).strip().lower() for s in sections if str(s).strip()]
+    else:
+        raise ValueError(f"Invalid sections: {sections!r}")
+    if not parts:
+        raise ValueError("At least one section must be specified")
+    deduped = []
+    seen = set()
+    for s in parts:
+        if s not in seen:
+            seen.add(s)
+            deduped.append(s)
+    return ",".join(deduped)
+
+
 def ttl_for(endpoint: str) -> int:
     for prefix, ttl in TTL_BY_PREFIX:
         if endpoint.startswith(prefix):
@@ -127,7 +156,7 @@ class Client:
 
     def _fetch_live(self, endpoint: str, params: dict) -> object:
         if not self.key:
-            raise SectorsError("tanpa SECTORS_API_KEY: mode snapshot, upstream ditolak")
+            raise SectorsNotConfigured("tanpa SECTORS_API_KEY: mode snapshot, upstream ditolak")
         url = BASE + endpoint
         if params:
             url += "?" + urllib.parse.urlencode(params)

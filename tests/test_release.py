@@ -126,7 +126,7 @@ def test_interim_actuals_must_be_primary_latest_and_precede_report_date():
     result = assess_release("finite_life_mining", intake, _forecast(), _sotp())
 
     assert result["status"] == "draft_non_distributable"
-    assert "latest interim actuals require sectors_cache as the sole data source" in result["blockers"]
+    assert "latest interim actuals require a verified source type" in result["blockers"]
     assert "latest interim actuals were published after the report as-of date" in result["blockers"]
     assert "interim actuals must be identified as the latest available release" in result["blockers"]
 
@@ -165,17 +165,139 @@ def test_non_mining_profile_requires_official_actual_and_driver_forecast():
     assert "sourced operating and cash-flow forecast is incomplete" in result["blockers"]
 
 
+def _driver_evidence():
+    return {
+        series: {
+            "source": "https://issuer.example/guidance_2026.pdf",
+            "source_date": "2026-09-18",
+            "page": 10,
+            "note": f"Sourced {series} operating trajectory from official guidance",
+            "path": [100, 115, 130],
+        }
+        for series in ("revenue", "ebitda", "net_profit", "capex")
+    }
+
+
 def test_sourced_going_concern_can_clear_non_mining_release_gate():
+    intake = {"as_of": "2026-09-22", "latest_official_actual": {
+        "period": "1H26", "period_end": "2026-06-30",
+        "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
+        "metrics": {"revenue": 100, "net_profit": 8}}}
+    forecast = {
+        "forecast_basis": "driver_forecast",
+        "production_ready": True,
+        "driver_evidence": _driver_evidence(),
+    }
+
+    assert assess_release("going_concern_fcff", intake, forecast, None) == {
+        "status": "distributable", "blockers": []}
+    assert assess_release("financial_ddm", intake, forecast, None)["status"] == \
+        "draft_non_distributable"
+
+
+def test_driver_forecast_missing_driver_evidence_is_blocked():
     intake = {"as_of": "2026-09-22", "latest_official_actual": {
         "period": "1H26", "period_end": "2026-06-30",
         "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
         "metrics": {"revenue": 100, "net_profit": 8}}}
     forecast = {"forecast_basis": "driver_forecast", "production_ready": True}
 
-    assert assess_release("going_concern_fcff", intake, forecast, None) == {
-        "status": "distributable", "blockers": []}
-    assert assess_release("financial_ddm", intake, forecast, None)["status"] == \
-        "draft_non_distributable"
+    result = assess_release("going_concern_fcff", intake, forecast, None)
+    assert result["status"] == "draft_non_distributable"
+    assert "driver forecast missing driver evidence for required series" in result["blockers"]
+
+
+def test_driver_forecast_missing_required_series_is_blocked():
+    intake = {"as_of": "2026-09-22", "latest_official_actual": {
+        "period": "1H26", "period_end": "2026-06-30",
+        "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
+        "metrics": {"revenue": 100, "net_profit": 8}}}
+    drv = _driver_evidence()
+    del drv["capex"]
+    forecast = {
+        "forecast_basis": "driver_forecast",
+        "production_ready": True,
+        "driver_evidence": drv,
+    }
+
+    result = assess_release("going_concern_fcff", intake, forecast, None)
+    assert result["status"] == "draft_non_distributable"
+    assert "driver forecast missing required series: capex" in result["blockers"]
+
+
+def test_driver_forecast_unsourced_series_is_blocked():
+    intake = {"as_of": "2026-09-22", "latest_official_actual": {
+        "period": "1H26", "period_end": "2026-06-30",
+        "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
+        "metrics": {"revenue": 100, "net_profit": 8}}}
+    drv = _driver_evidence()
+    drv["revenue"]["source"] = ""
+    forecast = {
+        "forecast_basis": "driver_forecast",
+        "production_ready": True,
+        "driver_evidence": drv,
+    }
+
+    result = assess_release("going_concern_fcff", intake, forecast, None)
+    assert result["status"] == "draft_non_distributable"
+    assert "driver forecast revenue: source is required and must identify verified provenance" in result["blockers"]
+
+
+def test_driver_forecast_rejects_non_https_or_malformed_source_urls():
+    for source in ("http://issuer.example/guidance.pdf",
+                   "not a URL, but contains http in prose",
+                   "https://", "https://user:pass@issuer.example/guidance.pdf"):
+        intake = {"as_of": "2026-09-22", "latest_official_actual": {
+            "period": "1H26", "period_end": "2026-06-30",
+            "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
+            "metrics": {"revenue": 100, "net_profit": 8}}}
+        drv = _driver_evidence()
+        drv["revenue"]["source"] = source
+        forecast = {
+            "forecast_basis": "driver_forecast",
+            "production_ready": True,
+            "driver_evidence": drv,
+        }
+
+        result = assess_release("going_concern_fcff", intake, forecast, None)
+        assert result["status"] == "draft_non_distributable", source
+        assert any("source must identify verified provenance" in blocker
+                   for blocker in result["blockers"]), source
+
+
+def test_driver_forecast_future_source_date_is_blocked():
+    intake = {"as_of": "2026-09-22", "latest_official_actual": {
+        "period": "1H26", "period_end": "2026-06-30",
+        "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
+        "metrics": {"revenue": 100, "net_profit": 8}}}
+    drv = _driver_evidence()
+    drv["ebitda"]["source_date"] = "2026-09-25"
+    forecast = {
+        "forecast_basis": "driver_forecast",
+        "production_ready": True,
+        "driver_evidence": drv,
+    }
+
+    result = assess_release("going_concern_fcff", intake, forecast, None)
+    assert result["status"] == "draft_non_distributable"
+    assert "driver forecast ebitda: source_date is after report as-of date" in result["blockers"]
+
+
+def test_driver_forecast_failed_g2_is_blocked():
+    intake = {"as_of": "2026-09-22", "latest_official_actual": {
+        "period": "1H26", "period_end": "2026-06-30",
+        "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
+        "metrics": {"revenue": 100, "net_profit": 8}}}
+    forecast = {
+        "forecast_basis": "driver_forecast",
+        "production_ready": True,
+        "driver_evidence": _driver_evidence(),
+        "g2": {"G2.9_driver_forecast": "gagal"},
+    }
+
+    result = assess_release("going_concern_fcff", intake, forecast, None)
+    assert result["status"] == "draft_non_distributable"
+    assert "forecast gate failed: G2.9 driver forecast is not reconciled" in result["blockers"]
 
 
 def test_unknown_profile_fails_closed():

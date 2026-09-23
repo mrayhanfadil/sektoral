@@ -36,7 +36,7 @@ def test_issuer_vs_ihsg_uses_common_dates_and_latest_cached_values(monkeypatch):
     assert "TEST +300,0%" in chart
     assert "IHSG +10,0%" in chart
     assert "Selisih +290,0 poin persentase" in chart
-    assert "2026-01-02–2026-01-04" in chart
+    assert "2026-01-02 - 2026-01-04" in chart
 
 
 def test_comparison_requires_two_shared_trading_dates(monkeypatch):

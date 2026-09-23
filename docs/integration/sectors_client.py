@@ -21,8 +21,24 @@ from typing import Any
 
 import httpx
 
-from .config import get_settings
-from .credit_policy import cache_only_mode, cache_ttl_seconds, offline_mode
+try:
+    from .config import get_settings
+except (ImportError, ModuleNotFoundError):
+    from types import SimpleNamespace
+    def get_settings():
+        return SimpleNamespace(
+            sectors_api_key=os.getenv("SECTORS_API_KEY", ""),
+            sectors_base=os.getenv("SECTORS_BASE", "https://api.sectors.app/v2"),
+        )
+
+from .credit_policy import (
+    cache_only_mode,
+    cache_ttl_seconds,
+    check_query_params,
+    offline_mode,
+    validate_minimal_sections,
+    validate_ticker,
+)
 
 log = logging.getLogger(__name__)
 
@@ -84,8 +100,12 @@ class SectorsError(RuntimeError):
 
 
 def bare_ticker(symbol: str) -> str:
-    """`BBCA.JK`/` bbca ` -> `BBCA`. Sectors wants bare IDX codes."""
-    return symbol.strip().upper().removesuffix(".JK")
+    """`BBCA.JK`/` bbca ` -> `BBCA`. Sectors wants bare IDX codes.
+    Validates ticker before dispatch because 404s incur API credit penalties.
+    """
+    cleaned = symbol.strip().upper().removesuffix(".JK")
+    validate_ticker(cleaned)
+    return cleaned
 
 
 def _client() -> httpx.Client:
@@ -133,20 +153,33 @@ def _get(path: str, params: dict[str, Any] | None = None, allow_window_substitut
       5. On error, raise; do NOT cache errors (retry on transient 5xx / network blips).
     """
     cache_key = None  # avoid unused-name lints
-    from .storage import SectorsCache  # late-bound import (avoids circular at module load)
+    if params and "q" in params and params["q"]:
+        check_query_params(params, strict=False)
+
+    try:
+        from .storage import SectorsCache
+    except (ImportError, ModuleNotFoundError):
+        try:
+            from server.storage import SectorsCache
+        except (ImportError, ModuleNotFoundError):
+            SectorsCache = None
 
     # Lazy singleton - first call creates the table, subsequent calls reuse it.
     global _cache
     try:
         cache = _cache  # type: ignore[name-defined]
     except NameError:
-        cache = SectorsCache()
+        cache = SectorsCache() if SectorsCache is not None else None
         _cache = cache  # type: ignore[name-defined]
-    payload, hit = cache.get(path, params)
-    if hit:
-        # Cached 404 marker → re-raise so callers keep the honest
-        # sectors_error path (never masquerade as valid empty data).
-        if isinstance(payload, dict) and payload.get("_neg404"):
+    if cache is not None:
+        payload, hit = cache.get(path, params)
+        if hit:
+            # Cached 404 marker → re-raise so callers keep the honest
+            # sectors_error path (never masquerade as valid empty data).
+            if isinstance(payload, dict) and payload.get("_neg404"):
+                raise SectorsError(404, "cached 404: no data for this endpoint+params")
+            log.debug("sectors cache HIT %s", path)
+            return payload
             raise SectorsError(404, "cached 404: no data for this endpoint+params")
         log.debug("sectors cache HIT %s", path)
         return payload
@@ -287,13 +320,21 @@ def company_report(symbol: str, sections: str) -> Any:
     one. So this caller scans all cached rows for the endpoint itself and takes the newest row
     that contains every requested section.
     """
-    from .storage import SectorsCache  # late-bound import (avoids circular at module load)
+    sec_parts = validate_minimal_sections(sections)
+    sections = ",".join(sec_parts)
+    try:
+        from .storage import SectorsCache
+    except (ImportError, ModuleNotFoundError):
+        try:
+            from server.storage import SectorsCache
+        except (ImportError, ModuleNotFoundError):
+            SectorsCache = None
     endpoint = f"/company/report/{bare_ticker(symbol)}/"
     params = {"sections": sections}
     try:
         cache = _cache  # type: ignore[name-defined]
     except NameError:
-        cache = SectorsCache()
+        cache = SectorsCache() if SectorsCache is not None else None
         globals()["_cache"] = cache
     # 1. Exact-key read first: the caller's contract. A row cached for exactly these sections is
     #    served as-is (this is the offline guarantee the suite pins: warm cache + gate on works).
@@ -506,8 +547,10 @@ def quarterly_dates(symbol: str) -> Any:
 
 # --- Tier 3: breadth, cheap ---
 
-def screener(where: str = "", order_by: str = "", limit: int = 50) -> Any:
+def screener(where: str = "", order_by: str = "", limit: int = 50, q: str = "") -> Any:
     """Structured screener ONLY (1 credit) - never ?q= (3 credits)."""
+    if q:
+        check_query_params({"q": q}, strict=True)
     p: dict[str, Any] = {"limit": min(max(1, limit), 200)}
     if where:
         p["where"] = where

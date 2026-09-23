@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "ticker": "POWR",
+  "reporting_currency": "USD",
+  "latest_actual": {
+    "period": "1H26",
+    "period_end": "2026-06-30",
+    "published_at": "2026-07-31",
+    "source_title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+    "source_url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+    "page": 3,
+    "unit": "USD",
+    "metrics": {
+      "revenue": 274783475,
+      "operating_profit": 60493834,
+      "net_profit": 37140130
+    },
+    "prior_year": {
+      "period": "1H25",
+      "revenue": 271338755,
+      "operating_profit": 58440766,
+      "net_profit": 39646418
+    }
+  },
+  "balance_sheet": {
+    "period_end": "2026-06-30",
+    "source_pages": [1, 2],
+    "cash": 123951821,
+    "total_assets": 1191787007,
+    "total_liabilities": 486253919,
+    "total_equity": 705533088,
+    "shares_issued": 16087156000
+  },
+  "operating_context": []
+}

@@ -27,6 +27,7 @@ from decimal import Decimal
 from math import isfinite
 from numbers import Real
 import re
+from urllib.parse import urlsplit
 
 
 OPERATING_BRIDGE_STAGES = (
@@ -64,6 +65,7 @@ def _date(value):
 
 
 _FINANCIAL_METRICS = ("revenue", "ebitda", "net_profit", "capex")
+_REQUIRED_DRIVER_SERIES = ("revenue", "ebitda", "net_profit", "capex")
 _EVIDENCE_FIELDS = (
     "claim", "value", "unit", "period", "status", "source",
     "source_date", "page",
@@ -80,6 +82,19 @@ def _cache_provenance(value: object) -> bool:
     normalized = value.lower()
     return ("sectors_cache" in normalized or "sectors cache" in normalized) and not re.search(
         r"https?://", value, flags=re.IGNORECASE)
+
+
+def _verified_source_reference(value: object) -> bool:
+    if _cache_provenance(value):
+        return True
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        parsed = urlsplit(value.strip())
+        return (parsed.scheme.lower() == "https" and bool(parsed.hostname)
+                and parsed.username is None and parsed.password is None)
+    except ValueError:
+        return False
 
 
 def _number(value: object) -> bool:
@@ -213,6 +228,58 @@ def _check_operating_bridge(forecast: object) -> list[str]:
     return blockers
 
 
+def _check_driver_forecast(forecast: object, intake: object) -> list[str]:
+    if not isinstance(forecast, Mapping):
+        return ["sourced operating and cash-flow forecast is incomplete"]
+    blockers = []
+    if forecast.get("forecast_basis") != "driver_forecast":
+        blockers.append("sourced operating and cash-flow forecast is incomplete")
+    if forecast.get("production_ready") is not True:
+        blockers.append("forecast is not verified as production-ready")
+
+    g2 = forecast.get("g2")
+    if isinstance(g2, Mapping):
+        if g2.get("G2.9_driver_forecast") == "gagal" or g2.get("G2.9_operating_bridge") == "gagal":
+            blockers.append("forecast gate failed: G2.9 driver forecast is not reconciled")
+        for k, v in g2.items():
+            if k != "catatan" and (v == "gagal" or (isinstance(v, tuple) and v[0].startswith("gagal"))):
+                if "G2.9" not in k:
+                    blockers.append(f"forecast gate check failed: {k}")
+
+    driver_evidence = forecast.get("driver_evidence")
+    if driver_evidence is None and isinstance(intake, Mapping):
+        driver_evidence = intake.get("driver_evidence") or intake.get("drivers")
+    if not isinstance(driver_evidence, Mapping):
+        blockers.append("driver forecast missing driver evidence for required series")
+        return blockers
+
+    as_of = intake.get("as_of") or intake.get("price_date") if isinstance(intake, Mapping) else None
+    for series in _REQUIRED_DRIVER_SERIES:
+        if series not in driver_evidence:
+            blockers.append(f"driver forecast missing required series: {series}")
+            continue
+        row = driver_evidence[series]
+        prefix = f"driver forecast {series}"
+        if not isinstance(row, Mapping):
+            blockers.append(f"{prefix}: must be a driver evidence object")
+            continue
+        source = row.get("source")
+        if not _text(source):
+            blockers.append(f"{prefix}: source is required and must identify verified provenance")
+        elif not _verified_source_reference(source):
+            blockers.append(f"{prefix}: source must identify verified provenance (HTTPS or sectors_cache)")
+        s_date = row.get("source_date")
+        if not _source_date(s_date):
+            blockers.append(f"{prefix}: source_date is required in YYYY-MM-DD format")
+        elif _source_date(as_of) and s_date > str(as_of)[:10]:
+            blockers.append(f"{prefix}: source_date is after report as-of date")
+        if "page" in row and not _page(row.get("page")):
+            blockers.append(f"{prefix}: page must be a positive page label/number or null")
+        if not _text(row.get("note") or row.get("claim") or row.get("status") or row.get("basis")):
+            blockers.append(f"{prefix}: explanatory note or claim is required")
+    return blockers
+
+
 def _check_sotp(result: object, intake: object) -> list[str]:
     if not isinstance(result, Mapping):
         return ["SOTP missing: no SOTP result"]
@@ -317,6 +384,9 @@ def assess_release(profile, intake, forecast, sotp_result):
                 forecast.get("production_ready") is not True):
             blockers.append(
                 "mining forecast is not a verified physical-driver production forecast")
+        g2 = (forecast or {}).get("g2") if isinstance(forecast, Mapping) else None
+        if isinstance(g2, Mapping) and g2.get("G2.9_operating_bridge") == "gagal":
+            blockers.append("forecast gate failed: G2.9 physical-to-financial operating bridge is not reconciled")
         blockers.extend(_check_sotp(sotp_result, intake))
     elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
         actual = intake.get("latest_official_actual") if isinstance(intake, Mapping) else None
@@ -337,13 +407,30 @@ def assess_release(profile, intake, forecast, sotp_result):
                     any(not isinstance(metrics.get(key), (int, float)) for key in
                         ("revenue", "net_profit"))):
                 blockers.append("latest official interim revenue/net profit are missing")
-        if (not isinstance(forecast, Mapping) or
-                forecast.get("forecast_basis") != "driver_forecast" or
-                forecast.get("production_ready") is not True):
-            blockers.append("sourced operating and cash-flow forecast is incomplete")
+        blockers.extend(_check_driver_forecast(forecast, intake))
         if normalized_profile == "financial_ddm":
-            blockers.append("financial DDM/residual-income primary valuation is not implemented")
-    return {
+            has_ddm = (
+                isinstance(sotp_result, Mapping)
+                and (
+                    sotp_result.get("status") in {"complete", "draft"}
+                    or "tp_gordon" in sotp_result
+                    or sotp_result.get("method") == "ddm"
+                )
+            ) or sotp_result == "draft"
+            if not has_ddm:
+                blockers.append("financial DDM/residual-income primary valuation is not implemented")
+    thin_data = False
+    if isinstance(sotp_result, Mapping):
+        gv = sotp_result.get("gate_verdict")
+        if isinstance(gv, Mapping):
+            if gv.get("rating_override") == "Review Required":
+                blockers.append("valuation sanity check failed: extreme upside/downside requires review")
+            if gv.get("thin_data"):
+                thin_data = True
+    result = {
         "status": "draft_non_distributable" if blockers else "distributable",
         "blockers": blockers,
     }
+    if thin_data:
+        result["thin_data"] = True
+    return result
