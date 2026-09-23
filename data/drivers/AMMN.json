@@ -1,0 +1,49 @@
+{
+ "ticker": "AMMN",
+ "basis": "agent-estimate",
+ "as_of": "2026-09-23",
+ "currency": "USD million",
+ "years": [
+  "2026F",
+  "2027F",
+  "2028F"
+ ],
+ "drivers": {
+  "revenue": {
+   "path": [
+    3789,
+    4179,
+    4475
+   ],
+   "source": "KB Valbury Securities initiation report, 9 June 2026 — https://www.kbvalbury.com/cfind/source/files/ammn-initiation-report---09062026.pdf",
+   "note": "Direct published forecast from KB Valbury Securities initiation report, 9 June 2026; single-source estimate, not consensus."
+  },
+  "ebitda": {
+   "path": [
+    1937,
+    2139,
+    2558
+   ],
+   "source": "KB Valbury Securities initiation report, 9 June 2026 — https://www.kbvalbury.com/cfind/source/files/ammn-initiation-report---09062026.pdf",
+   "note": "Direct published forecast from KB Valbury Securities initiation report, 9 June 2026; single-source estimate, not consensus."
+  },
+  "net_profit": {
+   "path": [
+    806,
+    899,
+    1170
+   ],
+   "source": "KB Valbury Securities initiation report, 9 June 2026 — https://www.kbvalbury.com/cfind/source/files/ammn-initiation-report---09062026.pdf",
+   "note": "Direct published forecast from KB Valbury Securities initiation report, 9 June 2026; single-source estimate, not consensus."
+  },
+  "capex": {
+   "path": [
+    1137,
+    1045,
+    1119
+   ],
+   "source": "KB Valbury Securities initiation report, 9 June 2026 — https://www.kbvalbury.com/cfind/source/files/ammn-initiation-report---09062026.pdf",
+   "note": "Direct published forecast from KB Valbury Securities initiation report, 9 June 2026; single-source estimate, not consensus. Basis: fixed-asset investment outflow proxy from the report's projected cash flow; excludes stockpile/mining-property rows"
+  }
+ }
+}

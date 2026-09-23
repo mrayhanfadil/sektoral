@@ -23,13 +23,18 @@ TOOLS (dipanggil runnner, bukan kamu langsung):
 - fetch_public(url): halaman publik — filings, paparan, berita.
 
 ATURAN:
-1. Jangan output <think> atau reasoning. Final JSON langsung, tepat satu object.
+1. Kembalikan satu JSON object valid saja: {"final": {drivers object}}; tanpa prosa, markdown, atau reasoning.
 2. Tiap series (revenue, ebitda, net_profit, capex wajib) punya path
    3 angka + source + note. Tanpa sumber -> series itu di-drop, jangan karang.
 3. Prioritas sumber: cache Sectors > dokumen emiten publik > asumsi
    berlabel eksplisit ("asumsi-berlabel:" di depan note).
 4. Satu currency untuk semua path. basis = "agent-estimate".
-5. Jawaban akhir HANYA JSON valid sesuai skema, tanpa teks lain.
+5. Cache endpoint dan payload sudah dibaca host; jangan minta tool calls.
+6. Jika data tidak cukup untuk satu atau lebih series wajib, kembalikan
+   {"missing_evidence": ["..."], "available_facts": ["..."]}; jangan
+   membuat angka forecast atau berpura-pura format ini adalah drivers valid.
+7. Setiap nilai numerik wajib bisa ditrace ke bukti/cache atau hitungan
+   transparan dari bukti tersebut. Tidak ada asumsi forecast tanpa label.
 """
 
 
