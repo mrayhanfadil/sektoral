@@ -1,93 +1,45 @@
-# Submission Checklist
+# Sectors Hackathon 2026 — submission checklist
 
-> **Hard deadline: 30 September 2026, 23:59 WIB.** Build period freezes on submit or at deadline, whichever first. After freeze: **no commits, pushes, edits, or changes of any kind** — even bug fixes — or we get disqualified. The only freeze exception is a leaked credential (notify `#support` first, rotate, then removal-only commit).
+**Submission deadline: 30 September 2026, 23:59 WIB.** Submission is through the [hackathon portal](https://hackathon.sectors.app/portal/submit). The repository and application freeze as soon as the team submits or at the deadline, whichever comes first. After freeze, do not edit, commit, or push, including fixes. The rules make a narrow exception for leaked credentials: notify Slack `#support`, revoke and rotate the credential, then push a removal-only commit.
 
-Cut this checklist up into weekly targets. Today is **29 Aug 2026** → we have ~32 days.
+Verify details against the [official rules](https://hackathon.sectors.app/rules) and [AI Agents & Assistants track](https://hackathon.sectors.app/tracks/ai-agents-assistants) before submission.
 
----
+## Project and eligibility
 
-## Pre-build prerequisites (BEFORE any project code)
+- [ ] Product is a working end-to-end prototype. The judged workflow is shown in the video and works in the submitted repository.
+- [ ] Sectors MCP or REST data is central to the product. For the current Sektoral workflow, the agent and report use only ticker-specific rows in `data/sectors_cache.db`; do not describe the demo as making live upstream Sectors requests.
+- [ ] AI/LLM and custom-built agent logic/orchestration are core to the declared AI Agents & Assistants track.
+- [ ] Every participant completed Sectors App onboarding, the team registration is valid, and the team has 2–4 participants (or one solo participant).
+- [ ] The project repository was created during the build period and the project contains no pre-event project code. Check commit history and provenance before submitting.
+- [ ] No secrets, API keys, `.env` files, or private credentials are in the public repository or recording.
+- [ ] Public-facing screens and narration position the product as information and analysis, not investment recommendations or financial advice. There is no automated trade execution.
+- [ ] Drafts, withheld sections, and missing evidence are labeled honestly. The demo uses a freshly generated result and trace from the current checkout.
 
-- [ ] **All team members onboarded at sectors.app.** Required for eligibility + API credit unlock. Verified by organizers.
-- [ ] **Team registered on hackathon portal.** https://hackathon.sectors.app/portal/team
-- [ ] **Team rep appointed** (single contact + prize + API credit holder).
-- [ ] **1,000 Sectors API credits claimed** via team page (only after all onboarded).
-- [ ] **Track chosen** — read [`tracks/`](tracks/) + [`ideas.md`](ideas.md), decide.
-- [ ] **Repo created during build period.** ✅ Done 29 Aug 2026 with planning artifacts only.
-- [ ] **No project code from before 19 Aug 2026.** ✅ This repo's first commit is 29 Aug 2026; no migration of code from other repos.
+## Required portal materials
 
----
+- [ ] **Public repository URL.** Keep the repository public for at least 90 days after winners are announced on 9 October 2026 — through at least **7 January 2027**. Remove keys before making it public.
+- [ ] **60-second teaser.** A screen recording of the product working, published publicly on YouTube or social media. Keep it to 60 seconds or less.
+- [ ] **Judging video, up to three minutes.** Walk through the problem, intended audience, and core workflow. Accepted hosting: public or unlisted YouTube, Vimeo, Google Drive with link sharing enabled, or Loom. Check access while signed out; inaccessible videos are not judged.
+- [ ] **One-sentence problem statement.** Suggested: “Sektoral helps Indonesian equity analysts turn cached Sectors company data into sourced updates that show what the evidence supports and what remains unknown.”
+- [ ] **Track selection:** AI Agents & Assistants.
+- [ ] **Names of all team participants**, matching the registered team.
+- [ ] **Public social post URL.** Post on Instagram, LinkedIn, Threads, or TikTok; tag the official Sectors account and use the [official thumbnail template](https://www.canva.com/design/DAHUfZI9dJI/rcFmHic2Nn5Hdqj7DLwfmw/edit). Save the URL. A post on Twitter/X alone does not satisfy the channels listed in the rules.
 
-## Build phase — week-by-week
+## Final run-through
 
-### Week 1 (29 Aug – 4 Sep) — scope & skeleton
+- [ ] Run the exact README command on the exact submission checkout: `python3 -m app.research BBCA --out out/demo --pdf` (or the actual demo ticker). Omit `--pdf` if Playwright is unavailable; HTML is the default output.
+- [ ] Confirm the report and machine-readable trace are newly produced and mutually consistent. Inspect every source/citation shown in the video.
+- [ ] If the chosen ticker has no relevant cached news or lacks evidence for a section, show that honestly. Do not use an old `out/*.json` or present a failed/draft result as a completed update.
+- [ ] Watch both videos from beginning to end. Test each URL in a private/incognito browser without signing in; confirm the teaser is public and the judging video is accessible.
+- [ ] Verify the repository opens publicly, README setup matches the submitted version, and no credentials are tracked.
+- [ ] Complete portal submission before 23:59 WIB on 30 September. Save the confirmation and verify the submitted links and text.
+- [ ] After submission, freeze the repository and application. Do not make routine post-submission edits or pushes.
 
-- [ ] Lock track. Document the choice in [`ideas.md`](ideas.md) "Decision" section.
-- [ ] Define the **one-sentence problem statement** (used verbatim on submission).
-- [ ] Identify the **intended audience** (used in judging video).
-- [ ] Sketch the **core workflow** end-to-end (user → product → Sectors data → result).
-- [ ] Pick stack. Add to [`experiment/<track-slug>/README.md`](../../) once created.
-- [ ] Confirm the product **breaks if Sectors data is removed** (organizers' litmus test).
+## Official links
 
-### Week 2 (5–11 Sep) — MVP loop
-
-- [ ] Integrate Sectors REST or MCP — prove it works on a single endpoint.
-- [ ] Build the smallest end-to-end core workflow (input → Sectors fetch → output).
-- [ ] Cache / rate-limit awareness — 1,000 credits is the cap; budget it.
-- [ ] Add error handling — product must not silently fail.
-
-### Week 3 (12–18 Sep) — polish + edge cases
-
-- [ ] Add the "second" feature that makes it actually useful (the one a real person would use today).
-- [ ] Document setup & run in README (so judges can `git clone` and try it).
-- [ ] **Strip all API keys / secrets from the repo.** Use `.env.example` not `.env`.
-- [ ] Add a disclaimer that the product is **information, not financial advice** (rules §12).
-
-### Week 4 (19–25 Sep) — videos
-
-- [ ] **60-second teaser video** — public YouTube or social media. Screen recording of the product working.
-- [ ] **Up-to-3-minute judging video** — public/unlisted YouTube, Vimeo, Google Drive (sharing on), or Loom. Problem → audience → core workflow → result. **Test the link on a fresh browser** before submitting.
-- [ ] **One-sentence problem statement** finalized.
-- [ ] **Social media post** — tag the official Sectors account. Save URL.
-
-### Final 5 days (26–30 Sep) — submit
-
-- [ ] Day-of buffer: stop coding by 28 Sep EOD. Last 2 days for review + portal submission only.
-- [ ] **Confirm repo is public.** It must stay public for **≥90 days after winners announced** (9 Oct 2026) → at least until **7 Jan 2027**.
-- [ ] **Confirm no API keys committed.** Grep for tokens, secret patterns, `.env` files.
-- [ ] Submit through https://hackathon.sectors.app/portal/submit BEFORE 30 Sep 23:59 WIB.
-- [ ] Capture the **submission confirmation** screenshot/URL.
-
----
-
-## At-the-portal submission form (what we'll need ready)
-
-| Field | Content |
-|---|---|
-| Public repo URL | https://github.com/mrayhanfadil/sectors-hackathon (or experiment-branch link) |
-| 60-second teaser URL | (YouTube/social link) |
-| Judging video URL | (YouTube unlisted / Vimeo / Drive / Loom) |
-| One-sentence problem statement | (locked from Week 1) |
-| Track selection | (ai-agents / automation / market-intelligence) |
-| Team participant names | (per roster) |
-| Social media post URL | (tagging official Sectors account) |
-
----
-
-## Post-freeze DO-NOT list (after we hit submit / 30 Sep 23:59 WIB)
-
-- ❌ Do **not** commit, push, edit anything in the repo (no bug fixes, no README tweaks, no doc fixes).
-- ❌ Do **not** make the repo private within 90 days of winners announced.
-- ❌ Do **not** submit to any other hackathon or competition.
-
-**Only exception:** leaked credential → Slack `#support` notify → rotate → removal-only commit.
-
----
-
-## Useful links (mirror of README)
-
-- Rules: https://hackathon.sectors.app/rules
-- Team portal: https://hackathon.sectors.app/portal/team
-- Submission portal: https://hackathon.sectors.app/portal/submit
-- Slack invite: https://join.slack.com/t/sectorshackathon/shared_invite/zt-47a8tdhhz-FgREdKQ46lUETWErcIwNcQ
-- Email: ask+hackathon@incoming.supertype.ai
+- [Rules and submission requirements](https://hackathon.sectors.app/rules)
+- [AI Agents & Assistants track](https://hackathon.sectors.app/tracks/ai-agents-assistants)
+- [Team portal](https://hackathon.sectors.app/portal/team)
+- [Submission portal](https://hackathon.sectors.app/portal/submit)
+- [Official thumbnail template](https://www.canva.com/design/DAHUfZI9dJI/rcFmHic2Nn5Hdqj7DLwfmw/edit)
+- [Video scripts and access checks](video-recording-guide.md)

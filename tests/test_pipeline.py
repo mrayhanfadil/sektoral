@@ -19,9 +19,9 @@ def test_ammn_end_to_end(tmp_path):
     assert set(doc) >= {"meta", "cover", "bagian", "tabel_asumsi", "log_gate",
                         "catatan_metodologi", "exhibits"}
     assert doc["meta"]["status"] == "draft_non_distributable"
-    assert doc["meta"]["tp"] is None
-    assert doc["meta"]["upside_persen"] is None
-    assert doc["meta"]["rating"] == "DRAFT NON-DISTRIBUTABLE"
+    assert "tp" not in doc["meta"]
+    assert "upside_persen" not in doc["meta"]
+    assert "rating" not in doc["meta"]
     assert len(doc["cover"]["headline"].split()) <= 12
     for b in doc["cover"]["bullets"]:
         assert len(b.split()) <= 30, b
@@ -31,17 +31,17 @@ def test_ammn_end_to_end(tmp_path):
         if banned in ("—", "–"):
             continue  # punctuation may occur in preserved source citations
         assert banned not in body, banned
-    assert "physical-driver production forecast" in body
-    assert "operating bridge missing:" in body
-    assert "SOTP incomplete" in body
+    assert "Forecast fisik tambang" in body
+    assert "Jembatan operasi ke keuangan" in body
+    assert "Valuasi SOTP/LoM" in body
     assert "Kinerja kuartalan yang tersedia di cache" in body
     assert "KB Valbury" not in body
     assert "BRI Danareksa" not in body
     assert doc["log_gate"]["release"]["status"] == "draft_non_distributable"
-    assert doc["log_gate"]["release"]["blockers"]
+    assert doc["log_gate"]["release"]["blocker_count"] > 0
     html = (tmp_path / "AMMN.html").read_text()
     assert "DRAFT NON-DISTRIBUTABLE" in html
-    assert "Target Harga (Rp)</span><b>Ditahan" in html
+    assert "Target Harga" not in html
 
 
 def test_unknown_ticker_refused(tmp_path):

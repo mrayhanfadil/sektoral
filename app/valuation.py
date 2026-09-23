@@ -4,9 +4,6 @@ from . import rnav
 from . import release
 from . import sotp as sotp_mod
 
-BAND_BUY, BAND_SELL = 0.15, -0.10
-
-
 def _core(fc, shares, wacc, g, exit_mult, net_debt):
     """Satu basis perhitungan; dipakai TP base, downside, dan grid sensitivitas."""
     dfs = [(1 + wacc) ** (i + 0.5) for i in range(3)]
@@ -73,7 +70,9 @@ def build(intake, fc):
     f_last = core["f_last"]
     tp = round((ps_g + ps_x) / 2 / 10) * 10
     upside = tp / intake["price"] - 1
-    rating = "Buy" if upside > BAND_BUY else ("Sell" if upside < BAND_SELL else "Hold")
+    # The numeric model output is for scenario analysis; it does not classify
+    # the security or imply an action for readers.
+    rating = None
 
     # --- downside + grid: basis SAMA dengan TP (rerata Gordon + exit)
     grid = tp_grid(intake, fc, wacc, g, exit_mult, net_debt)
@@ -141,13 +140,12 @@ def build(intake, fc):
         else:
             tp = round(sotp_result["target_price_idr"] / 10) * 10
             upside = tp / intake["price"] - 1
-            rating = "Buy" if upside > BAND_BUY else (
-                "Sell" if upside < BAND_SELL else "Hold")
+            rating = None
             tp_down, grid = None, {}
         g3 = {
             "G3.1_method": "lolos" if not is_draft else "gagal",
             "G3.2_sotp": "lolos" if sotp_result["status"] == "complete" else "gagal",
-            "G3.3_target": "lolos" if tp is not None else "gagal",
+            "G3.3_scenario_value": "lolos" if tp is not None else "gagal",
             "G3.4_sensitivity": "dilabeli",
             "G3.5_release": release_result["status"],
         }
@@ -165,4 +163,4 @@ def build(intake, fc):
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
             "ps_exit": ps_x, "tp": tp, "tp_down": tp_down, "tp_grid": grid,
             "upside": upside,
-            "rating": rating, "implied": impl, "lom": lom, "g3": g3, "notes": notes}
+            "implied": impl, "lom": lom, "g3": g3, "notes": notes}

@@ -1,5 +1,6 @@
 """TAHAP 4: NARASI & LAYOUT. Prosa templat deterministik dari angka model."""
 import re
+from urllib.parse import urlsplit
 
 from . import cache as cache_mod
 from . import ddm
@@ -25,8 +26,92 @@ def _word_cut(s, cap=64):
     return s[:cut].rstrip() if cut > 0 else s[:cap]
 
 
+_CURRENCY_METRICS = {
+    "revenue", "gross_loan", "net_loan", "loans", "total_loans", "total_deposit",
+    "deposits", "current_account", "savings_account", "time_deposit", "interest_income",
+    "interest_expense", "net_interest_income", "non_interest_income", "earnings",
+    "earnings_before_tax", "net_income", "net_profit", "gross_profit", "ebit", "ebitda",
+    "total_assets", "total_liabilities", "total_equity", "operating_cash_flow",
+    "investing_cash_flow", "financing_cash_flow", "net_cash_flow", "free_cash_flow",
+}
+
+
+def _research_citation_labels(citations):
+    """Keep report references compact; the trace retains the complete cache values."""
+    refs = []
+    news_articles = {}
+    for cite in citations:
+        if not isinstance(cite, dict):
+            continue
+        endpoint = str(cite.get("endpoint") or "").strip()
+        field_path = str(cite.get("field_path") or "").strip()
+        if not endpoint or not field_path:
+            continue
+        match = re.fullmatch(r"/results/(\d+)/(title|body|timestamp|source)", field_path) \
+            if endpoint == "/news/" else None
+        if match:
+            article = news_articles.setdefault(match.group(1), {})
+            article[match.group(2)] = cite.get("value")
+            continue
+
+        ref = f"{endpoint} · {field_path}"
+        value = cite.get("value")
+        if isinstance(value, (int, float)) and field_path.rsplit("/", 1)[-1] in _CURRENCY_METRICS:
+            ref += f" = Rp{fmt.miliar(value)} miliar"
+        elif value is not None and isinstance(value, (str, int, float, bool)):
+            ref += f" = {str(value)[:80]}"
+        refs.append(ref)
+
+    for index, article in news_articles.items():
+        title = _word_cut(str(article.get("title") or "Berita cache"), 90)
+        timestamp = str(article.get("timestamp") or "")[:10]
+        source = str(article.get("source") or "")
+        domain = urlsplit(source).netloc if source else ""
+        date_source = "; ".join(value for value in (timestamp, domain) if value)
+        suffix = f" ({date_source})" if date_source else ""
+        refs.append(f"/news/ · /results/{index} · {title}{suffix}")
+    return refs
+
+
 def _draft_value(value):
     return "-" if value is None else fmt.miliar(value)
+
+
+def _research_section(intake, page=2):
+    """Build print-friendly cards from the upstream-validated research brief."""
+    brief = intake.get("research_analysis")
+    if not isinstance(brief, dict):
+        return None
+    insights, cards = brief.get("insights"), []
+    if not isinstance(insights, list):
+        return None
+    for item in insights:
+        if not isinstance(item, dict):
+            continue
+        citations = _research_citation_labels(item.get("citations") or [])
+        # Research claims without a validated cache citation are not published.
+        if not citations:
+            continue
+        cards.append({"title": _word_cut(item.get("title") or "Temuan", 100),
+                      "observation": _word_cut(item.get("observation") or "-", 330),
+                      "implication": _word_cut(item.get("implication") or "-", 330),
+                      "caveat": _word_cut(item.get("caveat") or "-", 240),
+                      "citations": citations[:4]})
+    if not cards:
+        return None
+    paragraphs = []
+    summary = brief.get("summary")
+    if summary:
+        paragraphs.append(_word_cut(summary, 320))
+    as_of = brief.get("as_of")
+    if as_of:
+        paragraphs.append(f"Ringkasan riset bertanggal {str(as_of)[:40]}.")
+    limitations = brief.get("limitations")
+    if isinstance(limitations, list) and limitations:
+        paragraphs.append("Batasan: " + "; ".join(_word_cut(x, 120) for x in limitations[:4]))
+    return {"halaman": page, "judul": "Ringkasan riset berbantuan AI",
+            "layout": "research_cards", "paragraf": paragraphs,
+            "research_cards": cards, "exhibit": []}
 
 
 def _rnav_exhibit(lom, cash_idr, debt_idr, shares, discount_pct=0.0):
@@ -104,7 +189,7 @@ def _build_draft(intake, fc, va, g1):
             "Screen historis (bukan forecast produksi)",
             ["Metrik"] + [str(r.get("label", "-")) for r in F], screen_rows,
             "Basis: CAGR pendapatan historis dan margin; capex proyek belum terjadwal. "
-            "Hanya diagnostik internal, tidak digunakan untuk target harga.")
+            "Hanya diagnostik internal dan bukan estimasi produksi.")
 
     news_no = None
     news_analysis = intake.get("news_analysis") or []
@@ -147,7 +232,7 @@ def _build_draft(intake, fc, va, g1):
                 "Forecast fisik-ke-keuangan belum dihitung dan direkonsiliasi; CAGR hanya screening.")
         elif item.startswith("SOTP"):
             blocker_groups["Valuasi SOTP/LoM"] = (
-                "NAV per aset dan/atau jembatan ekuitas belum lengkap; target harga ditahan.")
+            "NAV per aset dan/atau jembatan ekuitas belum lengkap; skenario nilai belum dapat disajikan.")
         else:
             blocker_groups[item] = "Belum terpenuhi."
     blocker_no = add(
@@ -191,7 +276,7 @@ def _build_draft(intake, fc, va, g1):
         "Input SOTP yang belum lengkap",
         ["Input", "Kekurangan"], sotp_rows,
         "SOTP/LoM adalah metode utama untuk aset finite-life. Nilai tidak diisi nol; "
-        "target harga ditahan sampai NAV aset dan jembatan ekuitas tervalidasi.")
+        "skenario nilai menunggu NAV aset dan jembatan ekuitas tervalidasi.")
 
     profile_basis = intake.get("model_profile_basis") or "basis profil tidak tersedia"
     price_date = intake.get("price_date")
@@ -199,8 +284,8 @@ def _build_draft(intake, fc, va, g1):
                     "dan angka historis hanya berasal dari sectors cache. Belum ada "
                     "forecast fisik-ke-keuangan yang lolos rekonsiliasi; nilai CAGR dan "
                     "RNAV annuitas tidak dipakai sebagai target.")
-    release_text = ("Dokumen ini berstatus DRAFT NON-DISTRIBUTABLE. Target harga dan "
-                    "rating ditahan karena data interim, forecast fisik, dan provenance "
+    release_text = ("Dokumen ini berstatus DRAFT NON-DISTRIBUTABLE. Skenario nilai belum "
+                    "disajikan karena data interim, forecast fisik, dan provenance "
                     "yang tersedia di cache belum lengkap; SOTP/LoM belum dapat direkonsiliasi. "
                     "Tidak ada target DCF substitusi.")
     sections = [
@@ -213,6 +298,9 @@ def _build_draft(intake, fc, va, g1):
          "paragraf": [release_text],
          "exhibit": [exhibits[blocker_no - 1], exhibits[sotp_no - 1]]},
     ]
+    research = _research_section(intake)
+    if research:
+        sections.insert(0, research)
     next_page = 4
     if news_no:
         sections.append({"halaman": next_page, "judul": "Konteks berita dan kaitannya ke tesis",
@@ -225,20 +313,21 @@ def _build_draft(intake, fc, va, g1):
     if screening_no:
         sections.append({"halaman": next_page, "judul": "Screen historis untuk diskusi internal",
                          "paragraf": ["Angka berikut adalah screening berbasis data historis, "
-                                      "bukan estimasi produksi, guidance, atau target harga."],
+                                      "bukan estimasi produksi atau guidance."],
                          "exhibit": [exhibits[screening_no - 1]]})
+    for page_number, section in enumerate(sections, start=2):
+        section["halaman"] = page_number
 
     price = intake["price"]
     market_cap = intake["market_cap"]
     return {
         "meta": {"ticker": t, "emiten": name, "tanggal": price_date,
-                 "status": "draft_non_distributable",
-                 "rating": "DRAFT NON-DISTRIBUTABLE", "tp": None,
-                 "harga": price, "upside_persen": None},
+                 "status": "draft_non_distributable", "harga": price,
+                 "research_status": (intake.get("research_analysis_status") or {}).get("status", "missing")},
         "cover": {
-            "headline": "Target Harga Ditahan: SOTP dan Forecast Belum Lengkap",
+        "headline": "Bukti Model Belum Lengkap",
             "bullets": [
-                "Tidak ada rating atau target harga yang layak didistribusikan.",
+                "Skenario nilai belum disajikan karena bukti penting masih kurang.",
                 "Data sumber dibatasi pada sectors cache; sumber riset eksternal tidak dipakai.",
                 "Berita yang lolos validasi diparafrase dan dihubungkan ke tesis dengan caveat.",
                 "SOTP/LoM belum dapat direkonsiliasi dari input yang tersedia.",
@@ -247,7 +336,7 @@ def _build_draft(intake, fc, va, g1):
                 {"judul": "Status riset", "isi": release_text},
                 {"judul": "Basis model", "isi": profile_text},
             ],
-            "data_pasar": {"harga": price, "tp": None,
+            "data_pasar": {"harga": price,
                             "saham": intake["shares"], "market_cap": market_cap,
                             "adtv": "-", "free_float": "-"},
             "key_financials": hist_rows,
@@ -255,11 +344,12 @@ def _build_draft(intake, fc, va, g1):
         "bagian": sections,
         "tabel_asumsi": [],
         "log_gate": {"G1": g1.get("G1", {}), "G2": fc.get("g2", {}),
-                     "G3": {}, "release": release_result},
+                     "G3": {}, "release": {"status": release_result.get("status"),
+                                              "blocker_count": len(blockers)}},
         "method": "SOTP/LoM (belum lengkap)",
         "method_select": "auto", "holders": [],
         "catatan_metodologi": [
-            "DRAFT NON-DISTRIBUTABLE: target harga dan rating ditahan.",
+            "DRAFT NON-DISTRIBUTABLE: skenario nilai belum disajikan karena bukti belum lengkap.",
             "SOTP/LoM memerlukan NAV per aset, kepemilikan, net debt, minority interest, "
             "overhead korporat dan saham terdilusi dengan provenance.",
             "Validasi latest interim memakai metadata yang tersedia di cache; data di luar cache tidak dipakai.",
@@ -286,8 +376,7 @@ def build(intake, fc, va, g1, method="auto"):
     last, rev_last = A[-1], A[-1]["revenue"]
     rev_cagr = (A[-1]["revenue"] / A[0]["revenue"]) ** (1 / (len(A) - 1)) - 1
     f1 = F[0]
-    upside_s, tp_s = fmt.pct(va["upside"]), fmt.rp(va["tp"])
-    rating = va["rating"]
+    modeled_value_s = fmt.rp(va["tp"])
 
     rev_g = fmt.pct((f1["revenue"] / rev_last) - 1)
     ebitda_g = fmt.pct((f1["ebitda"] / last["ebitda"]) - 1) if last["ebitda"] else "n.a."
@@ -311,9 +400,8 @@ def build(intake, fc, va, g1, method="auto"):
                f"dengan margin EBITDA {mg}, didorong pertumbuhan pendapatan {rev_g}.", 30)
     b2 = _trim(f"Driver utama {F[1]['label']}-{F[2]['label']} adalah volume dan operating "
                f"leverage menuju margin {fmt.pct(F[2]['margin'])}.", 30)
-    b3 = _trim(f"Kami merekomendasikan {rating} dengan TP Rp{tp_s} "
-               f"(upside {upside_s}), setara {fmt.mult(va['implied']['ev_ebitda'] or 0)} "
-               f"EV/EBITDA {F[0]['label']}.", 30)
+    b3 = _trim(f"Skenario model menghasilkan nilai indikatif Rp{modeled_value_s} per saham; "
+               "angka ini bergantung pada asumsi dan bukan arahan tindakan.", 30)
 
     p1 = (f"{name} menutup {last['year']} dengan pendapatan Rp{fmt.miliar(rev_last)} miliar "
           f"({yoy_rev} yoy) dan EBITDA Rp{fmt.miliar(last['ebitda'] or 0)} miliar ({yoy_eb} yoy) "
@@ -342,17 +430,17 @@ def build(intake, fc, va, g1, method="auto"):
 
     r3 = "konsentrasi komoditas, eksekusi belanja modal, dan pelemahan harga"
     wacc_in = va["wacc_inputs"]
-    p3 = (f"Valuasi memakai {va['method']}, dengan WACC {fmt.pct(va['wacc'])} (risk-free "
+    p3 = (f"Skenario nilai memakai {va['method']}, dengan WACC {fmt.pct(va['wacc'])} (risk-free "
           f"{fmt.pct(wacc_in['rf'])}, beta {fmt._id(wacc_in['beta'], 1)}) dan terminal growth "
-          f"{fmt.pct(wacc_in['g'])}. TP Rp{tp_s} adalah rerata nilai Gordon Rp{fmt.rp(va['ps_gordon'])} "
-          f"dan exit EV/EBITDA {fmt._id(wacc_in['exit_mult'], 1)}x Rp{fmt.rp(va['ps_exit'])}, memberi upside "
-          f"{upside_s} dari harga Rp{fmt.rp(intake['price'])} sehingga rating {rating}. Pada TP, saham "
+          f"{fmt.pct(wacc_in['g'])}. Nilai skenario indikatif Rp{modeled_value_s} per saham "
+          f"merupakan rerata Gordon Rp{fmt.rp(va['ps_gordon'])} dan exit EV/EBITDA "
+          f"{fmt._id(wacc_in['exit_mult'], 1)}x Rp{fmt.rp(va['ps_exit'])}. Pada skenario ini, saham "
           f"diperdagangkan {fmt.mult(va['implied']['per'] or 0)} PER dan "
           f"{fmt.mult(va['implied']['ev_ebitda'] or 0)} EV/EBITDA {f1['label']}. Utang bersih posisi dasar "
           f"Rp{fmt.miliar(va['net_debt'])} miliar dipakai konsisten di seluruh perhitungan. Skenario "
-          f"downside (WACC +1pp, g -1pp) menghasilkan Rp{fmt.rp(va['tp_down'])}, di bawah base case. "
+          f"sensitivitas (WACC +1pp, g -1pp) menghasilkan Rp{fmt.rp(va['tp_down'])}, di bawah skenario dasar. "
           f"Risiko utama: {r3}.")
-    p3t = "TP Rp" + tp_s + " dengan upside " + upside_s
+    p3t = "Skenario nilai indikatif"
 
     # Left rail market data calculations: ADTV & Free Float
     daily_pts = {}
@@ -527,16 +615,16 @@ def build(intake, fc, va, g1, method="auto"):
                  fmt.pct(float(h.get("share_percentage") or 0))]
                 for h in (intake["major_holders"] or [])[:5]] or [["Tidak ada di cache", "-"]]})
 
-    E("Ringkasan DCF", "tabel",
+    E("Ringkasan skenario DCF", "tabel",
       {"cols": ["Komponen", "Rp miliar"],
        "rows": [["PV eksplisit", fmt.miliar(va["pv_explicit"])],
                 ["PV terminal", fmt.miliar(va["pv_terminal"])],
                 [f"Porsi terminal ({fmt.pct(va['tv_share'], 0)})", "-"],
                 ["EV", fmt.miliar(va["ev_gordon"])],
                 ["Utang bersih", fmt.miliar(va["net_debt"])],
-                ["TP Gordon", f"Rp{fmt.rp(va['ps_gordon'])}"],
-                ["TP exit", f"Rp{fmt.rp(va['ps_exit'])}"],
-                ["TP final", f"Rp{fmt.rp(va['tp'])}"]]})
+                ["Nilai skenario Gordon", f"Rp{fmt.rp(va['ps_gordon'])}"],
+                ["Nilai skenario exit", f"Rp{fmt.rp(va['ps_exit'])}"],
+                ["Nilai skenario gabungan", f"Rp{fmt.rp(va['tp'])}"]]})
     E("Proyeksi FCFF", "tabel",
       {"cols": ["Rp miliar"] + [r["label"] for r in F],
        "rows": [["FCFF", *[fmt.miliar(r["fcf"]) for r in F]]]})
@@ -545,8 +633,8 @@ def build(intake, fc, va, g1, method="auto"):
     for dw, wlabel in ((-0.01, "WACC -1pp"), (0.0, "WACC base"), (0.01, "WACC +1pp")):
         sens_tp_rows.append([wlabel] + [f"Rp{fmt.rp(grid.get((dw, gg), 0))}"
                                         for gg in (0.025, 0.035, 0.045)])
-    E("Sensitivitas TP (WACC x g)", "tabel",
-      {"cols": ["TP (Rp)", "g 2,5%", "g 3,5%", "g 4,5%"], "rows": sens_tp_rows})
+    E("Sensitivitas nilai skenario (WACC x g)", "tabel",
+      {"cols": ["Nilai indikatif (Rp)", "g 2,5%", "g 3,5%", "g 4,5%"], "rows": sens_tp_rows})
     for _vex in [valtables.fcff_exhibit(intake, fc, va)]:
         E(_vex["judul"], _vex["tipe"], _vex["data"], _vex.get("catatan_sumber") or
           "Source: Company, Sektoral Estimates")
@@ -653,9 +741,9 @@ def build(intake, fc, va, g1, method="auto"):
           "; diskon 0% (tanpa basis pembanding discount)")
         p_lom = (f"Silang cek umur tambang: NAV LoM Rp{fmt.rp(round(lom['rnav_ps']))}/saham "
                  f"(anuitas produksi flat sampai cadangan habis, tanpa terminal, diskon "
-                 f"{fmt.pct(va['wacc'])}; {lom['margin_basis']}) vs TP DCF Rp{tp_s}. "
-                 f"NAV LoM di atas TP karena horizon {(mo.get('reserve_life_cu_yr') or 0):.0f} tahun "
-                 f"menangkap nilai cadangan yang dipotong terminal Gordon; TP dipakai "
+          f"{fmt.pct(va['wacc'])}; {lom['margin_basis']}) dibanding skenario DCF Rp{modeled_value_s}. "
+          f"NAV LoM berbeda karena horizon {(mo.get('reserve_life_cu_yr') or 0):.0f} tahun "
+          f"menangkap nilai cadangan yang dipotong terminal Gordon; skenario DCF "
                  f"dengan kesadaran keterbatasan itu. "
                  f"Diskon RNAV 0% adalah pure judgment assumption tanpa basis "
                  f"pembanding discount historis/sektor di cache.")
@@ -678,7 +766,7 @@ def build(intake, fc, va, g1, method="auto"):
           {"cols": ["Diskon / harga"] + [f"Harga {p}" for p in
                                          ("-20%", "base", "+20%")],
            "rows": _dp_rows},
-          note="Source: Sektoral Estimates; sel = TP/saham; NAV linear "
+          note="Source: Sektoral Estimates; sel = nilai indikatif per saham; NAV linear "
                "terhadap harga (anuitas flat)")
     E("Laba rugi", "tabel", _is(F, "laba"))
     E("Neraca", "tabel", _is(F, "neraca"))
@@ -693,7 +781,7 @@ def build(intake, fc, va, g1, method="auto"):
            f"EBITDA {fmt.pct(f3['margin'])} pada {f3['label']}")
     lim = ("proksi Gordon + exit multiple tanpa DCF umur tambang" if mo else
            "asumsi terminal growth dan exit multiple pada model generik")
-    xtra = methodnote.extreme_tp_lines(va["upside"], va["tp"], intake["price"], drv, lim)
+    xtra = []
     bagian = [
         {"halaman": 2, "judul": "Industri dan makro: permintaan ke depan",
          "paragraf": [p_ind1, p_ind2, p_ind3] + ([p_mine] if p_mine else []),
@@ -710,16 +798,17 @@ def build(intake, fc, va, g1, method="auto"):
          "paragraf": [f"Risiko utama: {r3}. Arah neto insider dan arus asing "
                       "tercatat di tabel kepemilikan sebagai konteks."],
          "exhibit": [get("Katalis"), get("Kepemilikan")]},
-        {"halaman": 5, "judul": "Valuasi",
-         "paragraf": [f"TP Rp{tp_s} adalah rerata Gordon Rp{fmt.rp(va['ps_gordon'])} dan "
-                      f"exit Rp{fmt.rp(va['ps_exit'])} (WACC {fmt.pct(va['wacc'])})."] + xtra +
+        {"halaman": 5, "judul": "Skenario nilai",
+         "paragraf": [f"Nilai skenario indikatif Rp{modeled_value_s} per saham adalah rerata "
+                      f"Gordon Rp{fmt.rp(va['ps_gordon'])} dan exit Rp{fmt.rp(va['ps_exit'])} "
+                      f"(WACC {fmt.pct(va['wacc'])}); hasil sensitif terhadap asumsi model."] + xtra +
                       ([p_lom] if p_lom else []) + ([p_ddm] if p_ddm else []),
          "exhibit": [e for e in
-                     [get("Ringkasan DCF"), get("Proyeksi FCFF"),
-                      get("Sensitivitas TP (WACC x g)"),
-                      get("Prakiraan FCFF, Nilai Terminal, dan Jembatan Nilai Wajar"),
+                     [get("Ringkasan skenario DCF"), get("Proyeksi FCFF"),
+                      get("Sensitivitas nilai skenario (WACC x g)"),
+                      get("Proyeksi FCFF, Nilai Terminal, dan Jembatan Nilai Skenario"),
                       get("Komponen WACC"),
-                      get("Sensitivitas Nilai Wajar per Saham (Rp)"),
+                      get("Sensitivitas Nilai Skenario per Saham (Rp)"),
                       get("Prakiraan Dividen, Nilai Terminal, dan Inverse CoE"),
                       get("Komponen Cost of Equity"),
                       get("Sensitivitas DDM (CoE x g)"),
@@ -734,7 +823,13 @@ def build(intake, fc, va, g1, method="auto"):
                       "pajak identik di IS, CF, dan DCF."],
          "exhibit": [get("Laba rugi"), get("Neraca"), get("Arus kas")]},
     ]
-    assert all(b["exhibit"] and all(e is not None for e in b["exhibit"]) for b in bagian)
+    research = _research_section(intake)
+    if research:
+        bagian.insert(0, research)
+    for page_number, section in enumerate(bagian, start=2):
+        section["halaman"] = page_number
+    assert all((b.get("layout") == "research_cards" and b.get("research_cards")) or
+               (b["exhibit"] and all(e is not None for e in b["exhibit"])) for b in bagian)
     for b in bagian:
         for p in b["paragraf"]:
             assert fmt.words(p) <= 400, "paragraf kepanjangan"
@@ -768,12 +863,12 @@ def build(intake, fc, va, g1, method="auto"):
               )[:6]
     return {
         "meta": {"ticker": t, "emiten": name, "tanggal": intake["price_date"],
-                 "rating": rating, "tp": va["tp"], "harga": intake["price"],
-                 "upside_persen": round(va["upside"] * 100, 1)},
+                 "status": "informational_scenario_analysis", "harga": intake["price"],
+                 "research_status": (intake.get("research_analysis_status") or {}).get("status", "missing")},
         "cover": {"headline": headline, "bullets": [b1, b2, b3],
                   "paragraf": [{"judul": p1t, "isi": p1}, {"judul": p2t, "isi": p2},
                                {"judul": p3t, "isi": p3}],
-                  "data_pasar": {"harga": intake["price"], "tp": va["tp"],
+                  "data_pasar": {"harga": intake["price"],
                                  "saham": intake["shares"],
                                  "market_cap": intake["market_cap"],
                                  "adtv": adtv_str,
@@ -811,23 +906,14 @@ def _headline(intake, fc):
 
 def _katalis(intake):
     rows = []
-    for nw in intake["news"] or []:
-        title = scrub.clean_title(str(nw.get("title") or ""), 90)
+    # Raw cached headlines can be broad market stories or contain third-party
+    # trade calls. Only validated, ticker-matched paraphrases enter the report.
+    for item in intake.get("news_analysis") or []:
+        title = scrub.clean_title(str(item.get("summary") or ""), 90)
         if not title:
             continue
-        txt = f"{title} {nw.get('body') or ''}".lower()
-        if any(k in txt for k in ["revenue", "growth", "expansion", "project"]):
-            why = "terkait ekspansi dan pertumbuhan pendapatan"
-        elif "dividend" in txt:
-            why = "terkait kebijakan dividen"
-        elif "contract" in txt:
-            why = "terkait kontrak baru"
-        elif any(k in txt for k in ["guidance", "target", "forecast"]):
-            why = "terkait panduan kinerja"
-        else:
-            why = "konteks sentimen sektor"
-        ts = str(nw.get("timestamp") or "")[:10] or "-"
-        rows.append([title, ts, why, "Netral"])
+        ts = str(item.get("timestamp") or "")[:10] or "-"
+        rows.append([title, ts, _word_cut(item.get("connection") or "-", 110), "Pantau"])
         if len(rows) >= 5:
             break
     for c in (intake["corp_actions"] or [])[:2]:

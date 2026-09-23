@@ -47,7 +47,7 @@ def fcff_exhibit(intake, fc, val):
         tax_ebit = r["ebit"] * teff
         nopat = r["ebit"] - tax_ebit
         # Delta NWC = plug penyeimbang: kas satu-satunya penyeimbang di
-        # forecast, sehingga FCFF tampil = fcf forecast (sumber TP).
+        # forecast, sehingga FCFF tampil = fcf forecast (basis skenario nilai).
         dnwc = nopat + r["da"] - r["capex"] - r["fcf"]
         df = 1 / (1 + wacc) ** (i + 0.5)
         growth = None if prev is None or prev == 0 else r["fcf"] / prev - 1
@@ -61,7 +61,7 @@ def fcff_exhibit(intake, fc, val):
     df_t = 1 / (1 + wacc) ** (len(rows3) - 0.5)
     pv_tv = tv * df_t
 
-    # Blok 3 memakai angka val (sumber kebenaran TP) agar terikat persis.
+    # Blok 3 memakai angka val agar jembatan terikat persis pada hasil model.
     ev = val["ev_gordon"]
     eq = ev - net_debt
     ev_x = f_last["ebitda"] * exit_mult
@@ -95,7 +95,7 @@ def fcff_exhibit(intake, fc, val):
     R.append(["Terminal Value (undiscounted)", "", "", "", fmt.miliar(tv)])
     R.append(["Faktor diskonto terminal", "", "", "", _df4(df_t)])
     R.append(["PV Terminal Value", "", "", "", fmt.miliar(pv_tv)])
-    R.append(B("Blok 3: Jembatan ke nilai wajar"))
+    R.append(B("Blok 3: Jembatan ke nilai skenario"))
     R.append(["Jumlah PV FCFF (Rp miliar)", "", "", "",
               fmt.miliar(val["pv_explicit"])])
     R.append(["(+) PV Terminal Value (Rp miliar)", "", "", "",
@@ -107,14 +107,14 @@ def fcff_exhibit(intake, fc, val):
               "0 (tidak ada di cache)"])
     R.append(["(=) Nilai Ekuitas Gordon (Rp miliar)", "", "", "", fmt.miliar(eq)])
     R.append(["(/) Saham beredar (saham)", "", "", "", fmt.rp(shares)])
-    R.append(["(=) Nilai Wajar per Saham Gordon (Rp)", "", "", "",
+    R.append(["(=) Nilai skenario per Saham Gordon (Rp)", "", "", "",
               fmt.rp(val["ps_gordon"])])
     R.append([f"Silang cek: EV exit (EBITDA x {fmt.mult(exit_mult)}) "
               "(Rp miliar)", "", "", "", fmt.miliar(ev_x)])
     R.append(["Nilai per saham exit (Rp)", "", "", "", fmt.rp(ps_x)])
-    R.append(["Nilai Wajar per Saham rata-rata Gordon+exit (Rp)", "", "", "",
+    R.append(["Nilai skenario gabungan per saham Gordon+exit (Rp)", "", "", "",
               fmt.rp(val["tp"])])
-    return _exhibit("Prakiraan FCFF, Nilai Terminal, dan Jembatan Nilai Wajar",
+    return _exhibit("Proyeksi FCFF, Nilai Terminal, dan Jembatan Nilai Skenario",
                     cols, R,
                     "Source: Company, Sektoral Estimates; Delta NWC = plug "
                     "penyeimbang; konvensi diskonto mid-year; silang cek "
@@ -171,9 +171,9 @@ def sens_matrix_5x3(intake, fc, val):
         cells = [fmt.rp(_tp(dw, gg)) + (" *" if dw == 0 and gg == g0 else "")
                  for gg in ggs]
         rows.append([lab] + cells)
-    return _exhibit("Sensitivitas Nilai Wajar per Saham (Rp)", cols, rows,
-                    "Source: Sektoral Estimates; sel base (*) = TP base; "
-                    "rerata Gordon + exit, basis sama dengan TP")
+    return _exhibit("Sensitivitas Nilai Skenario per Saham (Rp)", cols, rows,
+                    "Source: Sektoral Estimates; sel base (*) = skenario dasar; "
+                    "rerata Gordon + exit, basis skenario sama")
 
 
 def ddm_exhibits(payout, roae_fwd, bvps, coe, g=0.035):
@@ -198,12 +198,12 @@ def ddm_exhibits(payout, roae_fwd, bvps, coe, g=0.035):
         ["Cost of Equity", fmt.pct(coe)],
         ["Terminal Value (= DPS terminal/(CoE-g), Rp)", fmt.rp(tv)],
         ["Faktor diskonto (1/(1+CoE))", _df4(df)],
-        ["Nilai Wajar per Saham Gordon (Rp)", fmt.rp(fv_gordon)],
+        ["Nilai skenario per Saham Gordon (Rp)", fmt.rp(fv_gordon)],
         ["Blok 2: Inverse Cost of Equity", ""],
         ["ROAE forward", fmt.pct(roae_fwd)],
         ["Fair P/BV (= (ROAE-g)/(CoE-g))", fmt.mult(pbv, dec=2)],
         ["BVPS forward (Rp)", fmt.rp(bvps)],
-        ["Nilai Wajar (= P/BV x BVPS, Rp)", fmt.rp(fv_pbv)],
+        ["Nilai skenario (= P/BV x BVPS, Rp)", fmt.rp(fv_pbv)],
     ]
     return _exhibit("Prakiraan Dividen, Nilai Terminal, dan Inverse CoE",
                     ["Uraian", "Nilai"], rows,
@@ -212,7 +212,7 @@ def ddm_exhibits(payout, roae_fwd, bvps, coe, g=0.035):
 
 
 def rnav_exhibits(assets, cash, debt, overhead, shares, discount):
-    """Opsi C: blok NAV per aset + jembatan ke TP = RNAVps x (1-diskon).
+    """Opsi C: blok NAV per aset + jembatan skenario = RNAVps x (1-diskon).
 
     assets: list {"nama", "nav", "kepemilikan" (0-1), opsional "ukuran"}.
     """
@@ -229,7 +229,7 @@ def rnav_exhibits(assets, cash, debt, overhead, shares, discount):
                      fmt.miliar(at)])
     rows.append(["Jumlah NAV atribuibel (Rp miliar)", fmt.miliar(total_nav)])
     rows += [
-        ["Blok 2: Jembatan RNAV ke target price", ""],
+        ["Blok 2: Jembatan RNAV ke skenario nilai", ""],
         ["(+) Kas dan setara kas (Rp miliar)", fmt.miliar(cash)],
         ["(-) Total utang (Rp miliar)", fmt.miliar(debt)],
         ["(-) Overhead korporat, PV biaya tak teratribusi (Rp miliar)",
@@ -238,7 +238,7 @@ def rnav_exhibits(assets, cash, debt, overhead, shares, discount):
         ["(/) Saham beredar (saham)", fmt.rp(shares)],
         ["(=) RNAV per saham (Rp)", fmt.rp(rnavps)],
         [f"(-) Diskon RNAV {fmt.pct(discount)} (judgment analis)", ""],
-        ["(=) Target Price (= RNAVps x (1-diskon), Rp)", fmt.rp(tp)],
+        ["(=) Nilai skenario (= RNAVps x (1-diskon), Rp)", fmt.rp(tp)],
     ]
     return _exhibit("Rincian Aset dan Jembatan RNAV", ["Uraian", "Nilai"],
                     rows,

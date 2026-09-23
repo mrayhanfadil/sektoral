@@ -4,6 +4,7 @@ from . import cache
 from . import mineops
 from . import model_profiles
 from . import news as news_context
+from . import research_context
 
 
 def _num(x, default=None):
@@ -24,7 +25,9 @@ def load(ticker):
     rep_rows = cache.payloads(f"/company/report/{t}/")
     if not rep_rows:
         raise ValueError(f"no verified assumptions: cache has no /company/report/{t}/")
-    rep = rep_rows[0][1]
+    # Endpoint rows can include newer partial responses. Select the newest
+    # report with usable model inputs, matching the agent's cache view.
+    rep = cache.company_report(t)
     ov = rep.get("overview", {}) or {}
     val = rep.get("valuation", {}) or {}
     fin = rep.get("financials", {}) or {}
@@ -74,9 +77,13 @@ def load(ticker):
         raise ValueError(f"only {len(annuals)} usable annuals for {t}, need >= 3")
 
     base = annuals[-1]
-    shares = base["shares"]
+    share_row = next((row for row in reversed(annuals) if row["shares"]), None)
+    shares = share_row["shares"] if share_row else None
     if not shares:
         raise ValueError(f"no outstanding_shares in cache for {t}")
+    if share_row["year"] != base["year"]:
+        notes.append(f"jumlah saham memakai data terakhir yang tersedia ({share_row['year']}); "
+                     f"data saham tahun dasar {base['year']} tidak ada di cache.")
     market_cap = price * shares
 
     # G1: scale sanity — revenue per share vs price must be same order of magnitude
@@ -118,6 +125,8 @@ def load(ticker):
     relevant_news = news_context.relevant_rows(t, news, price_date)
     news_analysis, news_analysis_status = news_context.load_analysis(
         t, relevant_news, price_date)
+    research_analysis, research_analysis_status = research_context.load_analysis(
+        t, price_date)
 
     quarterly_payload = cache.first(f"/financials/quarterly/{t}/") or {}
     quarterly_rows = quarterly_payload.get("data") or [] if isinstance(
@@ -161,6 +170,8 @@ def load(ticker):
         "news": relevant_news,
         "news_analysis": news_analysis,
         "news_analysis_status": news_analysis_status,
+        "research_analysis": research_analysis,
+        "research_analysis_status": research_analysis_status,
         "filings": (filings.get("results") or []) if isinstance(filings, dict) else [],
         "corp_actions": corp_list,
         "foreign_flow": (flow.get("data") or []) if isinstance(flow, dict) else [],

@@ -76,7 +76,7 @@ def test_bridge_minority_row(tmp_path):
               if e["judul"] == "Input SOTP yang belum lengkap")
     paths = {row[0] for row in fx["data"]["rows"]}
     assert "Kepentingan nonpengendali" in paths
-    assert d["meta"]["tp"] is None
+    assert "tp" not in d["meta"]
 
 
 def test_bank_ddm_full_path(tmp_path):
@@ -86,7 +86,7 @@ def test_bank_ddm_full_path(tmp_path):
     assert "Komponen Cost of Equity" in titles
     assert "Sensitivitas DDM (CoE x g)" in titles
     assert "Sensitivitas Inverse CoE (CoE x ROE)" in titles
-    val_sec = next(b for b in d["bagian"] if b["judul"] == "Valuasi")
+    val_sec = next(b for b in d["bagian"] if b["judul"] == "Skenario nilai")
     assert any("lintasan ROE" in p for p in val_sec["paragraf"])
     blob = json.dumps(d, ensure_ascii=False).lower()
     assert "tanpa histori coe di cache" in blob  # band jujur absen
@@ -98,6 +98,6 @@ def test_rnav_discount_sens(tmp_path):
     titles = [e["judul"] for e in d["exhibits"]]
     assert "Discount Rate per Aset" not in titles
     assert "Sensitivitas RNAV (diskon x harga)" not in titles
-    assert d["meta"]["tp"] is None
+    assert "tp" not in d["meta"]
     assert any("SOTP/LoM belum dapat direkonsiliasi" in p["isi"]
                for p in d["cover"]["paragraf"])
