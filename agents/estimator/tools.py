@@ -42,7 +42,7 @@ def cache_get(ticker, endpoint):
     try:
         row = con.execute(
             "SELECT payload_json FROM sectors_cache WHERE endpoint=? "
-            "AND endpoint LIKE ?",
+            "AND endpoint LIKE ? ORDER BY fetched_at DESC LIMIT 1",
             (endpoint, _like(ticker))).fetchone()
     finally:
         con.close()
