@@ -114,6 +114,16 @@ def load(ticker):
         payout, payout_basis = 0.25, "asumsi analis 25% (tanpa payout historis di cache)"
     else:
         payout_basis = "payout ratio historis di cache"
+    dps_hist, dps_years = [], []
+    hist_div = div.get("historical_dividends") or {}
+    if isinstance(hist_div, dict):
+        for y in sorted(hist_div, key=lambda k: str(k)):
+            tot = _num((hist_div[y] or {}).get("total_dividend"))
+            if tot is not None:
+                dps_hist.append(tot)
+                dps_years.append(str(y))
+    dps_basis = (f"DPS historis {dps_years[0]}-{dps_years[-1]} di cache"
+                 if dps_hist else "tanpa DPS historis di cache")
 
     intake = {
         "ticker": t, "name": rep.get("company_name", t),
@@ -122,6 +132,7 @@ def load(ticker):
         "shares": shares, "market_cap": market_cap,
         "annuals": annuals, "base_year": base["year"],
         "payout": payout, "payout_basis": payout_basis,
+        "dps_hist": dps_hist, "dps_basis": dps_basis,
         "industry": ov.get("industry"), "sub_sector": ov.get("sub_sector"),
         "major_holders": (own.get("major_shareholders") or [])[:5],
         "free_float": None,

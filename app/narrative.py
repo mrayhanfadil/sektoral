@@ -2,6 +2,7 @@
 import re
 
 from . import cache as cache_mod
+from . import ddm
 from . import fmt
 from . import methodnote
 from . import rnav
@@ -309,6 +310,68 @@ def build(intake, fc, va, g1, method="auto"):
                 va["wacc_inputs"]["re"])]:
             E(_vex["judul"], _vex["tipe"], _vex["data"], _vex.get("catatan_sumber") or
               "Source: Company, Sektoral Estimates")
+    p_ddm = None
+    if _is_bank:
+        _re, _g = va["wacc_inputs"]["re"], va["wacc_inputs"]["g"]
+        _nets = [r["net"] for r in F]
+        _bvps = (A[-1].get("equity") or 0) / intake["shares"]
+        _roae = _nets[0] / F[0]["equity"] if F[0]["equity"] else 0.12
+        _roe_h = [(a.get("earnings") or 0) / a["equity"] for a in A[-3:]
+                  if a.get("equity")]
+        _vb = ddm.value_bank(_nets, None, intake.get("dps_hist") or [],
+                             intake["shares"], _re, _g, _roae, _bvps)
+        wi = va["wacc_inputs"]
+        E("Komponen Cost of Equity", "tabel",
+          {"cols": ["Komponen", "Nilai"],
+           "rows": [["Jalur CAPM:", ""],
+                     ["Risk-free rate (INDOGB 10Y)", fmt.pct(wi["rf"])],
+                     ["Beta (Bloomberg)", fmt.mult(wi["beta"])],
+                     ["Equity Risk Premium (Damodaran)", fmt.pct(wi["erp"])],
+                     ["(=) Cost of Equity dipakai", fmt.pct(wi["re"])],
+                     ["Jalur band (pola BBTN):", ""],
+                     ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di cache)"],
+                     ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di cache)"],
+                     ["Offset dari mean", "n.a. — dipakai hasil CAPM"]]},
+          note="Source: Company, Sektoral Estimates; Rf = INDOGB 10Y, "
+               "ERP = Damodaran, Beta = Bloomberg")
+        _cg_rows = []
+        for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
+            _cg_rows.append(
+                [f"CoE {fmt.pct(_re + _d)}" + (" (base)" if _d == 0 else "")] +
+                [fmt.rp(round(ddm.value_bank(
+                    _nets, None, intake.get("dps_hist") or [],
+                    intake["shares"], _re + _d, _gg, _roae,
+                    _bvps)["tp_gordon"] / 10) * 10) +
+                 (" *" if _d == 0 and _gg == _g else "")
+                 for _gg in (_g - 0.01, _g, _g + 0.01)])
+        E("Sensitivitas DDM (CoE x g)", "tabel",
+          {"cols": ["CoE / g"] + [f"g {fmt.pct(_gg)}" for _gg in (_g - 0.01, _g, _g + 0.01)],
+           "rows": _cg_rows},
+          note="Source: Sektoral Estimates; sel = Nilai Wajar/saham Gordon; "
+               "base (*) = CoE dan g terpakai")
+        _cr_rows = []
+        for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
+            _cr_rows.append(
+                [f"CoE {fmt.pct(_re + _d)}" + (" (base)" if _d == 0 else "")] +
+                [fmt.rp(round(((_rr - _g) / (_re + _d - _g)) * _bvps / 10) * 10)
+                 for _rr in (_roae - 0.04, _roae, _roae + 0.04)])
+        E("Sensitivitas Inverse CoE (CoE x ROE)", "tabel",
+          {"cols": ["CoE / ROE"] + [f"ROE {fmt.pct(_rr)}" for _rr in
+                                    (_roae - 0.04, _roae, _roae + 0.04)],
+           "rows": _cr_rows},
+          note="Source: Sektoral Estimates; sel = P/BV wajar x BVPS; "
+               "Fair P/BV = (ROE-g)/(CoE-g)")
+        _roe_tr = ("naik" if _roe_h and _roae >= _roe_h[0] else "melandai")
+        p_ddm = (f"Driver utama valuasi bank ini adalah lintasan ROE, bukan arus kas: "
+                 f"ROAE historis {fmt.pct(_roe_h[0])} {_roe_tr} ke {fmt.pct(_roae)} "
+                 f"forward bila laba {F[0]['label']} tercapai. DDM Gordon memberi "
+                 f"Rp{fmt.rp(round(_vb['tp_gordon'] / 10) * 10)}/saham pada payout "
+                 f"{fmt.pct(_vb['payout_used'])} ({intake.get('payout_basis')}); silang cek "
+                 f"Inverse CoE Rp{fmt.rp(round(_vb['tp_inverse'] / 10) * 10)}/saham "
+                 f"(P/BV wajar {fmt.mult(_vb['fair_pbv'], 2)}x). Payout {fmt.pct(_vb['payout_used'])} "
+                 f"dinilai sustain sepanjang kebutuhan modal pertumbuhan kredit/aset "
+                 f"tidak menuntut retensi di atas level historis; "
+                 f"{intake.get('dps_basis')}.")
     E("Peer", "tabel",
       {"cols": ["Peer", "PER TTM", "PBV"],
        "rows": [[c["symbol"], fmt.mult(c["pe"] or 0), fmt.mult(c["pb"] or 0)]
@@ -341,7 +404,30 @@ def build(intake, fc, va, g1, method="auto"):
                  f"{fmt.pct(va['wacc'])}; {lom['margin_basis']}) vs TP DCF Rp{tp_s}. "
                  f"NAV LoM di atas TP karena horizon {(mo.get('reserve_life_cu_yr') or 0):.0f} tahun "
                  f"menangkap nilai cadangan yang dipotong terminal Gordon; TP dipakai "
-                 f"dengan kesadaran keterbatasan itu.")
+                 f"dengan kesadaran keterbatasan itu. "
+                 f"Diskon RNAV 0% adalah pure judgment assumption tanpa basis "
+                 f"pembanding discount historis/sektor di cache.")
+        _tn, _sh = lom["total_nav_rpbn"], intake["shares"]
+        _cb, _db = fc["base"]["cash"] / 1e9, fc["base"]["debt"] / 1e9
+        E("Discount Rate per Aset", "tabel",
+          {"cols": ["Aset", "Tahap", "Discount rate", "Umur (thn)"],
+           "rows": [[s["nama"].split(" (")[0], "produksi", fmt.pct(va["wacc"]),
+                     f"{(s['life'] or 0):.0f}"] for s in lom["streams"]]},
+          note="Source: Sektoral Estimates; satu tarif (WACC model) untuk "
+               "semua aset tahap produksi — tidak ada diferensiasi "
+               "matang-vs-development di cache")
+        _dp_rows = []
+        for _dd in (0.0, 0.10, 0.20, 0.30):
+            _dp_rows.append(
+                [f"Diskon {fmt.pct(_dd, 0)}"] +
+                [fmt.rp(round((_tn * _pm + _cb - _db) * 1e9 / _sh * (1 - _dd) / 10) * 10)
+                 for _pm in (0.8, 1.0, 1.2)])
+        E("Sensitivitas RNAV (diskon x harga)", "tabel",
+          {"cols": ["Diskon / harga"] + [f"Harga {p}" for p in
+                                         ("-20%", "base", "+20%")],
+           "rows": _dp_rows},
+          note="Source: Sektoral Estimates; sel = TP/saham; NAV linear "
+               "terhadap harga (anuitas flat)")
     E("Laba rugi", "tabel", _is(F, "laba"))
     E("Neraca", "tabel", _is(F, "neraca"))
     E("Arus kas", "tabel", _is(F, "kas"))
@@ -375,15 +461,21 @@ def build(intake, fc, va, g1, method="auto"):
         {"halaman": 5, "judul": "Valuasi",
          "paragraf": [f"TP Rp{tp_s} adalah rerata Gordon Rp{fmt.rp(va['ps_gordon'])} dan "
                       f"exit Rp{fmt.rp(va['ps_exit'])} (WACC {fmt.pct(va['wacc'])})."] + xtra +
-                      ([p_lom] if p_lom else []),
+                      ([p_lom] if p_lom else []) + ([p_ddm] if p_ddm else []),
          "exhibit": [e for e in
                      [get("Ringkasan DCF"), get("Proyeksi FCFF"),
                       get("Sensitivitas TP (WACC x g)"),
                       get("Prakiraan FCFF, Nilai Terminal, dan Jembatan Nilai Wajar"),
                       get("Komponen WACC"),
                       get("Sensitivitas Nilai Wajar per Saham (Rp)"),
+                      get("Prakiraan Dividen, Nilai Terminal, dan Inverse CoE"),
+                      get("Komponen Cost of Equity"),
+                      get("Sensitivitas DDM (CoE x g)"),
+                      get("Sensitivitas Inverse CoE (CoE x ROE)"),
                       get("Jembatan pendapatan tambang"),
                       get("Rincian Aset dan Jembatan RNAV"),
+                      get("Discount Rate per Aset"),
+                      get("Sensitivitas RNAV (diskon x harga)"),
                       get("Peer")] if e is not None]},
         {"halaman": 6, "judul": "Laporan keuangan",
          "paragraf": ["Kas adalah satu-satunya penyeimbang neraca; D&A, capex, dan tarif "
