@@ -76,3 +76,27 @@ def test_bridge_minority_row(tmp_path):
               if "Jembatan Nilai Wajar" in e["judul"])
     blob = json.dumps(fx["data"], ensure_ascii=False)
     assert "Minority Interest" in blob
+
+
+def test_bank_ddm_full_path(tmp_path):
+    from app import build as B
+    d = B.build("BBCA", tmp_path)
+    titles = [e["judul"] for e in d["exhibits"]]
+    assert "Komponen Cost of Equity" in titles
+    assert "Sensitivitas DDM (CoE x g)" in titles
+    assert "Sensitivitas Inverse CoE (CoE x ROE)" in titles
+    val_sec = next(b for b in d["bagian"] if b["judul"] == "Valuasi")
+    assert any("lintasan ROE" in p for p in val_sec["paragraf"])
+    blob = json.dumps(d, ensure_ascii=False).lower()
+    assert "tanpa histori coe di cache" in blob  # band jujur absen
+
+
+def test_rnav_discount_sens(tmp_path):
+    from app import build as B
+    d = B.build("AMMN", tmp_path)
+    titles = [e["judul"] for e in d["exhibits"]]
+    assert "Discount Rate per Aset" in titles
+    assert "Sensitivitas RNAV (diskon x harga)" in titles
+    assert any("pure judgment assumption" in n.lower()
+               for n in d["catatan_metodologi"] + sum(
+                   [b["paragraf"] for b in d["bagian"]], []))
