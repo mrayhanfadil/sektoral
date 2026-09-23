@@ -54,7 +54,8 @@ def methodology_notes(intake, fc, val, mineops_or_none):
                    "proksi FCFF dipakai karena kerangka ringan generic.")
     if not any(n.startswith("model dibangun") for n in out):
         out.append("model dibangun di mata uang pelaporan (Rp); FX = 1.")
-    return out[:5]
+    out.append("periode eksplisit 3 tahun (template ringan), bukan 5 tahun standar.")
+    return out[:6]
 
 
 def extreme_tp_lines(upside, tp, price, driver_sentence, limitation_sentence):

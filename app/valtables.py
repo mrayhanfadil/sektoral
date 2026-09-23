@@ -103,8 +103,9 @@ def fcff_exhibit(intake, fc, val):
     R.append(["(=) Enterprise Value (Rp miliar)", "", "", "", fmt.miliar(ev)])
     R.append(["(-) Utang bersih tanggal valuasi (Rp miliar)", "", "", "",
               fmt.miliar(net_debt)])
-    R.append(["(=) Nilai Ekuitas Gordon (Rp miliar)", "", "", "",
-              fmt.miliar(eq)])
+    R.append(["(+/-) Minority Interest / Aset non-operasi (Rp miliar)", "", "", "",
+              "0 (tidak ada di cache)"])
+    R.append(["(=) Nilai Ekuitas Gordon (Rp miliar)", "", "", "", fmt.miliar(eq)])
     R.append(["(/) Saham beredar (saham)", "", "", "", fmt.rp(shares)])
     R.append(["(=) Nilai Wajar per Saham Gordon (Rp)", "", "", "",
               fmt.rp(val["ps_gordon"])])

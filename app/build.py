@@ -19,11 +19,11 @@ except Exception:
 OUT = Path(__file__).resolve().parent.parent / "out"
 
 
-def build(ticker, outdir=OUT, want_pdf=False):
+def build(ticker, outdir=OUT, want_pdf=False, method="auto"):
     doc_in, g1 = intake.load(ticker)
     fc = forecast.build(doc_in)
     va = valuation.build(doc_in, fc)
-    doc = narrative.build(doc_in, fc, va, g1)
+    doc = narrative.build(doc_in, fc, va, g1, method=method)
     outdir.mkdir(parents=True, exist_ok=True)
     t = doc["meta"]["ticker"]
     (outdir / f"{t}.json").write_text(json.dumps(doc, indent=1))
@@ -50,9 +50,11 @@ def main():
     p.add_argument("ticker")
     p.add_argument("--out", default=str(OUT))
     p.add_argument("--pdf", action="store_true")
+    p.add_argument("--method", default="auto",
+                   help="opsi valuasi analis: auto|dcf|ddm|rnav")
     a = p.parse_args()
     try:
-        build(a.ticker, Path(a.out), want_pdf=a.pdf)
+        build(a.ticker, Path(a.out), want_pdf=a.pdf, method=a.method)
     except ValueError as e:
         sys.exit(f"refused: {e}")
 
