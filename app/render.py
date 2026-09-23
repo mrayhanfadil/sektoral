@@ -13,10 +13,16 @@ from pathlib import Path
 from . import cache as cache_mod
 
 FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
+BRAND_DIR = Path(__file__).resolve().parent / "assets" / "brand"
 
 
 def _b64_font(filename):
     p = FONTS_DIR / filename
+    return base64.b64encode(p.read_bytes()).decode("ascii") if p.exists() else ""
+
+
+def _b64_brand_asset(filename):
+    p = BRAND_DIR / filename
     return base64.b64encode(p.read_bytes()).decode("ascii") if p.exists() else ""
 
 
@@ -40,14 +46,22 @@ INDEX_COLOR = SERIES[3]
 # Use the canonical wordmark from sectors-hackathon/assets/brand/sectoral-logo.svg.
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg"
 LOGO_SVG = LOGO_PATH.read_text(encoding="utf-8")
+REPORT_WORDMARK = _b64_brand_asset("report-wordmark.png")
+REPORT_DIVIDER = _b64_brand_asset("report-divider.svg")
+REPORT_MORSE = _b64_brand_asset("report-morse.svg")
 
-PAGE_NUM = ('@page{size:A4;margin:12mm 12mm 14mm}'
-            '@page{@bottom-left{content:"sektoral";'
-            "font-family:'Roboto',sans-serif;font-size:7pt;color:" + MUT + '}'
-            '@bottom-center{content:"Lihat pengungkapan penting di bagian akhir laporan ini";'
-            "font-family:'Roboto',sans-serif;font-size:7pt;color:" + MUT + '}'
-            '@bottom-right{content:"Halaman " counter(page);'
-            "font-family:'Roboto',sans-serif;font-size:7.2pt;color:" + MUT + '}}')
+PAGE_NUM = ("@page{size:A4;margin:12mm 12mm 14mm;"
+            "@bottom-left{content:'See important disclosure at the back of this report';"
+            "box-sizing:border-box;width:160mm;height:3mm;padding-left:97mm;"
+            "background-image:url('data:image/svg+xml;base64," + REPORT_MORSE + "');"
+            "background-size:95mm 1.55mm;background-position:left center;"
+            "background-repeat:no-repeat;white-space:nowrap;"
+            "font-family:'Roboto',sans-serif;font-size:7.2pt;line-height:3mm;"
+            "color:" + PRIMARY + "}"
+            "@bottom-right{content:'Page ' counter(page) ' of ' counter(pages);"
+            "box-sizing:border-box;width:26mm;height:3mm;text-align:right;white-space:nowrap;"
+            "font-family:'Roboto',sans-serif;font-size:7.2pt;line-height:3mm;"
+            "color:" + PRIMARY + "}}")
 
 FONT_FACES = (
     f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_REG}') format('truetype');font-weight:400;font-style:normal;}}\n"
@@ -64,6 +78,17 @@ CSS = (FONT_FACES + PAGE_NUM +
        + PRIMARY + ";padding-bottom:3px;font-size:8.1pt;color:" + PRIMARY + ";font-weight:600}"
        ".brandmark{vertical-align:-4px;margin-right:3px}"
        ".wordmark{display:flex;align-items:center}.wordmark svg{display:block;width:84px;height:18px}"
+       ".report-header{display:grid;grid-template-columns:minmax(0,1fr) 30mm;"
+       "grid-template-rows:auto 0.5mm;column-gap:5mm;row-gap:0.4mm;"
+       "align-items:center;padding:3mm 3mm 2.5mm;margin:0 0 2mm}"
+       ".report-heading{grid-column:1;grid-row:1;min-width:0}"
+       ".report-title{font-size:9.5pt;line-height:1.15;color:" + PRIMARY + ";"
+       "font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+       ".report-subtitle{font-size:7.5pt;line-height:1.2;color:#000;margin-top:0.4mm}"
+       ".report-wordmark{grid-column:2;grid-row:1;display:block;width:30mm;height:5.35mm;"
+       "object-fit:contain}"
+       ".report-divider{grid-column:1/-1;grid-row:2;display:block;width:100%;"
+       "height:0.5mm;object-fit:fill}"
        ".status{font-size:10.5pt;color:" + PRIMARY + ";font-weight:700;margin:5px 0 2px}"
        ".rating-label{font-size:15pt;color:" + PRIMARY + ";font-weight:700;line-height:1.1}"
        ".rating-detail{font-size:7.5pt;color:" + MUT + ";margin:1px 0 5px}"
@@ -371,6 +396,40 @@ def _topbar(report_date):
             f"aria-label='Sectoral'>{LOGO_SVG}</span></div>")
 
 
+def _report_header(report_date, meta):
+    """Build the report header from the Figma layout and current report data."""
+    try:
+        day = date.fromisoformat(str(report_date)[:10])
+        months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        display_date = f"{day.day} {months[day.month - 1]} {day.year}"
+    except (TypeError, ValueError):
+        display_date = str(report_date)
+
+    ticker = str(meta.get("ticker") or "").strip().upper()
+    heading = f"{ticker} IJ" if ticker else "Equity Research"
+    rating = meta.get("rating")
+    target = meta.get("tp")
+    if rating:
+        heading += f" | {str(rating).upper()}"
+        if target is not None:
+            formatted_target = f"{target:,.0f}".replace(",", ".")
+            heading += f" · TP Rp {formatted_target}"
+    elif meta.get("status") == "draft_non_distributable":
+        heading += " | Dalam Peninjauan"
+
+    return ("<div class='report-header'>"
+            "<div class='report-heading'>"
+            f"<div class='report-title'>{html.escape(heading)}</div>"
+            "<div class='report-subtitle'>Equity Research – Company Update | "
+            f"{html.escape(display_date)}</div></div>"
+            f"<img class='report-wordmark' src='data:image/png;base64,{REPORT_WORDMARK}' "
+            "alt='Sektoral'>"
+            f"<img class='report-divider' src='data:image/svg+xml;base64,{REPORT_DIVIDER}' "
+            "alt=''>"
+            "</div>")
+
+
 def _draft_banner(meta):
     if meta.get("status") != "draft_non_distributable":
         return ""
@@ -456,7 +515,7 @@ def _render_page_content(b):
 def render(doc):
     m, cov = doc["meta"], doc["cover"]
     h = [f"<html><head><meta charset='utf-8'><style>{CSS}</style></head><body>"]
-    h.append(_topbar(m["tanggal"]))
+    h.append(_report_header(m["tanggal"], m))
     h.append(_draft_banner(m))
     report_status = (m.get("rating") or
                      ("Dalam peninjauan" if m.get("status") == "draft_non_distributable"
@@ -510,7 +569,7 @@ def render(doc):
 
     for b in doc["bagian"]:
         page_class = "page research-summary" if b.get("layout") == "research_cards" else "page"
-        h.append(f"<div class='{page_class}'>{_topbar(m['tanggal'])}")
+        h.append(f"<div class='{page_class}'>{_report_header(m['tanggal'], m)}")
         h.append(_draft_banner(m))
         h.append(f"<h2 class='sec'>{html.escape(b['judul'])}</h2>")
         h.append(_render_page_content(b))
@@ -523,7 +582,7 @@ def render(doc):
                   "Dokumen ini adalah bahan riset dalam peninjauan. Rating dan target "
                   "harga belum diterbitkan karena syarat data atau model belum terpenuhi. "
                   "Keputusan investasi menjadi tanggung jawab pembaca.")
-    h.append(f"<div class='page'>{_topbar(m['tanggal'])}"
+    h.append(f"<div class='page'>{_report_header(m['tanggal'], m)}"
              f"{_draft_banner(m)}"
              "<h2 class='sec'>Pengungkapan</h2>"
              f"<p class='small'>{html.escape(disclosure)}</p>"
