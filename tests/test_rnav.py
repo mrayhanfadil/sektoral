@@ -29,7 +29,7 @@ def test_ammn_dua_aliran_material():
     assert len(r["streams"]) == 2
     assert all(s["nav_rpbn"] > 10000 for s in r["streams"])
     assert r["total_nav_rpbn"] == sum(s["nav_rpbn"] for s in r["streams"])
-    assert "Rp16.000" in r["fx_basis"]
+    assert "Yahoo Finance IDR=X" in r["fx_basis"] or "asumsi analis Rp16.000/USD" in r["fx_basis"]
 
 
 def test_bridge_flag_ammn():
@@ -73,9 +73,10 @@ def test_bridge_minority_row(tmp_path):
     from app import build as B
     d = B.build("AMMN", tmp_path)
     fx = next(e for e in d["exhibits"]
-              if "Jembatan Nilai Wajar" in e["judul"])
-    blob = json.dumps(fx["data"], ensure_ascii=False)
-    assert "Minority Interest" in blob
+              if e["judul"] == "Input SOTP yang belum lengkap")
+    paths = {row[0] for row in fx["data"]["rows"]}
+    assert "Kepentingan nonpengendali" in paths
+    assert d["meta"]["tp"] is None
 
 
 def test_bank_ddm_full_path(tmp_path):
@@ -95,8 +96,8 @@ def test_rnav_discount_sens(tmp_path):
     from app import build as B
     d = B.build("AMMN", tmp_path)
     titles = [e["judul"] for e in d["exhibits"]]
-    assert "Discount Rate per Aset" in titles
-    assert "Sensitivitas RNAV (diskon x harga)" in titles
-    assert any("pure judgment assumption" in n.lower()
-               for n in d["catatan_metodologi"] + sum(
-                   [b["paragraf"] for b in d["bagian"]], []))
+    assert "Discount Rate per Aset" not in titles
+    assert "Sensitivitas RNAV (diskon x harga)" not in titles
+    assert d["meta"]["tp"] is None
+    assert any("SOTP/LoM belum dapat direkonsiliasi" in p["isi"]
+               for p in d["cover"]["paragraf"])

@@ -12,6 +12,9 @@ dist/
 .next/
 out/
 .cache/
+# Locally refreshed market data artifacts; never commit live snapshots.
+data/fx_usdidr.json
+data/fx_usdidr.json.tmp
 
 # Python
 __pycache__/

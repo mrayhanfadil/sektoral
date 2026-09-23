@@ -1,6 +1,8 @@
 """TAHAP 3: VALUATION ENGINE (GATE 3). Satu mata uang, TP = rerata Gordon + exit."""
 from . import fmt
 from . import rnav
+from . import release
+from . import sotp as sotp_mod
 
 BAND_BUY, BAND_SELL = 0.15, -0.10
 
@@ -33,12 +35,11 @@ def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
 def build(intake, fc):
     g3, notes = {}, []
     t = intake["ticker"]
-    is_miner = (intake.get("sub_sector") or "").lower().startswith("metal") or \
-               (intake.get("industry") or "").lower().startswith("metal")
+    profile = intake.get("model_profile", "unsupported")
+    is_miner = profile == "finite_life_mining"
     method = ("DCF FCFF 3 tahun eksplisit + terminal Gordon, dibobot sama dengan "
               "exit EV/EBITDA")
-    is_bank = "bank" in ((intake.get("sub_sector") or "") + " " +
-                          (intake.get("industry") or "")).lower()
+    is_bank = profile == "financial_ddm"
     if is_bank:
         notes.append("keterbatasan model: bank idealnya pendekatan GGM ekuitas atau "
                      "residual income dengan silang cek P/BV vs ROE; proksi FCFF "
@@ -101,7 +102,63 @@ def build(intake, fc):
                          fc["base"]["cash"] / 1e9, fc["base"]["debt"] / 1e9,
                          fc["rows"][0]["revenue"] / 1e9)
         lom["rnav_ps"] = lom["rnav_rpbn"] * 1e9 / intake["shares"]
-    return {"method": method, "wacc": wacc, "wacc_inputs": {"rf": rf, "erp": erp,
+
+    sotp_result = None
+    if is_miner:
+        bridge = intake.get("sotp_bridge")
+        bridge = bridge if isinstance(bridge, dict) else {}
+
+        def bridge_value(key):
+            value = bridge.get(key)
+            return value.get("value") if isinstance(value, dict) else value
+
+        sotp_result = sotp_mod.calculate_sotp(
+            intake.get("sotp_assets"),
+            cash_idr=bridge_value("cash_idr"),
+            debt_idr=bridge_value("debt_idr"),
+            minority_interest_idr=bridge_value("minority_interest_idr"),
+            corporate_overhead_idr=bridge_value("corporate_overhead_idr"),
+            shares=bridge_value("shares"),
+            discount_pct=bridge_value("discount_pct"),
+        )
+        sotp_result["bridge_evidence"] = {
+            field: {key: bridge[field].get(key) for key in
+                    ("source", "source_date", "page", "unit")}
+            if isinstance(bridge.get(field), dict) else None
+            for field in ("cash_idr", "debt_idr", "minority_interest_idr",
+                          "corporate_overhead_idr", "shares")
+        }
+    release_result = release.assess_release(profile, intake, fc, sotp_result)
+    is_draft = release_result["status"] != "distributable"
+
+    # Mining's primary method is finite-life SOTP, never the legacy Gordon /
+    # exit blend. A screening forecast or incomplete SOTP cannot publish a TP.
+    if is_miner:
+        method = "SOTP/LoM (asset-based, no perpetual terminal)"
+        if is_draft:
+            tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
+            tp_down, grid = None, {}
+        else:
+            tp = round(sotp_result["target_price_idr"] / 10) * 10
+            upside = tp / intake["price"] - 1
+            rating = "Buy" if upside > BAND_BUY else (
+                "Sell" if upside < BAND_SELL else "Hold")
+            tp_down, grid = None, {}
+        g3 = {
+            "G3.1_method": "lolos" if not is_draft else "gagal",
+            "G3.2_sotp": "lolos" if sotp_result["status"] == "complete" else "gagal",
+            "G3.3_target": "lolos" if tp is not None else "gagal",
+            "G3.4_sensitivity": "dilabeli",
+            "G3.5_release": release_result["status"],
+        }
+    elif profile == "unsupported":
+        tp, upside, rating, tp_down, grid = None, None, \
+            "DRAFT NON-DISTRIBUTABLE", None, {}
+        g3 = {"G3.release": "draft_non_distributable"}
+
+    return {"method": method, "model_profile": profile,
+            "release": release_result, "sotp": sotp_result,
+            "wacc": wacc, "wacc_inputs": {"rf": rf, "erp": erp,
             "beta": beta, "re": re, "rd_after_tax": rd, "g": g, "exit_mult": exit_mult,
             "exit_basis": exit_basis},
             "pv_explicit": pv_exp, "pv_terminal": pv_tv, "tv_share": pv_tv / ev_g,

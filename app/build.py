@@ -1,7 +1,9 @@
 """Pipeline v3: intake → forecast → valuation → narrative → render.
 
-Hanya membaca data/sectors_cache.db. Tidak ada network, tidak ada LLM,
-tidak ada estimasi karangan di luar asumsi berlabel.
+Facts are read only from data/sectors_cache.db. No network, LLM, analyst
+driver files, or local operating-profile files enter the report build. A
+separate agent-written news note is included only after matching it back to
+the ticker-specific cached news rows.
 """
 import argparse
 import json
@@ -29,8 +31,15 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto"):
     (outdir / f"{t}.json").write_text(json.dumps(doc, indent=1))
     (outdir / f"{t}.html").write_text(render.render(doc))
     gates = {"G1": g1["G1"], "G2": fc["g2"], "G3": va["g3"]}
-    print(f"{t} {doc['meta']['rating']} TP Rp{doc['meta']['tp']:,} "
-          f"upside {doc['meta']['upside_persen']}%")
+    tp = doc["meta"].get("tp")
+    upside = doc["meta"].get("upside_persen")
+    tp_text = f"Rp{tp:,}" if tp is not None else "Ditahan"
+    upside_text = f"{upside}%" if upside is not None else "n.a."
+    print(f"{t} {doc['meta']['rating']} TP {tp_text} upside {upside_text}")
+    release_result = va.get("release") or {}
+    if release_result.get("status"):
+        print(f"  release: {release_result['status']} "
+              f"({len(release_result.get('blockers') or [])} blocker)")
     for stage, log in gates.items():
         flat = {k: (v if isinstance(v, str) else v[0]) for k, v in log.items()
                 if not k.startswith("catatan")}

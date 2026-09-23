@@ -34,7 +34,8 @@ def _fixture():
                      "ocf": ocf, "capex": cx, "fcf": fcf, "div": net * 0.3,
                      "cash": 5e12, "debt": 20e12, "equity": 60e12,
                      "assets": 100e12, "eps": net / SHARES})
-    intake = {"ticker": "UJI", "shares": SHARES, "price": PRICE,
+    intake = {"ticker": "UJI", "model_profile": "going_concern_fcff",
+              "shares": SHARES, "price": PRICE,
               "market_cap": PRICE * SHARES, "payout": 0.3, "peers": []}
     fc = {"rows": rows,
           "base": {"cash": 5e12, "debt": 20e12, "equity": 55e12,

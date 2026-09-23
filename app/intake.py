@@ -2,6 +2,8 @@
 import time
 from . import cache
 from . import mineops
+from . import model_profiles
+from . import news as news_context
 
 
 def _num(x, default=None):
@@ -28,6 +30,12 @@ def load(ticker):
     fin = rep.get("financials", {}) or {}
     div = rep.get("dividend", {}) or {}
     own = rep.get("ownership", {}) or {}
+    profile, profile_basis = model_profiles.resolve({
+        "model_profile": rep.get("model_profile") or ov.get("model_profile"),
+        "industry": ov.get("industry"),
+        "sub_sector": ov.get("sub_sector"),
+        "sector": ov.get("sector"),
+    })
 
     price = _num(ov.get("last_close_price") or val.get("last_close_price"))
     price_date = ov.get("latest_close_date") or val.get("latest_close_date")
@@ -107,6 +115,18 @@ def load(ticker):
     ca = corp.get("corporate_actions") if isinstance(corp, dict) else None
     corp_list = ca if isinstance(ca, list) else ([ca] if isinstance(ca, dict) else [])
     flow = cache.first(f"/foreign-flow/{t}/") or {}
+    relevant_news = news_context.relevant_rows(t, news, price_date)
+    news_analysis, news_analysis_status = news_context.load_analysis(
+        t, relevant_news, price_date)
+
+    quarterly_payload = cache.first(f"/financials/quarterly/{t}/") or {}
+    quarterly_rows = quarterly_payload.get("data") or [] if isinstance(
+        quarterly_payload, dict) else []
+    quarterly_rows = sorted(
+        (row for row in quarterly_rows if isinstance(row, dict) and row.get("date")),
+        key=lambda row: row["date"],
+    )
+    latest_quarter = quarterly_rows[-1] if quarterly_rows else None
 
     peers, peer_median_pe, peer_median_pb = _peers(rep, t)
     payout = _num(div.get("payout_ratio"))
@@ -127,8 +147,9 @@ def load(ticker):
 
     intake = {
         "ticker": t, "name": rep.get("company_name", t),
+        "model_profile": profile, "model_profile_basis": profile_basis,
         "currency": "Rp", "fx": 1.0,
-        "price": price, "price_date": price_date,
+        "price": price, "price_date": price_date, "as_of": price_date,
         "shares": shares, "market_cap": market_cap,
         "annuals": annuals, "base_year": base["year"],
         "payout": payout, "payout_basis": payout_basis,
@@ -137,7 +158,9 @@ def load(ticker):
         "major_holders": (own.get("major_shareholders") or [])[:5],
         "free_float": None,
         "daily": drows[-5:] if isinstance(drows, list) else [],
-        "news": (news.get("results") or [])[:12] if isinstance(news, dict) else [],
+        "news": relevant_news,
+        "news_analysis": news_analysis,
+        "news_analysis_status": news_analysis_status,
         "filings": (filings.get("results") or []) if isinstance(filings, dict) else [],
         "corp_actions": corp_list,
         "foreign_flow": (flow.get("data") or []) if isinstance(flow, dict) else [],
@@ -145,6 +168,15 @@ def load(ticker):
         "peer_median_pb": peer_median_pb,
         "forward_pe_cache": _num(val.get("forward_pe")),
         "mineops": mineops.load(t),
+        "quarterly_actuals": quarterly_rows,
+        "latest_quarterly_actual": latest_quarter,
+        # Report inputs intentionally come only from sectors_cache. These
+        # release-gate inputs remain absent until the cache itself contains
+        # enough date/source/coverage metadata to support them.
+        "latest_interim_actuals": None,
+        "operating_bridge": None,
+        "sotp_assets": None,
+        "sotp_bridge": None,
     }
     return intake, {"G1": g1, "catatan": notes, "fetched_at": time.time()}
 

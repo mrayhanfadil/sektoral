@@ -1,0 +1,2 @@
+# Optional quote-refresh utility dependency; report builds remain offline.
+yfinance>=0.2.65

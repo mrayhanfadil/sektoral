@@ -134,6 +134,20 @@ def build(intake):
             f"{pay*100:.0f}%, {rnav.FX_BASIS})")
         g2["catatan"].append("G2.8: selisih bruto-vs-tercatat mencerminkan "
             "payability/TC-RC/royalti/mix; dijelaskan di narasi valuasi.")
+    operating_bridge = intake.get("operating_bridge")
+    is_mining = intake.get("model_profile") == "finite_life_mining"
+    if is_mining:
+        # Source rows by themselves are not a physical-to-financial forecast.
+        # Until that engine is implemented and reconciled, CAGR remains a
+        # screening diagnostic and cannot pass the production release gate.
+        g2["G2.9_operating_bridge"] = "gagal"
+        g2["catatan"].append(
+            "G2.9: forecast fisik-ke-keuangan belum dihitung; angka CAGR hanya "
+            "screening proxy dan tidak layak menjadi forecast produksi.")
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
+            "operating_bridge": operating_bridge,
+            "forecast_basis": ("historical_screening_proxy" if is_mining else
+                               "historical_fcff_screen"),
+            "production_ready": not is_mining,
             "base": {"cash": cash0, "debt": debt0, "equity": eq0,
                      "other_liab": oth_liab, "noncash": nc0}}

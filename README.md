@@ -74,6 +74,10 @@ python3 -m pytest tests/ -q
 
 - `app/cache.py` intake hanya dari `data/sectors_cache.db` (stale-ok, 0 kredit).
   Ticker tanpa data cache ditolak keras (`no verified assumptions`).
+- Report builder tidak membaca PDF benchmark, `data/drivers/`, atau profile lokal;
+  hanya angka di sectors cache yang boleh jadi input. Artikel `/news/` boleh dipakai
+  agent bila tercache, dengan parafrasa, hubungan ke tesis/driver, caveat, dan
+  provenance cache. Agent tidak membuka URL artikel.
 - `app/forecast.py` saat ini masih memakai driver generik 3 tahun (CAGR historis,
   margin + operating leverage, sustaining = D&A); belum production-grade untuk
   emiten tambang. Rebuild AMMN direncanakan berbasis operasi pada `docs/plans/2026-09-23-ammn-issuer-specific-rebuild.md`.

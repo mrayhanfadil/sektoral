@@ -12,28 +12,182 @@ sys.path.insert(0, str(ROOT))
 from agents.estimator.validate import gate
 
 
-def good():
-    return {"ticker": "AMMN", "basis": "agent-estimate",
+def good(ticker="AMMN"):
+    quarterly = f"/financials/quarterly/{ticker}/"
+    return {"ticker": ticker, "basis": "agent-estimate",
             "as_of": "2026-09-23", "currency": "USD mn (as published)",
             "years": ["2026F", "2027F", "2028F"],
             "drivers": {
                 "revenue": {"path": [4001, 4287, 4868],
-                            "source": "paparan publik emiten Q2-2026",
+                            "source": f"sectors_cache {quarterly}",
                             "note": "ramp Phase-8, fresh ore naik bertahap"},
                 "ebitda": {"path": [2024, 2673, 3300],
-                           "source": "paparan publik emiten Q2-2026",
+                           "source": f"sectors_cache {quarterly}",
                            "note": "margin 50-68%, biaya/ton turun saat ramp"},
                 "net_profit": {"path": [909, 1462, 1992],
-                               "source": "asumsi-berlabel: ikut margin historis",
+                               "source": f"sectors_cache {quarterly}",
                                "note": "asumsi-berlabel: net margin 22-41% bertahap"},
                 "capex": {"path": [498, 305, 318],
-                          "source": "cache filings FY2025A + normalisasi",
+                          "source": f"sectors_cache {quarterly}",
                           "note": "post-build normalisation dari 1.424 FY2025A"},
             }}
 
 
+def _news_item():
+    return {
+        "title": "AMMN shares rise as copper prices rally",
+        "body": "Cached article says tight copper supply and stronger demand lifted "
+                "benchmark prices and supported AMMN share momentum. It cautions that "
+                "benchmark moves do not equal realized company prices.",
+        "source": "https://news.example.test/ammn-copper-rally",
+        "timestamp": "2026-09-09T09:17:00",
+        "symbols": ["AMMN.JK"],
+    }
+
+
+def _news_analysis():
+    news = _news_item()
+    return [{
+        "summary": "Copper-market strength coincided with renewed buying interest in AMMN.",
+        "connection": "Higher benchmarks can support market sentiment and potential netbacks, "
+                      "but the cache has no realized-price bridge to quantify EBITDA or FCF.",
+        "caveat": "This is media-reported market context, not company guidance or an earnings fact.",
+        "source": f"sectors_cache /news/ | {news['title']} | {news['source']}",
+        "timestamp": news["timestamp"],
+    }]
+
+
 def test_lolos():
     assert gate(good()) == []
+
+
+def test_facts_optional_and_source_backed_rows_pass():
+    # Legacy driver payloads remain valid without the optional facts field.
+    assert gate(good()) == []
+
+    d = good()
+    d["facts"] = [{
+        "claim": "Phase 8 ore throughput",
+        "value": 18.0,
+        "unit": "Mtpa",
+        "period": "FY2026F",
+        "status": "management guidance",
+        "source": "sectors_cache /mining/companies/performance/TEST/",
+        "source_date": "2026-06-29",
+        "page": 12,
+        "asset": "Batu Hijau",
+        "project": "Phase 8",
+        "bridge_stage": "throughput",
+    }, {
+        "claim": "Smelter commissioning status",
+        "value": "commissioning underway",
+        "unit": "text",
+        "period": "as of 2026-06-29",
+        "status": "reported actual",
+        "source": "sectors_cache /mining/companies/performance/TEST/",
+        "source_date": "2026-06-29",
+        "page": "p. 15",
+        "asset": "Smelter",
+    }, {
+        "claim": "Quarterly revenue",
+        "value": 0,
+        "unit": "USD mn",
+        "period": "1Q2026A",
+        "status": "reported actual",
+        "source": "sectors_cache /financials/quarterly/TEST/",
+        "source_date": "2026-04-30",
+        "page": None,
+        "metric": "revenue",
+    }]
+    assert gate(d) == []
+
+
+def test_cache_news_analysis_schema_passes():
+    d = good()
+    d["news_analysis"] = _news_analysis()
+    assert gate(d) == []
+
+
+def test_fact_bridge_stage_enum_matches_release_contract():
+    from agents.estimator.schema import FACT_BRIDGE_STAGES
+    from app.release import OPERATING_BRIDGE_STAGES
+    assert FACT_BRIDGE_STAGES == OPERATING_BRIDGE_STAGES
+
+
+@pytest.mark.parametrize("field,value", [
+    ("metric", ""),
+    ("metric", "ore_throughput"),
+    ("bridge_stage", ""),
+    ("bridge_stage", "unknown_stage"),
+])
+def test_facts_reject_empty_or_unknown_optional_tags(field, value):
+    d = good()
+    d["facts"] = [{
+        "claim": "Ore throughput",
+        "value": 18,
+        "unit": "Mtpa",
+        "period": "FY2026F",
+        "status": "management guidance",
+        "source": "sectors_cache /mining/companies/performance/AMMN/",
+        "source_date": "2026-06-29",
+        "page": 12,
+        field: value,
+    }]
+    assert any(f"facts[0].{field}" in issue for issue in gate(d))
+
+
+@pytest.mark.parametrize("field,value", [
+    ("claim", ""),
+    ("value", None),
+    ("unit", ""),
+    ("period", ""),
+    ("status", ""),
+    ("source", ""),
+    ("source_date", "29-06-2026"),
+    ("page", 0),
+])
+def test_facts_reject_invalid_required_fields(field, value):
+    d = good()
+    d["facts"] = [{
+        "claim": "Ore throughput",
+        "value": 18,
+        "unit": "Mtpa",
+        "period": "FY2026F",
+        "status": "management guidance",
+        "source": "sectors_cache /mining/companies/performance/AMMN/",
+        "source_date": "2026-06-29",
+        "page": 12,
+    }]
+    d["facts"][0][field] = value
+    assert any(f"facts[0].{field}" in issue for issue in gate(d))
+
+
+def test_facts_reject_missing_provenance_and_malformed_collections():
+    d = good()
+    d["facts"] = [{"claim": "Ore throughput", "value": 18}]
+    issues = gate(d)
+    assert any("field hilang: source" in issue for issue in issues)
+    assert any("field hilang: source_date" in issue for issue in issues)
+    assert any("field hilang: page" in issue for issue in issues)
+
+    d["facts"] = {"claim": "not a list"}
+    assert any("facts harus list" in issue for issue in gate(d))
+
+
+def test_facts_reject_empty_asset_or_project_when_provided():
+    d = good()
+    d["facts"] = [{
+        "claim": "Ore throughput",
+        "value": 18,
+        "unit": "Mtpa",
+        "period": "FY2026F",
+        "status": "management guidance",
+        "source": "sectors_cache /mining/companies/performance/AMMN/",
+        "source_date": "2026-06-29",
+        "page": 12,
+        "project": " ",
+    }]
+    assert any("facts[0].project" in issue for issue in gate(d))
 
 
 def test_tolak_tanpa_sumber():
@@ -65,6 +219,7 @@ def test_plan_dry_run_tanpa_llm():
     p = plan("AMMN", ["2026F", "2027F", "2028F"])
     assert p["n_endpoints"] > 0
     assert "write_drivers" in p["tools"]
+    assert "fetch_public" not in p["tools"]
 
 
 def test_live_reads_cache_itself_then_requests_final(monkeypatch):
@@ -80,7 +235,6 @@ def test_live_reads_cache_itself_then_requests_final(monkeypatch):
         return {"endpoint": endpoint, "payload": "verified evidence"}
     monkeypatch.setattr(tools, "cache_get", cache_get)
     monkeypatch.setattr(tools, "write_drivers", lambda ticker, doc: saved.append(doc) or "drivers.json")
-    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [])
     def chat(messages, **kwargs):
         prompt = messages[-1]["content"]
         assert "verified evidence" in prompt
@@ -98,9 +252,9 @@ def test_live_reads_cache_itself_then_requests_final(monkeypatch):
 def test_live_gate_repair_includes_candidate_and_gate_reasons(monkeypatch):
     from agents.estimator import run
     from agents.estimator import tools
-    monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: [])
-    monkeypatch.setattr(tools, "cache_get", lambda *args: None)
-    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [])
+    endpoint = "/financials/quarterly/AMMN/"
+    monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: [endpoint])
+    monkeypatch.setattr(tools, "cache_get", lambda *args: {"data": []})
     saved = []
     monkeypatch.setattr(tools, "write_drivers", lambda ticker, doc: saved.append(doc) or "drivers.json")
     invalid = good()
@@ -126,9 +280,9 @@ def test_live_gate_repair_includes_candidate_and_gate_reasons(monkeypatch):
 def test_live_invalid_json_repair_receives_truncated_response(monkeypatch):
     from agents.estimator import run
     from agents.estimator import tools
-    monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: [])
-    monkeypatch.setattr(tools, "cache_get", lambda *args: None)
-    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [])
+    endpoint = "/financials/quarterly/AMMN/"
+    monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: [endpoint])
+    monkeypatch.setattr(tools, "cache_get", lambda *args: {"data": []})
     monkeypatch.setattr(tools, "write_drivers", lambda *args: "drivers.json")
     calls = []
     def chat(messages, **kwargs):
@@ -147,24 +301,11 @@ def test_live_invalid_json_repair_receives_truncated_response(monkeypatch):
 
 
 
-def test_public_forecast_evidence_exposes_published_driver_paths():
-    from agents.estimator.run import public_forecast_evidence
-    rows = public_forecast_evidence("AMMN")
-    kb = rows[0]
-    assert kb["years"] == ["2026F", "2027F", "2028F"]
-    assert kb["revenue"] == [3789, 4179, 4475]
-    assert kb["ebitda"] == [1937, 2139, 2558]
-    assert kb["net_profit"] == [806, 899, 1170]
-    assert kb["capex"] == [1137, 1045, 1119]
-    assert "kbvalbury.com" in kb["url"]
-
-
 def test_live_reports_insufficient_evidence_without_calling_write(monkeypatch):
     from agents.estimator import run
     from agents.estimator import tools
     monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: ["/financials/quarterly/AMMN/"])
     monkeypatch.setattr(tools, "cache_get", lambda *args: {"data": []})
-    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [])
     monkeypatch.setattr(tools, "write_drivers", lambda *args: pytest.fail("must not write"))
     monkeypatch.setattr(run, "_chat", lambda messages, **kwargs: json.dumps({
         "final": {"missing_evidence": ["forecast consensus"], "available_facts": ["quarterly actuals"]}}))
@@ -176,63 +317,11 @@ def test_live_reports_insufficient_evidence_without_calling_write(monkeypatch):
     assert "bukti belum cukup" in result["error"]
 
 
-def test_structured_forecasts_build_driver_paths_without_llm(monkeypatch):
-    from agents.estimator import run
-    from agents.estimator import tools
-    years = ["2026F", "2027F", "2028F"]
-    source = {
-        "source": "Verified research report",
-        "url": "https://example.test/report.pdf",
-        "currency": "USD million",
-        "years": years,
-        "revenue": [10, 11, 12],
-        "ebitda": [4, 5, 6],
-        "net_profit": [2, 3, 4],
-        "capex": [1, 1, 2],
-        "capex_basis": "fixed-asset outflow proxy",
-    }
-    monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: [])
-    monkeypatch.setattr(tools, "cache_get", lambda *args: None)
-    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [source])
-    monkeypatch.setattr(run, "_chat", lambda *args, **kwargs: pytest.fail("LLM not needed"))
-    saved = []
-    monkeypatch.setattr(tools, "write_drivers",
-                        lambda ticker, doc: saved.append(doc) or "drivers.json")
-
-    result = run.run_live("TEST", years)
-
-    assert result["ok"] is True
-    assert result["method"] == "structured-source"
-    assert len(saved) == 1
-    doc = saved[0]
-    assert doc["ticker"] == "TEST"
-    assert doc["drivers"]["revenue"]["path"] == source["revenue"]
-    assert doc["drivers"]["capex"]["path"] == source["capex"]
-    assert source["url"] in doc["drivers"]["revenue"]["source"]
-    assert gate(doc) == []
-
-
-def test_structured_forecast_requires_complete_year_series():
-    from agents.estimator.run import _forecast_candidate
-    source = {
-        "source": "Verified research report", "url": "https://example.test/report.pdf",
-        "currency": "USD million", "years": ["2026F", "2027F"],
-        "revenue": [10, 11], "ebitda": [4, 5], "net_profit": [2, 3], "capex": [1, 1],
-    }
-    assert _forecast_candidate("TEST", ["2026F", "2027F", "2028F"], [source]) is None
-
-
 def test_agentic_mode_chooses_and_executes_cache_tool_before_writing(monkeypatch):
     from agents.estimator import run
     from agents.estimator import tools
     years = ["2026F", "2027F", "2028F"]
     endpoint = "/financials/quarterly/TEST/"
-    source = {
-        "source": "Verified research report", "url": "https://example.test/report.pdf",
-        "currency": "USD million", "years": years,
-        "revenue": [10, 11, 12], "ebitda": [4, 5, 6],
-        "net_profit": [2, 3, 4], "capex": [1, 1, 2],
-    }
     reads = []
     saved = []
     calls = []
@@ -241,7 +330,6 @@ def test_agentic_mode_chooses_and_executes_cache_tool_before_writing(monkeypatch
         reads.append((ticker, requested_endpoint))
         return {"data": [{"date": "2026-03-31", "revenue": 9}]}
     monkeypatch.setattr(tools, "cache_get", cache_get)
-    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [source])
     monkeypatch.setattr(tools, "write_drivers",
                         lambda ticker, doc: saved.append(doc) or "drivers.json")
     def chat(messages, **kwargs):
@@ -249,22 +337,76 @@ def test_agentic_mode_chooses_and_executes_cache_tool_before_writing(monkeypatch
         if len(calls) == 1:
             return json.dumps({"tool": "cache_get", "args": ["TEST", endpoint]})
         assert "2026-03-31" in messages[-1]["content"]
-        return json.dumps({"final": {"decision": "ready",
-                                      "selected_cache_endpoints": [endpoint],
-                                      "reason": "Quarterly actuals reviewed."}})
+        return json.dumps({"final": good("TEST")})
     monkeypatch.setattr(run, "_chat", chat)
 
     result = run.run_live("TEST", years, agentic=True)
 
     assert result["ok"] is True
-    assert result["method"] == "agentic-structured-source"
+    assert result["method"] == "agentic-cache-only"
     assert result["agent_tool_calls"] == 1
-    assert result["agent_decision"] == {"decision": "ready",
+    assert result["agent_decision"] == {"decision": "drivers_submitted",
                                          "selected_cache_endpoints": [endpoint]}
     assert reads == [("TEST", endpoint)]
     assert len(calls) == 2
     assert len(saved) == 1
-    assert saved[0]["drivers"]["revenue"]["path"] == source["revenue"]
+    assert saved[0]["drivers"]["revenue"]["source"] == \
+        "sectors_cache /financials/quarterly/TEST/"
+
+
+def test_agentic_news_is_paraphrased_and_connected_to_drivers(monkeypatch):
+    from agents.estimator import run
+    from agents.estimator import tools
+    quarter = "/financials/quarterly/TEST/"
+    endpoints = [quarter, "/news/"]
+    news = _news_item()
+    monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: endpoints)
+    def cache_get(ticker, endpoint):
+        if endpoint == "/news/":
+            return {"results": [news]}
+        return {"data": [{"date": "2026-03-31", "revenue": 9}]}
+    monkeypatch.setattr(tools, "cache_get", cache_get)
+    monkeypatch.setattr(tools, "write_drivers", lambda ticker, doc: "drivers.json")
+    saved_news = []
+    monkeypatch.setattr(tools, "write_news_analysis",
+                        lambda ticker, doc: saved_news.append(doc) or "news.json")
+    calls = []
+    def chat(messages, **kwargs):
+        calls.append(messages)
+        if len(calls) == 1:
+            return json.dumps({"tool": "cache_get", "args": ["TEST", quarter]})
+        if len(calls) == 2:
+            return json.dumps({"tool": "cache_get", "args": ["TEST", "/news/"]})
+        assert "parafrasa" in messages[1]["content"]
+        assert news["body"] in messages[-1]["content"]
+        result = good("TEST")
+        result["news_analysis"] = _news_analysis()
+        return json.dumps({"final": result})
+    monkeypatch.setattr(run, "_chat", chat)
+
+    result = run.run_live("TEST", ["2026F", "2027F", "2028F"], agentic=True)
+
+    assert result["ok"] is True
+    assert result["agent_tool_calls"] == 2
+    assert result["agent_decision"]["selected_cache_endpoints"] == sorted(["/news/", quarter])
+    assert result["news_analysis_path"] == "news.json"
+    assert saved_news[0]["news_analysis"] == _news_analysis()
+
+
+def test_news_gate_requires_exact_cached_timestamp_and_url():
+    from agents.estimator.run import _news_analysis_problems
+
+    article = _news_item()
+    analysis = _news_analysis()[0]
+    assert _news_analysis_problems({"news_analysis": [analysis]}, [article]) == []
+
+    bad_timestamp = {**analysis, "timestamp": "2026-09-08T09:17:00"}
+    assert any("timestamp" in problem for problem in _news_analysis_problems(
+        {"news_analysis": [bad_timestamp]}, [article]))
+
+    bad_url = {**analysis, "source": analysis["source"] + " https://outside.test/story"}
+    assert any("URL" in problem for problem in _news_analysis_problems(
+        {"news_analysis": [bad_url]}, [article]))
 
 
 def test_agentic_mode_rejects_endpoint_outside_allowlist(monkeypatch):
@@ -272,7 +414,6 @@ def test_agentic_mode_rejects_endpoint_outside_allowlist(monkeypatch):
     from agents.estimator import tools
     monkeypatch.setattr(tools, "cache_endpoints",
                         lambda ticker: ["/financials/quarterly/TEST/"])
-    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [])
     monkeypatch.setattr(run, "_chat", lambda *args, **kwargs: json.dumps({
         "tool": "cache_get", "args": ["TEST", "/company/secret/TEST/"]}))
     monkeypatch.setattr(tools, "cache_get",
@@ -331,10 +472,41 @@ def test_live_invalid_json_stops_after_repair_attempt(monkeypatch, tmp_path):
     from agents.estimator import tools
     monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: [])
     monkeypatch.setattr(tools, "cache_get", lambda *args: None)
-    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [])
     monkeypatch.setattr(tools, "DRIVERS_DIR", tmp_path)
     monkeypatch.setattr(run, "_chat", lambda messages, **kwargs: "not json")
     result = run.run_live("AMMN", ["2026F", "2027F", "2028F"])
     assert result["ok"] is False
     assert "JSON" in result["error"]
     assert not (tmp_path / "AMMN.json").exists()
+
+
+def test_news_cache_is_ticker_filtered_and_cut_off_at_cached_as_of(monkeypatch, tmp_path):
+    import sqlite3
+    from agents.estimator import tools
+
+    db = tmp_path / "cache.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE sectors_cache (cache_key TEXT PRIMARY KEY, endpoint TEXT, "
+                "fetched_at REAL, expires_at REAL, payload_json TEXT)")
+    report = {"overview": {"latest_close_date": "2026-09-11"}}
+    news = {"results": [
+        {"title": "AMMN before as-of", "timestamp": "2026-09-10T12:00:00",
+         "symbols": ["AMMN.JK"]},
+        {"title": "AMMN after as-of", "timestamp": "2026-09-12T12:00:00",
+         "symbols": ["AMMN.JK"]},
+        {"title": "Other ticker", "timestamp": "2026-09-10T12:00:00",
+         "symbols": ["BBCA.JK"]},
+    ]}
+    con.executemany("INSERT INTO sectors_cache VALUES (?,?,?,?,?)", [
+        ("report", "/company/report/AMMN/", 1, 2, json.dumps(report)),
+        ("news", "/news/", 1, 2, json.dumps(news)),
+    ])
+    con.commit()
+    con.close()
+    monkeypatch.setattr(tools, "CACHE_DB", db)
+
+    endpoints = tools.cache_endpoints("AMMN")
+    payload = tools.cache_get("AMMN", "/news/")
+
+    assert "/news/" in endpoints
+    assert [row["title"] for row in payload["results"]] == ["AMMN before as-of"]
