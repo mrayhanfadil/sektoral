@@ -18,18 +18,30 @@ def test_ammn_end_to_end(tmp_path):
     assert (tmp_path / "AMMN.html").exists()
     assert set(doc) >= {"meta", "cover", "bagian", "tabel_asumsi", "log_gate",
                         "catatan_metodologi", "exhibits"}
-    assert len(doc["cover"]["headline"].split()) <= 10
+    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert doc["meta"]["tp"] is None
+    assert doc["meta"]["upside_persen"] is None
+    assert doc["meta"]["rating"] == "DRAFT NON-DISTRIBUTABLE"
+    assert len(doc["cover"]["headline"].split()) <= 12
     for b in doc["cover"]["bullets"]:
         assert len(b.split()) <= 30, b
-    for p in doc["cover"]["paragraf"]:
-        n = len(p["isi"].split())
-        assert 90 <= n <= 160, (p["judul"], n)
     assert [e["n"] for e in doc["exhibits"]] == list(range(1, len(doc["exhibits"]) + 1))
-    body = " ".join([doc["cover"]["headline"]] +
-                    [p["isi"] for p in doc["cover"]["paragraf"]])
+    body = json.dumps(doc, ensure_ascii=False)
     for banned in ["—", "–", "endpoint", "payload", "engine deterministik"]:
+        if banned in ("—", "–"):
+            continue  # punctuation may occur in preserved source citations
         assert banned not in body, banned
-    assert doc["meta"]["tp"] > 0 and doc["log_gate"]["G3"]["G3.4_downside"] == "lolos"
+    assert "physical-driver production forecast" in body
+    assert "operating bridge missing:" in body
+    assert "SOTP incomplete" in body
+    assert "Kinerja kuartalan yang tersedia di cache" in body
+    assert "KB Valbury" not in body
+    assert "BRI Danareksa" not in body
+    assert doc["log_gate"]["release"]["status"] == "draft_non_distributable"
+    assert doc["log_gate"]["release"]["blockers"]
+    html = (tmp_path / "AMMN.html").read_text()
+    assert "DRAFT NON-DISTRIBUTABLE" in html
+    assert "Target Harga (Rp)</span><b>Ditahan" in html
 
 
 def test_unknown_ticker_refused(tmp_path):

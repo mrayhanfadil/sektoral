@@ -25,27 +25,30 @@ def test_tanpa_string_bocor_di_json(tmp_path):
         assert s not in blob, s
 
 
-def test_disclaimer_kondisional_pakai_umur_aktual(tmp_path):
+def test_draft_does_not_promote_cache_reserve_life_to_valuation(tmp_path):
     d = _doc(tmp_path)
     notes = " ".join(d["catatan_metodologi"]).lower()
+    assert d["meta"]["tp"] is None
     assert "umur cadangan tidak ada di cache" not in notes
-    assert "73" in notes  # umur cadangan aktual dari overlay mining
+    assert "rnav annuitas indikatif" in notes
+    assert "bukan nilai wajar" in notes
 
 
-def test_tp_ekstrem_ada_tesis(tmp_path):
+def test_incomplete_mining_inputs_withhold_target_and_rating(tmp_path):
     d = _doc(tmp_path)
-    assert abs(d["meta"]["upside_persen"]) > 50
-    val_sec = next(b for b in d["bagian"] if b["judul"] == "Valuasi")
-    assert len(val_sec["paragraf"]) >= 3  # base + tesis + keterbatasan (+ LoM)
-    assert any("keterbatasan utama" in p.lower() for p in val_sec["paragraf"])
+    assert d["meta"]["upside_persen"] is None
+    assert d["meta"]["rating"] == "DRAFT NON-DISTRIBUTABLE"
+    val_sec = next(b for b in d["bagian"]
+                   if b["judul"] == "Valuasi dan kelengkapan model")
+    assert any("target harga dan rating ditahan" in p.lower()
+               for p in val_sec["paragraf"])
 
 
-def test_katalis_tidak_mengandung_skor(tmp_path):
+def test_draft_does_not_publish_unsourced_catalysts(tmp_path):
     d = _doc(tmp_path)
-    kat = next(e for e in d["exhibits"] if e["judul"] == "Katalis")
-    blob = json.dumps(kat["data"], ensure_ascii=False)
-    assert "kurasi" not in blob.lower()
-    assert len(kat["data"]["rows"]) >= 1
+    assert not any(e["judul"] == "Katalis" for e in d["exhibits"])
+    assert any("Kelengkapan sebelum rilis" == e["judul"]
+               for e in d["exhibits"])
 
 
 def test_pdf_tanpa_simbol_dolar(tmp_path):

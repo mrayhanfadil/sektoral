@@ -25,7 +25,262 @@ def _word_cut(s, cap=64):
     return s[:cut].rstrip() if cut > 0 else s[:cap]
 
 
+def _draft_value(value):
+    return "-" if value is None else fmt.miliar(value)
+
+
+def _rnav_exhibit(lom, cash_idr, debt_idr, shares, discount_pct=0.0):
+    """Convert LoM Rp-billion asset values to the raw-IDR table contract."""
+    assets = [{"nama": stream["nama"], "nav": stream["nav_rpbn"] * 1e9,
+               "kepemilikan": stream["kepemilikan"], "ukuran": stream["ukuran"]}
+              for stream in lom["streams"]]
+    return valtables.rnav_exhibits(
+        assets, cash_idr, debt_idr, 0, shares, discount_pct)
+
+
+def _build_draft(intake, fc, va, g1):
+    """Build a clearly non-distributable evidence/status report.
+
+    Do not expose the legacy DCF target or imply that the historical-CAGR
+    mining screen is a production forecast. All reported facts come from the
+    Sectors cache; local research documents and analyst estimate files are
+    deliberately excluded.
+    """
+    t, name = intake["ticker"], intake["name"]
+    release_result = va.get("release") or {}
+    blockers = release_result.get("blockers") or [
+        "production release gate has no validated result"
+    ]
+    profile = intake.get("model_profile") or "unsupported"
+    A = intake.get("annuals") or []
+    F = fc.get("rows") or []
+    exhibits = []
+
+    def add(title, columns, rows, source):
+        exhibits.append({"n": len(exhibits) + 1, "judul": title, "tipe": "tabel",
+                         "data": {"cols": columns, "rows": rows},
+                         "catatan_sumber": source})
+        return len(exhibits)
+
+    hist = A[-3:]
+    hist_rows = [
+        ["Pendapatan (Rp miliar)"] + [_draft_value(a.get("revenue")) for a in hist],
+        ["EBITDA (Rp miliar)"] + [_draft_value(a.get("ebitda")) for a in hist],
+        ["Laba bersih (Rp miliar)"] + [_draft_value(a.get("earnings")) for a in hist],
+    ]
+    hist_no = add("Laporan historis di cache",
+                  ["Metrik"] + [str(a.get("year", "-")) for a in hist], hist_rows,
+                  "Sumber: Sectors cache, company/report; angka historis belum direkonsiliasi ke interim terbaru.")
+
+    quarter = intake.get("latest_quarterly_actual")
+    quarter_no = None
+    if isinstance(quarter, dict):
+        quarter_metrics = (
+            ("Pendapatan (Rp miliar)", "revenue"),
+            ("EBITDA (Rp miliar)", "ebitda"),
+            ("Laba bersih (Rp miliar)", "earnings"),
+            ("Capex (Rp miliar)", "capital_expenditure"),
+            ("Arus kas operasi (Rp miliar)", "operating_cash_flow"),
+            ("Arus kas bebas (Rp miliar)", "free_cash_flow"),
+        )
+        quarter_rows = [[label, _draft_value(quarter.get(key))]
+                         for label, key in quarter_metrics]
+        period_end = str(quarter.get("date") or "-")
+        quarter_no = add(
+            "Kinerja kuartalan yang tersedia di cache",
+            ["Metrik", period_end], quarter_rows,
+            f"Sumber: Sectors cache, financials/quarterly/{t}; tanggal adalah akhir periode. "
+            "Cache tidak menyimpan tanggal publikasi/halaman untuk memvalidasi ketersediaan historis.")
+
+    screening_no = None
+    if F:
+        screen_rows = [
+            ["Pendapatan (Rp miliar)"] + [_draft_value(r.get("revenue")) for r in F],
+            ["EBITDA (Rp miliar)"] + [_draft_value(r.get("ebitda")) for r in F],
+            ["Laba bersih (Rp miliar)"] + [_draft_value(r.get("net")) for r in F],
+            ["Capex (Rp miliar)"] + [_draft_value(r.get("capex")) for r in F],
+        ]
+        screening_no = add(
+            "Screen historis (bukan forecast produksi)",
+            ["Metrik"] + [str(r.get("label", "-")) for r in F], screen_rows,
+            "Basis: CAGR pendapatan historis dan margin; capex proyek belum terjadwal. "
+            "Hanya diagnostik internal, tidak digunakan untuk target harga.")
+
+    news_no = None
+    news_analysis = intake.get("news_analysis") or []
+    news_rows, news_sources = [], []
+    for item in news_analysis:
+        if not isinstance(item, dict):
+            continue
+        news_rows.append([
+            str(item.get("timestamp", ""))[:10] or "-",
+            str(item.get("summary", "-")),
+            str(item.get("connection", "-")),
+            str(item.get("caveat", "-")),
+        ])
+        if item.get("source"):
+            news_sources.append(str(item["source"]))
+    if news_rows:
+        news_no = add(
+            "Konteks berita dari cache dan implikasi",
+            ["Tanggal", "Narasi ulang", "Kaitan ke tesis", "Batasan"], news_rows,
+            "Analisis agen atas berita ticker-spesifik di sectors_cache /news/. "
+            "Berita adalah konteks media, bukan guidance; tidak mengubah forecast numerik "
+            "tanpa dukungan data finansial/operasi cache. Referensi: " +
+            "; ".join(news_sources))
+
+    blocker_groups = {}
+    for item in blockers:
+        if item.startswith("latest interim actuals"):
+            latest_date = ((intake.get("latest_quarterly_actual") or {}).get("date")
+                           or "belum tersedia")
+            blocker_groups["Validasi interim dari cache"] = (
+                f"Baris kuartalan terakhir berakhir {latest_date}; cache belum memberi "
+                "tanggal publikasi dan metadata kelengkapan untuk membuktikan data terbaru "
+                f"per {intake.get('as_of') or intake.get('price_date')}.")
+        elif item.startswith("operating bridge"):
+            blocker_groups["Jembatan operasi ke keuangan"] = (
+                "Belum ada rangkaian bukti yang menghubungkan produksi fisik ke penjualan, "
+                "biaya, EBITDA, capex, modal kerja, utang dan FCFF.")
+        elif item.startswith("mining forecast"):
+            blocker_groups["Forecast fisik tambang"] = (
+                "Forecast fisik-ke-keuangan belum dihitung dan direkonsiliasi; CAGR hanya screening.")
+        elif item.startswith("SOTP"):
+            blocker_groups["Valuasi SOTP/LoM"] = (
+                "NAV per aset dan/atau jembatan ekuitas belum lengkap; target harga ditahan.")
+        else:
+            blocker_groups[item] = "Belum terpenuhi."
+    blocker_no = add(
+        "Kelengkapan sebelum rilis", ["Pemeriksaan", "Yang masih diperlukan"],
+        [[label, detail] for label, detail in blocker_groups.items()],
+        "Status ini memblokir distribusi laporan; detail validasi mesin tersimpan pada artefak JSON.")
+
+    sotp = va.get("sotp") or {}
+    sotp_gaps = sotp.get("gaps") or []
+    sotp_labels = {
+        "assets": "Daftar aset dan NAV",
+        "cash_idr": "Kas",
+        "debt_idr": "Utang",
+        "minority_interest_idr": "Kepentingan nonpengendali",
+        "corporate_overhead_idr": "Nilai kini overhead korporat",
+        "shares": "Saham terdilusi",
+        "discount_pct": "Diskon risiko",
+    }
+    sotp_reason_labels = {
+        "required; provide at least one asset": "Tambahkan sedikitnya satu aset bernilai.",
+        "required finite numeric value": "Nilai numerik wajib tersedia; tidak boleh diasumsikan nol.",
+        "required finite numeric value in raw IDR": "NAV wajib numerik dalam IDR mentah.",
+        "required non-empty text": "Isi nama/status/metode dan provenance sumber.",
+        "required finite percentage from 0 to 100": "Persentase kepemilikan wajib bersumber dan antara 0-100.",
+    }
+    sotp_rows = []
+    for gap in sotp_gaps:
+        if not isinstance(gap, dict):
+            continue
+        path = str(gap.get("path", "SOTP"))
+        top_field = path.split(".", 1)[0]
+        label = sotp_labels.get(path, sotp_labels.get(top_field, path))
+        reason = str(gap.get("reason", "-"))
+        reason = sotp_reason_labels.get(reason, reason)
+        if path.startswith("assets["):
+            label = "Aset: " + path.split(".", 1)[-1].replace("_", " ")
+        sotp_rows.append([label, reason])
+    if not sotp_rows:
+        sotp_rows = [["SOTP", "Valuasi belum lengkap"]]
+    sotp_no = add(
+        "Input SOTP yang belum lengkap",
+        ["Input", "Kekurangan"], sotp_rows,
+        "SOTP/LoM adalah metode utama untuk aset finite-life. Nilai tidak diisi nol; "
+        "target harga ditahan sampai NAV aset dan jembatan ekuitas tervalidasi.")
+
+    profile_basis = intake.get("model_profile_basis") or "basis profil tidak tersedia"
+    price_date = intake.get("price_date")
+    profile_text = (f"Model profile: {profile} ({profile_basis}). Fakta yang ditampilkan "
+                    "dan angka historis hanya berasal dari sectors cache. Belum ada "
+                    "forecast fisik-ke-keuangan yang lolos rekonsiliasi; nilai CAGR dan "
+                    "RNAV annuitas tidak dipakai sebagai target.")
+    release_text = ("Dokumen ini berstatus DRAFT NON-DISTRIBUTABLE. Target harga dan "
+                    "rating ditahan karena data interim, forecast fisik, dan provenance "
+                    "yang tersedia di cache belum lengkap; SOTP/LoM belum dapat direkonsiliasi. "
+                    "Tidak ada target DCF substitusi.")
+    sections = [
+        {"halaman": 2, "judul": "Kinerja dan bukti yang tersedia",
+         "layout": "stack",
+         "paragraf": [profile_text],
+         "exhibit": [exhibits[hist_no - 1]] +
+                    ([exhibits[quarter_no - 1]] if quarter_no else [])},
+        {"halaman": 3, "judul": "Valuasi dan kelengkapan model",
+         "paragraf": [release_text],
+         "exhibit": [exhibits[blocker_no - 1], exhibits[sotp_no - 1]]},
+    ]
+    next_page = 4
+    if news_no:
+        sections.append({"halaman": next_page, "judul": "Konteks berita dan kaitannya ke tesis",
+                         "layout": "stack",
+                         "paragraf": ["Ringkasan berikut diparafrase dari berita dalam cache. "
+                                      "Kaitan ke operasi/laba dibedakan dari sentimen pasar; "
+                                      "berita tidak menjadi asumsi angka tanpa bukti cache."],
+                         "exhibit": [exhibits[news_no - 1]]})
+        next_page += 1
+    if screening_no:
+        sections.append({"halaman": next_page, "judul": "Screen historis untuk diskusi internal",
+                         "paragraf": ["Angka berikut adalah screening berbasis data historis, "
+                                      "bukan estimasi produksi, guidance, atau target harga."],
+                         "exhibit": [exhibits[screening_no - 1]]})
+
+    price = intake["price"]
+    market_cap = intake["market_cap"]
+    return {
+        "meta": {"ticker": t, "emiten": name, "tanggal": price_date,
+                 "status": "draft_non_distributable",
+                 "rating": "DRAFT NON-DISTRIBUTABLE", "tp": None,
+                 "harga": price, "upside_persen": None},
+        "cover": {
+            "headline": "Target Harga Ditahan: SOTP dan Forecast Belum Lengkap",
+            "bullets": [
+                "Tidak ada rating atau target harga yang layak didistribusikan.",
+                "Data sumber dibatasi pada sectors cache; sumber riset eksternal tidak dipakai.",
+                "Berita yang lolos validasi diparafrase dan dihubungkan ke tesis dengan caveat.",
+                "SOTP/LoM belum dapat direkonsiliasi dari input yang tersedia.",
+            ],
+            "paragraf": [
+                {"judul": "Status riset", "isi": release_text},
+                {"judul": "Basis model", "isi": profile_text},
+            ],
+            "data_pasar": {"harga": price, "tp": None,
+                            "saham": intake["shares"], "market_cap": market_cap,
+                            "adtv": "-", "free_float": "-"},
+            "key_financials": hist_rows,
+        },
+        "bagian": sections,
+        "tabel_asumsi": [],
+        "log_gate": {"G1": g1.get("G1", {}), "G2": fc.get("g2", {}),
+                     "G3": {}, "release": release_result},
+        "method": "SOTP/LoM (belum lengkap)",
+        "method_select": "auto", "holders": [],
+        "catatan_metodologi": [
+            "DRAFT NON-DISTRIBUTABLE: target harga dan rating ditahan.",
+            "SOTP/LoM memerlukan NAV per aset, kepemilikan, net debt, minority interest, "
+            "overhead korporat dan saham terdilusi dengan provenance.",
+            "Validasi latest interim memakai metadata yang tersedia di cache; data di luar cache tidak dipakai.",
+            "News context hanya memakai berita ticker-spesifik dari cache dan tidak langsung menjadi angka forecast.",
+            "Forecast tambang harus dihitung dari driver fisik; proyeksi CAGR hanya screening.",
+            "RNAV annuitas indikatif dari overlay cache bukan nilai wajar karena bukan SOTP asset-level.",
+        ],
+        "exhibits": exhibits,
+    }
+
+
 def build(intake, fc, va, g1, method="auto"):
+    method = (method or "auto").lower()
+    if method not in ("auto", "dcf", "ddm", "rnav"):
+        raise ValueError(f"method tak dikenal: {method} (auto|dcf|ddm|rnav)")
+    if method == "ddm" and intake.get("payout") is None:
+        raise ValueError("method ddm ditolak: tanpa payout di cache")
+    if method == "rnav" and not intake.get("mineops"):
+        raise ValueError("method rnav ditolak: tanpa overlay operasional di cache")
+    if (va.get("release") or {}).get("status") != "distributable":
+        return _build_draft(intake, fc, va, g1)
     t, name = intake["ticker"], intake["name"]
     A, F = intake["annuals"], fc["rows"]
     last, rev_last = A[-1], A[-1]["revenue"]
@@ -391,11 +646,8 @@ def build(intake, fc, va, g1, method="auto"):
     lom = va.get("lom")
     p_lom = None
     if lom:
-        assets = [{"nama": s["nama"], "nav": s["nav_rpbn"],
-                   "kepemilikan": s["kepemilikan"], "ukuran": s["ukuran"]}
-                  for s in lom["streams"]]
-        _rn = valtables.rnav_exhibits(assets, fc["base"]["cash"], fc["base"]["debt"],
-                                      0, intake["shares"], 0.0)
+        _rn = _rnav_exhibit(lom, fc["base"]["cash"], fc["base"]["debt"],
+                            intake["shares"])
         E(_rn["judul"], _rn["tipe"], _rn["data"],
           (_rn.get("catatan_sumber") or "Source: Company, Sektoral Estimates") +
           "; diskon 0% (tanpa basis pembanding discount)")

@@ -6,10 +6,11 @@ cache daily. Nomor halaman via CSS counter. Cetak via app/pdf.py (A4).
 """
 import base64
 import html
+import math
 import re
+from datetime import date
 from pathlib import Path
 from . import cache as cache_mod
-from . import fmt
 
 FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 
@@ -51,6 +52,8 @@ CSS = (FONT_FACES + PAGE_NUM +
        + ROYAL_BLUE + ";padding-bottom:3px;font-size:8.1pt;color:" + ROYAL_BLUE + ";font-weight:600}"
        ".rating{font-weight:800;font-size:22pt;color:" + NAVY + ";margin:2px 0 0;line-height:1.1}"
        ".status{font-size:8.5pt;color:" + MUT + ";margin-bottom:3px}"
+       ".draft-banner{background:#fff3e8;border:1px solid #bb4d00;color:#803400;"
+       "font-weight:700;padding:5px 8px;margin:5px 0;font-size:8.5pt}"
        ".cover{display:flex;gap:12px;margin-top:3px}"
        ".left{width:32%;font-size:7.8pt}"
        ".right{width:68%}"
@@ -109,31 +112,107 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".page{page-break-before:always}}")
 
 
-def _price_chart(ticker):
-    """SVG garis harga dari seluruh window daily cache (tanggal unik)."""
-    pts = {}
-    for _, p in cache_mod.payloads(f"/daily/{ticker}/"):
-        for r in (p.get("data") or []):
-            if r.get("date") and r.get("close"):
-                pts[r["date"]] = float(r["close"])
-    dates = sorted(pts)
+def _daily_prices(endpoint, value_field, as_of):
+    """Read dated positive prices; later cache snapshots replace older rows."""
+    cutoff = date.fromisoformat(str(as_of)[:10]) if as_of else None
+    prices = {}
+    for _, payload in cache_mod.payloads(endpoint):
+        for row in payload.get("data") or []:
+            if not isinstance(row, dict):
+                continue
+            try:
+                day = date.fromisoformat(str(row["date"])[:10])
+                value = float(row[value_field])
+            except (KeyError, TypeError, ValueError, OverflowError):
+                continue
+            if value > 0 and math.isfinite(value) and (cutoff is None or day <= cutoff):
+                prices[day] = value
+    return prices
+
+
+def _comparison_series(ticker, as_of):
+    """Align issuer and IHSG on common dates and rebase both to 100."""
+    issuer = _daily_prices(f"/daily/{ticker}/", "close", as_of)
+    ihsg = _daily_prices("/index-daily/ihsg/", "price", as_of)
+    dates = sorted(issuer.keys() & ihsg.keys())
     if len(dates) < 2:
-        return "<p class='small'>[Grafik harga tidak tersedia — data harian kosong]</p>"
-    W, H, P = 220, 85, 6
-    vs = [pts[d] for d in dates]
-    lo, hi = min(vs), max(vs)
-    span = (hi - lo) or 1
-    xy = [(P + i * (W - 2 * P) / (len(vs) - 1), H - P - (v - lo) / span * (H - 2 * P))
-          for i, v in enumerate(vs)]
-    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
-    d0, d1 = dates[0][:7], dates[-1][:7]
-    return (f"<svg width='{W}' height='{H + 14}'><polyline points='{line}' "
-            f"fill='none' stroke='{ROYAL_BLUE}' stroke-width='1.5'/>"
-            f"<text x='{P}' y='{H + 11}' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>{d0}</text>"
-            f"<text x='{W - P - 52}' y='{H + 11}' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>{d1}</text>"
-            f"<text x='{P}' y='10' font-size='8' font-family='Poppins, sans-serif' fill='{MUT}'>Rp{fmt.rp(round(hi))}</text></svg>"
-            f"<p class='src'>Harga {html.escape(ticker)} {len(dates)} hari bursa terakhir "
-            f"dari data lokal. Overlay IHSG absen (window indeks beda periode).</p>")
+        return None
+    issuer_base, ihsg_base = issuer[dates[0]], ihsg[dates[0]]
+    return (dates,
+            [100 * issuer[day] / issuer_base for day in dates],
+            [100 * ihsg[day] / ihsg_base for day in dates])
+
+
+def _price_chart(ticker, as_of):
+    """Plot issuer and IHSG price performance on identical trading dates."""
+    series = _comparison_series(ticker, as_of)
+    if series is None:
+        return ("<p class='small'>Perbandingan harga belum tersedia: "
+                "kurang dari dua tanggal perdagangan yang sama di cache.</p>")
+
+    dates, issuer, ihsg = series
+    all_values = issuer + ihsg
+    padding = max(4, (max(all_values) - min(all_values)) * 0.08)
+    lower = 10 * math.floor((min(all_values) - padding) / 10)
+    upper = 10 * math.ceil((max(all_values) + padding) / 10)
+    if upper <= lower:
+        upper = lower + 10
+    x0, x1, y0, y1 = 32, 232, 17, 91
+    days = (dates[-1] - dates[0]).days
+
+    def xy(day, value):
+        x = x0 + (day - dates[0]).days / days * (x1 - x0)
+        y = y1 - (value - lower) / (upper - lower) * (y1 - y0)
+        return x, y
+
+    def polyline(values, color, dash=""):
+        points = " ".join(f"{x:.1f},{y:.1f}" for x, y in
+                          (xy(day, value) for day, value in zip(dates, values)))
+        dashed = f" stroke-dasharray='{dash}'" if dash else ""
+        end_x, end_y = xy(dates[-1], values[-1])
+        return (f"<polyline points='{points}' fill='none' stroke='{color}' "
+                f"stroke-width='2' stroke-linecap='round' stroke-linejoin='round'{dashed}/>"
+                f"<circle cx='{end_x:.1f}' cy='{end_y:.1f}' r='2.4' fill='{color}'/>")
+
+    ticks = {lower, 100, upper}
+    if 100 - lower >= 40:
+        ticks.add(10 * round((lower + 100) / 20))
+    if upper - 100 >= 40:
+        ticks.add(10 * round((upper + 100) / 20))
+    ticks = sorted(ticks)
+    grid = "".join(
+        f"<line x1='{x0}' x2='{x1}' y1='{xy(dates[0], tick)[1]:.1f}' "
+        f"y2='{xy(dates[0], tick)[1]:.1f}' stroke='{'#aebfd3' if tick == 100 else '#e4ebf3'}' "
+        f"stroke-width='{'1' if tick == 100 else '0.7'}'/>"
+        f"<text x='26' y='{xy(dates[0], tick)[1] + 2.5:.1f}' text-anchor='end' "
+        f"font-size='7.5' fill='{MUT}'>{tick}</text>"
+        for tick in ticks if lower <= tick <= upper)
+
+    issuer_return = issuer[-1] - 100
+    ihsg_return = ihsg[-1] - 100
+    spread = issuer_return - ihsg_return
+
+    def pct(value):
+        return f"{value:+.1f}".replace(".", ",")
+
+    safe_ticker = html.escape(ticker)
+    return (
+        "<svg class='price-chart' viewBox='0 0 240 145' width='240' height='145' "
+        "style='display:block;width:100%;height:auto' role='img' aria-labelledby='price-chart-title'>"
+        f"<title id='price-chart-title'>Kinerja harga {safe_ticker} dan IHSG, "
+        f"{dates[0].isoformat()} sampai {dates[-1].isoformat()}, awal 100</title>"
+        f"{grid}{polyline(ihsg, '#D27A30', '4 3')}{polyline(issuer, ROYAL_BLUE)}"
+        f"<text x='{x0}' y='105' font-size='7.5' fill='{MUT}'>{dates[0]:%Y-%m}</text>"
+        f"<text x='{x1}' y='105' text-anchor='end' font-size='7.5' fill='{MUT}'>{dates[-1]:%Y-%m}</text>"
+        f"<line x1='32' x2='44' y1='120' y2='120' stroke='{ROYAL_BLUE}' stroke-width='2'/>"
+        f"<text x='48' y='123' font-size='8' fill='{INK}'>{safe_ticker} {pct(issuer_return)}%</text>"
+        "<line x1='135' x2='147' y1='120' y2='120' stroke='#D27A30' stroke-width='2' stroke-dasharray='4 3'/>"
+        f"<text x='151' y='123' font-size='8' fill='{INK}'>IHSG {pct(ihsg_return)}%</text>"
+        f"<text x='32' y='140' font-size='7.8' fill='{MUT}'>Selisih {pct(spread)} poin persentase</text>"
+        "</svg>"
+        f"<p class='src'>Sumber: Sectors cache; {len(dates)} tanggal sama "
+        f"({dates[0].isoformat()}–{dates[-1].isoformat()}). "
+        "Kinerja harga, awal = 100; tidak termasuk dividen.</p>")
 
 
 def _column_widths(cols):
@@ -141,6 +220,10 @@ def _column_widths(cols):
     labels = [str(col).strip().lower() for col in cols]
     if len(cols) == 2 and "terakhir" in labels[1]:
         return [31, 69]
+    if len(cols) == 2 and labels[0] == "pemeriksaan" and labels[1] == "yang masih diperlukan":
+        return [35, 65]
+    if len(cols) == 2 and labels[0] == "input" and labels[1] == "kekurangan":
+        return [30, 70]
     if len(cols) == 2:
         return [78, 22]
     if "dasar" in labels and len(cols) == 6:
@@ -213,13 +296,26 @@ def _topbar(date):
             f"{html.escape(str(date))}</span><span>Sektoral</span></div>")
 
 
+def _draft_banner(meta):
+    if meta.get("status") != "draft_non_distributable":
+        return ""
+    return ("<div class='draft-banner'>DRAFT NON-DISTRIBUTABLE — "
+            "target harga dan rating ditahan sampai data dan valuasi tervalidasi.</div>")
+
+
 def _render_page_content(b):
     halaman = b.get("halaman")
     exs = b.get("exhibit") or []
     paras = b.get("paragraf") or []
 
     res = []
-    if halaman == 2:
+    if b.get("layout") == "stack":
+        for p in paras:
+            res.append(f"<p>{html.escape(p)}</p>")
+        for e in exs:
+            res.append(_table(e))
+
+    elif halaman == 2:
         if len(paras) >= 2:
             res.append(f"<p>{html.escape(paras[0])}</p>")
             res.append(f"<p>{html.escape(paras[1])}</p>")
@@ -272,16 +368,18 @@ def _render_page_content(b):
 def render(doc):
     m, cov = doc["meta"], doc["cover"]
     up = m["upside_persen"]
-    ups = f"{up:,.1f}".replace(",", "_").replace(".", ",").replace("_", ".") + "%"
+    ups = (f"{up:,.1f}".replace(",", "_").replace(".", ",").replace("_", ".") + "%"
+           if up is not None else "n.a.")
     h = [f"<html><head><meta charset='utf-8'><style>{CSS}</style></head><body>"]
     h.append(_topbar(m["tanggal"]))
+    h.append(_draft_banner(m))
     h.append(f"<div class='rating'>{html.escape(m['rating'])}</div>"
-             "<div class='status'>(Inisiasi)</div>")
+             f"<div class='status'>{'(Inisiasi)' if m.get('status') != 'draft_non_distributable' else 'Status: draft'}</div>")
     h.append("<div class='cover'><div class='left'>")
     h.append(f"<div class='small'>Valuasi: {html.escape(doc.get('method', 'DCF'))}</div>"
              "<div class='panel'>")
     h.append(_kv("Harga Terakhir (Rp)", f"{m['harga']:,.0f}"))
-    h.append(_kv("Target Harga (Rp)", f"{m['tp']:,}"))
+    h.append(_kv("Target Harga (Rp)", f"{m['tp']:,}" if m.get("tp") is not None else "Ditahan"))
     h.append(_kv("TP Sebelumnya (Rp)", "n.a."))
     h.append(_kv("Upside/Downside", ups))
     h.append(_kv("Jumlah Saham (juta)", f"{cov['data_pasar']['saham']/1e6:,.0f}"))
@@ -299,9 +397,8 @@ def render(doc):
             if k in f1:
                 h.append(_kv(k, f1[k]))
         h.append("</div>")
-    h.append(f"<h3 class='sub'>{html.escape(m['ticker'])} relatif terhadap IHSG</h3>")
-    h.append(_price_chart(m["ticker"]))
-    h.append("<p class='src'>Sumber: Sectors cache (daily)</p>")
+    h.append(f"<h3 class='sub'>{html.escape(m['ticker'])} vs IHSG (awal = 100)</h3>")
+    h.append(_price_chart(m["ticker"], m["tanggal"]))
     h.append("<div class='small'>Analis Sektoral<br>Tim Riset Sektoral</div>")
     h.append("</div><div class='right'>")
     h.append(f"<h1 class='emit'>{html.escape(m['emiten'])} ({html.escape(m['ticker'])} IJ)</h1>")
@@ -317,11 +414,13 @@ def render(doc):
 
     for b in doc["bagian"]:
         h.append(f"<div class='page'>{_topbar(m['tanggal'])}")
+        h.append(_draft_banner(m))
         h.append(f"<h2 class='sec'>{html.escape(b['judul'])}</h2>")
         h.append(_render_page_content(b))
         h.append("</div>")
 
     h.append(f"<div class='page'>{_topbar(m['tanggal'])}"
+             f"{_draft_banner(m)}"
              "<h2 class='sec'>Pengungkapan</h2>"
              "<p class='small'>Laporan ini adalah alat informasi dan analisis, bukan "
              "rekomendasi, prediksi, atau saran investasi. Data bersumber dari Sectors "

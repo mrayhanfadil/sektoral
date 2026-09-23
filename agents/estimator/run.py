@@ -1,14 +1,12 @@
-"""Evidence-first estimator: cache/public evidence -> gate -> driver file."""
+"""Evidence-first estimator: sectors_cache only -> gate -> driver file."""
 from __future__ import annotations
 
 import json
-import math
 import os
 import re
 import shlex
 import sys
 import urllib.request
-from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -114,9 +112,12 @@ def _unwrap_candidate(candidate):
 def _missing_evidence_result(candidate):
     final = _unwrap_candidate(candidate)
     if isinstance(final, dict) and final.get("missing_evidence"):
-        return {"error": "bukti belum cukup untuk membuat drivers",
-                "missing_evidence": final.get("missing_evidence"),
-                "available_facts": final.get("available_facts", [])}
+        result = {"error": "bukti belum cukup untuk membuat drivers",
+                  "missing_evidence": final.get("missing_evidence"),
+                  "available_facts": final.get("available_facts", [])}
+        if isinstance(final.get("news_analysis"), list):
+            result["news_analysis"] = final["news_analysis"]
+        return result
     return None
 
 
@@ -183,21 +184,19 @@ def plan(ticker, years):
 
 
 def run_live(ticker, years, agentic=False):
-    """Read evidence, optionally let the LLM select cache reads, then gate."""
+    """Use only cached evidence, optionally letting the LLM select cache reads."""
     normalized_ticker = ticker.upper()
     endpoints = T.cache_endpoints(normalized_ticker)
     evidence_log = [f"cache_endpoints({normalized_ticker}) -> {endpoints}"]
     calls = build_cache_calls(normalized_ticker, endpoints)
-    public_evidence = public_forecast_evidence(normalized_ticker)
     if agentic:
         return _run_agentic_with_evidence(
-            normalized_ticker, years, endpoints, evidence_log, calls, public_evidence)
-    return _run_with_evidence(
-        normalized_ticker, years, endpoints, evidence_log, calls, public_evidence)
+            normalized_ticker, years, endpoints, evidence_log, calls)
+    return _run_with_evidence(normalized_ticker, years, evidence_log, calls)
 
 
 def _run_agentic_with_evidence(ticker, years, endpoints, evidence_log, calls,
-                               public_evidence, max_tool_calls=4):
+                               max_tool_calls=8):
     """Bounded JSON tool-use loop; the model chooses cache reads, host executes them."""
     allowed_endpoints = {call["args"][1] for call in calls}
     if not allowed_endpoints:
@@ -209,22 +208,24 @@ def _run_agentic_with_evidence(ticker, years, endpoints, evidence_log, calls,
             "Kamu research agent. Kamu boleh meminta host membaca cache lokal Sectors "
             "dengan JSON {\"tool\":\"cache_get\",\"args\":[TICKER,ENDPOINT]}. "
             "Endpoint harus persis dari allowlist. Host yang menjalankan tool; kamu tidak "
-            "punya akses langsung ke database/network. Setelah membaca minimal satu hasil, "
-            "kembalikan JSON final: {\"final\":{\"decision\":\"ready\","
-            "\"selected_cache_endpoints\":[...],\"reason\":\"...\"}} jika bukti cukup, "
-            "atau {\"final\":{\"missing_evidence\":[...],"
-            "\"available_facts\":[...]}} jika tidak. Jangan keluarkan prosa/markdown."
+            "punya akses ke web atau sumber lain. Setelah membaca hasil, kembalikan "
+            "drivers lengkap yang mencantumkan endpoint cache pada tiap source, atau "
+            "missing_evidence jika cache tidak cukup. Jika berita cache tersedia, tetap "
+            "parafrase dan hubungkan berita meski driver forecast belum cukup. Jangan "
+            "keluarkan prosa/markdown."
         )},
         {"role": "user", "content": (
             f"Ticker {ticker}; tahun {', '.join(years)}.\n"
             "Pilih endpoint relevan satu per giliran dan tunggu hasil tool sebelum memilih "
-            "lagi atau memberi keputusan final. Minimal satu cache_get wajib sebelum final.\n"
-            "Allowlist endpoint: " + json.dumps(sorted(allowed_endpoints)) +
-            "\nForecast evidence terstruktur (sumber publik): " +
-            json.dumps(public_evidence, ensure_ascii=False)
+            "lagi atau memberi keputusan final. Minimal satu cache_get wajib. Gunakan hanya "
+            "data di payload cache yang dibaca host; jangan gunakan pengetahuan atau sumber "
+            "di luar cache. Jika `/news/` ada di allowlist, baca juga dan rangkum berita "
+            "relevan dengan parafrasa serta kaitan ke driver/tesis.\nAllowlist endpoint: " +
+            json.dumps(sorted(allowed_endpoints))
         )},
     ]
     seen = set()
+    available_endpoints = set()
     cache_evidence = []
     max_calls = min(max_tool_calls, len(allowed_endpoints))
 
@@ -253,6 +254,9 @@ def _run_agentic_with_evidence(ticker, years, endpoints, evidence_log, calls,
                 result = {"tool_error": type(error).__name__, "message": str(error)[:200]}
             if isinstance(result, dict) and isinstance(result.get("data"), list):
                 result = {**result, "data": result["data"][:6]}
+            if result is not None and not (isinstance(result, dict) and
+                                           result.get("tool_error")):
+                available_endpoints.add(endpoint)
             seen.add(endpoint)
             cache_evidence.append({"endpoint": endpoint, "result": result})
             evidence_log.append(f"agent cache_get({ticker}, {endpoint}) -> {str(result)[:300]}")
@@ -261,8 +265,9 @@ def _run_agentic_with_evidence(ticker, years, endpoints, evidence_log, calls,
                 {"role": "user", "content": (
                     "Tool result (read-only JSON): " +
                     json.dumps(cache_evidence[-1], ensure_ascii=False)[:12000] +
-                    "\nPilih endpoint lain dari allowlist yang belum dibaca, atau beri "
-                    "keputusan final sesuai schema. Jangan mengarang data."
+                    "\nPilih endpoint lain dari allowlist yang belum dibaca, atau kembalikan "
+                    "drivers lengkap yang bersumber dari payload yang dibaca / "
+                    "missing_evidence. Jangan mengarang data."
                 )},
             ])
             continue
@@ -270,86 +275,140 @@ def _run_agentic_with_evidence(ticker, years, endpoints, evidence_log, calls,
         final = _unwrap_candidate(action) if isinstance(action, dict) else None
         missing = _missing_evidence_result(action)
         if missing:
-            return {"ok": False, **missing, "evidence": evidence_log}
+            news_problems = _news_analysis_problems(
+                _unwrap_candidate(action), _news_rows(cache_evidence))
+            if news_problems:
+                return {"ok": False, "error": "news analysis gagal validasi cache",
+                        "problems": news_problems, "evidence": evidence_log}
+            news_path = (T.write_news_analysis(ticker, _unwrap_candidate(action))
+                         if missing.get("news_analysis") else None)
+            result = {"ok": False, **missing, "evidence": evidence_log}
+            if news_path:
+                result["news_analysis_path"] = str(news_path)
+            return result
         if not isinstance(final, dict) or not seen:
             return {"ok": False, "error": "agent final tanpa cache tool evidence",
                     "evidence": evidence_log}
+        if "/news/" in allowed_endpoints and "/news/" not in seen:
+            return {"ok": False, "error": "agent belum membaca news yang tersedia di sectors_cache",
+                    "evidence": evidence_log}
 
-        candidate = _forecast_candidate(ticker, years, public_evidence)
-        structured_source = candidate is not None
-        if structured_source:
-            if (final.get("decision") != "ready" or
-                    not isinstance(final.get("selected_cache_endpoints"), list) or
-                    not set(final["selected_cache_endpoints"]).issubset(seen) or
-                    not final["selected_cache_endpoints"]):
-                return {"ok": False, "error": "keputusan agent tidak mereferensikan cache yang dibaca",
-                        "agent_final": final, "evidence": evidence_log}
-            problems = gate(candidate, len(years))
-            if problems:
-                return {"ok": False, "error": "gate menolak evidence terstruktur",
-                        "problems": problems, "evidence": evidence_log}
-        else:
-            candidate = final.get("drivers", final)
-            problems = gate(candidate, len(years))
-            if problems:
-                return {"ok": False, "error": "gate menolak agent final",
-                        "problems": problems, "evidence": evidence_log}
+        candidate = final
+        problems = gate(candidate, len(years))
+        cached_news = _news_rows(cache_evidence)
+        problems.extend(_cache_source_problems(candidate, available_endpoints, cached_news))
+        if problems:
+            return {"ok": False, "error": "gate menolak agent final",
+                    "problems": problems, "evidence": evidence_log}
 
         path = T.write_drivers(ticker, candidate)
-        method = "agentic-structured-source" if structured_source else "agentic-llm"
-        decision = "ready" if structured_source else "drivers_submitted"
-        return {"ok": True, "path": str(path), "method": method,
+        news_path = (T.write_news_analysis(ticker, candidate)
+                     if candidate.get("news_analysis") else None)
+        result = {"ok": True, "path": str(path), "method": "agentic-cache-only",
                 "agent_tool_calls": len(seen),
-                "agent_decision": {"decision": decision,
+                "agent_decision": {"decision": "drivers_submitted",
                                    "selected_cache_endpoints": sorted(seen)},
                 "evidence": evidence_log}
+        if news_path:
+            result["news_analysis_path"] = str(news_path)
+        return result
 
     return {"ok": False, "error": f"agent mencapai batas {max_calls} cache tool calls",
             "evidence": evidence_log}
 
 
-def _forecast_candidate(ticker, years, evidence_rows):
-    """Build driver paths directly from source values; never ask the LLM to copy them."""
-    selections = {}
-    for series in REQUIRED_SERIES:
-        for evidence in evidence_rows:
-            source_years = evidence.get("years")
-            values = evidence.get(series)
-            if (not isinstance(source_years, list) or not isinstance(values, list) or
-                    len(source_years) != len(values) or not evidence.get("source") or
-                    not evidence.get("url")):
-                continue
-            indexed = dict(zip(source_years, values))
-            if not all(year in indexed for year in years):
-                continue
-            path = [indexed[year] for year in years]
-            if not all(isinstance(value, (int, float)) and not isinstance(value, bool)
-                       and math.isfinite(value) for value in path):
-                continue
-            selections[series] = (evidence, path)
-            break
-
-    if len(selections) != len(REQUIRED_SERIES):
-        return None
-    currencies = {evidence.get("currency") for evidence, _ in selections.values()}
-    if len(currencies) != 1 or not next(iter(currencies)):
-        return None
-
-    drivers = {}
-    for series, (evidence, path) in selections.items():
-        source = f"{evidence['source']} — {evidence['url']}"
-        note = (f"Direct published forecast from {evidence['source']}; "
-                "single-source estimate, not consensus.")
-        if series == "capex" and evidence.get("capex_basis"):
-            note += f" Basis: {evidence['capex_basis']}"
-        drivers[series] = {"path": path, "source": source, "note": note}
-
-    return {"ticker": ticker, "basis": "agent-estimate",
-            "as_of": date.today().isoformat(), "currency": currencies.pop(),
-            "years": list(years), "drivers": drivers}
+def _news_rows(cache_evidence):
+    for row in cache_evidence:
+        if row.get("endpoint") != "/news/":
+            continue
+        result = row.get("result")
+        if isinstance(result, dict) and isinstance(result.get("results"), list):
+            return [item for item in result["results"] if isinstance(item, dict)]
+    return []
 
 
-def _run_with_evidence(ticker, years, endpoints, evidence_log, calls, public_evidence):
+def _cache_source_problems(candidate, available_endpoints, cached_news=(),
+                           require_drivers=True):
+    """Require every generated value to cite an endpoint actually read from cache."""
+    problems = []
+    drivers = candidate.get("drivers") if isinstance(candidate, dict) else None
+    if not isinstance(drivers, dict):
+        if require_drivers:
+            problems.append("drivers tidak ditemukan untuk validasi sumber cache")
+    else:
+        for series in REQUIRED_SERIES:
+            item = drivers.get(series)
+            source = item.get("source") if isinstance(item, dict) else None
+            if not isinstance(source, str) or not any(
+                    endpoint in source for endpoint in available_endpoints):
+                problems.append(f"{series}: source harus menyebut endpoint cache yang dibaca")
+            if isinstance(source, str) and re.search(r"https?://", source, flags=re.I):
+                problems.append(f"{series}: URL eksternal dilarang; gunakan hanya sectors_cache")
+    facts = candidate.get("facts") if isinstance(candidate, dict) else None
+    if isinstance(facts, list):
+        for index, fact in enumerate(facts):
+            source = fact.get("source") if isinstance(fact, dict) else None
+            if not isinstance(source, str) or not any(
+                    endpoint in source for endpoint in available_endpoints):
+                problems.append(f"facts[{index}]: source harus menyebut endpoint cache yang dibaca")
+            if (isinstance(source, str) and re.search(r"https?://", source, flags=re.I)
+                    and not _source_matches_cached_news(source, cached_news)):
+                problems.append(f"facts[{index}]: URL eksternal dilarang; gunakan hanya sectors_cache")
+
+    problems.extend(_news_analysis_problems(candidate, cached_news))
+    return problems
+
+
+def _news_analysis_problems(candidate, cached_news):
+    problems = []
+    news_analysis = candidate.get("news_analysis") if isinstance(candidate, dict) else None
+    if cached_news and not news_analysis:
+        problems.append("news_analysis wajib merangkum dan menghubungkan berita relevan dari cache")
+    if news_analysis is not None:
+        if not isinstance(news_analysis, list):
+            problems.append("news_analysis harus list")
+        else:
+            for index, item in enumerate(news_analysis):
+                source = item.get("source") if isinstance(item, dict) else None
+                if not isinstance(source, str) or "/news/" not in source:
+                    problems.append(f"news_analysis[{index}]: source harus menunjuk /news/ di cache")
+                    continue
+                timestamp = item.get("timestamp") if isinstance(item, dict) else None
+                matched_rows = [row for row in cached_news
+                                if row.get("title") and row["title"] in source and
+                                (not row.get("source") or row["source"] in source) and
+                                str(row.get("timestamp") or "") == str(timestamp or "")]
+                if not matched_rows:
+                    problems.append(f"news_analysis[{index}]: judul, URL, dan timestamp harus cocok persis dengan news cache")
+                summary = str(item.get("summary") or "") if isinstance(item, dict) else ""
+                matched = matched_rows[0] if matched_rows else None
+                if matched and (summary.strip() == str(matched.get("title") or "").strip()
+                                or (summary and summary in str(matched.get("body") or ""))):
+                    problems.append(f"news_analysis[{index}]: summary harus diparafrase, bukan salinan")
+                if isinstance(source, str):
+                    cited_urls = re.findall(r"https?://\S+", source, flags=re.I)
+                    allowed_urls = {str(row.get("source")) for row in cached_news
+                                    if row.get("source")}
+                    if any(url.rstrip(".,;)") not in allowed_urls for url in cited_urls):
+                        problems.append(f"news_analysis[{index}]: URL harus berasal persis dari cache")
+                connection = str(item.get("connection") or "").strip() \
+                    if isinstance(item, dict) else ""
+                if len(connection) < 20:
+                    problems.append(f"news_analysis[{index}]: connection harus menjelaskan implikasi")
+            if len(news_analysis) > 3:
+                problems.append("news_analysis: maksimal 3 artikel cache")
+    return problems
+
+
+def _source_matches_cached_news(source, cached_news):
+    return isinstance(source, str) and any(
+        (row.get("title") and row["title"] in source) or
+        (row.get("source") and row["source"] in source)
+        for row in cached_news
+    )
+
+
+def _run_with_evidence(ticker, years, evidence_log, calls):
     evidence_log.append(f"planned_cache_reads={len(calls)}")
     cache_evidence = []
     for call in calls:
@@ -363,81 +422,65 @@ def _run_with_evidence(ticker, years, endpoints, evidence_log, calls, public_evi
         cache_evidence.append({"endpoint": args[1], "result": result})
         evidence_log.append(f"cache_get({args!r}) -> {str(result)[:300]}")
 
-    # Exact source-provided forecasts are already verified structured facts. Map
-    # them directly so the model cannot drop, alter, or detach numeric paths.
-    candidate = _forecast_candidate(ticker, years, public_evidence)
-    if candidate is not None:
-        problems = gate(candidate, len(years))
-        if problems:
-            return {"ok": False, "error": "gate menolak evidence terstruktur",
-                    "problems": problems, "evidence": evidence_log}
-        path = T.write_drivers(ticker, candidate)
-        return {"ok": True, "path": str(path), "method": "structured-source",
-                "evidence": evidence_log}
-
+    available_endpoints = {
+        row["endpoint"] for row in cache_evidence
+        if row.get("result") is not None and not (
+            isinstance(row.get("result"), dict) and row["result"].get("tool_error"))
+    }
     messages = [
         {"role": "system", "content": P.SYSTEM},
         {"role": "user", "content": P.user_task(ticker, years) +
-         "\nCache actuals (read-only): " + json.dumps(cache_evidence, ensure_ascii=False) +
-         "\nPublic forecast evidence: " + json.dumps(public_evidence, ensure_ascii=False) +
-         "\nUse only supported values, preserve units, and cite the exact source URL per series. "
-         "Do not extrapolate beyond reported years. If a required series/year is unsupported, "
-         "return missing_evidence instead of guessing."},
+         "\nBukti sectors_cache (read-only): " + json.dumps(cache_evidence, ensure_ascii=False) +
+         "\nGunakan hanya bukti tersebut, pertahankan unit, dan cantumkan endpoint cache "
+         "yang benar-benar dibaca pada source tiap series. Semua forecast harus berupa "
+         "hitungan transparan dari cache dengan asumsi dijelaskan di note. Jika bukti "
+         "tidak cukup, return missing_evidence alih-alih menebak."},
     ]
     final, failure = _generate_final(messages, years)
     if failure:
-        return {"ok": False, **failure, "evidence": evidence_log}
+        if failure.get("news_analysis") is not None or (
+                failure.get("missing_evidence") and _news_rows(cache_evidence)):
+            news_problems = _news_analysis_problems(
+                failure, _news_rows(cache_evidence))
+            if news_problems:
+                return {"ok": False, "error": "news analysis gagal validasi cache",
+                        "problems": news_problems, "evidence": evidence_log}
+        news_path = (T.write_news_analysis(ticker, failure)
+                     if failure.get("news_analysis") else None)
+        result = {"ok": False, **failure, "evidence": evidence_log}
+        if news_path:
+            result["news_analysis_path"] = str(news_path)
+        return result
     problems = gate(final, len(years))
+    problems.extend(_cache_source_problems(final, available_endpoints,
+                                           _news_rows(cache_evidence)))
     if problems:
         return {"ok": False, "error": "gate menolak", "problems": problems,
                 "evidence": evidence_log}
     path = T.write_drivers(ticker, final)
-    return {"ok": True, "path": str(path), "method": "llm-assisted",
-            "evidence": evidence_log}
-
-
-def public_forecast_evidence(ticker):
-    """Structured forecast sources registered for tickers with verified evidence."""
-    if ticker.upper() != "AMMN":
-        return []
-    return [
-        {
-            "source": "KB Valbury Securities initiation report, 9 June 2026",
-            "url": "https://www.kbvalbury.com/cfind/source/files/ammn-initiation-report---09062026.pdf",
-            "currency": "USD million",
-            "years": ["2026F", "2027F", "2028F"],
-            "revenue": [3789, 4179, 4475],
-            "ebitda": [1937, 2139, 2558],
-            "net_profit": [806, 899, 1170],
-            "capex": [1137, 1045, 1119],
-            "capex_basis": "fixed-asset investment outflow proxy from the report's projected cash flow; excludes stockpile/mining-property rows",
-            "limits": "one analyst report, not consensus; source covers estimates through FY2028 only",
-        },
-        {
-            "source": "AMMAN H1 2026 Earnings Presentation, published 21 Sep 2026",
-            "url": "https://www.amman.co.id/earnings-presentation",
-            "direct_pdf": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ==--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
-            "as_of": "2026-09-21",
-            "facts": [
-                "H1 2026 audited: net sales USD 2,052mn; EBITDA USD 1,128mn; net income USD 504mn; capex USD 130mn.",
-                "2026 guidance: concentrate 900 kdmt; copper in concentrate 485 Mlbs; gold in concentrate revised to 775 koz; copper cathode 130 kt; refined gold 350 koz.",
-                "Capex is tapering as major projects near completion; no numeric FY26-28 capex path disclosed.",
-            ],
-        },
-    ]
+    news_path = (T.write_news_analysis(ticker, final)
+                 if final.get("news_analysis") else None)
+    result = {"ok": True, "path": str(path), "method": "llm-cache-only",
+              "evidence": evidence_log}
+    if news_path:
+        result["news_analysis_path"] = str(news_path)
+    return result
 
 
 def build_cache_calls(ticker, endpoints):
     """Pick relevant cache reads in stable, compact priority order."""
     normalized_ticker = ticker.upper()
     priorities = ("/financials/quarterly/", "/company/report/",
-                  "/company/get-segments/")
+                  "/company/get-segments/", "/news/")
     calls = [{"tool": "cache_get", "args": [normalized_ticker, endpoint]}
              for endpoint in endpoints if any(key in endpoint for key in priorities)]
     for endpoint in (f"/financials/quarterly/{normalized_ticker}/",
                      f"/company/report/{normalized_ticker}/"):
         if endpoint not in [call["args"][1] for call in calls]:
             calls.append({"tool": "cache_get", "args": [normalized_ticker, endpoint]})
+    if "/news/" in endpoints and "/news/" not in [
+            call["args"][1] for call in calls]:
+        calls.append({"tool": "cache_get", "args": [normalized_ticker, "/news/"]})
     calls.sort(key=lambda call: priorities.index(
         next(key for key in priorities if key in call["args"][1])))
     return calls

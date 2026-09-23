@@ -5,8 +5,15 @@ umur = cadangan / produksi tahunan. Tanpa terminal value. Semua proksi
 (margin, FX, harga) berlabel eksplisit.
 """
 
-FX_USDIDR = 16000.0
-FX_BASIS = "asumsi analis Rp16.000/USD (tanpa kurs di cache)"
+from .fx import load_cached_rate
+
+
+_FX_QUOTE = load_cached_rate()
+FX_USDIDR = float(_FX_QUOTE["rate"]) if _FX_QUOTE else 16000.0
+FX_BASIS = (
+    f"Yahoo Finance IDR=X ({_FX_QUOTE['date']})" if _FX_QUOTE else
+    "asumsi analis Rp16.000/USD (rate belum di-refresh; tanpa silent network fallback)"
+)
 OZT_PER_TON = 32150.7
 
 
