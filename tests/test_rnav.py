@@ -1,4 +1,5 @@
 """Batch D: LoM RNAV + revenue bridge nyambung ke forecast."""
+import json
 import sys
 from pathlib import Path
 
@@ -49,3 +50,29 @@ def test_forecast_g28_hanya_tambang():
     fb = forecast.build(fbb)
     assert fb["bridge"] is None
     assert "G2.8_bridge" not in fb["g2"]
+
+
+def test_method_select_ddm_bbca(tmp_path):
+    from app import build as B
+    d = B.build("BBCA", tmp_path, method="ddm")
+    assert d["method_select"] == "ddm"
+    assert d["method"] == "DDM (dividen, Rp)"
+    assert any("dipilih analis" in n for n in d["catatan_metodologi"])
+
+
+def test_method_select_ditolak_jujur(tmp_path):
+    import pytest
+    from app import build as B
+    with pytest.raises(ValueError):
+        B.build("BBCA", tmp_path, method="rnav")
+    with pytest.raises(ValueError):
+        B.build("AMMN", tmp_path, method="bogus")
+
+
+def test_bridge_minority_row(tmp_path):
+    from app import build as B
+    d = B.build("AMMN", tmp_path)
+    fx = next(e for e in d["exhibits"]
+              if "Jembatan Nilai Wajar" in e["judul"])
+    blob = json.dumps(fx["data"], ensure_ascii=False)
+    assert "Minority Interest" in blob

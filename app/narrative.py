@@ -24,7 +24,7 @@ def _word_cut(s, cap=64):
     return s[:cut].rstrip() if cut > 0 else s[:cap]
 
 
-def build(intake, fc, va, g1):
+def build(intake, fc, va, g1, method="auto"):
     t, name = intake["ticker"], intake["name"]
     A, F = intake["annuals"], fc["rows"]
     last, rev_last = A[-1], A[-1]["revenue"]
@@ -399,6 +399,17 @@ def build(intake, fc, va, g1):
 
     g32 = va["g3"].get("G3.2_skala")
     mnotes = methodnote.methodology_notes(intake, fc, va, intake.get("mineops"))
+    method = (method or "auto").lower()
+    if method not in ("auto", "dcf", "ddm", "rnav"):
+        raise ValueError(f"method tak dikenal: {method} (auto|dcf|ddm|rnav)")
+    if method == "ddm" and intake.get("payout") is None:
+        raise ValueError("method ddm ditolak: tanpa payout di cache")
+    if method == "rnav" and not intake.get("mineops"):
+        raise ValueError("method rnav ditolak: tanpa overlay operasional di cache")
+    method_label = {"auto": "DCF (FCFF, Rp)", "dcf": "DCF (FCFF, Rp)",
+                    "ddm": "DDM (dividen, Rp)", "rnav": "RNAV LoM (Rp)"}[method]
+    if method != "auto":
+        mnotes = [f"metode valuasi dipilih analis: {method_label}."] + mnotes
     metodo = (["Angka bersumber dari snapshot cache Sectors (salinan lokal yang bisa "
                "kedaluwarsa; pembacaan tidak memakai kuota API). Tanpa angka karangan "
                "di luar asumsi berlabel pada tabel Asumsi."]
@@ -430,7 +441,8 @@ def build(intake, fc, va, g1):
                          for d, s, f, s2, t3, b in fc["assumptions"]],
         "log_gate": {"G1": g1["G1"], "G2": fc["g2"], "G3": {k: (v if isinstance(v, str) else v[0])
                                                           for k, v in va["g3"].items()}},
-        "method": "DCF (FCFF, Rp)",
+        "method": "DCF (FCFF, Rp)" if method == "auto" else method_label,
+        "method_select": method,
         "fy26": {"Pendapatan": fmt.miliar(f1["revenue"]),
                  "EBITDA": fmt.miliar(f1["ebitda"]),
                  "Laba bersih": fmt.miliar(f1["net"])},
