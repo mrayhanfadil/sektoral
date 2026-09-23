@@ -8,7 +8,35 @@ def _mean(xs):
     return sum(xs) / len(xs) if xs else None
 
 
-def build(intake, n_years=5):
+def _interim_scenario(intake, plan):
+    scenario = (plan or {}).get("interim_scenario")
+    actual = intake.get("latest_official_actual") or {}
+    if not isinstance(scenario, dict) or not actual:
+        return None
+    metrics = actual.get("metrics") or {}
+    needed = ("revenue", "ebitda", "net_profit", "capital_expenditure")
+    if any(not isinstance(metrics.get(key), (int, float)) for key in needed):
+        return None
+    h1_revenue = metrics["revenue"]
+    h2_revenue = h1_revenue * scenario["h2_revenue_to_h1"]
+    h2_ebitda = h2_revenue * scenario["h2_ebitda_margin_pct"] / 100
+    h2_net = h2_revenue * scenario["h2_net_margin_pct"] / 100
+    h2_capex = metrics["capital_expenditure"] * scenario["h2_capex_to_h1"]
+    return {"year": int(str(actual["period_end"])[:4]),
+            "unit": actual.get("unit"), "source_url": scenario["source_url"],
+            "published_at": scenario["published_at"],
+            "rationale": scenario["rationale"], "assumptions": scenario,
+            "h1": {key: metrics[key] for key in needed},
+            "h2": {"revenue": h2_revenue, "ebitda": h2_ebitda,
+                   "net_profit": h2_net, "capital_expenditure": h2_capex},
+            "full_year": {
+                "revenue": h1_revenue + h2_revenue,
+                "ebitda": metrics["ebitda"] + h2_ebitda,
+                "net_profit": metrics["net_profit"] + h2_net,
+                "capital_expenditure": metrics["capital_expenditure"] + h2_capex}}
+
+
+def build(intake, n_years=5, assumption_plan=None):
     A = intake["annuals"]
     base = A[-1]
     y0 = base["year"]
@@ -25,9 +53,16 @@ def build(intake, n_years=5):
     for i in range(1, len(gs)):
         if gs[i] >= gs[i - 1]:
             gs[i] = round(gs[i - 1] - 0.5, 1)
+    effects = (assumption_plan or {}).get("news_effects") or []
+    for event in effects:
+        if event.get("driver") != "revenue_growth_pp":
+            continue
+        for i, year in enumerate(years):
+            if year in event["years"]:
+                gs[i] += event["change"]
     assumptions.append(("g_t", "%", *gs,
                         f"CAGR historis {cagr*100:.1f}% ({A[0]['year']}-{y0}), "
-                        "diturunkan bertahap"))
+                        "diturunkan bertahap; perubahan berita tercatat terpisah"))
     if cagr != cagr_c:
         clamped_gs = [round(cagr_c * (0.9 ** i) * 100, 1) for i in range(n_years)]
         assumptions.append(("batas g_t", "%", *clamped_gs,
@@ -41,6 +76,12 @@ def build(intake, n_years=5):
     mmin, mmax = min(hist_all), max(hist_all)
     raw = [mbase + 0.005 * i for i in range(n_years)]
     mgn = [max(mmin, min(mmax, m)) for m in raw]
+    for event in effects:
+        if event.get("driver") != "ebitda_margin_pp":
+            continue
+        for i, year in enumerate(years):
+            if year in event["years"]:
+                mgn[i] = max(0.0, min(1.0, mgn[i] + event["change"] / 100))
     capped = any(abs(r - c) > 1e-9 for r, c in zip(raw, mgn))
     assumptions.append(("margin EBITDA", "%", *[m * 100 for m in mgn],
                         "rata-rata 3 tahun terakhir + operating leverage"
@@ -146,6 +187,8 @@ def build(intake, n_years=5):
             "G2.9: angka CAGR dan capex=D&A hanyalah screen; forecast driver, "
             "modal kerja, serta jadwal utang belum direkonsiliasi.")
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
+            "news_assumptions": effects,
+            "interim_scenario": _interim_scenario(intake, assumption_plan),
             "operating_bridge": operating_bridge,
             "driver_evidence": intake.get("driver_evidence") or intake.get("drivers"),
             "forecast_basis": "historical_screening_proxy",

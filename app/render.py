@@ -31,7 +31,8 @@ _ROB_BOLD = _b64_font("Roboto-Bold.ttf")
 _ROB_ITA = _b64_font("Roboto-Italic.ttf")
 
 # Sectoral branding spec: primary blue, white paper, near-black-ink text,
-# light-gray rules, light-blue even rows, Roboto only.
+# light-gray rules, light-blue even rows. Keep Roboto in HTML; use Arial for
+# print text because Chromium's bundled Roboto subset breaks copied PDF words.
 PRIMARY = "#0928B1"
 PAPER = "#ffffff"
 INK = "#333333"
@@ -56,11 +57,11 @@ PAGE_NUM = ("@page{size:A4;margin:12mm 12mm 14mm;"
             "background-image:url('data:image/svg+xml;base64," + REPORT_MORSE + "');"
             "background-size:95mm 1.55mm;background-position:left center;"
             "background-repeat:no-repeat;white-space:nowrap;"
-            "font-family:'Roboto',sans-serif;font-size:7.2pt;line-height:3mm;"
+            "font-family:Arial,sans-serif;font-size:7.2pt;line-height:3mm;"
             "color:" + PRIMARY + "}"
             "@bottom-right{content:'Page ' counter(page) ' of ' counter(pages);"
             "box-sizing:border-box;width:26mm;height:3mm;text-align:right;white-space:nowrap;"
-            "font-family:'Roboto',sans-serif;font-size:7.2pt;line-height:3mm;"
+            "font-family:Arial,sans-serif;font-size:7.2pt;line-height:3mm;"
             "color:" + PRIMARY + "}}")
 
 FONT_FACES = (
@@ -155,7 +156,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table th,.exhibit-table td{padding:5px 6px}"
        ".exhibit::before{content:'Geser tabel untuk kolom lainnya →';display:block;"
        "text-align:right;font-size:10px;color:" + MUT + ";margin-bottom:2px}}"
-       "@media print{body,body *{font-family:'Roboto',sans-serif!important;"
+       "@media print{body,body *{font-family:Arial,sans-serif!important;"
        "font-variant-ligatures:none;font-feature-settings:'liga' 0,'clig' 0}"
        "@media print{h1,h2,h3{font-weight:400!important}"
        ".exhibit{overflow:visible}.exhibit-table{min-width:0}"
@@ -441,6 +442,9 @@ def _report_header(report_date, meta):
 def _draft_banner(meta):
     if meta.get("status") != "draft_non_distributable":
         return ""
+    if meta.get("illustrative_scenarios"):
+        return ("<div class='draft-banner'>DRAFT ILUSTRATIF: skenario memakai fakta "
+                "bersumber dan asumsi analis; belum layak sebagai target harga.</div>")
     return ("<div class='draft-banner'>DRAFT: BUKTI BELUM LENGKAP: "
             "skenario nilai belum disajikan sampai data dan model tervalidasi.</div>")
 

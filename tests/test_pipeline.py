@@ -45,6 +45,33 @@ def test_ammn_end_to_end(tmp_path):
     assert "Rating ditahan hingga pemeriksaan selesai" in html
 
 
+def test_ammn_report_date_includes_published_interim_without_releasing_target(tmp_path):
+    doc = B.build("AMMN", tmp_path, as_of="2026-09-23")
+    assert doc["meta"]["tanggal"] == "2026-09-23"
+    assert doc["meta"]["harga_tanggal"] == "2026-09-11"
+    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert "tp" not in doc["meta"]
+    titles = {item["judul"] for item in doc["exhibits"]}
+    assert "Hasil interim resmi dan perubahan yoy" in titles
+    assert "Metrik operasi dan pemrosesan" in titles
+    assert "Pemeriksaan sebelum rating dan target harga" in titles
+    assert len(doc["exhibits"]) >= 9
+
+
+def test_ammn_illustrative_pages_keep_release_boundary(tmp_path):
+    doc = B.build("AMMN", tmp_path, as_of="2026-09-23",
+                  illustrative_scenarios=True)
+    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert doc["meta"]["illustrative_scenarios"] is True
+    assert "tp" not in doc["meta"] and "rating" not in doc["meta"]
+    titles = {item["judul"] for item in doc["exhibits"]}
+    assert "Riwayat keuangan dalam cache" in titles
+    assert "Screen proyeksi historis, bukan forecast produksi" in titles
+    assert "Perbandingan nilai model lama, bukan target harga" in titles
+    assert "Sensitivitas Gordon ilustratif (Rp/saham)" in titles
+    assert any("Skenario operasi ilustratif" == page["judul"] for page in doc["bagian"])
+
+
 def test_unknown_ticker_refused(tmp_path):
     with pytest.raises(ValueError, match="no verified assumptions"):
         B.build("ZZZZ", tmp_path)

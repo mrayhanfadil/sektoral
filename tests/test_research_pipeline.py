@@ -31,15 +31,21 @@ def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path
         "ok": True, "document": document, "path": "research.json",
         "agent_trace": document["agent_trace"]})
 
-    def fake_build(ticker, outdir, want_pdf=False):
+    def fake_build(ticker, outdir, want_pdf=False, as_of=None,
+                   illustrative_scenarios=False):
+        assert as_of == "2026-09-23"
+        assert illustrative_scenarios is False
         (outdir / "TEST.html").write_text("<h1>Report</h1>", encoding="utf-8")
         return {"meta": {"status": "draft_non_distributable",
-                         "tanggal": "2026-09-11", "research_status": "loaded"}}
+                         "tanggal": "2026-09-23", "harga_tanggal": "2026-09-11",
+                         "research_status": "loaded"}}
 
     monkeypatch.setattr(research.build, "build", fake_build)
-    monkeypatch.setattr(research.research_context, "load_analysis",
-                        lambda ticker, as_of: (document, {"status": "loaded"}))
-    output = research.run("TEST", tmp_path)
+    def fake_load_analysis(ticker, as_of):
+        assert as_of == "2026-09-11"
+        return document, {"status": "loaded"}
+    monkeypatch.setattr(research.research_context, "load_analysis", fake_load_analysis)
+    output = research.run("TEST", tmp_path, as_of="2026-09-23")
 
     assert output["research_ok"] is True
     assert output["report_status"] == "draft_non_distributable"
@@ -48,6 +54,8 @@ def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path
     assert "earnings depend" in trace_html
     trace = json.loads((tmp_path / "TEST-trace.json").read_text(encoding="utf-8"))
     assert trace["report"]["research_status"] == "loaded"
+    assert trace["report"]["as_of"] == "2026-09-23"
+    assert trace["report"]["market_price_date"] == "2026-09-11"
 
 
 def test_rejected_agent_prose_is_not_published_in_trace(monkeypatch, tmp_path):
@@ -60,13 +68,15 @@ def test_rejected_agent_prose_is_not_published_in_trace(monkeypatch, tmp_path):
                         "validation": {"accepted": False,
                                        "rejected_claims": ["citation mismatch"]}},
     })
-    monkeypatch.setattr(research.build, "build", lambda ticker, outdir, want_pdf=False: {
-        "meta": {"status": "draft_non_distributable", "tanggal": "2026-09-11",
+    monkeypatch.setattr(research.build, "build", lambda ticker, outdir, want_pdf=False,
+                        as_of=None, illustrative_scenarios=False: {
+        "meta": {"status": "draft_non_distributable", "tanggal": "2026-09-23",
+                 "harga_tanggal": "2026-09-11",
                  "research_status": "insufficient"}})
     monkeypatch.setattr(research.research_context, "load_analysis",
                         lambda ticker, as_of: (None, {"status": "insufficient"}))
 
-    output = research.run("AMMN", tmp_path)
+    output = research.run("AMMN", tmp_path, as_of="2026-09-23")
 
     assert output["research_ok"] is False
     assert "UNVALIDATED MODEL CLAIM" not in (tmp_path / "AMMN-trace.html").read_text()

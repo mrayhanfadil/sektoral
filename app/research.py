@@ -4,12 +4,14 @@ from __future__ import annotations
 import argparse
 import html
 import json
+from datetime import date
 from pathlib import Path
 
-from . import build, research_context
+from . import build, intake, research_context
 
 
-def _trace_html(ticker, research, report_name):
+def _trace_html(ticker, research, report_name, forecast_assumptions=None,
+                news_deepdive=None):
     """A small, readable audit view for the analyst and the judging demo."""
     brief = research.get("document") if isinstance(research, dict) else None
     brief = brief if isinstance(brief, dict) else {}
@@ -56,6 +58,44 @@ def _trace_html(ticker, research, report_name):
         parts.append("</ul></section>")
     if not insights:
         parts.append("<div class='card muted'>Belum ada temuan yang lolos validasi cache.</div>")
+    forecast_assumptions = forecast_assumptions or {}
+    parts.append("<h2>Asumsi forecast oleh agent</h2>")
+    parts.append(f"<p class='muted'>Status: {esc(forecast_assumptions.get('status'))}</p>")
+    plan = forecast_assumptions.get("plan") or {}
+    for effect in plan.get("news_effects") or []:
+        parts.append("<section class='card'>"
+                     f"<strong>{esc(effect.get('driver'))}: {esc(effect.get('change'))}</strong> "
+                     f"({esc(', '.join(str(y) for y in effect.get('years') or []))})<br>"
+                     f"{esc(effect.get('rationale'))}<br><small>"
+                     f"{esc(effect.get('timestamp'))} · {esc(effect.get('source_url'))}"
+                     "</small></section>")
+    interim = plan.get("interim_scenario") or {}
+    if interim:
+        parts.append("<section class='card'><strong>Skenario hasil interim</strong><br>"
+                     f"{esc(interim.get('rationale'))}<br><small>"
+                     f"{esc(interim.get('published_at'))} · {esc(interim.get('source_url'))}"
+                     "</small></section>")
+    if forecast_assumptions.get("problems"):
+        parts.append("<div class='card muted'>" +
+                     esc("; ".join(forecast_assumptions["problems"])) + "</div>")
+    parts.append("<h2>Deep-dive berita (teks lengkap otomatis)</h2>")
+    deepdive = news_deepdive or []
+    if not deepdive:
+        parts.append("<div class='card muted'>Belum ada hasil deep-dive berita.</div>")
+    for item in deepdive:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("fetch_status") or "")
+        body_preview = str(item.get("full_text") or "")[:400]
+        parts.append("<section class='card'>"
+                     f"<strong>{esc(item.get('title') or '(tanpa judul)')}</strong><br><small>"
+                     f"{esc(item.get('timestamp'))} · {esc(item.get('source_url'))} · "
+                     f"status {esc(status)}"
+                     + (f" · {esc(item.get('fetched_at'))}" if item.get("fetched_at") else "")
+                     + f" · {int(item.get('full_length') or 0)} karakter</small>"
+                     + (f"<p>{esc(body_preview)}…</p>" if body_preview and status == "fetched" else
+                        "<p class='muted'>Teks lengkap tidak tersedia; memakai ringkasan cache.</p>")
+                     + "</section>")
     limitations = brief.get("limitations") or []
     if limitations:
         parts.append("<h2>Bukti yang masih kurang</h2><div class='card'><ul>")
@@ -66,7 +106,8 @@ def _trace_html(ticker, research, report_name):
     return "\n".join(parts)
 
 
-def run(ticker, outdir, want_pdf=False):
+def run(ticker, outdir, want_pdf=False, as_of=None,
+        illustrative_scenarios=False, analyst_target=False):
     """Run the research agent and build a report from the same cached evidence."""
     from agents.research.run import run_live
 
@@ -74,15 +115,31 @@ def run(ticker, outdir, want_pdf=False):
     destination = Path(outdir)
     destination.mkdir(parents=True, exist_ok=True)
     print(f"{t}: agent membaca sectors cache dan menyusun briefing…", flush=True)
-    research = run_live(t)
+    try:
+        research = run_live(t)
+    except (OSError, TimeoutError, ValueError) as error:
+        # Preserve a usable draft and an explicit failure in the trace when
+        # an LLM request times out or the provider returns malformed data.
+        research = {"ok": False, "status": "agent_error",
+                    "error": f"{type(error).__name__}: {str(error)[:200]}"}
     if not isinstance(research, dict):
         raise TypeError("research agent must return an object")
     print(f"{t}: agent {research.get('status') or ('OK' if research.get('ok') else 'belum lengkap')}",
           flush=True)
 
-    report = build.build(t, destination, want_pdf=want_pdf)
+    report_as_of = as_of or date.today().isoformat()
+    from agents.forecast_assumptions.run import run_live as forecast_agent
+    forecast_intake, _ = intake.load(t, as_of=report_as_of)
+    assumption_result = forecast_agent(forecast_intake)
+    print(f"{t}: forecast agent {assumption_result['status']}", flush=True)
+    assumption_plan = assumption_result.get("plan")
+    report = build.build(t, destination, want_pdf=want_pdf, as_of=report_as_of,
+                         illustrative_scenarios=illustrative_scenarios or analyst_target,
+                         assumption_plan=assumption_plan,
+                         analyst_target=analyst_target,
+                         assumption_status=assumption_result.get("status"))
     validated, validation_status = research_context.load_analysis(
-        t, report["meta"].get("tanggal"))
+        t, report["meta"].get("harga_tanggal"))
     safe_research = {
         "ok": bool(research.get("ok") and validated),
         "path": research.get("path"),
@@ -93,14 +150,23 @@ def run(ticker, outdir, want_pdf=False):
     audit = {
         "ticker": t,
         "research": safe_research,
+        "forecast_assumptions": assumption_result,
+        "news_deepdive": forecast_intake.get("news_full") or [],
         "report": {"status": report["meta"].get("status"),
                    "as_of": report["meta"].get("tanggal"),
+                   "market_price_date": report["meta"].get("harga_tanggal"),
+                   "illustrative_scenarios": bool(report["meta"].get("illustrative_scenarios")),
+                   "target_method": report.get("method"),
+                   "target_price": report["meta"].get("tp"),
+                   "rating": report["meta"].get("rating"),
                    "research_status": report["meta"].get("research_status")},
     }
     trace_json = destination / f"{t}-trace.json"
     trace_html = destination / f"{t}-trace.html"
     trace_json.write_text(json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
-    trace_html.write_text(_trace_html(t, safe_research, f"{t}.html"), encoding="utf-8")
+    trace_html.write_text(_trace_html(t, safe_research, f"{t}.html",
+                                      assumption_result,
+                                      forecast_intake.get("news_full")), encoding="utf-8")
     return {"ticker": t, "research_ok": safe_research["ok"],
             "report_status": report["meta"].get("status"),
             "report_html": str(destination / f"{t}.html"),
@@ -113,8 +179,16 @@ def main(argv=None):
     parser.add_argument("ticker")
     parser.add_argument("--out", default="out/demo")
     parser.add_argument("--pdf", action="store_true")
+    parser.add_argument("--as-of", default=None,
+                        help="tanggal laporan YYYY-MM-DD (default: hari ini)")
+    parser.add_argument("--illustrative-scenarios", action="store_true",
+                        help="tambahkan screen historis dan valuasi ilustratif ke draft")
+    parser.add_argument("--analyst-target", action="store_true",
+                        help="opt-in target FY26F EV/EBITDA dari rencana agent tervalidasi")
     args = parser.parse_args(argv)
-    print(json.dumps(run(args.ticker, args.out, want_pdf=args.pdf),
+    print(json.dumps(run(args.ticker, args.out, want_pdf=args.pdf, as_of=args.as_of,
+                         illustrative_scenarios=args.illustrative_scenarios,
+                         analyst_target=args.analyst_target),
                      ensure_ascii=False, indent=2))
 
 

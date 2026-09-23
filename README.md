@@ -6,9 +6,9 @@ Sektoral helps Indonesian equity analysts turn fragmented company data into a so
 
 The local browser flow is simple: enter an IDX ticker, follow its research status, then open the company update and agent trace. Behind the form, the research agent selects reads from the ticker's locally cached Sectors data and creates an evidence-linked brief. A deterministic validator checks its citations before the report builder creates the update. If the cache cannot support all sections, the UI labels the result partial and the report shows its evidence limits.
 
-Sectors cache is the product's market-price source. The research agent reads `data/sectors_cache.db`; it does not call Sectors upstream or fetch market data from the web. The deterministic report builder may also read dated, source-linked issuer releases from `data/issuer_evidence/`. No brokerage connection or trade execution is part of the product.
+Sectors cache is the default market-price source. A newer dated close in `data/market_quotes/` may override a stale cached quote. The research agent reads `data/sectors_cache.db`; it does not call Sectors upstream. The deterministic report builder may also read dated, source-linked issuer releases from `data/issuer_evidence/`. No brokerage connection or trade execution is part of the product.
 
-Current PDF outputs are research drafts while their forecast and valuation gates remain incomplete. The builder can show Buy, Hold or Sell and a target price only when the applicable production gate passes.
+The builder shows Buy, Hold or Sell and a target price only when the selected method's release gate passes. An explicit assumption-led FY EV/EBITDA method can publish a mining target while separately retaining incomplete LoM/SOTP findings in the audit trace.
 
 ## Quickstart
 
@@ -26,16 +26,22 @@ For a terminal-only run, use the one-command CLI below. It writes the HTML repor
 python3 -m app.research BBCA --out out/demo --pdf
 ```
 
-Replace `BBCA` with another IDX ticker when its required rows are present in the local cache. The deterministic report builder without agent research remains available as `python3 -m app.build BBCA --out out/demo`. Use `--as-of YYYY-MM-DD` to set a report date; the cached market price retains its own date and issuer facts published later than the report date are excluded.
+Replace `BBCA` with another IDX ticker when its required rows are present in the local cache. The deterministic report builder without agent research remains available as `python3 -m app.build BBCA --out out/demo`. Both CLI commands use today's date for the report unless `--as-of YYYY-MM-DD` is supplied. The cached market price retains its own date, and issuer facts published later than the report date are excluded.
+
+The one-command research flow now runs specialist assumption passes over dated ticker news and any local official interim release. They read the applicable rules from `spec/Instruksi-Report-v3.md` at run time and record an explicit zero effect for articles that only describe trading or index moves. A supported operating event can adjust the internal revenue or margin screen; macro risk can adjust an illustrative WACC or, for financial firms, Cost of Equity. The exact source, year, driver, magnitude, and rationale are preserved in the trace. On MiniMax-M3, the agents use adaptive thinking with an 8,192-token combined thinking-and-answer cap, the closest budget control exposed by its Chat API; other compatible models receive `reasoning_effort=high`.
+
+For an internal mining draft with the historical extrapolation and valuation screens shown alongside the sourced actuals, add `--illustrative-scenarios`. When official interim evidence is available, the PDF also shows an agent-authored second-half/full-year scenario in the issuer's reporting currency. These screens remain separate when the FX and asset-level bridges are incomplete. The PDF labels the scenarios on every page and keeps the rating and target price withheld while the mining forecast and SOTP gates remain incomplete.
+
+To opt into the validated FY scenario as a formal target and rating, use `--analyst-target`, for example `python3 -m app.research AMMN --out out/AMMN-formal --pdf --as-of 2026-09-24 --analyst-target`. This route requires a validated forecast agent scenario, an official interim release, a fresh post-release close and FX quote, an official balance-sheet bridge, and 6x/8x/10x sensitivity. The selected 8x multiple is an analyst assumption; the PDF discloses missing LoM/SOTP and the trace preserves its original blockers.
 
 ## Evidence and draft policy
 
-- The agent's inputs are limited to Sectors rows already present in `data/sectors_cache.db`. The deterministic builder may use reviewed local issuer source packs with publication dates and page references. Missing facts are never silently filled with web research or analyst assumptions.
+- The research agent's inputs are limited to Sectors rows already present in `data/sectors_cache.db`. The forecast agent may also use reviewed local issuer source packs. The deterministic builder may use those source packs and dated market quote overrides. Assumptions proposed by the forecast agent are labeled, validated, and retained in the trace.
 - The agent may select only cache endpoints available for that ticker. The host executes the reads and records them in the trace.
-- When current ticker-specific news is cached alongside relevant quarterly metrics, the agent paraphrases the article and connects it to the operating context in a single cited insight. The host withholds that link if the evidence or citation does not validate.
+- The forecast assumption agent reads dated, ticker-specific cache news and reviewed local issuer releases. It may propose bounded changes to revenue growth, EBITDA margin, or an illustrative discount rate, with exact article matching and year-by-year provenance. An article about the share price alone receives zero financial effect. Unsupported or malformed proposals are rejected and left in the trace.
 - A validation gate checks the research brief's citations against rows actually read. Failed validation or insufficient evidence must remain visible as a partial result or a clear missing-evidence result; do not present it as a completed conclusion.
 - Do not record an old artifact as if it came from the current integrated command. Generate the demo output afresh and show the browser status and resulting report/trace.
-- The report builder withholds recommendation labels and target prices until the issuer's source, forecast, and valuation checks pass. All current example PDFs remain visibly labeled drafts.
+- The report builder withholds recommendation labels and target prices until the selected method's source, forecast, and valuation checks pass. A formal assumption-led mining report does not mark the separate LoM/SOTP gate complete.
 
 ## Project map
 
