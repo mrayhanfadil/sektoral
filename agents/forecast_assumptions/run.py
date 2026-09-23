@@ -100,6 +100,7 @@ def _source_payload(intake):
             "stockpile_metrics": evidence.get("stockpile_metrics") or {},
             "mine_life_context": evidence.get("mine_life_context") or {},
             "balance_sheet": evidence.get("balance_sheet") or {},
+            "annual_actuals": evidence.get("annual_actuals") or [],
         } if actual else None,
         "news": selected_news,
     }
@@ -240,7 +241,68 @@ def _validate(plan, source, require_news_coverage=True):
     return problems
 
 
-def _run_subagent(name, source, spec):
+def _validate_outyears(rows, source):
+    """Validate four explicit analyst assumption rows after the FY scenario."""
+    problems = []
+    official = source.get("official") or {}
+    if not isinstance(rows, list) or len(rows) != 4:
+        return ["outyear_scenario must contain exactly four annual rows"]
+    base_year = int(str(official.get("period_end") or "")[:4])
+    allowed_sources = {"official"} | {f"news:{item['index']}" for item in source["news"]}
+    expected_years = list(range(base_year + 1, base_year + 5))
+    actual_years = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            problems.append(f"outyear_scenario[{index}] must be an object")
+            continue
+        year = row.get("year")
+        actual_years.append(year)
+        if year != expected_years[index]:
+            problems.append("outyear_scenario years must be contiguous after interim fiscal year")
+        bounds = {"revenue_growth_pct": (-30, 30),
+                  "ebitda_margin_pct": (0, 85),
+                  "net_income_margin_pct": (-30, 60),
+                  "capex_to_revenue_pct": (0, 60)}
+        for field, (lower, upper) in bounds.items():
+            if not _number(row.get(field), lower, upper):
+                problems.append(f"outyear_scenario[{year}].{field} outside bounds")
+        rationale = row.get("rationale")
+        if not isinstance(rationale, str) or not 40 <= len(rationale.strip()) <= 450:
+            problems.append(f"outyear_scenario[{year}] needs a 40-450 character rationale")
+        source_ids = row.get("source_ids")
+        if (not isinstance(source_ids, list) or "official" not in source_ids or
+                any(item not in allowed_sources for item in source_ids)):
+            problems.append(f"outyear_scenario[{year}] must cite valid official/news source_ids")
+        if isinstance(rationale, str) and re.search(r"[\u4e00-\u9fff]", rationale):
+            problems.append(f"outyear_scenario[{year}] rationale must use Indonesian text")
+    if actual_years != expected_years:
+        problems.append("outyear_scenario does not cover the next four fiscal years")
+    if not official.get("source_url") or not _dated_on_or_before(
+            official.get("published_at"), source["as_of"]):
+        problems.append("outyear_scenario official evidence is missing or future-dated")
+    return list(dict.fromkeys(problems))
+
+
+def _interim_anchor(source, interim):
+    official = source["official"]
+    actual = official["metrics"]
+    revenue_h1 = actual["revenue"]
+    revenue_h2 = revenue_h1 * interim["h2_revenue_to_h1"]
+    ebitda_h2 = revenue_h2 * interim["h2_ebitda_margin_pct"] / 100
+    net_h2 = revenue_h2 * interim["h2_net_margin_pct"] / 100
+    return {
+        "year": int(str(official["period_end"])[:4]),
+        "unit": official.get("unit"),
+        "source_url": official.get("source_url"),
+        "full_year": {
+            "revenue": revenue_h1 + revenue_h2,
+            "ebitda": actual["ebitda"] + ebitda_h2,
+            "net_profit": actual["net_profit"] + net_h2,
+        },
+    }
+
+
+def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
     """Run one isolated analyst role and one evidence-preserving repair if needed."""
     common = (
         "You are an Indonesian equity analyst subagent. Apply the attached current "
@@ -281,7 +343,7 @@ def _run_subagent(name, source, spec):
         )
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                    "model_profile": source["model_profile"], "news": source["news"]}
-    else:
+    elif name == "interim":
         role = (
             "Role: OFFICIAL INTERIM ANALYST. Return {\"interim_scenario\": object "
             "or null}. Only create an H2 scenario when the official latest period "
@@ -310,10 +372,60 @@ def _run_subagent(name, source, spec):
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                    "model_profile": source["model_profile"],
                    "official": source["official"]}
+    else:
+        role = (
+            "Role: OUTYEAR EARNINGS SCENARIO ANALYST. Build an assumption-led "
+            "annual earnings path for exactly the four years after anchor.year. "
+            "Return {\"outyear_scenario\": [four rows]}. Each row requires year, "
+            "revenue_growth_pct [-30,30], ebitda_margin_pct [0,85], "
+            "net_income_margin_pct [-30,60], capex_to_revenue_pct [0,60], "
+            "rationale (40-450 characters in Indonesian), source_ids. Use only the supplied official release, annual "
+            "actuals, guidance, operations, mine-life milestones, and dated news. "
+            "source_ids must be selected from [\"official\", \"news:0\", ...]. "
+            "Do not invent annual production, grade, recovery, price deck, costs, "
+            "inventory, or a LoM schedule that the sources do not disclose. When "
+            "annual operating detail is absent, state that the numerical path is "
+            "an analyst assumption and explain the operational milestones and "
+            "uncertainty that informed it. Treat news as zero impact unless it has "
+            "a specific measurable transmission to the issuer's operations. Do "
+            "not force nonzero news adjustments. Capex ratio is also an explicit "
+            "analyst assumption unless source-backed. These are earnings scenarios, "
+            "not a physical production forecast or SOTP valuation. No perpetual "
+            "terminal value. Write concise Indonesian rationales distinguishing "
+            "reported facts from judgments. Keep margins and year-on-year changes "
+            "economically coherent with the FY anchor; show ramp-up, normalization, "
+            "asset transition, and finite-life uncertainty where relevant. Do not "
+            "simply repeat one flat value every year without a causal explanation. "
+            "Return compact JSON only; rationale must be at most two short sentences."
+        )
+        news_by_id = {f"news:{item['article_index']}": {
+            "title": item["title"], "timestamp": item["timestamp"],
+            "url": item["source_url"], "driver": item.get("driver"),
+            "change": item.get("change"),
+            "rationale": str(item.get("rationale") or "")[:350]}
+                      for item in news_effects or []}
+        official = source["official"]
+        payload = {"ticker": source["ticker"], "as_of": source["as_of"],
+                   "official": {key: official.get(key) for key in (
+                       "source_url", "published_at", "period", "period_end", "unit",
+                       "metrics", "guidance", "operating_metrics", "operating_context",
+                       "mine_life_context", "annual_actuals")},
+                   "anchor": interim_anchor, "news_effects": news_by_id,
+                   "required_years": list(range(interim_anchor["year"] + 1,
+                                                 interim_anchor["year"] + 5)),
+                   "json_shape": {"outyear_scenario": [{
+                       "year": "integer", "revenue_growth_pct": "number",
+                       "ebitda_margin_pct": "number", "net_income_margin_pct": "number",
+                       "capex_to_revenue_pct": "number",
+                       "rationale": "Indonesian text, 40-450 characters",
+                       "source_ids": ["official"]}]}}
+        attempts = 3
+    if name != "outyears":
+        attempts = 2
     messages = [{"role": "system", "content": common + "\n\n" + role},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
     raw = ""
-    for attempt in range(2):
+    for attempt in range(attempts):
         try:
             raw, _ = _response_text(_chat(messages, max_tokens=8192,
                                           reasoning_effort="high"))
@@ -330,6 +442,11 @@ def _run_subagent(name, source, spec):
                 else:
                     problems = _validate({"news_effects": fragment["news_effects"],
                                           "interim_scenario": None}, source)
+            elif name == "outyears":
+                if set(fragment) != {"outyear_scenario"}:
+                    problems = ["outyear agent must return only outyear_scenario"]
+                else:
+                    problems = _validate_outyears(fragment["outyear_scenario"], source)
             else:
                 if "interim_scenario" in fragment:
                     fragment = {"interim_scenario": fragment["interim_scenario"]}
@@ -359,18 +476,32 @@ def _run_subagent(name, source, spec):
                                          require_news_coverage=False)
         if not problems:
             break
-        if attempt == 0:
+        if attempt + 1 < attempts:
             messages.append({"role": "assistant", "content": raw[:8000]})
+            if name == "outyears":
+                repair = (
+                    "Your prior response may be unparsable. Return one complete JSON "
+                    "object only. Repair every listed outyear validation error. Return exactly four "
+                    "rows for the same consecutive years and preserve the numeric "
+                    "assumptions unless an error names them. Rewrite each rationale "
+                    "in Indonesian, 40-450 characters, and remove any Chinese or other "
+                    "non-Indonesian text. Keep source_ids valid and do not add sources. Errors: " +
+                    json.dumps(problems, ensure_ascii=False))
+            else:
+                repair = ("Repair the candidate as ONE valid JSON object. Errors: " +
+                          json.dumps(problems) +
+                          (". Preserve exact source URL, title, and timestamp. "
+                           if name == "news" else ". Keep numerical assumptions and rationale source-grounded. ") +
+                          "Do not invent sources.")
             messages.append({"role": "user", "content":
-                             "Repair the candidate as ONE valid JSON object. Errors: " +
-                             json.dumps(problems) +
-                             (". Preserve exact source URL, title, and timestamp. "
-                              if name == "news" else ". Keep the numerical assumptions and rationale source-grounded. ") +
-                             "Do not invent sources."})
+                             repair})
     if problems:
         return {"status": "invalid", "fragment": None, "problems": problems}
+    binding = ("official_evidence" if name == "interim" else
+               "official_evidence_and_dated_news" if name == "outyears" else
+               "cached_news")
     return {"status": "validated", "fragment": fragment, "problems": [],
-            "provenance_binding": "official_evidence" if name == "interim" else "cached_news"}
+            "provenance_binding": binding}
 
 
 def run_live(intake):
@@ -383,6 +514,7 @@ def run_live(intake):
                 "problems": [f"report spec unavailable: {error}"]}
     if not source["news"] and not source["official"]:
         return {"status": "no_event_evidence", "plan": None, "problems": [],
+                "interim_status": "not_run", "outyears_status": "not_run",
                 "subagents": {},
                 "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
                 "spec_sha256": spec_sha256,
@@ -407,7 +539,24 @@ def run_live(intake):
             except Exception as error:  # noqa: BLE001 — preserve the other agent's result
                 results[name] = {"status": "invalid", "fragment": None,
                                  "problems": [f"{type(error).__name__}: {str(error)[:180]}"]}
-    plan = {"news_effects": [], "interim_scenario": None}
+    interim_result = results.get("interim") or {}
+    news_result = results.get("news") or {}
+    if (source.get("model_profile") == "finite_life_mining" and
+            interim_result.get("status") == "validated"):
+        interim_plan = interim_result.get("fragment") or {}
+        interim = interim_plan.get("interim_scenario")
+        if isinstance(interim, dict):
+            anchor = _interim_anchor(source, interim)
+            try:
+                results["outyears"] = _run_subagent(
+                    "outyears", source, spec, interim_anchor=anchor,
+                    news_effects=(news_result.get("fragment") or {}).get("news_effects"))
+            except Exception as error:  # noqa: BLE001 — preserve the FY actual scenario
+                results["outyears"] = {
+                    "status": "invalid", "fragment": None,
+                    "problems": [f"{type(error).__name__}: {str(error)[:180]}"]}
+    plan = {"news_effects": [], "interim_scenario": None,
+            "outyear_scenario": None}
     problems = []
     for name, result in results.items():
         if result["status"] == "validated":
@@ -428,6 +577,8 @@ def run_live(intake):
         if status == "invalid":
             plan = None
     return {"status": status, "plan": plan, "problems": problems,
+            "interim_status": (results.get("interim") or {}).get("status", "not_run"),
+            "outyears_status": (results.get("outyears") or {}).get("status", "not_run"),
             "subagents": {name: {"status": result["status"],
                                  "problems": result["problems"]}
                           for name, result in results.items()},
