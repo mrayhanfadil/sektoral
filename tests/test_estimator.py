@@ -222,6 +222,68 @@ def test_structured_forecast_requires_complete_year_series():
     assert _forecast_candidate("TEST", ["2026F", "2027F", "2028F"], [source]) is None
 
 
+def test_agentic_mode_chooses_and_executes_cache_tool_before_writing(monkeypatch):
+    from agents.estimator import run
+    from agents.estimator import tools
+    years = ["2026F", "2027F", "2028F"]
+    endpoint = "/financials/quarterly/TEST/"
+    source = {
+        "source": "Verified research report", "url": "https://example.test/report.pdf",
+        "currency": "USD million", "years": years,
+        "revenue": [10, 11, 12], "ebitda": [4, 5, 6],
+        "net_profit": [2, 3, 4], "capex": [1, 1, 2],
+    }
+    reads = []
+    saved = []
+    calls = []
+    monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: [endpoint])
+    def cache_get(ticker, requested_endpoint):
+        reads.append((ticker, requested_endpoint))
+        return {"data": [{"date": "2026-03-31", "revenue": 9}]}
+    monkeypatch.setattr(tools, "cache_get", cache_get)
+    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [source])
+    monkeypatch.setattr(tools, "write_drivers",
+                        lambda ticker, doc: saved.append(doc) or "drivers.json")
+    def chat(messages, **kwargs):
+        calls.append(messages)
+        if len(calls) == 1:
+            return json.dumps({"tool": "cache_get", "args": ["TEST", endpoint]})
+        assert "2026-03-31" in messages[-1]["content"]
+        return json.dumps({"final": {"decision": "ready",
+                                      "selected_cache_endpoints": [endpoint],
+                                      "reason": "Quarterly actuals reviewed."}})
+    monkeypatch.setattr(run, "_chat", chat)
+
+    result = run.run_live("TEST", years, agentic=True)
+
+    assert result["ok"] is True
+    assert result["method"] == "agentic-structured-source"
+    assert result["agent_tool_calls"] == 1
+    assert result["agent_decision"] == {"decision": "ready",
+                                         "selected_cache_endpoints": [endpoint]}
+    assert reads == [("TEST", endpoint)]
+    assert len(calls) == 2
+    assert len(saved) == 1
+    assert saved[0]["drivers"]["revenue"]["path"] == source["revenue"]
+
+
+def test_agentic_mode_rejects_endpoint_outside_allowlist(monkeypatch):
+    from agents.estimator import run
+    from agents.estimator import tools
+    monkeypatch.setattr(tools, "cache_endpoints",
+                        lambda ticker: ["/financials/quarterly/TEST/"])
+    monkeypatch.setattr(run, "public_forecast_evidence", lambda ticker: [])
+    monkeypatch.setattr(run, "_chat", lambda *args, **kwargs: json.dumps({
+        "tool": "cache_get", "args": ["TEST", "/company/secret/TEST/"]}))
+    monkeypatch.setattr(tools, "cache_get",
+                        lambda *args: pytest.fail("outside endpoint must not execute"))
+
+    result = run.run_live("TEST", ["2026F", "2027F", "2028F"], agentic=True)
+
+    assert result["ok"] is False
+    assert "allowlist" in result["error"]
+
+
 def test_chat_sends_supported_completion_token_field(monkeypatch):
     from agents.estimator import run
     import urllib.request
