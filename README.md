@@ -6,9 +6,9 @@ Sektoral helps Indonesian equity analysts turn fragmented company data into a so
 
 The local browser flow is simple: enter an IDX ticker, follow its research status, then open the company update and agent trace. Behind the form, the research agent selects reads from the ticker's locally cached Sectors data and creates an evidence-linked brief. A deterministic validator checks its citations before the report builder creates the update. If the cache cannot support all sections, the UI labels the result partial and the report shows its evidence limits.
 
-Sectors data is the product's only market-data source. The research run reads `data/sectors_cache.db`; it does not call Sectors upstream or fetch market data from the web. The LLM endpoint is used for agent reasoning, not as a market-data source. No brokerage connection or trade execution is part of the product.
+Sectors cache is the product's market-price source. The research agent reads `data/sectors_cache.db`; it does not call Sectors upstream or fetch market data from the web. The deterministic report builder may also read dated, source-linked issuer releases from `data/issuer_evidence/`. No brokerage connection or trade execution is part of the product.
 
-The product provides information and analysis for research. It does not give investment recommendations or financial advice. Outputs should be read as analytical scenarios, not instructions to buy, sell, or hold a security.
+Current PDF outputs are research drafts while their forecast and valuation gates remain incomplete. The builder can show Buy, Hold or Sell and a target price only when the applicable production gate passes.
 
 ## Quickstart
 
@@ -26,16 +26,16 @@ For a terminal-only run, use the one-command CLI below. It writes the HTML repor
 python3 -m app.research BBCA --out out/demo --pdf
 ```
 
-Replace `BBCA` with another IDX ticker when its required rows are present in the local cache. The deterministic report builder without agent research remains available as `python3 -m app.build BBCA --out out/demo`.
+Replace `BBCA` with another IDX ticker when its required rows are present in the local cache. The deterministic report builder without agent research remains available as `python3 -m app.build BBCA --out out/demo`. Use `--as-of YYYY-MM-DD` to set a report date; the cached market price retains its own date and issuer facts published later than the report date are excluded.
 
 ## Evidence and draft policy
 
-- Inputs are limited to the Sectors rows already present in `data/sectors_cache.db`. Missing ticker data is not silently replaced with web research, memory, analyst assumptions, or another local dataset.
+- The agent's inputs are limited to Sectors rows already present in `data/sectors_cache.db`. The deterministic builder may use reviewed local issuer source packs with publication dates and page references. Missing facts are never silently filled with web research or analyst assumptions.
 - The agent may select only cache endpoints available for that ticker. The host executes the reads and records them in the trace.
 - When current ticker-specific news is cached alongside relevant quarterly metrics, the agent paraphrases the article and connects it to the operating context in a single cited insight. The host withholds that link if the evidence or citation does not validate.
 - A validation gate checks the research brief's citations against rows actually read. Failed validation or insufficient evidence must remain visible as a partial result or a clear missing-evidence result; do not present it as a completed conclusion.
 - Do not record an old artifact as if it came from the current integrated command. Generate the demo output afresh and show the browser status and resulting report/trace.
-- No output is an investment recommendation. Remove recommendation labels and price targets from any public-facing demo view unless the team has reviewed them against the hackathon's no-financial-advice rule.
+- The report builder withholds recommendation labels and target prices until the issuer's source, forecast, and valuation checks pass. All current example PDFs remain visibly labeled drafts.
 
 ## Project map
 
@@ -44,6 +44,7 @@ Replace `BBCA` with another IDX ticker when its required rows are present in the
 | `app/` | Deterministic report intake, forecast, valuation, narrative, and rendering |
 | `agents/research/` | Cache-constrained research agent, evidence checks, and trace data |
 | `data/sectors_cache.db` | Local Sectors cache used as the only market-data source |
+| `data/issuer_evidence/` | Dated local copies of metrics transcribed from official issuer releases |
 | `spec/` | Report and output requirements |
 | `docs/` | Sectors API/MCP reference, recipes, and implementation notes |
 | `video-recording-guide.md` | Real-workflow video scripts and recording checks |

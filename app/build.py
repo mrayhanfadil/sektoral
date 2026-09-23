@@ -1,10 +1,4 @@
-"""Pipeline v3: intake → forecast → valuation → narrative → render.
-
-Facts are read only from data/sectors_cache.db. No network, LLM, analyst
-driver files, or local operating-profile files enter the report build. A
-separate agent-written news note is included only after matching it back to
-the ticker-specific cached news rows.
-"""
+"""Pipeline v3: cache market data, local official source packs, report build."""
 import argparse
 import json
 import sys
@@ -21,8 +15,8 @@ except Exception:
 OUT = Path(__file__).resolve().parent.parent / "out"
 
 
-def build(ticker, outdir=OUT, want_pdf=False, method="auto"):
-    doc_in, g1 = intake.load(ticker)
+def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None):
+    doc_in, g1 = intake.load(ticker, as_of=as_of)
     fc = forecast.build(doc_in)
     va = valuation.build(doc_in, fc)
     doc = narrative.build(doc_in, fc, va, g1, method=method)
@@ -58,9 +52,12 @@ def main():
     p.add_argument("--pdf", action="store_true")
     p.add_argument("--method", default="auto",
                    help="opsi valuasi analis: auto|dcf|ddm|rnav")
+    p.add_argument("--as-of", default=None,
+                   help="tanggal laporan YYYY-MM-DD; harga tetap bertanggal sesuai cache")
     a = p.parse_args()
     try:
-        build(a.ticker, Path(a.out), want_pdf=a.pdf, method=a.method)
+        build(a.ticker, Path(a.out), want_pdf=a.pdf, method=a.method,
+              as_of=a.as_of)
     except ValueError as e:
         sys.exit(f"refused: {e}")
 

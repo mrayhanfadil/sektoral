@@ -2,6 +2,7 @@
 from . import fmt
 from . import rnav
 from . import release
+from . import rating as rating_mod
 from . import sotp as sotp_mod
 
 def _core(fc, shares, wacc, g, exit_mult, net_debt):
@@ -90,6 +91,14 @@ def build(intake, fc):
     g3["G3.5_keyfin"] = "lolos"
     g3["G3.6_peer"] = "dilabeli" if not intake["peers"] else "lolos"
     g3["G3.7_band"] = "lolos"
+    method_gap = abs(ps_g - ps_x) / max(abs(ps_g), abs(ps_x), 1)
+    g3["G3.8_method_divergence"] = (
+        "lolos" if method_gap <= 0.30 else "gagal",
+        f"selisih Gordon vs exit {method_gap*100:.1f}%")
+    g3["G3.9_extreme_thesis"] = (
+        "gagal" if abs(upside) > 0.50 else "lolos",
+        "upside/downside ekstrem memerlukan tesis fundamental dan validasi analis"
+        if abs(upside) > 0.50 else "band ekstrem tidak terpicu")
 
     impl = {"per": tp / (f_last["net"] / intake["shares"]) if f_last["net"] > 0 else None,
             "ev_ebitda": (tp * intake["shares"] + net_debt) / f_last["ebitda"]
@@ -128,6 +137,14 @@ def build(intake, fc):
                           "corporate_overhead_idr", "shares")
         }
     release_result = release.assess_release(profile, intake, fc, sotp_result)
+    if release_result["status"] == "distributable":
+        critical = [key for key, result in g3.items()
+                    if key in {"G3.2_skala", "G3.4_downside",
+                               "G3.8_method_divergence", "G3.9_extreme_thesis"}
+                    and isinstance(result, tuple) and result[0].startswith("gagal")]
+        if critical:
+            release_result = {"status": "draft_non_distributable",
+                              "blockers": [f"valuation check failed: {key}" for key in critical]}
     is_draft = release_result["status"] != "distributable"
 
     # Mining's primary method is finite-life SOTP, never the legacy Gordon /
@@ -140,7 +157,12 @@ def build(intake, fc):
         else:
             tp = round(sotp_result["target_price_idr"] / 10) * 10
             upside = tp / intake["price"] - 1
-            rating = None
+            if abs(upside) > 0.50:
+                release_result = {"status": "draft_non_distributable",
+                                  "blockers": ["extreme SOTP target needs a sourced fundamental thesis"]}
+                tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
+            else:
+                rating = rating_mod.classify(upside)
             tp_down, grid = None, {}
         g3 = {
             "G3.1_method": "lolos" if not is_draft else "gagal",
@@ -153,6 +175,8 @@ def build(intake, fc):
         tp, upside, rating, tp_down, grid = None, None, \
             "DRAFT NON-DISTRIBUTABLE", None, {}
         g3 = {"G3.release": "draft_non_distributable"}
+    elif release_result["status"] == "distributable":
+        rating = rating_mod.classify(upside)
 
     return {"method": method, "model_profile": profile,
             "release": release_result, "sotp": sotp_result,
@@ -162,5 +186,5 @@ def build(intake, fc):
             "pv_explicit": pv_exp, "pv_terminal": pv_tv, "tv_share": pv_tv / ev_g,
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
             "ps_exit": ps_x, "tp": tp, "tp_down": tp_down, "tp_grid": grid,
-            "upside": upside,
+            "upside": upside, "rating": rating,
             "implied": impl, "lom": lom, "g3": g3, "notes": notes}

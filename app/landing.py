@@ -1131,9 +1131,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               <span class="disclosure-mode">Mode: Cache-Only</span>
             </div>
             <ul class="disclosure-list">
-              <li><strong>Hanya Cache Lokal:</strong> Data pasar dibaca eksklusif dari <code>data/sectors_cache.db</code>. Tidak ada panggilan data langsung atau scraping internet saat runtime.</li>
+              <li><strong>Sumber Bertanggal:</strong> Harga pasar dibaca dari <code>data/sectors_cache.db</code>; pembangun PDF juga dapat memakai rilis resmi emiten yang disimpan lokal dengan tanggal dan halaman sumber.</li>
               <li><strong>Nalar AI, Bukan Data:</strong> LLM digunakan murni untuk penalaran dan penyusunan narasi, bukan sebagai generator angka harga atau estimasi pasar.</li>
-              <li><strong>Bukan Saran Investasi:</strong> Hasil adalah analisis skenario independen. Tidak menyediakan rekomendasi transaksi, target harga spekulatif, atau eksekusi broker.</li>
+              <li><strong>Gate Rilis:</strong> Draft menahan rating dan target harga sampai forecast serta valuasi sesuai profil emiten lolos pemeriksaan. Tidak ada eksekusi broker.</li>
             </ul>
           </aside>
         </div>
@@ -1374,7 +1374,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <div class="limit-num">01</div>
             <h3 class="limit-title">Penyimpanan Terisolasi (Cache-Only)</h3>
             <p class="limit-text">
-              Siklus riset tidak terhubung ke API eksternal atau penyedia data pihak ketiga secara langsung saat berjalan. Seluruh analisis memanfaatkan snapshot data terstruktur pada cache lokal untuk memastikan replikasi hasil yang konsisten dan dapat diaudit ulang.
+              Siklus agen riset membaca snapshot cache lokal tanpa panggilan data pasar langsung. Pembangun PDF dapat menambahkan angka aktual dari rilis resmi emiten yang disimpan lokal dan diberi tanggal publikasi agar hasil dapat diaudit ulang.
             </p>
           </div>
 
@@ -1445,7 +1445,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="footer-disclaimer-panel" role="note" aria-label="Pernyataan Pengungkapan dan Sanggahan Resmi">
         <div class="disclaimer-badge">PENGUNGKAPAN PENTING & BATASAN TANGGUNG JAWAB</div>
         <p class="disclaimer-text">
-          <strong>INFORMASI, BUKAN SARAN INVESTASI:</strong> Sektoral adalah perangkat lunak informasi dan analisis data pasar modal Indonesia berbasis data dari Sectors (<code>data/sectors_cache.db</code>). Seluruh keluaran laporan, ringkasan riset, dan jejak agen merupakan analisis skenario analitis berbasis data historis dan agregat, bukan rekomendasi, prediksi kepastian, atau saran investasi.
+          <strong>CATATAN RISET:</strong> Sektoral mengolah harga dari Sectors (<code>data/sectors_cache.db</code>) dan, untuk PDF tertentu, rilis resmi emiten yang disimpan lokal. Draft tidak memuat rating atau target harga; keluaran produksi hanya dapat memuatnya setelah pemeriksaan data, forecast, dan valuasi lolos. Keputusan investasi tetap tanggung jawab pembaca.
         </p>
         <p class="disclaimer-text">
           Keputusan investasi sepenuhnya merupakan tanggung jawab mandiri pembaca dan investor. Selalu lakukan uji tuntas (due diligence) independen dan konsultasikan dengan penasihat keuangan berlisensi sebelum mengambil keputusan investasi. Sektoral tidak terhubung dengan broker dan tidak mengeksekusi pesanan efek.
