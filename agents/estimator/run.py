@@ -182,15 +182,130 @@ def plan(ticker, years):
             "tools": sorted(T.TOOLS)}
 
 
-def run_live(ticker, years):
-    """Read evidence, use exact published forecasts when available, then gate."""
+def run_live(ticker, years, agentic=False):
+    """Read evidence, optionally let the LLM select cache reads, then gate."""
     normalized_ticker = ticker.upper()
     endpoints = T.cache_endpoints(normalized_ticker)
     evidence_log = [f"cache_endpoints({normalized_ticker}) -> {endpoints}"]
+    calls = build_cache_calls(normalized_ticker, endpoints)
+    public_evidence = public_forecast_evidence(normalized_ticker)
+    if agentic:
+        return _run_agentic_with_evidence(
+            normalized_ticker, years, endpoints, evidence_log, calls, public_evidence)
     return _run_with_evidence(
-        normalized_ticker, years, endpoints, evidence_log,
-        build_cache_calls(normalized_ticker, endpoints),
-        public_forecast_evidence(normalized_ticker))
+        normalized_ticker, years, endpoints, evidence_log, calls, public_evidence)
+
+
+def _run_agentic_with_evidence(ticker, years, endpoints, evidence_log, calls,
+                               public_evidence, max_tool_calls=4):
+    """Bounded JSON tool-use loop; the model chooses cache reads, host executes them."""
+    allowed_endpoints = {call["args"][1] for call in calls}
+    if not allowed_endpoints:
+        return {"ok": False, "error": "tidak ada endpoint cache untuk diperiksa",
+                "evidence": evidence_log}
+
+    messages = [
+        {"role": "system", "content": (
+            "Kamu research agent. Kamu boleh meminta host membaca cache lokal Sectors "
+            "dengan JSON {\"tool\":\"cache_get\",\"args\":[TICKER,ENDPOINT]}. "
+            "Endpoint harus persis dari allowlist. Host yang menjalankan tool; kamu tidak "
+            "punya akses langsung ke database/network. Setelah membaca minimal satu hasil, "
+            "kembalikan JSON final: {\"final\":{\"decision\":\"ready\","
+            "\"selected_cache_endpoints\":[...],\"reason\":\"...\"}} jika bukti cukup, "
+            "atau {\"final\":{\"missing_evidence\":[...],"
+            "\"available_facts\":[...]}} jika tidak. Jangan keluarkan prosa/markdown."
+        )},
+        {"role": "user", "content": (
+            f"Ticker {ticker}; tahun {', '.join(years)}.\n"
+            "Pilih endpoint relevan satu per giliran dan tunggu hasil tool sebelum memilih "
+            "lagi atau memberi keputusan final. Minimal satu cache_get wajib sebelum final.\n"
+            "Allowlist endpoint: " + json.dumps(sorted(allowed_endpoints)) +
+            "\nForecast evidence terstruktur (sumber publik): " +
+            json.dumps(public_evidence, ensure_ascii=False)
+        )},
+    ]
+    seen = set()
+    cache_evidence = []
+    max_calls = min(max_tool_calls, len(allowed_endpoints))
+
+    for _ in range(max_calls + 1):
+        raw, finish_reason = _response_text(_chat(messages))
+        try:
+            action = _parse_json(raw)
+        except (ValueError, json.JSONDecodeError):
+            return {"ok": False, "error": "agent tidak mengembalikan JSON valid",
+                    "finish_reason": finish_reason, "evidence": evidence_log}
+
+        if isinstance(action, dict) and action.get("tool"):
+            tool = action.get("tool")
+            args = action.get("args")
+            if tool != "cache_get" or not isinstance(args, list) or len(args) != 2:
+                return {"ok": False, "error": "agent meminta tool/argumen yang tidak diizinkan",
+                        "evidence": evidence_log}
+            requested_ticker, endpoint = args
+            if (str(requested_ticker).upper() != ticker or endpoint not in allowed_endpoints or
+                    endpoint in seen):
+                return {"ok": False, "error": "agent meminta endpoint di luar allowlist atau duplikat",
+                        "requested_endpoint": endpoint, "evidence": evidence_log}
+            try:
+                result = T.cache_get(ticker, endpoint)
+            except Exception as error:  # noqa: BLE001 — keep tool failures in the trace
+                result = {"tool_error": type(error).__name__, "message": str(error)[:200]}
+            if isinstance(result, dict) and isinstance(result.get("data"), list):
+                result = {**result, "data": result["data"][:6]}
+            seen.add(endpoint)
+            cache_evidence.append({"endpoint": endpoint, "result": result})
+            evidence_log.append(f"agent cache_get({ticker}, {endpoint}) -> {str(result)[:300]}")
+            messages.extend([
+                {"role": "assistant", "content": raw[:8000]},
+                {"role": "user", "content": (
+                    "Tool result (read-only JSON): " +
+                    json.dumps(cache_evidence[-1], ensure_ascii=False)[:12000] +
+                    "\nPilih endpoint lain dari allowlist yang belum dibaca, atau beri "
+                    "keputusan final sesuai schema. Jangan mengarang data."
+                )},
+            ])
+            continue
+
+        final = _unwrap_candidate(action) if isinstance(action, dict) else None
+        missing = _missing_evidence_result(action)
+        if missing:
+            return {"ok": False, **missing, "evidence": evidence_log}
+        if not isinstance(final, dict) or not seen:
+            return {"ok": False, "error": "agent final tanpa cache tool evidence",
+                    "evidence": evidence_log}
+
+        candidate = _forecast_candidate(ticker, years, public_evidence)
+        structured_source = candidate is not None
+        if structured_source:
+            if (final.get("decision") != "ready" or
+                    not isinstance(final.get("selected_cache_endpoints"), list) or
+                    not set(final["selected_cache_endpoints"]).issubset(seen) or
+                    not final["selected_cache_endpoints"]):
+                return {"ok": False, "error": "keputusan agent tidak mereferensikan cache yang dibaca",
+                        "agent_final": final, "evidence": evidence_log}
+            problems = gate(candidate, len(years))
+            if problems:
+                return {"ok": False, "error": "gate menolak evidence terstruktur",
+                        "problems": problems, "evidence": evidence_log}
+        else:
+            candidate = final.get("drivers", final)
+            problems = gate(candidate, len(years))
+            if problems:
+                return {"ok": False, "error": "gate menolak agent final",
+                        "problems": problems, "evidence": evidence_log}
+
+        path = T.write_drivers(ticker, candidate)
+        method = "agentic-structured-source" if structured_source else "agentic-llm"
+        decision = "ready" if structured_source else "drivers_submitted"
+        return {"ok": True, "path": str(path), "method": method,
+                "agent_tool_calls": len(seen),
+                "agent_decision": {"decision": decision,
+                                   "selected_cache_endpoints": sorted(seen)},
+                "evidence": evidence_log}
+
+    return {"ok": False, "error": f"agent mencapai batas {max_calls} cache tool calls",
+            "evidence": evidence_log}
 
 
 def _forecast_candidate(ticker, years, evidence_rows):
@@ -334,10 +449,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("ticker")
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--agentic", action="store_true",
+                        help="jalankan loop agent JSON tool-use atas cache Sectors")
     parser.add_argument("--years", default="2026F,2027F,2028F")
     args = parser.parse_args(argv)
     years = [year.strip() for year in args.years.split(",")]
-    result = run_live(args.ticker, years) if args.live else plan(args.ticker, years)
+    result = run_live(args.ticker, years, agentic=args.agentic) if args.live else plan(args.ticker, years)
     print(json.dumps(result, indent=1, ensure_ascii=False)[:3000])
 
 
