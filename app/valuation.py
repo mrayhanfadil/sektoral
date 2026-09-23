@@ -32,7 +32,55 @@ def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
     return out
 
 
-def build(intake, fc):
+def gordon_screen_grid(intake, fc, wacc, g, exit_mult, net_debt):
+    """Unblended historical-model sensitivity for an explicitly labeled draft."""
+    rows = []
+    for delta_wacc in (-0.01, 0.0, 0.01):
+        rate = wacc + delta_wacc
+        values = []
+        for delta_growth in (-0.01, 0.0, 0.01):
+            growth = g + delta_growth
+            values.append(_core(fc, intake["shares"], rate, growth,
+                                exit_mult, net_debt)["ps_g"]
+                          if rate > growth else None)
+        rows.append((rate, values))
+    return {"growth_rates": [g - 0.01, g, g + 0.01], "rows": rows}
+
+
+def scenario_ev_ebitda_crosscheck(intake, fc, multiples=(6.0, 8.0, 10.0)):
+    """Optional interim-based multiple screen in the issuer's reporting currency."""
+    scenario = fc.get("interim_scenario") or {}
+    evidence = intake.get("official_evidence") or {}
+    balance = evidence.get("balance_sheet") or {}
+    fx_quote = intake.get("fx_spot") or {}
+    if evidence.get("reporting_currency") != "USD" or not scenario or not fx_quote:
+        return None
+    ebitda = (scenario.get("full_year") or {}).get("ebitda")
+    cash, debt, shares, rate = (balance.get("cash"), balance.get("total_debt"),
+                                 balance.get("shares_outstanding") or balance.get("shares_issued"),
+                                 fx_quote.get("rate"))
+    minority_interest = balance.get("non_controlling_interest")
+    if not all(isinstance(value, (int, float)) and value > 0
+               for value in (ebitda, cash, debt, shares, rate)) or not (
+                   isinstance(minority_interest, (int, float)) and minority_interest >= 0):
+        return None
+    net_debt = debt - cash
+    values = []
+    for multiple in multiples:
+        enterprise = ebitda * multiple
+        equity = enterprise - net_debt - minority_interest
+        values.append({"multiple": multiple, "enterprise_usd": enterprise,
+                       "equity_usd": equity,
+                       "per_share_idr": equity / shares * rate if equity > 0 else None})
+    return {"year": scenario["year"], "ebitda_usd": ebitda,
+            "cash_usd": cash, "debt_usd": debt, "net_debt_usd": net_debt,
+            "minority_interest_usd": minority_interest,
+            "shares": shares, "fx": fx_quote, "balance_period": balance.get("period_end"),
+            "source_url": scenario["source_url"], "values": values,
+            "status": "illustrative_crosscheck_only"}
+
+
+def build(intake, fc, analyst_target=False, assumption_status=None):
     g3, notes = {}, []
     t = intake["ticker"]
     profile = intake.get("model_profile", "unsupported")
@@ -47,19 +95,36 @@ def build(intake, fc):
                      "dipakai karena kerangka ringan generic.")
     if is_miner:
         notes.append("keterbatasan model: emiten tambang idealnya DCF sampai akhir umur "
-                     "aset tanpa terminal perpetual; umur cadangan tidak ada di cache "
-                     "sehingga dipakai Gordon + exit multiple sebagai proksi.")
+                     "aset tanpa terminal perpetual; rilis resmi dapat memuat jadwal "
+                     "tambang, tetapi tanpa arus kas tahunan per aset Gordon dan "
+                     "exit multiple hanya menjadi screen ilustratif.")
     notes.append("model dibangun di mata uang pelaporan (Rp); FX = 1.")
 
     # --- WACC IDR: INDOGB 10Y sudah memuat risiko negara, tanpa CRP ganda
     rf, erp, beta = 0.065, 0.04, 1.1
     re = rf + beta * erp
+    news_coe_bps = sum(
+        event["change"] for event in (fc.get("news_assumptions") or [])
+        if event.get("driver") == "coe_bps" and is_bank and
+        fc["rows"][0]["year"] in event.get("years", []))
+    news_coe_bps = max(-200, min(200, news_coe_bps))
+    re += news_coe_bps / 10000
+    if news_coe_bps:
+        notes.append(f"CoE screen adjusted {news_coe_bps:+g} bp by cited news scenario judgments.")
     teff = fc["rows"][0]["tax"] / max(fc["rows"][0]["ebit"] - fc["rows"][0]["interest"], 1)
     teff = max(0.0, min(0.35, teff))
     rd = 0.09 * (1 - teff)
     D = fc["base"]["debt"] + fc["base"]["other_liab"]
     E = intake["market_cap"]
     wacc = (re * E + rd * D) / max(E + D, 1)
+    news_wacc_bps = sum(
+        event["change"] for event in (fc.get("news_assumptions") or [])
+        if event.get("driver") == "wacc_bps" and
+        fc["rows"][0]["year"] in event.get("years", []))
+    news_wacc_bps = max(-200, min(200, news_wacc_bps))
+    wacc += news_wacc_bps / 10000
+    if news_wacc_bps:
+        notes.append(f"WACC screen adjusted {news_wacc_bps:+g} bp by cited news scenario judgments.")
     g = 0.035  # terminal growth FIX analis, wajib < rf
     exit_mult = 8.0
     exit_basis = "asumsi analis 8,0x (tanpa EV/EBITDA peer di cache)"
@@ -212,13 +277,28 @@ def build(intake, fc):
         if critical:
             release_result = {"status": "draft_non_distributable",
                               "blockers": [f"valuation check failed: {key}" for key in critical]}
-    is_draft = release_result["status"] != "distributable"
+    scenario_target = None
+    if is_miner and analyst_target:
+        scenario_target = scenario_ev_ebitda_crosscheck(intake, fc)
+        release_result = release.assess_assumption_led(
+            intake, fc, scenario_target or {}, assumption_status, release_result)
+    is_draft = release_result["status"] not in {
+        "distributable", "distributable_assumption_led"}
 
     # Mining's primary method is finite-life SOTP, never the legacy Gordon /
     # exit blend. A screening forecast or incomplete SOTP cannot publish a TP.
     if is_miner:
-        method = "SOTP/LoM (asset-based, no perpetual terminal)"
-        if is_draft:
+        method = ("FY26F EV/EBITDA 8x (asumsi analis)"
+                  if release_result["status"] == "distributable_assumption_led"
+                  else "SOTP/LoM (asset-based, no perpetual terminal)")
+        if release_result["status"] == "distributable_assumption_led":
+            base = scenario_target["values"][1]
+            tp = round(base["per_share_idr"] / 10) * 10
+            upside = tp / intake["price"] - 1
+            rating = rating_mod.classify(upside)
+            tp_down, grid = None, {}
+            notes.append("8x EV/EBITDA FY26F adalah asumsi analis; LoM/SOTP belum lengkap.")
+        elif is_draft:
             tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
             tp_down, grid = None, {}
         else:
@@ -249,10 +329,12 @@ def build(intake, fc):
 
     return {"method": method, "model_profile": profile,
             "release": release_result, "sotp": sotp_result,
+            "scenario_target": scenario_target,
             "ddm": ddm_result, "gate_verdict": verdict.to_dict(),
             "wacc": wacc, "wacc_inputs": {"rf": rf, "erp": erp,
             "beta": beta, "re": re, "rd_after_tax": rd, "g": g, "exit_mult": exit_mult,
-            "exit_basis": exit_basis},
+            "exit_basis": exit_basis, "news_wacc_bps": news_wacc_bps,
+            "news_coe_bps": news_coe_bps},
             "pv_explicit": pv_exp, "pv_terminal": pv_tv, "tv_share": pv_tv / ev_g,
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
             "ps_exit": ps_x, "tp": tp, "tp_down": tp_down, "tp_grid": grid,

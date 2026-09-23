@@ -434,3 +434,68 @@ def assess_release(profile, intake, forecast, sotp_result):
     if thin_data:
         result["thin_data"] = True
     return result
+
+
+def assess_assumption_led(intake, forecast, valuation, assumption_status,
+                          underlying_release):
+    """Opt-in FY forecast/multiple release, independent of the LoM/SOTP gate."""
+    blockers = []
+    report_day = _date(intake.get("as_of"))
+    actual = intake.get("latest_official_actual") or {}
+    quote = intake.get("market_quote") or {}
+    scenario = forecast.get("interim_scenario") or {}
+    fx = intake.get("fx_spot") or {}
+    if intake.get("model_profile") != "finite_life_mining":
+        blockers.append("assumption-led method requires finite_life_mining profile")
+    blockers.extend(_check_latest_interim_actuals(intake))
+    if assumption_status != "validated":
+        blockers.append("forecast agent scenario has not passed validation")
+    if not scenario or not _verified_source_reference(scenario.get("source_url")):
+        blockers.append("source-backed interim scenario is missing")
+    elif (scenario.get("source_url") != actual.get("source_url") or
+          scenario.get("published_at") != actual.get("published_at")):
+        blockers.append("interim scenario does not match the official actual release")
+    else:
+        for key in _FINANCIAL_METRICS:
+            field = "capital_expenditure" if key == "capex" else key
+            if not _number((scenario.get("h1") or {}).get(field)) or not _number(
+                    (scenario.get("full_year") or {}).get(field)):
+                blockers.append(f"interim scenario missing {field}")
+            elif abs(scenario["h1"][field] - actual["metrics"][field]) > 1:
+                blockers.append(f"interim scenario {field} differs from official actual")
+    publication = _date(actual.get("published_at"))
+    quote_day = _date(quote.get("date"))
+    if (not report_day or not publication or not quote_day or
+            not publication <= quote_day <= report_day or
+            (report_day - quote_day).days > 5 or
+            not _verified_source_reference(quote.get("source_url")) or
+            quote.get("price") != intake.get("price")):
+        blockers.append("fresh sourced close after latest release is required")
+    fx_day = _date(fx.get("date"))
+    if (not report_day or not fx_day or fx_day > report_day or
+            (report_day - fx_day).days > 7 or
+            not _text(fx.get("source")) or
+            not _number(fx.get("rate")) or fx["rate"] <= 0):
+        blockers.append("fresh sourced USD/IDR quote is required")
+    balance = (intake.get("official_evidence") or {}).get("balance_sheet") or {}
+    if (not _verified_source_reference(balance.get("source_url")) or
+            any(not _number(balance.get(key)) or balance[key] <= 0 for key in
+                ("cash", "total_debt", "shares_outstanding")) or
+            not _number(balance.get("non_controlling_interest")) or
+            balance["non_controlling_interest"] < 0):
+        blockers.append("official cash/debt/minority/share bridge is incomplete")
+    values = valuation.get("values") if isinstance(valuation, Mapping) else None
+    if not isinstance(values, list) or [v.get("multiple") for v in values] != [6.0, 8.0, 10.0] or any(
+            not _number(v.get("per_share_idr")) or v["per_share_idr"] <= 0
+            for v in values):
+        blockers.append("6x/8x/10x EV/EBITDA sensitivity is incomplete")
+    elif not values[0]["per_share_idr"] < values[1]["per_share_idr"] < values[2]["per_share_idr"]:
+        blockers.append("EV/EBITDA sensitivity is not monotonic")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "FY26F EV/EBITDA 8x",
+        "blockers": blockers,
+        "underlying_sotp": underlying_release,
+        "limitations": ["8x is an analyst assumption, not a verified peer multiple",
+                        "asset-level LoM/SOTP and later cash/debt movements are not modeled"],
+    }

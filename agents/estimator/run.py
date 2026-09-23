@@ -20,6 +20,7 @@ _LLM_ENV_KEYS = frozenset({
     "SEKTORAL_LLM_BASE_URL", "SEKTORAL_LLM_API_KEY", "SEKTORAL_LLM_MODEL",
     "MINIMAX_API_KEY",
 })
+LLM_GENERATION_BUDGET = 8192
 
 
 def _load_dotenv(path=None):
@@ -44,7 +45,7 @@ def _load_dotenv(path=None):
         os.environ[key] = " ".join(parts)
 
 
-def _chat(messages, max_tokens=4000):
+def _chat(messages, max_tokens=4000, reasoning_effort="high"):
     """Call the configured OpenAI-compatible chat endpoint."""
     _load_dotenv()
     base = os.environ.get("SEKTORAL_LLM_BASE_URL", "https://api.minimax.io/v1").rstrip("/")
@@ -59,16 +60,23 @@ def _chat(messages, max_tokens=4000):
     if not (base and model):
         raise RuntimeError("LLM belum dikonfigurasi (SEKTORAL_LLM_BASE_URL/MODEL)")
 
-    token_limit = max(max_tokens, 131072) if model == "MiniMax-M3" else max_tokens
+    # MiniMax's Chat API has no separate thinking-token budget. Bound the
+    # combined thinking + answer generation to 8k tokens, the closest supported
+    # control, while enabling its adaptive thinking mode below.
+    token_limit = max(max_tokens, LLM_GENERATION_BUDGET)
     request_body = {"model": model, "messages": messages,
                     "max_completion_tokens": token_limit, "temperature": 0.2}
     if model == "MiniMax-M3":
-        request_body["thinking"] = {"type": "disabled"}
+        # MiniMax exposes adaptive thinking, not an OpenAI-style high level.
+        # Its documented adaptive mode is the reasoning-capable setting.
+        request_body["thinking"] = {"type": "adaptive"}
+    elif reasoning_effort:
+        request_body["reasoning_effort"] = reasoning_effort
     req = urllib.request.Request(
         base + "/chat/completions", data=json.dumps(request_body).encode(),
         headers={"Authorization": "Bearer " + key,
                  "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as response:
+    with urllib.request.urlopen(req, timeout=240) as response:
         output = json.loads(response.read().decode())
     choice = output["choices"][0]
     message = choice.get("message") or {}

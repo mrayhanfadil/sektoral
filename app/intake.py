@@ -2,10 +2,13 @@
 import time
 from datetime import date
 from . import cache
+from . import fx
 from . import mineops
+from . import market_quote
 from . import model_profiles
 from . import issuer_evidence
 from . import news as news_context
+from . import news_fetch
 from . import research_context
 
 
@@ -49,7 +52,18 @@ def load(ticker, as_of=None):
     report_date = as_of or price_date
     if date.fromisoformat(str(report_date)[:10]) < date.fromisoformat(str(price_date)[:10]):
         raise ValueError("report date cannot precede the cached market price date")
+    quote = market_quote.load(t, report_date, price_date)
+    if quote:
+        price, price_date = float(quote["price"]), quote["date"]
+        notes.append(f"harga memakai {quote['source_title']} ({price_date}); "
+                     f"{quote['source_url']}.")
     official_evidence = issuer_evidence.load(t, report_date) if report_date else None
+    fx_spot = fx.load_cached_rate()
+    if fx_spot:
+        fx_age = (date.fromisoformat(str(report_date)[:10]) -
+                  date.fromisoformat(fx_spot["date"])).days
+        if not 0 <= fx_age <= 7:
+            fx_spot = None
 
     hist = fin.get("historical_financials") or []
     annuals = []
@@ -122,6 +136,12 @@ def load(ticker, as_of=None):
     if share_row["year"] != base["year"]:
         notes.append(f"jumlah saham memakai data terakhir yang tersedia ({share_row['year']}); "
                      f"data saham tahun dasar {base['year']} tidak ada di cache.")
+    official_balance = (official_evidence or {}).get("balance_sheet") or {}
+    official_shares = official_balance.get("shares_outstanding")
+    if isinstance(official_shares, (int, float)) and official_shares > 0:
+        shares = official_shares
+        notes.append("jumlah saham beredar memakai laporan interim resmi; "
+                     "saham treasuri tidak masuk denominator.")
     market_cap = price * shares
 
     if da_invalid_years:
@@ -170,9 +190,15 @@ def load(ticker, as_of=None):
     ca = corp.get("corporate_actions") if isinstance(corp, dict) else None
     corp_list = ca if isinstance(ca, list) else ([ca] if isinstance(ca, dict) else [])
     flow = cache.first(f"/foreign-flow/{t}/") or {}
-    relevant_news = news_context.relevant_rows(t, news, price_date)
+    relevant_news = news_context.relevant_rows(t, news, report_date)
     news_analysis, news_analysis_status = news_context.load_analysis(
-        t, relevant_news, price_date)
+        t, relevant_news, report_date)
+    # Auto deep-dive: fetch the full text behind every cached news link.
+    # Failures stay as unavailable_* records; the snippet remains the source.
+    try:
+        news_full = news_fetch.enrich_all(relevant_news)
+    except Exception:
+        news_full = [news_fetch.enrich_one(row) for row in relevant_news]
     research_analysis, research_analysis_status = research_context.load_analysis(
         t, price_date)
 
@@ -206,6 +232,8 @@ def load(ticker, as_of=None):
         "ticker": t, "name": rep.get("company_name", t),
         "model_profile": profile, "model_profile_basis": profile_basis,
         "currency": "Rp", "fx": 1.0,
+        "fx_spot": fx_spot,
+        "market_quote": quote,
         "price": price, "price_date": price_date, "as_of": report_date,
         "shares": shares, "market_cap": market_cap,
         "annuals": annuals, "base_year": base["year"],
@@ -216,6 +244,7 @@ def load(ticker, as_of=None):
         "free_float": None,
         "daily": drows[-5:] if isinstance(drows, list) else [],
         "news": relevant_news,
+        "news_full": news_full,
         "news_analysis": news_analysis,
         "news_analysis_status": news_analysis_status,
         "research_analysis": research_analysis,

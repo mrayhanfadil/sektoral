@@ -1,272 +1,192 @@
-# Ticker-Agnostic Valuation Framework - AMMN Mining Pilot
+# Ticker-Agnostic Equity Report Modeling Framework
 
-> **For Hermes:** implement sequentially by gates; no report release until every P0 gate passes. Preserve unrelated worktree changes and verify every derived value against sourced inputs.
+> Implement by profile and release gate. Keep issuer facts in sourced profiles. A successful render is separate from approval to distribute a rating or target price.
 
-**Goal:** Route issuers to a suitable valuation/forecast profile without ticker-specific branches. Implement the mining finite-life profile with AMMN as the first pilot, while preserving distinct DCF, DDM/residual-income, and historical-relative methods for issuers whose business economics fit them.
+## Goal and scope
 
-**Architecture:** Keep the deterministic, cache-only pipeline. Dispatch by configured business/model profile, never by ticker. Share intake, provenance, period, unit, and release controls; route the forecast and valuation to `finite_life_mining` (LoM/SOTP), `going_concern_fcff` (DCF), or `financial_ddm` (DDM/residual income) as appropriate. Historical-relative multiples are a separate cross-check, not a primary method selected by ticker or an automatic blend. Define versioned issuer input contracts, with facts/estimates stored in ticker-keyed profiles. Load interim statements using each issuer's fiscal calendar; fail closed when profile-required inputs, units, freshness, or reconciliations are invalid. Keep shared code and report instructions free of issuer names, projects, dates, and figures.
+Build a complete forecast, valuation, report, and release path for every supported `MODEL_PROFILE`:
 
-**Method references supplied by the user:**
-- [DCF valuation tool](https://github.com/abidamassi/dcf-valuation-tool): FCFF/WACC workflow for non-financial going concerns; use as a method/reference profile, subject to this pipeline's sourced-input and release gates.
-- [DDM tool](https://github.com/abidamassi/ddm_tool): dividend-based equity valuation with Cost of Equity and residual-income/P/BV cross-checks; use only when dividend history and payout economics support it.
-- [Relative historical tool](https://github.com/abidamassi/relativepeers): issuer-versus-own-history multiples and sector scorecard; classify as a historical-multiple cross-check, not peer valuation and not a substitute for finite-life asset NAV.
+| Profile | Forecast | Primary valuation | Method-specific release evidence |
+|---|---|---|---|
+| `going_concern_fcff` | Operating and cash-flow drivers | FCFF DCF | Latest actuals, revenue and margin drivers, capex, working capital, debt/interest, FCFF and terminal assumptions |
+| `financial_ddm` | Earnings, capital, and shareholder distributions | DDM or residual income/P/BV, selected by payout economics | Latest actuals, relevant earning-asset and profitability drivers, capital/book equity, payout or retained earnings, Cost of Equity |
+| `finite_life_mining` | Physical-to-financial asset drivers | Finite-life LoM/SOTP | Latest actuals, asset/process production and sales bridge, costs, capex, economic life, ownership, corporate NAV bridge |
 
-These repositories are methodology references, not runtime dependencies or permission to bypass the cache-only/source-provenance controls. Reimplement or adapt only the required model logic into the existing pipeline after reviewing its assumptions and gates.
+Historical-relative multiples are labeled cross-checks. They do not silently replace a missing primary model or get averaged mechanically into its target price.
 
-**Tech Stack:** Python stdlib, SQLite cache, JSON inputs, pytest, existing HTML/PDF renderer.
+AMMN is a mining pilot and regression fixture. Its projects, commodities, reporting periods, and numbers belong in its issuer profile and fixture. Shared code and instructions select behavior by profile, never by ticker.
 
----
+**Definition of working across tickers:** each supported profile has at least one source-backed positive fixture that can reach `distributable` and one incomplete fixture that returns `draft_non_distributable` with exact blockers. All eight current tickers run through the same profile contracts. Their statuses follow available evidence; the plan does not assume every issuer is ready for release today.
 
-## Decision Log
+## Architecture and decisions
 
-| # | Decision | Why | Alternatives rejected | Risk / mitigation |
-|---|---|---|---|---|
-| D1 | Mining forecasts use a physical-to-financial chain, not historical revenue CAGR as the primary driver | Access, throughput, grade, recovery/payability, processing and product mix determine issuer economics | CAGR with mining prose added afterward | Granular operational data may be incomplete; expose sourced manual inputs and uncertainty ranges |
-| D2 | Exceptional manual inputs are allowed only with source, publication date, period, unit, definition, owner/asset, and explicit actual/guidance/analyst status | Sectors cache does not carry every material project/operating datapoint | Inventing a default, silently borrowing peer data, or unlabeled spreadsheet overrides | Source documents must be archived or linked; stale/unsourced critical values block production |
-| D3 | Latest-results gate is independent of the forecast horizon and parameterized by issuer fiscal calendar/reporting policy | Latest actual must reflect what was officially published by the report date | Reuse whichever annual or quarterly row happens to appear last in cache | AMMN is the first dated regression fixture; add fixtures with different fiscal calendars and release gaps |
-| D4 | Mining valuation follows supported finite-life asset economics, with methodology selected from the issuer's asset profile | Producing assets, processing assets, development projects and corporate items have distinct risk and cash-flow profiles | Apply one perpetual terminal or one aggregate multiple to every mining issuer | Reconcile asset boundaries and ownership; missing life-of-mine or asset-separation data blocks a definitive production TP |
-| D5 | No averaging of methods when fair values diverge >30%; explain/reconcile first | Existing rule already requires investigation | Convenient arithmetic mean | If unresolved, select the defensible primary method and disclose cross-check only |
-| D6 | Model-control failures are release blockers, not footnotes | RNAV contradiction, NWC plug, debt/interest mismatch, unit errors and stale inputs invalidate outputs | Preserve output with caveats | Fail closed can delay the report; report the exact missing evidence instead |
-| D7 | Catalyst inclusion requires a company-specific earnings/valuation transmission path | Daily stock/commodity moves and index flows do not establish issuer catalysts | Fill page with news irrespective of earnings relevance | Real milestones with uncertain dates are shown as windows and marked unconfirmed |
-| D8 | Shared procedures and model engine are ticker-agnostic; issuer facts, model profile and disclosed assumptions are input data | Reuse comes from stable contracts and profile dispatch, while evidence varies by issuer | Hardcode issuer names, projects, dates, or figures into shared prompt/code | Add schema, method-routing, cross-issuer fixture and genericity tests |
+Use a deterministic pipeline fed by the newest complete `sectors_cache` company report plus versioned issuer evidence and assumptions. Do not allow a newer overview-only cache response to displace a complete financial snapshot. Exceptional manual inputs are allowed when they are sourced, dated, labeled, and validated. The source register identifies the document and page or table.
 
----
+| Decision | Rule |
+|---|---|
+| Profile routing | Bind forecast builder, valuation builder, release validator, and exhibits to `MODEL_PROFILE`. Unsupported or ambiguous profiles return an explicit blocker. |
+| Source integrity | Every material input carries value, unit, period, source, publication date, page/table, and status: actual, company guidance, or analyst assumption. Analyst estimates are never presented as company guidance. |
+| Latest actuals | Select the latest officially published period available by report date using the issuer fiscal calendar and release policy. Annual history is context, not a substitute for a required interim actual. |
+| Forecast status | `production_ready` is calculated from source coverage and model reconciliation. No builder hardcodes it true or false for every issuer. A historical screen remains labeled as a screen. |
+| Method controls | Run only checks applicable to the selected profile. FCFF and enterprise-value gates do not apply to financial DDM; physical mining and asset NAV gates do not apply to other profiles. |
+| Missing values | Unknown means unavailable/null. Zero requires a sourced or explicitly justified zero assumption. No generic CAGR, flat debt, D&A-equals-capex, or zero project capex silently fills a material gap. |
+| Divergent methods | If independent fair values differ by more than 30%, investigate inputs and assumptions. Select the defensible primary method and disclose the cross-check; do not average first. |
+| Release | Critical data, unit, freshness, forecast, valuation, or sensitivity failures block a production rating/TP and identify the exact input path. Rendering alone is never a release gate. |
 
-## Pilot Evidence / Blockers (AMMN fixture; verified locally before implementation)
+Methodology references supplied earlier: [FCFF DCF](https://github.com/abidamassi/dcf-valuation-tool), [DDM](https://github.com/abidamassi/ddm_tool), and [historical-relative multiples](https://github.com/abidamassi/relativepeers). These are references, not runtime dependencies or permission to bypass source controls.
 
-- `data/sectors_cache.db` had AMMN quarterly financial rows through `2026-03-31` (1Q26) when this plan was drafted and no 1H26 row. Verify the official latest release relative to each report date and store its provenance. This is pilot evidence, not a shared reporting-period rule.
-- Cache mining overlays currently provide annual production/reserve snapshots and commodity prices, but not the complete Phase 8-to-sales schedule, payable-metal bridge, smelter/PMR ramp, product sales mix, capex schedule or asset-separated LoM cash flows.
-- Existing `data/drivers/AMMN.json` is uncommitted user work containing published KB Valbury estimates. Preserve it. Do not overwrite or silently treat analyst estimates as company guidance. The new operational input schema must coexist with and cite/label this evidence.
-- Worktree already contains user changes in `agents/estimator/prompt.py`, `agents/estimator/run.py`, `tests/test_estimator.py`, and new `data/drivers/AMMN.json`. Keep them untouched; no broad `git add`.
-- Current code confirms the known structural defects: `app/forecast.py` projects CAGR revenue, sustaining capex = D&A and project capex = 0; `app/valuation.py` blends 3-year Gordon and exit multiple; `app/rnav.py` builds crude metal annuities; `app/intake.py` labels annual base as latest while ignoring interim period for the base.
+### Dated pilot evidence, separate from the rules
 
----
+- The earlier AMMN cache snapshot had quarterly financials through 1Q26 and lacked the then-required 1H26 row. Recheck the latest official release against each report date.
+- Mining overlays lacked a complete physical-to-sales, capex, and asset-separated LoM chain. `data/drivers/AMMN.json` contains published analyst estimates; preserve their analyst status and provenance.
+- The current forecast builder emits `historical_screening_proxy`, `production_ready: false`, and a failed G2.9 for every profile. The release validator also applies the same driver-forecast check to FCFF and financial DDM. Both structural paths must be replaced.
+- The current eight-ticker batch at `out/e2e-2026-09-23/` is a diagnostic baseline. Its draft results are not positive fixtures and should not be converted to distributable by changing labels.
 
-## Phase 0 - Evidence pack and input contract (do first)
+## Phase 0 — Versioned inputs and profile registry
 
-### Task 0.1: Assemble issuer source register and verify reporting period
+### 0.1 Source register and issuer contract
 
-**Files:**
-- Create: `data/assumptions/{TICKER}-operating.json` (issuer instance of the versioned, provenance-indexed input contract; do not invent missing values)
-- Create: `data/sources/{TICKER}/README.md` (issuer source register and document hashes/URLs/date; store source documents only if license permits)
-- Modify later: `app/intake.py`
-- Test: `tests/test_operating_inputs.py`
+**Files:** `data/assumptions/{TICKER}.json`, `data/sources/{TICKER}/README.md`, `app/intake.py`, `app/issuer_evidence.py`.
 
-For the AMMN pilot, record latest official interim statements and presentation, mine access/production/grade/recovery/payable metrics, processing ramp, product sales, capex commitments, reserve/resource/LoM and development-project milestones. Apply the same contract to each issuer using only relevant assets and metrics. Each datapoint records `value`, `unit`, `period`, `source_title`, `source_url_or_file`, `published_at`, `page_or_table`, `status` (`actual|company_guidance|analyst_assumption`), and optional `asset_id`/`process_id`. Preserve unsupported values as unavailable/null.
+Define one versioned issuer contract. Common fields are issuer identity, reporting currency, fiscal calendar, as-of date, latest official actual, annual history, market price/shares, source references, and `MODEL_PROFILE`. Each used datapoint has `value`, `unit`, `period`, `source_title`, `source_url_or_file`, `published_at`, `page_or_table`, and `status`. Analyst assumptions additionally have a rationale and sensitivity range. Preserve source documents only when permitted.
 
-**Gate:** no production forecast or target price may claim an input is sourced until that input has provenance. Define completeness from the selected model profile's critical-input requirements; unrelated optional fields do not block. Never label analyst estimates as company guidance. AMMN's existing analyst evidence remains analyst evidence.
+Profile extensions are declared rather than imposed on every issuer:
 
-### Task 0.2: Define and validate the operating input schema
+- `operating_drivers[]`: relevant volume, price, mix, utilization, margin, cost, capex, working-capital, debt, and tax drivers for FCFF.
+- `financial_drivers[]`: relevant earning assets, funding costs, fees, credit losses, capital, ROE, payout, dividends, and book equity for financial institutions. A bank-specific metric is not mandatory for every financial business.
+- `assets[]`, `processes[]`, `products[]`/`commodities[]`: ownership, stage, physical output, capacity, yields, realized prices, costs, capex, economic life, and source links for mining where applicable. Names are values, not schema keys.
+- `model_policy`: required/optional fields, source precedence, freshness thresholds, forecast horizon, valuation method, and release checks for the selected profile.
 
-The versioned issuer profile should have extensible sections for:
-- `issuer` / `model_profile`: ticker, reporting currency, fiscal calendar, business archetype, schema version, and configured freshness/release policies.
-- `reporting_periods`: official interim periods and annual actuals, with period end, publication date, scope, and audited/reviewed status.
-- `assets[]`: stable asset IDs, ownership, stage, reserve/resource basis, operating schedule, unit costs, capex, useful/economic life, and source links. Asset names are data, never schema keys.
-- `processes[]`: optional processing, transport, or downstream facilities linked to source/sink assets; capacities, ramp, yields, products, transfer pricing, and incremental economics.
-- `products[]` / `commodities[]`: optional product quantities, units, price basis, realization deductions, sales mix, and scenario deck.
-- `market`: relevant price decks, FX, royalties/taxes/regulation, source/as-of dates, and scenario ranges.
-- `corporate`: latest net debt, corporate costs, minority interests/ownership, and non-operating items.
+The profile determines completeness. A field required by mining does not block a bank or a general going concern.
 
-Do not require a field merely because it exists for the AMMN pilot. Model-profile rules declare required and optional fields, supported valuation methods, and applicable unit/freshness checks.
+### 0.2 Registry and applicability
 
-The model registry must explicitly route supported archetypes: finite-life mining to physical-driver forecast + LoM/SOTP; non-financial going concerns to FCFF DCF; financial/dividend issuers to DDM and/or residual income/P/BV when payout and capital economics support them. Historical-relative multiples are optional cross-checks for any profile with valid history. Unsupported/ambiguous profiles fail with an explicit `unsupported_model_profile`, never a guessed method or ticker-name branch.
+**Files:** `app/model_profiles.py`, `app/forecast.py`, `app/valuation.py`, `app/release.py`.
 
-### Task 0.3: Define model-profile registry and routing
+Register a forecast builder, primary valuation method, release validator, sensitivity axes, and report exhibits for each supported profile. Configuration or verified business metadata chooses the profile. Unknown metadata fails with `unsupported_model_profile`. Historical-relative multiples remain cross-checks. Keep issuer-specific branches out of shared code.
 
-**Files:**
-- Create: `app/model_profiles.py`
-- Modify: `app/forecast.py`
-- Modify: `app/valuation.py`
-- Test: `tests/test_model_profiles.py`
+## Phase 1 — Actuals and model controls
 
-Create an explicit profile registry separating issuer identity from business archetype and valuation method. Route mining, general going-concern, and financial/dividend fixtures to the appropriate engine. Preserve relative historical multiple outputs as named cross-checks only; no automatic averaging with primary fair value. Profile selection must be supplied by configuration or derived from verified business metadata, never from hardcoded ticker comparisons.
+### 1.1 Latest published period
 
-**Gate:** test at least one issuer fixture per supported profile and an unknown profile. Financial issuers must not enter enterprise-value DCF; finite-life assets must not receive perpetual going-concern terminals; historical-relative value must not silently become the primary TP.
+**Files:** `app/intake.py`, `app/issuer_evidence.py`.
 
-Schema validation must reject missing provenance for used material inputs, incompatible units, stale critical inputs under the selected profile, duplicate/overlapping assets, invalid ownership/attribution, and company guidance presented as actual. `null` means unavailable; zero is a real sourced or explicitly justified assumption, never a missing-data fallback.
+Parse annual, interim, and quarterly periods with period end, publication date, scope, and cumulative-versus-standalone semantics. Select the latest eligible official actual by report date and the issuer's fiscal calendar/release policy. Sum quarters only when all components and definitions support the calculation. A required but missing latest actual returns `latest_interim_missing`; it cannot be disguised as the latest result.
 
----
+### 1.2 Controls by profile
 
-## Phase 1 - Latest actuals and data controls (P0)
+**Files:** `app/model_controls.py`, `app/build.py`.
 
-### Task 1.1: Parse quarterly/interim financials by actual period
+Apply common price/share/FX scale, period, freshness, source, and accounting checks. Add only method-relevant controls:
 
-**Files:**
-- Modify: `app/intake.py`
-- Test: `tests/test_intake_periods.py`
-- Test: `tests/test_pipeline.py`
+- FCFF: operating revenue-to-cash-flow bridge, capex, calculated NWC, debt/rate/interest schedule, FCFF identity, enterprise-to-equity bridge, terminal assumptions.
+- Financial DDM/residual income: earnings and book-equity roll-forward, capital and payout coverage, dividend-per-share/share-count consistency, Cost of Equity, and equity-value bridge.
+- Mining: physical quantities, price/unit conversions, no double counting of intermediate and refined products, asset life/ownership, NAV bridge, and LoM cash-flow identity.
 
-Add a typed period parser for quarterly, interim, and annual rows. Derive cumulative periods from component quarters only when all required quarters are present and source semantics support summation; otherwise use the official cumulative report. Select the latest released actual based on publication date, period end, scope, and the issuer fiscal calendar, not row order or stale annual history. Keep annual history for comparisons and full-year forecast. Make freshness thresholds configurable by period type and reporting policy; never hardcode a fiscal year or period label.
+A failed material check stops production TP with its input path. Missing values remain null; they never become zero in the forecast or valuation.
 
-**Fail-closed behavior:** when the configured policy requires a newer interim actual and neither cache nor a verified source contains it, stop production output with a clear `latest_interim_missing` error; do not label a stale annual/quarterly result as latest.
+## Phase 2 — Profile-specific production forecasts
 
-**Tests:** shuffled rows; reporting-policy freshness boundaries; cumulative interim supersedes stale annual/quarterly rows; no double counting when official cumulative totals are used; different fiscal calendars; preserve existing non-mining behavior.
+### 2.1 Shared forecast output contract
 
-### Task 1.2: Add metric and unit validation before narrative/render
+**Files:** `app/forecast.py` and profile forecast modules.
 
-**Files:**
-- Create: `app/model_controls.py`
-- Modify: `app/build.py`
-- Test: `tests/test_model_controls.py`
+Replace the universal screening-only return. Each builder returns its rows, assumptions, source links, applicable G2 checks, `forecast_basis`, `production_ready`, and blockers. Valid production bases are profile-specific, for example `driver_forecast` for FCFF, `financial_driver_forecast` for financials, and `physical_driver_forecast` for mining. Compute readiness from coverage, source validity, and reconciliation. A historical proxy can still render an informational draft, with no production TP.
 
-Add profile-aware hard checks for: NAV bridge arithmetic and share conversion; declared quantity/price units and conversion factors; date freshness for material market inputs; price basis/as-of disclosure; debt, interest rate and interest expense reconciliation; NWC as calculated operating working capital, not a balancing plug; FCFF components and consistency across forecast/valuation; physical-to-revenue bridges where applicable; and no duplicate asset/reserve attribution. A failed critical check prevents production PDF/TP generation and reports the exact check and input path. Add Cu/Au unit fixtures from AMMN without making those units mandatory for other profiles.
+G2.9 means the selected profile's driver-to-earnings/value chain reconciles. It is not a permanently failed constant. Other G2 checks also declare applicability; EBITDA margin and FCFF checks do not run against financial DDM merely because they exist in the shared report format.
 
-### Task 1.3: Replace zero NAV substitution with missing-value semantics
+### 2.2 Non-financial going concern: FCFF
 
-**Files:**
-- Modify: `app/rnav.py`
-- Modify: `app/valuation.py`
-- Test: `tests/test_rnav.py`
-- Test: `tests/test_model_controls.py`
+**Files:** `app/fcff_forecast.py`, `app/forecast.py`.
 
-Unknown asset NAV must be `None`/unavailable, not numeric zero. Never sum unavailable NAV as zero while presenting a complete RNAV/share. Reconcile asset NAV rows to SOTP bridge and sensitivity base exactly; if any required asset NAV is missing, suppress the RNAV TP and label the report not production-ready.
+Forecast revenue from material business drivers such as volume, price, mix, utilization, backlog, or contract economics as the issuer profile supports. Link costs and margins to those drivers. Calculate taxes, D&A, committed and sustaining capex, operating working capital excluding cash/debt, and debt/interest from schedules or sourced assumptions. Reconcile `FCFF = NOPAT + D&A - capex - ΔNWC` and the financial statements. Historical CAGR and flat ratios are cross-checks; they do not certify a production forecast. If material project spend or funding is unknown, return a specific blocker.
 
----
+### 2.3 Financial institution: DDM or residual income
 
-## Phase 2 - Mining operating forecast (P0/P1)
+**Files:** `app/financial_forecast.py`, `app/ddm.py`, `app/forecast.py`.
 
-### Task 2.1: Build operating forecast module from physical drivers
+Forecast the earnings and capital drivers relevant to the configured financial archetype. For a bank this can include earning assets, yields, funding costs, fee income, credit losses, operating costs, tax, capital, payout, dividends, and book-equity roll-forward. Select DDM when distributions represent sustainable shareholder cash flows; otherwise use a supported residual-income/P/BV-versus-ROE method. Use Cost of Equity and equity value. Do not require a generic capex/NWC/FCFF bridge, WACC, or EV for this profile. Incomplete dividend/capital evidence returns a named blocker rather than a fabricated path.
 
-**Files:**
-- Create: `app/mining_forecast.py`
-- Modify: `app/forecast.py` (dispatch by configured model profile; retain compatible existing paths for other profiles)
-- Test: `tests/test_mining_forecast.py`
+### 2.4 Finite-life mining: physical-to-financial
 
-Implement the linked annual forecast:
+**Files:** `app/mining_forecast.py`, `app/forecast.py`.
 
-`asset access/development -> throughput x grade/quality -> contained product -> recovery/yield -> payable/saleable product -> optional processing stages -> product sales mix -> realized price/netback -> revenue -> unit costs/royalties -> EBITDA -> tax, capex, NWC and FCFF`.
+Implement the applicable chain:
 
-Build a commodity/product bridge for each relevant stream, using source-supported conversion factors and attributable ownership. Forecast asset output and processing capacity separately; do not count an intermediate and its refined output twice. Price decks declare annual basis (company/consensus/forward curve/analyst), source date, source currency and unit. Apply FX exactly once when converting to reporting currency. Include sourced committed project spend and separately labeled sustaining estimates; do not default unknown capex to zero. Development assets remain separate from operating production until the profile's operating-status criteria are met. AMMN-specific commodities, facilities and project stages belong only in its issuer profile.
+`asset access/development → throughput × grade/quality → contained output → recovery/yield → payable/saleable product → processing capacity/utilization → product sales mix → realized price/netback → revenue → unit costs/royalties → EBITDA → tax, capex, NWC, debt, FCFF`.
 
-For each year, derive revenue from quantities and realized price, and EBITDA from asset/process economics. Historical CAGR is a cross-check only when a material driver model applies. Every analyst assumption carries rationale and sensitivity range. If a profile-critical driver is unavailable, mark the forecast incomplete and block production TP rather than silently reverting to CAGR.
+Forecast source assets and downstream processes separately, removing internal transfers and double counting. Declare conversion units, source/currency/date and annual basis for every material price deck. Include committed project and sustaining spend separately; unknown capex does not default to zero. Development assets begin contributing operating cash flows only when supported by their stage and schedule. Use calculated NWC and a debt/rate/repayment schedule. Connect FX, price, regulation, and milestones to the years and cash flows they change. A missing profile-critical physical driver keeps the forecast incomplete.
 
-### Task 2.2: Replace NWC, debt and interest plugs with mechanics
+## Phase 3 — Primary valuation and sensitivity by profile
 
-**Files:**
-- Modify: `app/mining_forecast.py`
-- Modify: `app/forecast.py` only as needed for shared helpers
-- Test: `tests/test_mining_forecast.py`
+### 3.1 FCFF DCF
 
-NWC = operating current assets less operating current liabilities, excluding cash/debt; calculate delta year-over-year using historical and forecast drivers (or explicit sourced days/ratios where balances lack detail). Interest = beginning/average debt by tranche x explicit rate, plus fees/FX where sourced; debt evolves through drawdowns and scheduled repayment. No relationship between net income and FCFF may be assumed or engineered. Include a bridge exhibit and identity tests proving `FCFF = NOPAT + D&A - capex - ΔNWC` and that FCFF is not mechanically equal to net income.
+**Files:** `app/valuation.py` or `app/fcff_valuation.py`.
 
-### Task 2.3: Connect macro and regulatory drivers to economics
+Discount sourced FCFF using a currency-consistent WACC. Support a defensible terminal growth or exit assumption for a going concern; show PV of explicit cash flows, PV terminal, EV, latest net debt, minority/non-operating items, equity value, and per-share TP. Reconcile the base sensitivity cell to the published TP. Flag excessive terminal dependence and unexplained equity-value extremes.
 
-**Files:**
-- Modify: `app/mining_forecast.py`
-- Modify: `app/narrative.py`
-- Test: `tests/test_mining_forecast.py`
+### 3.2 Financial DDM/residual income
 
-Map relevant commodity/product prices, FX, demand, royalties/tax/regulation and processing deductions to revenue, net realized price, EBITDA, tax and FCFF. Include source/as-of dates and profile-configured freshness checks. Do not promote daily spot movements into annual forecasts; use the declared price deck and scenario framework.
+**Files:** `app/ddm.py`, `app/valuation.py`.
 
----
+Value sustainable dividends or residual earnings using Cost of Equity and book equity. Reconcile forecast net profit, retained earnings, payout, DPS, share count, capital needs, and terminal assumptions. Present an appropriate CoE/ROE/payout sensitivity and a named historical P/BV cross-check when comparable. Do not run FCFF or EV/WACC release checks.
 
-## Phase 3 - LoM/SOTP valuation and sensitivity (P0/P1)
+### 3.3 Mining LoM/SOTP
 
-### Task 3.1: Replace mining Gordon/exit average with finite-life asset SOTP
+**Files:** `app/mining_valuation.py` or `app/sotp.py`, `app/rnav.py`, `app/valuation.py`.
 
-**Files:**
-- Modify: `app/valuation.py`
-- Modify or replace: `app/rnav.py`
-- Create if separation is cleaner: `app/mining_valuation.py`
-- Test: `tests/test_rnav.py`
-- Test: `tests/test_mining_valuation.py`
+Value producing assets through supported reserve/economic life without an unsupported perpetual terminal. Count downstream incremental cash flows once, development projects separately with stage-appropriate risk and capex, and corporate/non-operating items in the bridge. Reconcile:
 
-Value supported components separately according to the selected mining profile:
-1. Producing assets: annual production and cost profiles through supported reserve/economic life, with no unsupported perpetual terminal value.
-2. Processing/downstream assets: incremental cash flows only; remove transfer/intercompany duplication with source assets and respect remaining economic life.
-3. Development assets: separate risk-adjusted NAV with stage-appropriate probability, capex and timing. Do not include operating production before profile criteria are met.
-4. Corporate bridge: latest net debt, minority interests/ownership, corporate overhead PV and other non-operating assets/liabilities.
+`RNAV/share = (attributable asset/process NAV + non-operating assets - net debt - minorities ± corporate items) / diluted shares`.
 
-`RNAV/share = (sum of attributable asset/process NAVs + non-operating assets - net debt - minorities +/- corporate items) / diluted shares`.
+Unknown asset NAV remains unavailable, not zero. Missing life, separation, ownership, or corporate bridge evidence yields incomplete SOTP and no production TP. EV/EBITDA is an independent sanity check.
 
-EV/EBITDA may appear only as an independent sanity check and cannot be assigned an arbitrary TP weight. If life-of-mine or asset separation data required by the profile is missing, do not substitute a short Gordon value as a production TP; return an explicit incomplete-valuation status and enumerate missing inputs. Reconcile sum-of-assets, bridge, per-share value and sensitivity base to zero tolerance.
+### 3.4 Cross-checks and scenarios
 
-### Task 3.2: Explain and gate valuation divergence
+If independent methods diverge by more than 30%, trace the gap through horizon, drivers, capex, discount rates, terminal assumptions, and risk adjustments. Correct errors or select the method that best matches the profile, with the other method disclosed as a cross-check. Recalculate material upside and downside scenarios from the same base as TP. The downside TP must be lower. Compare house estimates with company guidance and independent consensus only on aligned period, unit, and definition. Missing comparisons remain unavailable.
 
-**Files:**
-- Modify: `app/valuation.py`
-- Modify: `app/narrative.py`
-- Test: `tests/test_mining_valuation.py`
+## Phase 4 — Profile-aware report content
 
-If independent valuation methods differ by >30%, identify the source (mine life, price deck, margin, WACC, capex, risk haircut, terminal assumptions); correct data/formula or select the method best matched to the asset. Never average first. Label cross-check valuation separately from primary TP.
+**Files:** `app/narrative.py`, `app/render.py`.
 
-### Task 3.3: Expand sensitivity and consensus/guidance comparisons
+The cover, key financials, exhibits, catalysts, risks, and valuation page follow the active profile. Remove fixed fiscal-year keys and issuer assumptions from generated report fields; use the selected issuer's actual fiscal-year labels. Non-financial reports show relevant revenue, EBITDA, capex, FCFF, debt, and DCF drivers. Financial reports show relevant earnings, ROE, book equity, capital, payout/dividends, and CoE drivers. Mining reports show physical output, price/netback, capex, LoM/SOTP, and asset bridge. Unavailable metrics display `n.m.` with a reason; they are not zero or fixed empty slots.
 
-**Files:**
-- Modify: `app/mining_valuation.py` / `app/mining_forecast.py`
-- Modify: `app/narrative.py`
-- Test: `tests/test_mining_forecast.py`
-- Test: `tests/test_mining_valuation.py`
+Every catalyst identifies a dated/conditioned observable event, the model driver and year affected, expected earnings/value direction, and source/status. Risks and scenarios are selected from issuer evidence and the active model. News without a material earnings/value path is excluded. The renderer accommodates different asset and exhibit counts without issuer-specific page assumptions. The AI-assisted research summary stays available in HTML/trace for audit and is excluded from the final PDF.
 
-Sensitivity must recompute EBITDA and net profit for the material profile-specific price/demand drivers and FX, plus combined downside/upside cases; include discount-rate and relevant asset-risk/valuation haircut sensitivities. Show house forecasts against company guidance and independently sourced consensus/peer estimates when available, with aligned period/unit/definitions. Missing comparison sources are unavailable, not fabricated. AMMN's Cu/Au +/-10% and FX +/-5% cases are pilot fixtures, not universal required axes.
+## Phase 5 — Release gate and acceptance
 
----
+### 5.1 Profile-specific release decision
 
-## Phase 4 - Report content and page density
+**Files:** `app/release.py`, `app/build.py`, `app/report_contract.py`.
 
-### Task 4.1: Rewrite mining industry/model bridge and catalyst/risks pages
+Split the current combined FCFF/DDM release branch. Common checks cover verified actuals, date/source/unit validity, share/price basis, method selection, and critical model consistency. Apply additional checks only for the active profile:
 
-**Files:**
-- Modify: `app/narrative.py`
-- Test: `tests/test_mining_report_content.py`
+- FCFF: sourced operating forecast, capex/NWC/debt/interest reconciliation, FCFF DCF, and applicable G3 checks.
+- Financial DDM/residual income: sourced earnings/capital/payout forecast, equity valuation reconciliation, and applicable G3 checks.
+- Mining: official interim actuals, physical operating bridge, production-ready LoM forecast, complete SOTP, and applicable G3 checks.
 
-Replace generic sector prose and noisy catalyst rows with issuer-specific, sourced milestones selected from the active profile: access/development, production/quality, utilization/ramp, results/guidance, project de-risking, regulation, and price-deck deviations where relevant. Every catalyst row must provide expected date/window, observable event/condition, model driver, EBITDA/FCFF/valuation transmission, direction, and source/status. If date or impact is unknown, say so; exclude daily moves, passive flows and index rebalancing without material issuer earnings transmission.
+The release result contains `status` and a list of precise `blockers`. `production_ready` and G2.9 must be derived from the actual model, never flipped solely to clear a report. Research validation status remains visible in trace; invalid/insufficient research is not promoted into report insight. If a required source is absent, return an honest draft.
 
-Risk analysis should select material operating, product-quality, processing, commodity/FX, capex, debt/refinancing/interest, regulation, governance and development-option risks from issuer evidence and calculated sensitivities. Do not print risks irrelevant to the issuer.
+### 5.2 Acceptance matrix and batch review
 
-### Task 4.2: Complete cover key financials and improve useful density
+**Files:** focused profile tests, `tests/test_pipeline.py`, `tests/test_release.py`, and eight-ticker artifacts.
 
-**Files:**
-- Modify: `app/narrative.py`
-- Modify: `app/render.py`
-- Test: `tests/test_mining_report_content.py`
-- Visual QA: rendered pilot report pages and profile-driven exhibits; verify layout does not assume a fixed issuer or asset count
+- At least one complete positive fixture and one missing-source/failed-reconciliation fixture per supported profile; an unknown profile fails explicitly.
+- No shared code or instruction contains issuer-specific business facts or ticker comparisons. Two mining fixtures with different asset/process/product configurations exercise the same engine.
+- Latest actual selection respects fiscal calendar, publication date, and complete cache snapshots.
+- FCFF, DDM/residual income, and mining each use their own forecast, valuation, release, and report path. A financial fixture cannot be held for missing FCFF/capex/NWC evidence.
+- Missing inputs cannot become zero, historical CAGR production forecasts, flat debt/interest plugs, or a published TP.
+- Unit, currency, source, sensitivity base, downside direction, value bridge, and report figures reconcile for each applicable profile.
+- Rebuild all eight current tickers. Record status, blocker count, and source gaps per ticker; resolve available evidence and formula defects. A genuine missing critical input remains a draft with a specific blocker.
+- Review HTML, trace, PDF text, arithmetic, and page layout. The final PDF excludes the AI research-summary section. Preserve unrelated worktree changes.
 
-Add revenue/EBITDA/net profit and growth, EPS and growth, BVPS, DPS, PER, PBV, dividend yield, EV/EBITDA and net gearing where derivable; unavailable metrics must be `n.m.`/`-` with reason, not zero. Use available report space for profile-relevant operating/price/production/FCFF/valuation bridges and scenario charts, not issuer-specific fixed page assumptions. Preserve the house visual shell and page-count restraint.
+## Implementation order
 
----
+1. Define the shared source/profile contract, registry, and status schema.
+2. Preserve and verify complete cache selection; implement latest-actual selection and profile-applicable controls.
+3. Replace unconditional screening flags and split FCFF from DDM release validation.
+4. Build and prove a positive and negative production path for FCFF, financial DDM/residual income, and mining.
+5. Connect the corresponding valuations, sensitivities, and profile-aware report exhibits.
+6. Populate the eight issuer profiles from verified sources; rebuild and review the batch with exact remaining blockers.
 
-## Phase 5 - Release gate and verification
-
-### Task 5.1: End-to-end acceptance tests
-
-**Files:**
-- Modify: `tests/test_pipeline.py`
-- Create: `tests/test_production_gates.py`
-
-The tests must prove:
-- latest official interim actual is selected according to issuer fiscal calendar and release policy; AMMN's 1H26 case is one regression fixture.
-- profile routing sends finite-life mining to LoM/SOTP, non-financial going concerns to FCFF DCF, and dividend-eligible financial issuers to DDM/residual income as configured; unknown profiles fail closed.
-- two mining issuer profiles with different asset/process/product configurations pass without ticker-specific branches; existing non-mining profiles retain their existing model dispatch.
-- Every critical manual input has verifiable provenance and correct period/unit.
-- Driver chain is complete and reconciles to reported/sourced revenue within defined, disclosed bridge tolerances.
-- Production/capacity and concentrate/refined output are not double-counted.
-- Missing data cannot become zero, generic CAGR, flat debt/interest, or a published TP.
-- profile-declared commodity/price/quantity units catch deliberate swaps; stale market inputs fail configured freshness gates.
-- FCFF, debt, interest, NWC, NAV/share, SOTP and sensitivities reconcile; sensitivity base equals TP and downside is lower.
-- No unsupported Gordon/perpetual terminal value is used for finite-life primary valuation; going-concern profiles retain their applicable methods.
-- Historical-relative multiples are labeled as own-history cross-checks, filtered for invalid denominators/structural breaks, and never automatically averaged into the primary TP.
-- Catalysts each map to a dated/conditioned earnings driver; noise is excluded.
-- Shared system instruction and shared model code contain no issuer-specific names, dates, projects, or figures; issuer-specific information is loaded from profiles.
-- PDF text scan finds no internal strings; all pages have no clipping/overlap and useful page density.
-
-### Task 5.2: Build and independently review
-
-Run in order after source inputs are populated:
-1. `python3 -m pytest tests/test_operating_inputs.py tests/test_intake_periods.py tests/test_model_controls.py tests/test_mining_forecast.py tests/test_mining_valuation.py tests/test_mining_report_content.py tests/test_production_gates.py -q`
-2. `python3 -m pytest tests/ -q`
-3. Build each fixture via its configured profile (including AMMN pilot) and require either a production-ready report with all P0 gates passed or refusal with exact missing evidence. A successful process exit alone is not acceptance.
-4. Validate rendered PDF text, units, fiscal period, exhibit arithmetic, latest-result recency, applicable terminal-value policy, NAV/TP consistency and source notes for each profile.
-5. Inspect pilot report screenshots and layout behavior for profiles with different asset counts; use an independent visual reviewer if available.
-6. Confirm existing unrelated dirty files remain unchanged and stage only explicitly intended framework/profile files.
-
-## Implementation order and release status
-
-1. Shared profile schema, source register and verified latest actuals for the pilot issuer.
-2. Period/unit/model-control gates and remove invalid RNAV publication.
-3. Driver-based forecast and real cash-flow mechanics.
-4. LoM/SOTP valuation and sensitivities.
-5. Catalysts, risks, key financials and layout density.
-6. Full test suite, PDF arithmetic/text/visual QA.
-
-**Release rule:** an issuer output is a non-distributable research draft until that profile's required latest actuals, asset/operating inputs and P0 checks pass. The AMMN pilot specifically requires verified latest interim results and supported asset-level life-of-mine, processing, development-project and corporate bridge inputs. No fabricated values, silent fallbacks, or production TP from an incomplete profile.
+**Release rule:** an issuer output remains `draft_non_distributable` until the active profile's required source evidence and model controls pass. The framework must make a valid production report reachable for every supported profile without promoting unsupported forecasts or target prices.

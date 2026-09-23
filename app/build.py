@@ -2,6 +2,7 @@
 import argparse
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 from . import forecast, intake, narrative, render, report_contract, valuation
@@ -15,11 +16,19 @@ except Exception:
 OUT = Path(__file__).resolve().parent.parent / "out"
 
 
-def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None):
+def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
+          illustrative_scenarios=False, assumption_plan=None,
+          analyst_target=False, assumption_status=None):
     doc_in, g1 = intake.load(ticker, as_of=as_of)
-    fc = forecast.build(doc_in)
-    va = valuation.build(doc_in, fc)
-    doc = narrative.build(doc_in, fc, va, g1, method=method)
+    fc = forecast.build(doc_in, assumption_plan=assumption_plan)
+    va = valuation.build(doc_in, fc, analyst_target=analyst_target,
+                         assumption_status=assumption_status)
+    doc = narrative.build(doc_in, fc, va, g1, method=method,
+                          illustrative_scenarios=illustrative_scenarios or analyst_target)
+    doc["forecast_assumptions"] = {
+        "news_effects": fc.get("news_assumptions") or [],
+        "interim_scenario": fc.get("interim_scenario"),
+    }
     report_contract.validate_or_raise(doc)
     outdir.mkdir(parents=True, exist_ok=True)
     t = doc["meta"]["ticker"]
@@ -53,12 +62,14 @@ def main():
     p.add_argument("--pdf", action="store_true")
     p.add_argument("--method", default="auto",
                    help="opsi valuasi analis: auto|dcf|ddm|rnav")
-    p.add_argument("--as-of", default=None,
-                   help="tanggal laporan YYYY-MM-DD; harga tetap bertanggal sesuai cache")
+    p.add_argument("--as-of", default=date.today().isoformat(),
+                   help="tanggal laporan YYYY-MM-DD (default: hari ini); harga tetap bertanggal sesuai cache")
+    p.add_argument("--illustrative-scenarios", action="store_true",
+                   help="tambahkan screen historis dan valuasi ilustratif ke draft; bukan target harga")
     a = p.parse_args()
     try:
         build(a.ticker, Path(a.out), want_pdf=a.pdf, method=a.method,
-              as_of=a.as_of)
+              as_of=a.as_of, illustrative_scenarios=a.illustrative_scenarios)
     except ValueError as e:
         sys.exit(f"refused: {e}")
 

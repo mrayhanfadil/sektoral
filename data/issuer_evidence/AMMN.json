@@ -38,11 +38,26 @@
   },
   "balance_sheet": {
     "period_end": "2026-06-30",
-    "source_pages": [3, 108],
+    "source_title": "AMMAN H1 2026 Financial Statements",
+    "source_url": "https://www.amman.co.id/financial-statement",
+    "source_pages": [8, 9, 10, 101],
     "cash": 819000000,
     "total_debt": 5845000000,
     "total_equity": 5861000000,
-    "shares_issued": 72412413856
+    "non_controlling_interest": 95328000,
+    "shares_issued": 72518217656,
+    "shares_outstanding": 72412413856
+  },
+  "mine_life_context": {
+    "source_title": "AMMAN H1 2026 Earnings Release",
+    "source_url": "https://www.amman.co.id/earnings-release",
+    "source_page": 6,
+    "batu_hijau_reserves_mt": 777,
+    "elang_reserves_mt": 2581,
+    "batu_hijau_mining_through": "2031/2032",
+    "batu_hijau_stockpile_through": "2033/2034",
+    "elang_first_ore": "2031/2032",
+    "elang_fid_target": "2027"
   },
   "operating_metrics": [
     {"name": "Fresh ore mined (juta ton)", "prior": 6, "current": 66, "decimals": 0},
@@ -50,10 +65,18 @@
     {"name": "Kadar tembaga (%)", "prior": 0.33, "current": 0.52, "decimals": 2},
     {"name": "Kadar emas (g/t)", "prior": 0.14, "current": 0.65, "decimals": 2},
     {"name": "Konsentrat diproduksi (dmt)", "prior": 191657, "current": 347307, "decimals": 0},
+    {"name": "Konsentrat terjual (dmt)", "prior": null, "current": 120079, "decimals": 0},
     {"name": "Tembaga dalam konsentrat (Mlbs)", "prior": 89, "current": 211, "decimals": 0},
     {"name": "Emas dalam konsentrat (oz)", "prior": 59578, "current": 346354, "decimals": 0},
     {"name": "Katoda tembaga (ton)", "prior": 19805, "current": 48756, "decimals": 0},
-    {"name": "Emas murni (oz)", "prior": null, "current": 122131, "decimals": 0}
+    {"name": "Katoda tembaga terjual (ton)", "prior": 18522, "current": 48654, "decimals": 0},
+    {"name": "Emas murni (oz)", "prior": null, "current": 122131, "decimals": 0},
+    {"name": "Emas murni terjual (oz)", "prior": null, "current": 65544, "decimals": 0}
+  ],
+  "sales_production_bridge": [
+    {"product": "Konsentrat", "unit": "dmt", "production": 347307, "sales": 120079},
+    {"product": "Katoda tembaga", "unit": "ton", "production": 48756, "sales": 48654},
+    {"product": "Emas murni", "unit": "oz", "production": 122131, "sales": 65544}
   ],
   "revenue_breakdown": {
     "source_page": 4,
@@ -78,6 +101,12 @@
     },
     {
       "fact": "Smelter dan PMR memperoleh Project Acceptance Certificate pada Juli 2026; perluasan processing plant menghasilkan first ore to mill pada Agustus 2026.",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/earnings-release",
+      "published_at": "2026-09-21"
+    },
+    {
+      "fact": "Smelter dan PMR sudah berproduksi pada 1H26: 48.756 ton katoda tembaga dan 122.131 oz emas murni. PAC pada Juli adalah tonggak penerimaan proyek, bukan awal operasi.",
       "source_title": "AMMAN H1 2026 Earnings Release",
       "source_url": "https://www.amman.co.id/earnings-release",
       "published_at": "2026-09-21"
