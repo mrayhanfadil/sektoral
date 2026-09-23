@@ -28,6 +28,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     doc["forecast_assumptions"] = {
         "news_effects": fc.get("news_assumptions") or [],
         "interim_scenario": fc.get("interim_scenario"),
+        "outyear_scenario": fc.get("outyear_scenario"),
     }
     report_contract.validate_or_raise(doc)
     outdir.mkdir(parents=True, exist_ok=True)

@@ -1059,6 +1059,50 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
     if not any(effect.get("driver") != "none" for effect in fc.get("news_assumptions") or []):
         remove_titles.add("Berita dan keputusan asumsi")
     doc["bagian"] = [page for page in doc["bagian"] if page["judul"] not in remove_titles]
+    forward = fc.get("outyear_scenario")
+    if forward and forward.get("rows"):
+        source_lookup = {"official": (intake.get("official_evidence") or {}).get("latest_actual", {}).get("source_url")}
+        news_effects = fc.get("news_assumptions") or []
+        source_lookup.update({f"news:{item.get('article_index')}": item.get("source_url")
+                              for item in news_effects})
+        assumption_rows = []
+        cited_urls = []
+        for row in forward["rows"]:
+            sources = [source_lookup[source_id] for source_id in row["source_ids"]
+                       if source_lookup.get(source_id)]
+            cited_urls.extend(sources)
+            assumption_rows.append([
+                row["label"],
+                (f"Revenue growth {fmt.pct(row['revenue_growth_pct'] / 100)}; "
+                 f"EBITDA margin {fmt.pct(row['ebitda_margin_pct'] / 100)}; "
+                 f"net margin {fmt.pct(row['net_income_margin_pct'] / 100)}; "
+                 f"capex/revenue {fmt.pct(row['capex_to_revenue_pct'] / 100)}"),
+                f"{row['rationale']} [Sumber: {', '.join(row['source_ids'])}]"])
+        assumptions_exhibit = {
+            "n": len(doc["exhibits"]) + 1,
+            "judul": "Asumsi skenario laba FY27F-FY30F",
+            "tipe": "tabel",
+            "data": {"cols": ["Tahun", "Asumsi analis", "Dasar dan batasan"],
+                     "rows": assumption_rows},
+            "catatan_sumber": (
+                "Sumber referensi: " + "; ".join(dict.fromkeys(cited_urls)) +
+                ". Angka tahunan dihitung dari FY26F dan asumsi di tabel; "
+                "bukan panduan emiten atau forecast produksi LoM.")}
+        doc["exhibits"].append(assumptions_exhibit)
+        anchor = next((index for index, page in enumerate(doc["bagian"])
+                       if page["judul"] == "Forecast FY26 dari rilis terbaru"), 0)
+        doc["bagian"].insert(anchor + 1, {
+            "halaman": 0,
+            "judul": "Skenario laba FY27F-FY30F",
+            "layout": "stack",
+            "paragraf": [
+                "Estimasi di bawah memperpanjang FY26F memakai pertumbuhan dan "
+                "margin asumsi analis yang diturunkan dari rilis resmi dan konteks "
+                "operasi. Perusahaan belum memberi jadwal tahunan produksi, harga, "
+                "biaya dan capex untuk periode ini; angka ini adalah skenario laba, "
+                "bukan forecast fisik tambang atau SOTP."],
+            "exhibit": [assumptions_exhibit],
+        })
     for page in doc["bagian"]:
         if page["judul"] == "Skenario FY26 dari rilis terbaru":
             page["judul"] = f"Forecast {forecast_label} dari rilis terbaru"
@@ -1116,24 +1160,38 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
     if doc["cover"].get("key_financials"):
         rows = doc["cover"]["key_financials"]
         full = scenario["full_year"]
+        forecast_values = [{"year": scenario["year"], **full}] + (forward or {}).get("rows", [])
         history = (intake.get("official_evidence") or {}).get("annual_actuals") or []
         prior = next((row for row in history if row.get("year") == scenario["year"] - 1), {})
         for row in rows:
             key = ("revenue" if row[0].startswith("Pendapatan") else
                    "ebitda" if row[0].startswith("EBITDA") else
                    "net_profit" if row[0].startswith("Laba bersih") else None)
-            if key and len(row) > 3:
-                row[3] = fmt._id(full[key] / 1e6, 1)
             growth_key = ("revenue" if row[0].startswith("Pertumbuhan pendapatan") else
                           "ebitda" if row[0].startswith("Pertumbuhan EBITDA") else
                           "net_profit" if row[0].startswith("Pertumbuhan laba bersih") else None)
-            if growth_key and len(row) > 3 and prior.get(growth_key):
-                row[3] = fmt.pct(full[growth_key] / prior[growth_key] - 1)
+            metric = key or growth_key
+            if metric:
+                previous_value = prior.get(metric)
+                for index, projection in enumerate(forecast_values, start=3):
+                    if index >= len(row):
+                        break
+                    current_value = projection.get(metric)
+                    if current_value is None:
+                        continue
+                    if key:
+                        row[index] = fmt._id(current_value / 1e6, 1)
+                    elif previous_value and previous_value > 0:
+                        row[index] = fmt.pct(current_value / previous_value - 1)
+                    previous_value = current_value
         doc["exhibits"][0]["catatan_sumber"] = (
             f"Sumber aktual: {(intake.get('official_evidence') or {}).get('annual_source_title')}; "
             f"{forecast_label} adalah estimasi Sektoral dari rilis interim "
             f"{scenario['source_url']} dan asumsi semester kedua. "
-            "FY berikutnya belum dimodelkan; EPS/BVPS historis memakai jumlah saham "
+            + ("FY27F-FY30F adalah skenario laba asumsi analis pada exhibit terpisah; "
+               "bukan jadwal produksi LoM. " if forward else
+               "FY27F-FY30F belum dimodelkan karena asumsi lanjutan belum tervalidasi. ")
+            + "EPS/BVPS historis memakai jumlah saham "
             f"per {value['balance_period']} sebagai basis pro forma.")
     doc["fy26"] = {
         "Pendapatan": fmt._id(scenario["full_year"]["revenue"] * value["fx"]["rate"] / 1e9, 0),

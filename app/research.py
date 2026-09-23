@@ -75,6 +75,16 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
                      f"{esc(interim.get('rationale'))}<br><small>"
                      f"{esc(interim.get('published_at'))} · {esc(interim.get('source_url'))}"
                      "</small></section>")
+    for row in plan.get("outyear_scenario") or []:
+        parts.append("<section class='card'><strong>"
+                     f"{esc(row.get('year'))} · pertumbuhan revenue "
+                     f"{esc(row.get('revenue_growth_pct'))}% · margin EBITDA "
+                     f"{esc(row.get('ebitda_margin_pct'))}%</strong><br>"
+                     f"Margin laba {esc(row.get('net_income_margin_pct'))}% · "
+                     f"capex/revenue {esc(row.get('capex_to_revenue_pct'))}%<br>"
+                     f"{esc(row.get('rationale'))}<br><small>"
+                     f"Bukti: {esc(', '.join(row.get('source_ids') or []))}"
+                     "</small></section>")
     if forecast_assumptions.get("problems"):
         parts.append("<div class='card muted'>" +
                      esc("; ".join(forecast_assumptions["problems"])) + "</div>")
@@ -137,7 +147,8 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                          illustrative_scenarios=illustrative_scenarios or analyst_target,
                          assumption_plan=assumption_plan,
                          analyst_target=analyst_target,
-                         assumption_status=assumption_result.get("status"))
+                         assumption_status=assumption_result.get(
+                             "interim_status", assumption_result.get("status")))
     validated, validation_status = research_context.load_analysis(
         t, report["meta"].get("harga_tanggal"))
     safe_research = {

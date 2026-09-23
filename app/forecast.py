@@ -36,6 +36,38 @@ def _interim_scenario(intake, plan):
                 "capital_expenditure": metrics["capital_expenditure"] + h2_capex}}
 
 
+def _outyear_scenario(interim, plan):
+    """Calculate earnings from four validated, explicit agent assumption rows."""
+    assumptions = (plan or {}).get("outyear_scenario")
+    if not interim or not isinstance(assumptions, list) or len(assumptions) != 4:
+        return None
+    expected = list(range(interim["year"] + 1, interim["year"] + 5))
+    if [row.get("year") for row in assumptions if isinstance(row, dict)] != expected:
+        return None
+    previous_revenue = interim["full_year"]["revenue"]
+    rows = []
+    for assumption in assumptions:
+        revenue = previous_revenue * (1 + assumption["revenue_growth_pct"] / 100)
+        rows.append({
+            "year": assumption["year"],
+            "label": f"FY{assumption['year'] % 100:02d}F",
+            "revenue": revenue,
+            "ebitda": revenue * assumption["ebitda_margin_pct"] / 100,
+            "net_profit": revenue * assumption["net_income_margin_pct"] / 100,
+            "capex": revenue * assumption["capex_to_revenue_pct"] / 100,
+            "revenue_growth_pct": assumption["revenue_growth_pct"],
+            "ebitda_margin_pct": assumption["ebitda_margin_pct"],
+            "net_income_margin_pct": assumption["net_income_margin_pct"],
+            "capex_to_revenue_pct": assumption["capex_to_revenue_pct"],
+            "rationale": assumption["rationale"],
+            "source_ids": assumption["source_ids"],
+        })
+        previous_revenue = revenue
+    return {"anchor_year": interim["year"], "anchor": interim["full_year"],
+            "unit": interim.get("unit"), "source_url": interim.get("source_url"),
+            "rows": rows, "status": "validated_analyst_scenario"}
+
+
 def build(intake, n_years=5, assumption_plan=None):
     A = intake["annuals"]
     base = A[-1]
@@ -186,9 +218,11 @@ def build(intake, n_years=5, assumption_plan=None):
         g2["catatan"].append(
             "G2.9: angka CAGR dan capex=D&A hanyalah screen; forecast driver, "
             "modal kerja, serta jadwal utang belum direkonsiliasi.")
+    interim_scenario = _interim_scenario(intake, assumption_plan)
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "news_assumptions": effects,
-            "interim_scenario": _interim_scenario(intake, assumption_plan),
+            "interim_scenario": interim_scenario,
+            "outyear_scenario": _outyear_scenario(interim_scenario, assumption_plan),
             "operating_bridge": operating_bridge,
             "driver_evidence": intake.get("driver_evidence") or intake.get("drivers"),
             "forecast_basis": "historical_screening_proxy",
