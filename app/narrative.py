@@ -441,13 +441,17 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
         # screening. "NA" fits the narrow Figma cover columns; the note spells it out.
         f_dashes = ["NA"] * len(f_labels)
         total_cols_dash = ["-"] * (len(history) + len(f_labels))
+        # Net profit is the parent's share, the EPS basis, so Key Financials ties
+        # out with the income statement and the combo chart.
+        attributable_key = ("net_profit_attributable" if all(
+            row.get("net_profit_attributable") is not None for row in history) else "net_profit")
         key_rows = [
             [f"Pendapatan ({unit})"] + values("revenue") + f_dashes,
             ["Pertumbuhan pendapatan (%)"] + growth("revenue") + f_dashes,
             [f"EBITDA ({unit})"] + values("ebitda") + f_dashes,
             ["Pertumbuhan EBITDA (%)"] + growth("ebitda") + f_dashes,
-            [f"Laba bersih ({unit})"] + values("net_profit") + f_dashes,
-            ["Pertumbuhan laba bersih (%)"] + growth("net_profit") + f_dashes,
+            [f"Laba bersih ({unit})"] + values(attributable_key) + f_dashes,
+            ["Pertumbuhan laba bersih (%)"] + growth(attributable_key) + f_dashes,
             ["EPS (US$ sen)" if currency == "USD" else "EPS (Rp)"] +
             per_share("net_profit_attributable") + f_dashes,
             ["BVPS (US$ sen)" if currency == "USD" else "BVPS (Rp)"] +
@@ -3444,7 +3448,8 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         def metric_of(name):
             name = name.lower()
             return ("revenue" if "pendapatan" in name else "ebitda" if "ebitda" in name
-                    else "net_profit" if "laba bersih" in name else None)
+                    # Parent's share, like the actual columns and EPS.
+                    else "net_profit_attributable" if "laba bersih" in name else None)
 
         for row in key_fin["data"]["rows"]:
             metric = metric_of(row[0])
