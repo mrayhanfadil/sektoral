@@ -395,7 +395,7 @@ def peer_industry_page(intake):
                    if weighted else None)
     total_cap = sum(cap for cap, _ in caps if cap)
     own = subject["metrics"]
-    mult = lambda v: "-" if v is None else fmt.mult(v)
+    mult = lambda v: "-" if v is None else fmt.mult(v, cap=fmt.MULT_CAP)
     pct = lambda v: "-" if v is None else fmt.pct(v)
     table = [
         ["Kapitalisasi pasar (Rp triliun)", fmt._id(total_cap / 1e12, 1),
@@ -540,7 +540,9 @@ def peer_page(intake, valuation_inputs=None):
     pe_median, pb_median = stats["pe"][0], stats["pb"][0]
     if pe_signal.get("value") is not None and pe_median:
         paragraphs.append(
-            f"P/E {ticker} {fmt.mult(pe_signal['value'])} dibanding median peer "
+            (f"P/E {ticker} di atas {fmt.MULT_CAP}x (laba terlalu kecil untuk bermakna) dibanding median peer "
+             if pe_signal["value"] > fmt.MULT_CAP else
+             f"P/E {ticker} {fmt.mult(pe_signal['value'])} dibanding median peer ") +
             f"{fmt.mult(pe_median)}, sementara ROE berada di peringkat "
             f"{roe_signal.get('rank') or '-'} dari {roe_signal.get('n') or '-'}.")
     outliers = [r["symbol"] for r in rows
@@ -962,7 +964,9 @@ def financials_page(intake, fc=None):
         coverage = []
         for r in actual:
             ebit, interest = get(r, "operating_pnl"), get(r, "interest_expense_non_operating")
-            coverage.append(fmt.mult(ebit / interest) if ebit is not None and interest else "NA")
+            cover = ebit / interest if ebit is not None and interest else None
+            coverage.append("NA" if cover is None else f">{fmt.MULT_CAP}x" if cover > fmt.MULT_CAP
+                            else fmt.mult(cover))
         gearing = []
         for r in actual:
             net_debt, equity = get(r, "net_debt"), get(r, "total_equity")
