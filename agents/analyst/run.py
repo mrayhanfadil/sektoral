@@ -21,13 +21,18 @@ MAX_TOOL_CALLS = 7
 MAX_TURNS = 4
 MAX_CALLS_PER_TURN = 3
 VERDICTS = ("didukung", "tidak didukung", "belum terjawab")
-_ADVICE = re.compile(r"\b(beli|jual|buy|sell|hold|akumulasi|target harga|rekomendasi|"
-                     r"undervalued|overvalued|saran investasi)\b", re.I)
-# Market-flow descriptions ("jual bersih asing", "aksi beli") describe what
-# investors did; they are not advice and are removed before the advice check.
+# Advice means telling the reader to act, not describing what investors did:
+# "asing mencatat beli bersih" is a market fact, "layak dibeli" is advice.
+_ADVICE = re.compile(
+    r"\b(?:target\s+harga|rekomendasi|undervalued|overvalued|saran\s+investasi|akumulasi|"
+    r"buy|sell|hold|accumulate|trading\s+buy|"
+    r"(?:rating|peringkat)\s+(?:beli|jual|tahan)|"
+    r"(?:sebaiknya|disarankan|direkomendasikan|layak|patut|saatnya|waktunya|segera|silakan)\s+"
+    r"(?:di)?(?:beli|jual|tahan|lepas|koleksi|akumulasi|masuk|keluar))\b", re.I)
+# Market-flow descriptions ("net sell", "aksi beli") are removed before the check.
 _FLOW_PHRASES = re.compile(
     r"\b(?:(?:aksi|tekanan|net|posisi)\s+(?:beli|jual|buy|sell)|"
-    r"(?:beli|jual|buy|sell)(?:\s+bersih|\s+asing|\s+neto|ing))\b", re.I)
+    r"(?:buy|sell)(?:\s+bersih|\s+asing|\s+neto|ing|-off|back))\b", re.I)
 _DIGIT = re.compile(r"\S*\d\S*")
 # Valuation verdicts that read as a call to act rather than a comparison.
 _JUDGEMENT = re.compile(r"\b(?:valuasi\s+(?:\w+\s+){0,2}menarik|layak\s+(?:dibeli|dikoleksi|dimiliki)|"
@@ -52,8 +57,9 @@ SYSTEM = (
     "Tool Sectors membaca data Sectors lokal untuk satu emiten; web_news (jika tersedia) hanya memberi judul berita web bertanggal sebagai konteks, bukan sumber angka. "
     "Tugasmu: merencanakan pemeriksaan, memilih tool, lalu menyimpulkan posisi emiten "
     "terhadap peer dan perubahan terbarunya. Ini materi informasi, bukan saran investasi: "
-    "jangan pernah menulis beli, jual, tahan, akumulasi, target harga, rekomendasi, "
-    "undervalued atau overvalued. Selalu balas dengan satu object JSON saja."
+    "jangan menyuruh pembaca membeli, menjual atau menahan saham, dan jangan menulis target "
+    "harga, rekomendasi, undervalued atau overvalued. Menjelaskan aksi investor (misalnya "
+    "asing mencatat beli bersih) boleh. Selalu balas dengan satu object JSON saja."
 )
 
 
@@ -115,9 +121,6 @@ def _plan_problems(plan, available):
     text = " ".join([str(plan.get("question") or "")] + [str(h) for h in hypotheses or []])
     if _advice_terms(text):
         problems.append("plan memuat bahasa rekomendasi investasi: " + ", ".join(_advice_terms(text)))
-    if _FOREIGN_SCRIPT.search(text):
-        problems.append("tulis rencana dalam bahasa Indonesia saja; hapus: " +
-                        ", ".join(_FOREIGN_SCRIPT.findall(text)[:5]))
     return problems
 
 
@@ -151,8 +154,10 @@ def _make_plan(chat, ticker, info, previous, problems):
             break
         found = _plan_problems(plan, info["available"])
         if not found:
-            plan = {"question": plan["question"].strip()[:300],
-                    "hypotheses": [h.strip()[:240] for h in plan["hypotheses"]],
+            # Stray CJK tokens are stripped here rather than failing the plan;
+            # synthesis prose, which readers see as conclusions, still rejects them.
+            plan = {"question": _clean(plan["question"], 300),
+                    "hypotheses": [_clean(h, 240) for h in plan["hypotheses"]],
                     "steps": [{"tool": s["tool"], "args": s.get("args") or {},
                                "why": _clean(s.get("why"))} for s in plan["steps"]],
                     "source": "agent"}
@@ -261,13 +266,29 @@ def _execute(chat, ticker, plan, messages, available, problems):
 
 # ------------------------------------------------------------ synthesize
 
+def _replace_ids(doc, labels):
+    """Readers see signal labels, not internal ids, in accepted prose."""
+    def swap(text):
+        if not isinstance(text, str):
+            return text
+        for signal_id in sorted(labels, key=len, reverse=True):
+            text = text.replace(signal_id, labels[signal_id].lower())
+        return text
+    doc["headline"] = swap(doc.get("headline"))
+    for item in doc.get("findings") or []:
+        for key in ("title", "interpretation", "caveat"):
+            item[key] = swap(item.get(key))
+    for item in doc.get("hypotheses") or []:
+        item["reason"] = swap(item.get("reason"))
+
+
 def _known_ids(ids, signal_ids):
     """A non-empty list of signal id strings that all exist."""
     return (isinstance(ids, list) and bool(ids) and
             all(isinstance(x, str) and x in signal_ids for x in ids))
 
 
-def _synthesis_problems(doc, signal_ids, n_hypotheses):
+def _synthesis_problems(doc, signal_ids, n_hypotheses, label_numbers=frozenset()):
     problems = []
     if not isinstance(doc, dict):
         return ["synthesis harus object"]
@@ -311,7 +332,12 @@ def _synthesis_problems(doc, signal_ids, n_hypotheses):
             problems.append("headline, title, interpretation, caveat dan reason wajib diisi")
             break
     joined = " ".join(t for t in prose if isinstance(t, str))
-    numbers = sorted(set(_DIGIT.findall(joined)))
+    # Signal ids ("flow.net_20d") and numbers that are part of a signal's
+    # label ("20 sesi") are references, not figures the model invented.
+    for signal_id in sorted(signal_ids, key=len, reverse=True):
+        joined = joined.replace(signal_id, " ")
+    numbers = sorted(token for token in set(_DIGIT.findall(joined))
+                     if re.sub(r"\D", "", token) not in label_numbers)
     if numbers:
         problems.append("prosa tidak boleh memuat angka (angka ditampilkan dari sinyal yang "
                         "dicite); hapus: " + ", ".join(numbers[:8]))
@@ -357,14 +383,18 @@ def _synthesize(chat, ticker, plan, all_signals, headlines, changes, problems):
         "\"signal_ids\": [...], \"reason\": ...}], \"next_checks\": [\"pemeriksaan lanjutan\"]}. "
         "Maksimal empat findings.")}]
     ids = {s["id"] for s in all_signals}
+    label_numbers = frozenset(n for s in all_signals if s.get("kind") != "web"
+                              for n in re.findall(r"\d+", str(s.get("label") or "")))
+    labels = {s["id"]: s["label"] for s in all_signals}
     for attempt in range(2):
         try:
             raw, doc = _call(chat, messages)
         except Exception as error:
             problems.append(f"sintesis: {type(error).__name__}: {str(error)[:160]}")
             break
-        found = _synthesis_problems(doc, ids, len(plan["hypotheses"]))
+        found = _synthesis_problems(doc, ids, len(plan["hypotheses"]), label_numbers)
         if not found:
+            _replace_ids(doc, labels)
             doc["next_checks"] = [str(x)[:200] for x in (doc.get("next_checks") or [])
                                   if isinstance(x, str) and not _advice_terms(x)][:3]
             doc["source"] = "agent"

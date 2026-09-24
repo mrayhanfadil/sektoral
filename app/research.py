@@ -195,7 +195,7 @@ def run_analyst(ticker):
 
 
 def run(ticker, outdir, want_pdf=False, as_of=None,
-        illustrative_scenarios=False, analyst_target=False):
+        illustrative_scenarios=False, analyst_target=False, refresh_assumptions=False):
     """Run the research agent and build a report from the same cached evidence."""
     from agents.research.run import run_live
 
@@ -222,12 +222,13 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
          research.get("status"), status="ok" if research.get("ok") else "warn")
 
     report_as_of = as_of or date.today().isoformat()
-    from agents.forecast_assumptions.run import run_live as forecast_agent
+    from agents.forecast_assumptions.run import run_cached as forecast_agent
     forecast_intake, _ = intake.load(t, as_of=report_as_of)
     emit("forecast", "Agent asumsi forecast membaca berita dan rilis resmi", status="run")
-    assumption_result = forecast_agent(forecast_intake)
-    print(f"{t}: forecast agent {assumption_result['status']}", flush=True)
-    emit("forecast", "Asumsi forecast selesai", assumption_result.get("status"))
+    assumption_result = forecast_agent(forecast_intake, refresh=refresh_assumptions)
+    reused = " (dipakai ulang untuk bukti yang sama)" if assumption_result.get("reused") else ""
+    print(f"{t}: forecast agent {assumption_result['status']}{reused}", flush=True)
+    emit("forecast", "Asumsi forecast selesai" + reused, assumption_result.get("status"))
     assumption_plan = assumption_result.get("plan")
     emit("report", "Menyusun company update dan memeriksa gate valuasi", status="run")
     report = build.build(t, destination, want_pdf=want_pdf, as_of=report_as_of,
@@ -287,10 +288,13 @@ def main(argv=None):
                         help="tambahkan screen historis dan valuasi ilustratif ke draft")
     parser.add_argument("--analyst-target", action="store_true",
                         help="opt-in target FY26F EV/EBITDA dari rencana agent tervalidasi")
+    parser.add_argument("--refresh-assumptions", action="store_true",
+                        help="panggil ulang agent forecast walau bukti sama sudah punya rencana tersimpan")
     args = parser.parse_args(argv)
     result = run(args.ticker, args.out, want_pdf=args.pdf, as_of=args.as_of,
                  illustrative_scenarios=args.illustrative_scenarios,
-                 analyst_target=args.analyst_target)
+                 analyst_target=args.analyst_target,
+                 refresh_assumptions=args.refresh_assumptions)
     intel = result.pop("intel", None) or {}
     result["analyst"] = {"status": intel.get("status"),
                          "headline": (intel.get("synthesis") or {}).get("headline")}
