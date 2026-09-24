@@ -30,16 +30,25 @@ def _b64_brand_asset(filename):
 _ROB_REG = _b64_font("Roboto-Regular.ttf")
 _ROB_BOLD = _b64_font("Roboto-Bold.ttf")
 _ROB_ITA = _b64_font("Roboto-Italic.ttf")
+_ROB_MED = _b64_font("Roboto-Medium.ttf")
+_ROB_BOLD_ITA = _b64_font("Roboto-BoldItalic.ttf")
+_ROB_BLACK = _b64_font("Roboto-Black.ttf")
+_ROB_BLACK_ITA = _b64_font("Roboto-BlackItalic.ttf")
 
-# Sectoral branding spec: primary blue, white paper, near-black-ink text,
-# light-gray rules, light-blue even rows. Keep Roboto in HTML; use Arial for
-# print text because Chromium's bundled Roboto subset breaks copied PDF words.
+# Sectoral Design System (docs: "Sectoral Design System Documentation").
+# Roboto only, on screen and in print: the static Google Fonts v51 faces keep
+# copied PDF words intact (the old variable build did not, which is why print
+# used to fall back to Arial / Liberation Sans). Sizes are the design's
+# artboard points scaled x0.5 to A4.
 PRIMARY = "#0928B1"
 PAPER = "#ffffff"
-INK = "#333333"
-RULE = "#D9D9D9"
+INK = "#000000"
+RULE = "#E0E0E0"
 EVEN_ROW = "#B4C7FF"
+HIGHLIGHT = "#E1E9FF"
+LIME = "#3ED628"
 MUT = "#555555"
+GRID = "#E0E0E0"
 # Categorical chart series, in order.
 SERIES = ["#0928B1", "#B4C7FF", "#3ED628", "#1DCD9F", "#0047AB", "#7596FF"]
 ISSUER_COLOR = SERIES[0]
@@ -58,18 +67,21 @@ PAGE_NUM = ("@page{size:A4;margin:12mm 12mm 14mm;"
             "background-image:url('data:image/svg+xml;base64," + REPORT_MORSE + "');"
             "background-size:95mm 1.55mm;background-position:left center;"
             "background-repeat:no-repeat;white-space:nowrap;"
-            "font-family:Arial,sans-serif;font-size:7.2pt;line-height:3mm;"
+            "font-family:'Roboto',sans-serif;font-size:7.5pt;line-height:3mm;"
             "color:" + PRIMARY + "}"
-            "@bottom-right{content:'Page ' counter(page) ' of ' counter(pages);"
+            "@bottom-right{content:'Page ' counter(page) ' of ' counter(pages);font-weight:900;"
             "box-sizing:border-box;width:26mm;height:3mm;text-align:right;white-space:nowrap;"
-            "font-family:Arial,sans-serif;font-size:7.2pt;line-height:3mm;"
+            "font-family:'Roboto',sans-serif;font-size:7.5pt;line-height:3mm;"
             "color:" + PRIMARY + "}}")
 
 FONT_FACES = (
     f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_REG}') format('truetype');font-weight:400;font-style:normal;}}\n"
-    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_BOLD}') format('truetype');font-weight:700;font-style:normal;}}\n"
-    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_BOLD}') format('truetype');font-weight:800;font-style:normal;}}\n"
     f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_ITA}') format('truetype');font-weight:400;font-style:italic;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_MED}') format('truetype');font-weight:500;font-style:normal;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_BOLD}') format('truetype');font-weight:700;font-style:normal;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_BOLD_ITA}') format('truetype');font-weight:700;font-style:italic;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_BLACK}') format('truetype');font-weight:900;font-style:normal;}}\n"
+    f"@font-face{{font-family:'Roboto';src:url('data:font/truetype;charset=utf-8;base64,{_ROB_BLACK_ITA}') format('truetype');font-weight:900;font-style:italic;}}\n"
 )
 
 CSS = (FONT_FACES + PAGE_NUM +
@@ -84,29 +96,56 @@ CSS = (FONT_FACES + PAGE_NUM +
        "grid-template-rows:auto 0.5mm;column-gap:5mm;row-gap:0.4mm;"
        "align-items:center;padding:3mm 3mm 2.5mm;margin:0 0 2mm}"
        ".report-heading{grid-column:1;grid-row:1;min-width:0}"
-       ".report-title{font-size:9.5pt;line-height:1.15;color:" + PRIMARY + ";"
-       "font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
-       ".report-subtitle{font-size:7.5pt;line-height:1.2;color:#000;margin-top:0.4mm}"
+       # Header line 1: stock code + rating action (Roboto Black, blue);
+       # line 2: report type + date (Roboto Regular, black).
+       ".report-title{font-size:10pt;line-height:1.15;color:" + PRIMARY + ";"
+       "font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+       ".report-subtitle{font-size:8pt;line-height:1.2;color:" + INK + ";margin-top:0.5mm}"
        ".report-wordmark{grid-column:2;grid-row:1;display:block;width:30mm;height:5.35mm;"
        "object-fit:contain}"
        ".report-divider{grid-column:1/-1;grid-row:2;display:block;width:100%;"
        "height:0.5mm;object-fit:fill}"
        ".status{font-size:10.5pt;color:" + PRIMARY + ";font-weight:700;margin:5px 0 2px}"
-       ".rating-label{font-size:15pt;color:" + PRIMARY + ";font-weight:700;line-height:1.1}"
-       ".rating-detail{font-size:7.5pt;color:" + MUT + ";margin:1px 0 5px}"
+       # Rating block: Roboto Black Italic on the highlight fill.
+       ".rating-block{background:" + HIGHLIGHT + ";padding:4mm 4mm 3.5mm;margin:0 0 3mm}"
+       ".rating-label{font-size:32pt;color:" + PRIMARY + ";font-weight:900;font-style:italic;"
+       "line-height:0.95;text-transform:uppercase;letter-spacing:-0.01em}"
+       ".rating-detail{font-size:10pt;color:" + PRIMARY + ";font-weight:900;font-style:italic;"
+       "margin-top:1.2mm}"
+       ".rating-method{font-size:7pt;color:" + INK + ";margin-top:2mm;padding-top:1.5mm;"
+       "border-top:1px solid #FFFFFF;line-height:1.3}"
+       ".basic-head{font-size:10pt;font-weight:700;color:" + INK + ";margin:3.5mm 0 1mm}"
        ".draft-banner{background:#fff3e8;border:1px solid #bb4d00;color:#803400;"
        "font-weight:700;padding:5px 8px;margin:5px 0;font-size:8.5pt}"
        ".cover{display:flex;gap:12px;margin-top:3px}"
-       ".left{width:32%;font-size:7.8pt}"
+       ".left{width:31%;font-size:8pt}"
        ".right{width:68%}"
-       ".kv{display:flex;justify-content:space-between;align-items:baseline;padding:2px 0;border-bottom:1px dotted " + RULE + "}"
-       ".kv span{padding-right:4px}.kv b{font-weight:700;color:" + INK + ";white-space:nowrap}"
-       ".panel{background:" + PAPER + ";padding:5px 6px;border:1px solid " + RULE + ";border-radius:2px}"
-       "h1.emit{font-size:12.8pt;margin:0 0 2px;color:" + PRIMARY + ";font-weight:700}"
-       ".headline{font-size:10.8pt;font-weight:700;color:" + PRIMARY + ";margin:2px 0 4px}"
-       ".bullets{margin:4px 0 6px 14px;padding:0;font-size:7.9pt}.bullets li{margin-bottom:3px}"
-       "h2.sec{font-size:11pt;color:" + PRIMARY + ";font-weight:700;margin:10px 0 5px}"
-       "h3.sub{font-size:8.8pt;color:" + PRIMARY + ";font-weight:700;margin:5px 0 2px}"
+       ".kv{display:flex;justify-content:space-between;align-items:baseline;padding:2.2px 0;"
+       "border-bottom:1px solid " + HIGHLIGHT + "}"
+       ".kv span{padding-right:4px}.kv b{font-weight:500;color:" + INK + ";white-space:nowrap}"
+       ".panel{background:" + PAPER + ";padding:0}"
+       # Company name (Roboto Black) and thesis line (Roboto Black Italic).
+       "h1.emit{font-size:20pt;line-height:1.08;margin:0 0 2mm;color:" + INK + ";font-weight:900}"
+       ".headline{font-size:14pt;line-height:1.12;font-weight:900;font-style:italic;color:" + INK +
+       ";margin:0 0 3mm}"
+       # Highlight callout for the three executive-summary bullets.
+       ".highlight{background:" + HIGHLIGHT + ";padding:2.5mm 3.5mm;margin:0 0 3mm}"
+       ".bullets{margin:0 0 0 12px;padding:0;font-size:8pt}"
+       ".bullets li{margin-bottom:1.6mm;font-weight:500}.bullets li:last-child{margin-bottom:0}"
+       # Numbered section heads on inner pages (Roboto Black, black).
+       "h2.sec{font-size:18pt;line-height:1.1;color:" + INK + ";font-weight:900;margin:3mm 0 3mm}"
+       "h2.sec .num{color:" + PRIMARY + "}"
+       "h3.sub{font-size:10pt;color:" + INK + ";font-weight:700;margin:2.5mm 0 1mm}"
+       # Thesis cards: claim on the left, the metric that backs it on the right.
+       ".cards{display:flex;flex-direction:column;gap:2.5mm;margin:2mm 0}"
+       ".card{display:flex;gap:4mm;align-items:center;background:" + HIGHLIGHT + ";"
+       "padding:3mm 4mm;break-inside:avoid-page;page-break-inside:avoid}"
+       ".card-body{flex:1 1 auto;min-width:0}"
+       ".card-title{font-weight:900;font-size:10pt;margin-bottom:1mm;color:" + INK + "}"
+       ".card-text{font-size:8pt;line-height:1.4}"
+       ".card-metric{flex:0 0 32mm;text-align:right}"
+       ".card-value{font-size:20pt;font-weight:900;color:" + PRIMARY + ";line-height:1}"
+       ".card-label{font-size:7pt;color:" + INK + ";margin-top:1mm;line-height:1.25}"
        ".exhibit{margin:7px 0 8px}"
        ".exhibit.keep{break-inside:avoid-page;page-break-inside:avoid}"
        # Table styling follows sectors-hackathon's .fin-table: a solid header
@@ -123,8 +162,8 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table tbody{display:table-row-group}"
        ".exhibit-table tbody.block{break-inside:avoid-page;page-break-inside:avoid}"
        ".exhibit-table tr{break-inside:avoid-page;page-break-inside:avoid}"
-       ".exhibit-table thead th{background:" + PRIMARY + ";color:#fff;font-weight:600;"
-       "letter-spacing:.05em;white-space:nowrap;padding:4px 6px;vertical-align:bottom}"
+       ".exhibit-table thead th{background:" + PRIMARY + ";color:#fff;font-weight:900;"
+       "letter-spacing:.02em;white-space:nowrap;padding:4px 6px;vertical-align:bottom}"
        ".exhibit-table .cell-text{text-align:left}"
        ".exhibit-table .cell-num{text-align:right;font-variant-numeric:tabular-nums}"
        ".exhibit-table .cell-date{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}"
@@ -138,12 +177,15 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table tbody tr.total-row td{background:" + PAPER + ";font-weight:700;"
        "border-top:1px solid " + PRIMARY + "}"
        # Exhibit label carries the same brand tick as the section heads.
-       ".exhibit-table caption{text-align:left;font-weight:700;font-size:7.8pt;"
+       ".exhibit-table caption{text-align:left;font-weight:900;font-size:8pt;"
        "color:" + PRIMARY + ";margin-bottom:3px;font-family:'Roboto',sans-serif}"
        ".exhibit-table caption::before{content:'';display:block;width:26pt;"
        "border-top:1.5px solid " + PRIMARY + ";margin-bottom:2.5px}"
-       ".src{font-size:6.7pt;color:" + MUT + ";margin:2px 0 6px;line-height:1.3}"
-       ".metric-chart{display:block;width:100%;height:180px;border:1px solid " + RULE + ";}"
+       ".src{font-size:6pt;color:" + INK + ";margin:2px 0 6px;line-height:1.3}"
+       ".metric-chart{display:block;width:100%;height:180px}"
+       ".chart-caption{font-weight:900;font-size:8pt;color:" + PRIMARY + ";margin-bottom:2mm}"
+       ".chart-caption::before{content:'';display:block;width:26pt;"
+       "border-top:1.5px solid " + PRIMARY + ";margin-bottom:2.5px}"
        ".research-card{border:1px solid " + RULE + ";"
        "padding:7px 9px;margin:9px 0;break-inside:avoid-page;page-break-inside:avoid}"
        ".research-card h3{color:" + PRIMARY + ";font-size:9pt;margin:0 0 4px}"
@@ -151,6 +193,9 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".research-card .research-cite{font-size:6.7pt;color:" + MUT + ";"
        "margin-top:6px;overflow-wrap:anywhere}"
        ".page{page-break-before:always}"
+       ".analyst{font-size:8pt;margin-top:3mm;line-height:1.35}"
+       ".section{margin-top:6mm}.section>.report-header{display:none}"
+       "h2.sec{break-after:avoid-page;page-break-after:avoid}"
        ".small{font-size:7.5pt;color:" + MUT + "}"
        ".grid-2{display:flex;gap:12px;width:100%;margin:4px 0;box-sizing:border-box}"
        ".grid-col{flex:1 1 0;min-width:0;box-sizing:border-box}"
@@ -169,9 +214,10 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table th,.exhibit-table td{padding:5px 6px}"
        ".exhibit::before{content:'Geser tabel untuk kolom lainnya →';display:block;"
        "text-align:right;font-size:10px;color:" + MUT + ";margin-bottom:2px}}"
-       "@media print{body,body *{font-family:Arial,sans-serif!important;"
-       "font-variant-ligatures:none;font-feature-settings:'liga' 0,'clig' 0}"
-       "@media print{h1,h2,h3{font-weight:400!important}"
+       # Print keeps Roboto; ligatures stay off so copied words never merge.
+       "@media print{body,body *{font-variant-ligatures:none;"
+       "font-feature-settings:'liga' 0,'clig' 0}"
+       "@media print{"
        ".exhibit{overflow:visible}.exhibit-table{min-width:0}"
        ".research-summary{display:none!important}"
        ".page{page-break-before:always}}")
@@ -272,19 +318,20 @@ def _price_chart(ticker, as_of):
                 f"r='2.4' fill='{color}'/>")
 
     # Four gridlines, price labelled left and relative performance right.
-    grid = [f"<rect x='{x0}' y='{y0}' width='{x1 - x0}' height='{y1 - y0}' "
-            f"fill='none' stroke='#E6E6E6' stroke-width='0.5'/>"]
+    # Design chart rules: no axis lines or frame, dashed light-gray grid,
+    # black baseline, black tick labels.
+    grid = []
     for i in range(4):
         y = y0 + i * (y1 - y0) / 3
         price_tick = p_hi - i * (p_hi - p_lo) / 3
         rel_tick = r_hi - i * (r_hi - r_lo) / 3
         grid.append(
             f"<line x1='{x0}' x2='{x1}' y1='{y:.1f}' y2='{y:.1f}' "
-            f"stroke='#E6E6E6' stroke-width='0.5'/>"
+            f"stroke='{GRID}' stroke-width='0.6' stroke-dasharray='3 3'/>"
             f"<text x='{x0 - 3}' y='{y + 2.5:.1f}' text-anchor='end' font-size='7' "
-            f"fill='{MUT}'>{fmt.rp(price_tick)}</text>"
+            f"fill='{INK}'>{fmt.rp(price_tick)}</text>"
             f"<text x='{x1 + 3}' y='{y + 2.5:.1f}' font-size='7' "
-            f"fill='{MUT}'>{rel_tick:+.0f}%</text>")
+            f"fill='{INK}'>{rel_tick:+.0f}%</text>")
     # Parity: above this line the issuer outperformed the index.
     if r_lo <= 0 <= r_hi:
         zero_y = y_of(0, r_lo, r_hi)
@@ -292,7 +339,7 @@ def _price_chart(ticker, as_of):
                     f"stroke='#000000' stroke-width='1.2'/>")
 
     area = (f"<polygon points='{x0},{y1} {points(closes, p_lo, p_hi)} {x1},{y1}' "
-            f"fill='{ISSUER_COLOR}' fill-opacity='0.07'/>")
+            f"fill='{ISSUER_COLOR}' fill-opacity='0.12'/>")
 
     issuer_return = issuer[-1] - 100
     ihsg_return = ihsg[-1] - 100
@@ -310,13 +357,12 @@ def _price_chart(ticker, as_of):
         f"{''.join(grid)}{area}"
         f"{line(relative, r_lo, r_hi, INDEX_COLOR, '4 3')}"
         f"{line(closes, p_lo, p_hi, ISSUER_COLOR)}"
-        f"<text x='{x0}' y='112' font-size='7.5' fill='{MUT}'>{dates[0]:%Y-%m}</text>"
-        f"<text x='{x1}' y='112' text-anchor='end' font-size='7.5' fill='{MUT}'>{dates[-1]:%Y-%m}</text>"
-        f"<line x1='{x0}' x2='{x0 + 12}' y1='124' y2='124' stroke='{ISSUER_COLOR}' stroke-width='2'/>"
+        f"<text x='{x0}' y='112' font-size='7.5' fill='{INK}'>{dates[0]:%b-%y}</text>"
+        f"<text x='{x1}' y='112' text-anchor='end' font-size='7.5' fill='{INK}'>{dates[-1]:%b-%y}</text>"
+        f"<rect x='{x0}' y='120' width='8' height='8' fill='{ISSUER_COLOR}'/>"
         f"<text x='{x0 + 16}' y='127' font-size='7.5' fill='{INK}'>{safe_ticker} "
         f"{pct(issuer_return)}% - harga Rp, sumbu kiri</text>"
-        f"<line x1='{x0}' x2='{x0 + 12}' y1='136' y2='136' stroke='{INDEX_COLOR}' "
-        "stroke-width='2' stroke-dasharray='4 3'/>"
+        f"<rect x='{x0}' y='132' width='8' height='8' fill='{INDEX_COLOR}'/>"
         f"<text x='{x0 + 16}' y='139' font-size='7.5' fill='{INK}'>Relatif vs IHSG "
         f"{pct(spread)} pp - sumbu kanan</text>"
         f"<text x='{x0}' y='149' font-size='7' fill='{MUT}'>IHSG {pct(ihsg_return)}%. "
@@ -413,57 +459,119 @@ def _table(ex):
             f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
 
 
+def _nice_max(value):
+    """Round a positive axis top up to 1, 2, 2.5 or 5 x 10^k."""
+    if value <= 0:
+        return 1.0
+    power = 10 ** math.floor(math.log10(value))
+    return next(step * power for step in (1, 2, 2.5, 5, 10) if step * power >= value)
+
+
+def _short_number(value):
+    """Compact bar label: 55.800.818 -> 55,8 jt; 6.524 -> 6.524."""
+    magnitude = abs(value)
+    if magnitude < 100:
+        return fmt._id(value, 1)  # ratios such as DER 0,9x
+    for size, suffix in ((1e12, " T"), (1e9, " M"), (1e6, " jt")):
+        if magnitude >= size * 10 or (magnitude >= size and size >= 1e9):
+            return fmt._id(value / size, 1) + suffix
+    return fmt.rp(round(value))
+
+
+def _mini_chart(ox, oy, w, h, title, labels, bars, line, forecast, line_label):
+    """One quadrant: bars (actual solid blue, forecast light blue), optional
+    secondary line on its own scale, dashed grid and a black zero baseline."""
+    out = [f"<text x='{ox}' y='{oy + 11}' font-size='11' font-weight='700' "
+           f"fill='{INK}'>{html.escape(title)}</text>"]
+    top, base = oy + 30, oy + h - 22
+    values = [v for v in bars if isinstance(v, (int, float))]
+    lo = min(0.0, min(values)) if values else 0.0
+    # Bars use the lower ~60% of the plot; the secondary line gets the top band,
+    # so bar and line labels never collide.
+    hi = _nice_max(max(values) * 1.65) if values and max(values) > 0 else 1.0
+    span = (hi - lo) or 1.0
+
+    def y_of(v):
+        return base - (v - lo) / span * (base - top)
+
+    for i in range(1, 4):
+        gy = y_of(lo + span * i / 3)
+        out.append(f"<line x1='{ox}' x2='{ox + w}' y1='{gy:.1f}' y2='{gy:.1f}' "
+                   f"stroke='{GRID}' stroke-width='0.8' stroke-dasharray='3 3'/>")
+    zero = y_of(0)
+    n = max(len(labels), 1)
+    slot = w / n
+    bw = min(34.0, slot * 0.62)
+    for i, label in enumerate(labels):
+        cx = ox + slot * (i + 0.5)
+        v = bars[i] if i < len(bars) else None
+        is_fc = bool(forecast[i]) if i < len(forecast) else False
+        if isinstance(v, (int, float)):
+            y = min(y_of(v), zero)
+            height = max(1.2, abs(y_of(v) - zero))
+            color = EVEN_ROW if is_fc else PRIMARY
+            out.append(f"<rect x='{cx - bw / 2:.1f}' y='{y:.1f}' width='{bw:.1f}' "
+                       f"height='{height:.1f}' fill='{color}'/>")
+            text_y = y - 3 if height < 14 else y + 10
+            fill = INK if (height < 14 or is_fc) else "#FFFFFF"
+            out.append(f"<text x='{cx:.1f}' y='{text_y:.1f}' text-anchor='middle' "
+                       f"font-size='7.5' font-weight='500' fill='{fill}'>{_short_number(v)}</text>")
+        out.append(f"<text x='{cx:.1f}' y='{base + 13}' text-anchor='middle' font-size='8' "
+                   f"fill='{INK}'>{html.escape(str(label))}</text>")
+    out.append(f"<line x1='{ox}' x2='{ox + w}' y1='{zero:.1f}' y2='{zero:.1f}' "
+               f"stroke='#000000' stroke-width='1'/>")
+    points = [(ox + slot * (i + 0.5), v) for i, v in enumerate(line or [])
+              if isinstance(v, (int, float))]
+    if len(points) >= 2:
+        l_lo, l_hi = min(v for _, v in points), max(v for _, v in points)
+        l_span = (l_hi - l_lo) or 1.0
+        band = (base - top) * 0.32
+        coords = [(x, top + 8 + (1 - (v - l_lo) / l_span) * band) for x, v in points]
+        out.append("<polyline points='" + " ".join(f"{x:.1f},{y:.1f}" for x, y in coords) +
+                   f"' fill='none' stroke='{SERIES[3]}' stroke-width='2'/>")
+        for (x, y), (_, v) in zip(coords, points):
+            out.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='2.2' fill='{SERIES[3]}'/>"
+                       f"<text x='{x:.1f}' y='{y - 5:.1f}' text-anchor='middle' font-size='7' "
+                       f"fill='{INK}'>{fmt._id(v, 1)}%</text>")
+        out.append(f"<text x='{ox + w}' y='{oy + 11}' text-anchor='end' font-size='8' "
+                   f"fill='{INK}'>garis: {html.escape(line_label)}</text>")
+    return "".join(out)
+
+
+_LINE_LABELS = {"Pendapatan": "pertumbuhan yoy", "EBITDA": "margin",
+                "Laba bersih": "pertumbuhan yoy", "DER": "ROE"}
+
+
 def _combo_chart(ex):
-    """2x2 combo: bars actual solid, forecast lighter + line growth/margin.
+    """Slide-3 style 2x2 grid; each quadrant tie-outs with Key Financials.
 
     data: {"cols": [...], "series": [{"label":..., "bars":[...], "line":[...],
             "is_forecast":[bool...]}]}
     """
     data = ex.get("data") or {}
-    series = data.get("series") or []
-    cols = data.get("cols") or []
-    parts = [f"<div class='exhibit keep'><h3 class='sub'>Exhibit {ex['n']}. "
-             f"{html.escape(ex['judul'])}</h3>",
-             "<svg class='metric-chart' viewBox='0 0 780 260' role='img' "
-             f"aria-label='{html.escape(ex['judul'])}'>",
-             "<line x1='35' x2='750' y1='200' y2='200' stroke='#747474' stroke-width='1'/>"]
-    # Simple 2x2 grid: up to 4 series, each mini-chart.
-    for idx, s in enumerate(series[:4]):
-        ox, oy = (idx % 2) * 380, (idx // 2) * 120
-        parts.append(f"<text x='{45 + ox}' y='{20 + oy}' font-size='12' fill='{INK}'>"
-                     f"{html.escape(s.get('label') or '')}</text>")
-        bars = s.get("bars") or []
-        peak = max([abs(v or 0) for v in bars] + [1])
-        n = max(len(bars), 1)
-        bw = min(40, 300 / max(n, 1) - 8)
-        for i, v in enumerate(bars):
-            x = 45 + ox + i * (bw + 8)
-            h = max(1.5, 60 * abs(v or 0) / peak)
-            y = 95 + oy - h if (v or 0) >= 0 else 95 + oy
-            is_fc = (s.get("is_forecast") or [False] * len(bars))[i] if i < len(s.get("is_forecast") or []) else False
-            color = "#B9C6E8" if is_fc else PRIMARY
-            parts.append(f"<rect x='{x:.1f}' y='{y:.1f}' width='{bw:.1f}' height='{h:.1f}' fill='{color}'/>")
-        # line for growth/margin
-        line = s.get("line") or []
-        valid = [v for v in line if isinstance(v, (int, float))]
-        if valid:
-            # Secondary axis: scale the line to its own range inside the
-            # 60 px plot band, so margins/ROE above 20% keep their shape.
-            lo, hi = min(valid), max(valid)
-            span = (hi - lo) or 1.0
-            pts = []
-            for i, v in enumerate(line):
-                if not isinstance(v, (int, float)):
-                    continue
-                x = 45 + ox + i * (bw + 8) + bw / 2
-                y = 95 + oy - 60 * (v - lo) / span
-                pts.append(f"{x:.1f},{y:.1f}")
-            if len(pts) >= 2:
-                parts.append(f"<polyline points='{' '.join(pts)}' fill='none' stroke='#1DCD9F' stroke-width='2'/>")
+    series = (data.get("series") or [])[:4]
+    labels = data.get("cols") or []
+    w, h, gap = 360, 175, 20
+    rows = (len(series) + 1) // 2
+    height = rows * h + (rows - 1) * gap + 22
+    parts = [f"<div class='exhibit keep'><div class='chart-caption'>Exhibit {ex['n']}. "
+             f"{html.escape(ex['judul'])}</div>",
+             f"<svg class='combo-chart' viewBox='0 0 {2 * w + gap} {height}' role='img' "
+             f"aria-label='{html.escape(ex['judul'])}' style='display:block;width:100%;height:auto'>"]
+    for idx, s in enumerate(series):
+        title = str(s.get("label") or "")
+        key = next((k for k in _LINE_LABELS if title.startswith(k)), "")
+        parts.append(_mini_chart((idx % 2) * (w + gap), (idx // 2) * (h + gap), w, h, title,
+                                 labels, s.get("bars") or [], s.get("line") or [],
+                                 s.get("is_forecast") or [], _LINE_LABELS.get(key, "rasio")))
+    ly = height - 8
+    parts.append(f"<rect x='0' y='{ly - 7}' width='8' height='8' fill='{PRIMARY}'/>"
+                 f"<text x='12' y='{ly}' font-size='8' fill='{INK}'>Aktual</text>"
+                 f"<rect x='62' y='{ly - 7}' width='8' height='8' fill='{EVEN_ROW}'/>"
+                 f"<text x='74' y='{ly}' font-size='8' fill='{INK}'>Proyeksi</text>"
+                 f"<rect x='130' y='{ly - 7}' width='8' height='8' fill='{SERIES[3]}'/>"
+                 f"<text x='142' y='{ly}' font-size='8' fill='{INK}'>Garis (sumbu sendiri)</text>")
     parts.append("</svg>")
-    # Legend: actual solid, forecast lighter
-    parts.append("<div class='small'>Actual solid; forecast lighter. "
-                 "EBITDA hanya bila dimodelkan.</div>")
     parts.append(f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
     return "".join(parts)
 
@@ -471,34 +579,39 @@ def _combo_chart(ex):
 def _bar_chart(ex):
     data = ex["data"]
     rows = data["rows"]
-    peak = max((row.get(key) or 0 for row in rows for key in ("prior", "current")),
-               default=1) / 1e6
-    peak = max(peak, 1)
-    parts = [f"<div class='exhibit keep'><h3 class='sub'>Exhibit {ex['n']}. "
-             f"{html.escape(ex['judul'])}</h3>",
+    values = [(row.get(key) or 0) / 1e6 for row in rows for key in ("prior", "current")]
+    top = _nice_max(max(values + [1]))
+    parts = [f"<div class='exhibit keep'><div class='chart-caption'>Exhibit {ex['n']}. "
+             f"{html.escape(ex['judul'])}</div>",
              "<svg class='metric-chart' viewBox='0 0 780 205' role='img' "
-             f"aria-label='{html.escape(ex['judul'])}'>",
-             "<line x1='35' x2='750' y1='164' y2='164' stroke='#747474' stroke-width='1'/>" ]
+             f"aria-label='{html.escape(ex['judul'])}'>"]
+    for i in range(1, 4):
+        gy = 164 - 112 * i / 3
+        parts.append(f"<line x1='35' x2='750' y1='{gy:.1f}' y2='{gy:.1f}' stroke='{GRID}' "
+                     "stroke-width='0.8' stroke-dasharray='3 3'/>")
     centers = [145, 390, 635] if len(rows) == 3 else [270, 520]
     for center, row in zip(centers, rows):
-        for x, key, color in ((center - 70, "prior", "#8295C2"),
-                              (center + 7, "current", PRIMARY)):
+        for x, key, color in ((center - 70, "prior", EVEN_ROW), (center + 7, "current", PRIMARY)):
             value = max(0, (row.get(key) or 0) / 1e6)
-            height = max(1.5, 112 * value / peak)
+            height = max(1.5, 112 * value / top)
             y = 164 - height
             label = f"{value:,.0f}".replace(",", ".")
             parts.append(f"<rect x='{x}' y='{y:.1f}' width='63' height='{height:.1f}' "
                          f"fill='{color}'/>")
-            parts.append(f"<text x='{x + 31.5}' y='{max(13, y - 5):.1f}' "
-                         f"text-anchor='middle' font-size='13' fill='{INK}'>{label}</text>")
+            inside = height >= 18
+            fill = ("#FFFFFF" if color == PRIMARY else INK) if inside else INK
+            ty = y + 13 if inside else max(13, y - 5)
+            parts.append(f"<text x='{x + 31.5}' y='{ty:.1f}' text-anchor='middle' "
+                         f"font-size='12' font-weight='500' fill='{fill}'>{label}</text>")
         parts.append(f"<text x='{center}' y='185' text-anchor='middle' "
                      f"font-size='13' fill='{INK}'>{html.escape(row['label'])}</text>")
-    parts.append("<rect x='34' y='15' width='12' height='12' fill='#8295C2'/>")
+    parts.append("<line x1='35' x2='750' y1='164' y2='164' stroke='#000000' stroke-width='1'/>")
+    parts.append(f"<rect x='34' y='15' width='12' height='12' fill='{EVEN_ROW}'/>")
     parts.append(f"<text x='51' y='26' font-size='13'>{html.escape(data['prior_label'])}</text>")
     parts.append(f"<rect x='130' y='15' width='12' height='12' fill='{PRIMARY}'/>")
     parts.append(f"<text x='147' y='26' font-size='13'>{html.escape(data['current_label'])}</text>")
     parts.append(f"<text x='745' y='26' text-anchor='end' font-size='12' "
-                 f"fill='{MUT}'>{html.escape(data['unit'])}</text>")
+                 f"fill='{INK}'>{html.escape(data['unit'])}</text>")
     parts.append("</svg>")
     parts.append(f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
     return "".join(parts)
@@ -594,6 +707,25 @@ def _render_page_content(b):
                        f"<p class='research-cite'><b>Rujukan data:</b> {html.escape(refs)}</p>"
                        "</article>")
 
+    elif b.get("layout") == "cards":
+        for p in paras:
+            res.append(f"<p>{html.escape(p)}</p>")
+        res.append("<div class='cards'>")
+        for card in b.get("cards") or []:
+            metric = ""
+            if card.get("metric"):
+                metric = ("<div class='card-metric'>"
+                          f"<div class='card-value'>{html.escape(str(card['metric']))}</div>"
+                          f"<div class='card-label'>{html.escape(str(card.get('metric_label') or ''))}</div>"
+                          "</div>")
+            res.append("<div class='card'><div class='card-body'>"
+                       f"<div class='card-title'>{html.escape(str(card.get('title') or ''))}</div>"
+                       f"<div class='card-text'>{html.escape(str(card.get('text') or ''))}</div>"
+                       f"</div>{metric}</div>")
+        res.append("</div>")
+        for e in exs:
+            res.append(_exhibit(e))
+
     elif b.get("layout") == "stack":
         for p in paras:
             res.append(f"<p>{html.escape(p)}</p>")
@@ -674,11 +806,14 @@ def _running_header(m):
         right = f"Equity Research - Company Update | {day.day} {months[day.month - 1]} {day.year}"
     except (TypeError, ValueError):
         right = "Equity Research - Company Update"
-    box = ("font-family:Arial,sans-serif;font-size:7.4pt;color:" + PRIMARY +
-           ";vertical-align:bottom;padding-bottom:2mm;border-bottom:1.5px solid " + PRIMARY)
+    box = ("font-family:'Roboto',sans-serif;font-size:7.6pt;"
+           "vertical-align:bottom;padding-bottom:2mm;")
+    # Two-colour rule under the header, as in the design divider: blue, then lime.
     return ("@page{margin-top:19mm;"
-            f"@top-left{{content:{_css_string(left)};font-weight:700;{box}}}"
-            f"@top-right{{content:{_css_string(right)};text-align:right;{box}}}}}"
+            f"@top-left{{content:{_css_string(left)};font-weight:900;color:{PRIMARY};{box}"
+            f"border-bottom:1.5px solid {PRIMARY}}}"
+            f"@top-right{{content:{_css_string(right)};text-align:right;color:{INK};{box}"
+            f"border-bottom:1.5px solid {LIME}}}}}"
             "@page:first{margin-top:12mm;@top-left{content:none;border:0}"
             "@top-right{content:none;border:0}}"
             "@media print{.page>.report-header{display:none}}")
@@ -689,16 +824,24 @@ def render(doc):
     h = [f"<html><head><meta charset='utf-8'><style>{CSS}{_running_header(m)}</style></head><body>"]
     h.append(_report_header(m["tanggal"], m))
     h.append(_draft_banner(m))
-    report_status = (m.get("rating") or
-                     ("Dalam peninjauan" if m.get("status") == "draft_non_distributable"
-                      else "Analisis skenario informasional"))
+    draft = m.get("status") == "draft_non_distributable"
+    rating_word = m.get("rating") or ("Draft" if draft else "Analisis")
+    rating_status = m.get("rating_status") or cov.get("rating_status")
+    if draft:
+        rating_status = rating_status or "Dalam peninjauan"
+    elif m.get("rating"):
+        rating_status = rating_status or "Inisiasi"
+    else:
+        rating_status = "Skenario informasional"
     h.append("<div class='cover'><div class='left'>")
-    h.append(f"<div class='rating-label'>{html.escape(report_status)}</div>")
-    h.append("<div class='rating-detail'>" +
-             ("Inisiasi" if m.get("rating") else "Rating ditahan hingga pemeriksaan selesai") +
+    h.append("<div class='rating-block'>"
+             f"<div class='rating-label'>{html.escape(str(rating_word))}</div>"
+             f"<div class='rating-detail'>({html.escape(str(rating_status))})</div>"
+             "<div class='rating-method'>"
+             + ("Rating ditahan hingga pemeriksaan selesai.<br>" if draft else "")
+             + f"Valuasi: {html.escape(doc.get('method', 'DCF'))}</div>"
              "</div>")
-    h.append(f"<div class='small'>Valuasi: {html.escape(doc.get('method', 'DCF'))}</div>"
-             "<div class='panel'>")
+    h.append("<div class='basic-head'>Data pasar</div><div class='panel'>")
     price_label = (f"Harga Terakhir (Rp; {m['harga_tanggal']})"
                    if m.get("harga_tanggal") and m.get("harga_tanggal") != m["tanggal"]
                    else "Harga Terakhir (Rp)")
@@ -707,7 +850,7 @@ def render(doc):
     h.append(_kv("Target Harga (Rp)",
                  fmt.rp(m["tp"]) if m.get("rating") and m.get("tp") is not None else "-"))
     h.append(_kv("TP Sebelumnya (Rp)", str(m.get("tp_sebelumnya") or "n.a.")))
-    h.append(_kv("Upside/Downside", f"{m['upside_persen']:.1f}%".replace(".", ",")
+    h.append(_kv("Upside/Downside", f"{m['upside_persen']:+.1f}%".replace(".", ",")
                  if m.get("rating") and m.get("upside_persen") is not None else "-"))
     dp = cov.get("data_pasar") or {}
     saham_val = fmt._id(dp["saham"] / 1e6, 0) if dp.get("saham") is not None else "n.a."
@@ -715,41 +858,50 @@ def render(doc):
     h.append(_kv("Jumlah Saham (juta)", saham_val))
     h.append(_kv("Kap. Pasar (Rp miliar)", mcap_val))
     h.append(_kv("Rata-rata T/O Harian (Rp miliar)", str(dp.get("adtv", "-"))))
-    h.append(_kv("Public ownership (%)", str(
+    h.append(_kv("Free Float (%)", str(
         dp.get("public_ownership", dp.get("free_float", "-")))))
-    for holder in (doc.get("holders") or [])[:2]:
-        h.append(_kv(str(holder[0])[:22], str(holder[1])))
     h.append("</div>")
+    holders = (doc.get("holders") or [])[:3]
+    if holders:
+        h.append("<div class='basic-head'>Pemegang saham utama</div><div class='panel'>")
+        for holder in holders:
+            h.append(_kv(str(holder[0])[:26], str(holder[1])))
+        h.append("</div>")
     f1 = doc.get("fy26") or {}
     if f1:
-        h.append("<div class='panel' style='margin-top:5px'>"
-                 "<div class='small'>FY26F: Sektoral Estimates (Rp miliar)</div>")
+        h.append("<div class='basic-head'>FY26F (Rp miliar)</div><div class='panel'>")
         for k in ("Pendapatan", "EBITDA", "Laba bersih"):
             if k in f1:
                 v = f1[k]
                 h.append(_kv(k, "n.a." if v is None else str(v)))
         h.append("</div>")
-    h.append(f"<h3 class='sub'>{html.escape(m['ticker'])} vs IHSG (awal = 100)</h3>")
+    h.append(f"<div class='basic-head'>{html.escape(m['ticker'])} vs IHSG</div>")
     h.append(_price_chart(m["ticker"], m["tanggal"]))
-    h.append("<div class='small'>Tim Riset Sektoral<br>"
-             "Snapshot otomatis dari data bersumber</div>")
+    h.append("<div class='analyst'><b>Tim Riset Sektoral</b><br>Equity Analyst</div>")
     h.append("</div><div class='right'>")
     h.append(f"<h1 class='emit'>{html.escape(m['emiten'])} ({html.escape(m['ticker'])} IJ)</h1>")
-    h.append(f"<div class='headline'>{html.escape(cov['headline'])}</div><ul class='bullets'>")
+    h.append(f"<div class='headline'>{html.escape(cov['headline'])}</div>"
+             "<div class='highlight'><ul class='bullets'>")
     for b in cov["bullets"]:
         h.append(f"<li>{html.escape(b)}</li>")
-    h.append("</ul>")
+    h.append("</ul></div>")
     for p in cov["paragraf"]:
         h.append(f"<h3 class='sub'>{html.escape(p['judul'])}</h3><p>{html.escape(p['isi'])}</p>")
-    h.append("</div></div>")
     by_n = {e["n"]: e for e in doc["exhibits"]}
+    # Key Financials sits under the narrative in the main column (design 5.4.2).
     h.append(_table(by_n[1]))
+    h.append("</div></div>")
 
-    for b in doc["bagian"]:
-        page_class = "page research-summary" if b.get("layout") == "research_cards" else "page"
+    for number, b in enumerate(doc["bagian"], start=1):
+        # The cover owns sheet 1; inner sections flow like the design deck
+        # (several short sections per sheet) instead of one section per page.
+        page_class = "page" if number == 1 else "section"
+        if b.get("layout") == "research_cards":
+            page_class += " research-summary"
         h.append(f"<div class='{page_class}'>{_report_header(m['tanggal'], m)}")
         h.append(_draft_banner(m))
-        h.append(f"<h2 class='sec'>{html.escape(b['judul'])}</h2>")
+        h.append(f"<h2 class='sec'><span class='num'>{number}.</span> "
+                 f"{html.escape(b['judul'])}</h2>")
         h.append(_render_page_content(b))
         h.append("</div>")
 
@@ -764,7 +916,7 @@ def render(doc):
              f"{_draft_banner(m)}"
              "<h2 class='sec'>Pengungkapan</h2>"
              f"<p class='small'>{html.escape(disclosure)}</p>"
-             "<h2 class='sec'>Catatan metodologi</h2><ul>")
+             "<h3 class='sub'>Catatan metodologi</h3><ul>")
     for c in doc["catatan_metodologi"]:
         h.append(f"<li class='small'>{html.escape(c)}</li>")
     h.append("</ul></div></body></html>")

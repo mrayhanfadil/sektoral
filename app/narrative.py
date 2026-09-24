@@ -3219,6 +3219,38 @@ def _earnings_headline(rating, label):
     }.get(rating, f"Laba {label} Menunggu Konfirmasi")
 
 
+def _card_title(text, cap=7):
+    """Short card title: the claim's opening clause, at most ``cap`` words."""
+    clause = re.split(r"[,;:.]", text.strip(), maxsplit=1)[0]
+    words = clause.split()
+    return " ".join(words[:cap]) + ("..." if len(words) > cap else "")
+
+
+def _thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr):
+    """Design 'Tesis investasi': each forward claim beside the model figure it
+    moves (revenue growth, net margin, upside), all from sourced numbers."""
+    annual = [a for a in intake.get("annuals") or [] if a.get("revenue")]
+    last_revenue = annual[-1]["revenue"] if annual else None
+    fy_revenue_idr = fy["revenue"] * to_idr
+    metrics = []
+    if last_revenue:
+        metrics.append((fmt.pct(fy_revenue_idr / last_revenue - 1),
+                        f"Pertumbuhan pendapatan {label} vs {annual[-1]['year']}"))
+    if fy.get("revenue"):
+        metrics.append((fmt.pct(fy["net_profit"] / fy["revenue"]), f"Margin laba bersih {label}"))
+    if va.get("upside") is not None:
+        metrics.append((fmt.pct(va["upside"]), f"Ke target Rp{fmt.rp(va['tp'])}"))
+    cards = []
+    for i, point in enumerate(thesis):
+        metric, metric_label = metrics[i] if i < len(metrics) else (None, None)
+        cards.append({"title": _card_title(point), "text": point,
+                      "metric": metric, "metric_label": metric_label})
+    return {"halaman": 0, "judul": "Tesis investasi", "layout": "cards",
+            "paragraf": ["Pandangan kami tentang driver laba ke depan; angka di kanan "
+                         "adalah hasil model yang digerakkan oleh tiap tesis."],
+            "cards": cards, "exhibit": []}
+
+
 def _build_earnings_led(intake, fc, va, g1, method="auto"):
     """Going concern / bank: FY PER peer on the validated earnings scenario."""
     doc = _build_general_draft(intake, fc, va, g1, method=method)
@@ -3371,6 +3403,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
             "catatan_sumber": (
                 "Sumber: asumsi analis tahunan dari rilis resmi dan berita bertanggal; "
                 "bukan panduan emiten. Target harga tetap memakai " + label + ".")})
+    doc["bagian"].append(_thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr))
     doc["bagian"].append({"halaman": 0, "judul": f"Target harga berbasis laba {label}",
                           "layout": "stack", "paragraf": [valuation_text],
                           "exhibit": exhibits})
