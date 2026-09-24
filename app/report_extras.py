@@ -24,7 +24,7 @@ TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensit
 COMMODITY_UNITS = {"Copper": ("Tembaga", "USD/ton"), "Gold": ("Emas", "USD/oz"),
                    "Nickel": ("Nikel", "USD/ton"), "Coal": ("Batu bara", "USD/ton")}
 # Page order from spec §5.4, matched on page title prefixes.
-PAGE_ORDER = ("Hasil terbaru", "Operasi", "Industri", "Forecast", "Skenario FY26",
+PAGE_ORDER = ("Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
               "Skenario operasi", "Skenario laba", "Berita", "Sensitivitas", "Katalis",
               "Konteks historis", "Target harga", "Cross-check", "Skenario nilai",
               "Perbandingan peer", "Valuasi", "Data keuangan")
@@ -70,6 +70,7 @@ def method_chain_exhibit(va):
     """Rantai metode §4.1a: urutan, keputusan, dan alasan tiap metode.
 
     Nilai per saham hanya tampil bila rilis lolos; draft menahan angka.
+    Menampilkan usulan sistem vs override analis bila ada.
     """
     chain = (va or {}).get("method_chain") or {}
     trace = chain.get("trace") or []
@@ -83,13 +84,23 @@ def method_chain_exhibit(va):
                  ("selected", "cross_check") else "ditahan" if t.get("per_share") else "-")
         why = (method_chain.reader_reason(t["reasons"][0]) if t.get("reasons")
                else "; ".join(t.get("labels") or []) or "input lengkap")
-        rows.append([f"{t['rank']}. {t['short']}" + (" (utama)" if t["role"] == "primary" else ""),
+        role_tag = ""
+        if t["role"] == "primary":
+            role_tag = " (utama)"
+        elif t["role"] == "override":
+            role_tag = " (override analis)"
+        rows.append([f"{t['rank']}. {t['short']}" + role_tag,
                      _DECISION.get(t["decision"], t["decision"]), value, why])
+    source = ("Source: Sektoral Estimates; urutan metode dikunci dari verdict Gates 0-5 "
+              "sebelum nilai dihitung; metode berikutnya hanya dipakai bila metode "
+              "sebelumnya tidak memadai, bukan karena hasilnya tidak disukai")
+    override = chain.get("override")
+    if override:
+        proposed = (chain.get("proposed_order") or [None])[0]
+        source += f"; Usulan sistem: {proposed}; dipilih analis: {override}."
+    # Brand constant: Sectoral (keputusan branding fase ini).
     return _exhibit("Rantai metode valuasi",
-                    ["Metode", "Keputusan", "Nilai/saham", "Alasan"], rows,
-                    "Source: Sektoral Estimates; urutan metode dikunci per profil sebelum "
-                    "nilai dihitung; metode berikutnya hanya dipakai bila metode "
-                    "sebelumnya tidak memadai, bukan karena hasilnya tidak disukai")
+                    ["Metode", "Keputusan", "Nilai/saham", "Alasan"], rows, source)
 
 
 def attach_method_chain(doc, va):
@@ -128,6 +139,11 @@ def _holders(intake):
 
 def cover_market_data(doc, intake):
     data = doc["cover"].setdefault("data_pasar", {})
+    # Price box: shares, mcap Rp/US$, ADTV 3m fixed, free float, major >5%.
+    if intake.get("shares") and "saham" not in data:
+        data["saham"] = intake["shares"]
+    if intake.get("market_cap") and "market_cap" not in data:
+        data["market_cap"] = intake["market_cap"]
     adtv = _adtv_3m(intake["ticker"])
     if adtv:
         data["adtv"] = fmt._id(adtv / 1e9, 1)
@@ -135,8 +151,10 @@ def cover_market_data(doc, intake):
     public = next((pct for name, pct in holders if name.lower() in ("public", "publik", "masyarakat")), None)
     if public is not None:
         data["free_float"] = fmt._id(public, 1)
-    doc["holders"] = [[name, fmt._id(pct, 1) + "%"] for name, pct in holders
-                      if name.lower() not in ("public", "publik", "masyarakat")][:2]
+    # Major shareholders >5% (plan Slide 1).
+    majors = [(n, p) for n, p in holders if p is not None and p > 5.0
+              and n.lower() not in ("public", "publik", "masyarakat")]
+    doc["holders"] = [[name, fmt._id(pct, 1) + "%"] for name, pct in majors[:5]]
 
 
 # -------------------------------------------------------- industry page
@@ -275,7 +293,9 @@ def peer_page(intake, valuation_inputs=None):
         label = row["symbol"] + (" (emiten)" if row["is_self"] else "")
         table.append([label, m(row, "market_cap", "rp"), m(row, "pe", "x"), m(row, "pb", "x"),
                       m(row, "roe", "pct"), m(row, "net_margin", "pct"), m(row, "leverage", "x")])
-    median_row, rank_row = ["Median peer (tanpa emiten)"], [f"Peringkat {ticker}"]
+    median_row, avg_row, rank_row = (["Median peer (tanpa emiten)"],
+                                     ["Rata-rata peer (tanpa emiten)"],
+                                     [f"Peringkat {ticker}"])
     for key, kind in (("market_cap", "rp"), ("pe", "x"), ("pb", "x"), ("roe", "pct"),
                       ("net_margin", "pct"), ("leverage", "x")):
         signal = ranked.get(f"peer.{key}") or {}
@@ -283,15 +303,27 @@ def peer_page(intake, valuation_inputs=None):
         median_row.append("-" if median is None else
                           fmt.pct(median) if kind == "pct" else
                           fmt.mult(median) if kind == "x" else _rp_bn(median))
+        # Average: mean of valid metrics, excluding outliers >100x for PE.
+        vals = [r["metrics"].get(key) for r in rows if not r["is_self"]]
+        vals = [v for v in vals if isinstance(v, (int, float)) and v == v]
+        if key == "pe":
+            vals = [v for v in vals if 0 < v <= 100]
+        avg = sum(vals) / len(vals) if vals else None
+        avg_row.append("-" if avg is None else
+                       fmt.pct(avg) if kind == "pct" else
+                       fmt.mult(avg) if kind == "x" else _rp_bn(avg))
         rank_row.append(f"{signal['rank']}/{signal['n']}" if signal.get("rank") else "-")
-    table += [median_row, rank_row]
+    table += [median_row, avg_row, rank_row]
     exhibits = [_exhibit(
         f"Perbandingan peer {peers.get('group') or ''}".strip(),
         ["Emiten", "Kap. pasar (Rp miliar)", "P/E (x)", "P/B (x)", "ROE", "Margin bersih",
          "Liabilitas/ekuitas (x)"], table,
-        f"Sumber: {peers['source']} ({peers['basis']}); P/E negatif tidak diperingkat; "
-        "rasio di atas 500% ditulis n.m. karena basis pendapatan atau ekuitas sangat kecil. "
-        "Rasio dihitung dari laba, ekuitas, pendapatan dan liabilitas tabel peer.")]
+        f"Sumber: {peers['source']} ({peers['basis']}); per {intake.get('as_of') or intake.get('price_date') or '-'}; "
+        "kriteria: model bisnis dan eksposur sebanding, kapitalisasi sebanding, outlier dijelaskan; "
+        "P/E negatif tidak diperingkat; rasio di atas 500% ditulis n.m. karena basis pendapatan atau ekuitas sangat kecil. "
+        "Rasio dihitung dari laba, ekuitas, pendapatan dan liabilitas tabel peer. "
+        "Emiten yang dibahas disorot '(emiten)'.")]
+    caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
     caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
     subject = next(r for r in rows if r["is_self"])
     paragraphs = [
@@ -335,7 +367,71 @@ def peer_page(intake, valuation_inputs=None):
         paragraphs.append(
             "Multiple peer di bawah ini hanya cross-check: tabel peer Sectors tidak memuat "
             "EBITDA dan utang bersih, sehingga EV/EBITDA peer belum dapat diverifikasi.")
+    # 1-year own-history P/E and P/BV bands (mean, median, current, percentile).
+    band = own_history_bands(intake)
+    if band:
+        exhibits.append(band)
+    else:
+        paragraphs.append("Band historis P/E dan P/BV 1 tahun belum dimodelkan: "
+                          "cache membutuhkan harga harian + EPS/BVPS TTM yang sebanding; "
+                          "cakupan saat ini tidak cukup.")
     return _page("Perbandingan peer", paragraphs, exhibits)
+
+
+def own_history_bands(intake):
+    """1y own-history P/E and P/BV bands; None bila cache tidak cukup.
+
+    Butuh daily closes 1y + EPS/BVPS TTM tiap tanggal. Cache saat ini hanya
+    membawa daily recent + annuals, sehingga sering belum tersedia (labeled limitation).
+    """
+    try:
+        daily = (local_data.cache_get(intake["ticker"], f"/daily/{intake['ticker']}/") or {}).get("data") or []
+    except Exception:
+        daily = []
+    if len(daily) < 60:
+        return None
+    annuals = intake.get("annuals") or []
+    if len(annuals) < 2:
+        return None
+    # TTM proxy: latest annual EPS/BVPS (cache tidak membawa TTM series per tanggal).
+    latest = annuals[-1]
+    shares = intake.get("shares") or 0
+    eps = (latest.get("earnings") / shares) if latest.get("earnings") and shares else None
+    bvps = (latest.get("equity") / shares) if latest.get("equity") and shares else None
+    if not eps and not bvps:
+        return None
+    closes = [r.get("close") for r in daily[-250:] if isinstance(r, dict) and r.get("close")]
+    if len(closes) < 60:
+        return None
+    rows = []
+    import statistics as _st
+    for label, base, kind in (("P/E", eps, "x"), ("P/BV", bvps, "x")):
+        if not base or base <= 0:
+            rows.append([label, "belum dimodelkan", "belum dimodelkan",
+                         "belum dimodelkan", "bukan target harga"])
+            continue
+        mults = sorted(c / base for c in closes if c and base)
+        if len(mults) < 60:
+            rows.append([label, "belum dimodelkan", "belum dimodelkan",
+                         "belum dimodelkan", "bukan target harga"])
+            continue
+        mean = sum(mults) / len(mults)
+        med = _st.median(mults)
+        cur = closes[-1] / base
+        # Percentile of current
+        pct = sum(1 for m in mults if m <= cur) / len(mults) * 100
+        # Implied prices from mean/median reversion (disclaimer, bukan TP)
+        imp_mean = mean * base
+        imp_med = med * base
+        rows.append([label, f"{mean:.1f}x", f"{med:.1f}x",
+                     f"{cur:.1f}x (p{pct:.0f})",
+                     f"mean Rp{fmt.rp(round(imp_mean/10)*10)}; median Rp{fmt.rp(round(imp_med/10)*10)}"])
+    return _exhibit(
+        "Band historis 1 tahun P/E dan P/BV (bukan target harga)",
+        ["Multiple", "Mean", "Median", "Kini (persentil)", "Implikasi mean/median"],
+        rows,
+        f"Source: Sectors daily {intake['ticker']} + EPS/BVPS TTM proxy annuals; "
+        f"per {intake.get('as_of') or '-'}; mean/median reversion hanya konteks, bukan target harga.")
 
 
 # ------------------------------------------ ownership and market activity
@@ -618,7 +714,76 @@ def trim_key_financials(doc, actual_years=2, forecast_years=3):
     doc["cover"]["key_financials"] = cover["data"]["rows"]
 
 
-def enrich(doc, intake, valuation_inputs=None, va=None):
+# ------------------------------------------------------------ combo charts (Slide 3)
+
+def combo_charts_page(intake, fc=None):
+    """2x2 combo: Revenue+growth, EBITDA+margin, Net Profit+EPS growth, DER vs ROE.
+
+    Actual bars solid, forecast lighter; EBITDA only when modeled; each with
+    2-3 sentences; tie-out with Key Financials (same period labels).
+    Bank: NIM+CoC note when financial_ddm (data Sectors tidak membawa NIM rinci).
+    """
+    annuals = (intake.get("annuals") or [])[-5:]
+    if len(annuals) < 2:
+        return None
+    frows = (fc or {}).get("rows") or []
+    labels = [str(a.get("year")) for a in annuals] + [r.get("label", "") for r in frows[:3]]
+    rev_bars = [a.get("revenue") for a in annuals] + [r.get("revenue") for r in frows[:3]]
+    rev_g = [None]
+    for i in range(1, len(annuals)):
+        prev = annuals[i - 1].get("revenue") or 0
+        cur = annuals[i].get("revenue") or 0
+        rev_g.append((cur / prev - 1) * 100 if prev else None)
+    rev_g += [None] * min(3, len(frows))
+    ebitda_bars = [a.get("ebitda") for a in annuals] + [r.get("ebitda") for r in frows[:3]]
+    has_ebitda = any(isinstance(v, (int, float)) for v in ebitda_bars)
+    ebitda_m = []
+    for a in annuals:
+        rev, eb = a.get("revenue") or 0, a.get("ebitda")
+        ebitda_m.append(eb / rev * 100 if rev and isinstance(eb, (int, float)) else None)
+    ebitda_m += [((r.get("margin") or 0) * 100) if r.get("margin") is not None else None
+                 for r in frows[:3]]
+    net_bars = [(a.get("earnings") if a.get("earnings") is not None else a.get("net_profit"))
+                for a in annuals] + [r.get("net") for r in frows[:3]]
+    is_fc = [False] * len(annuals) + [True] * min(3, len(frows))
+    series = [
+        {"label": "Pendapatan + pertumbuhan", "bars": rev_bars, "line": rev_g, "is_forecast": is_fc},
+        {"label": "Laba bersih + pertumbuhan", "bars": net_bars, "line": [None] * len(labels),
+         "is_forecast": is_fc},
+    ]
+    if has_ebitda:
+        series.insert(1, {"label": "EBITDA + margin", "bars": ebitda_bars,
+                          "line": ebitda_m, "is_forecast": is_fc})
+    else:
+        series.insert(1, {"label": "EBITDA belum dimodelkan", "bars": [0] * len(labels),
+                          "line": [None] * len(labels), "is_forecast": is_fc})
+    # DER vs ROE placeholder: leverage from annuals liab/equity; ROE from earnings/equity.
+    der = []
+    roe = []
+    for a in annuals:
+        liab, eq = a.get("liab") or 0, a.get("equity") or 0
+        earn = a.get("earnings") or 0
+        der.append(liab / eq if eq else None)
+        roe.append(earn / eq * 100 if eq else None)
+    der += [None] * min(3, len(frows))
+    roe += [None] * min(3, len(frows))
+    series.append({"label": "DER vs ROE (bank: NIM+CoC konteks)", "bars": der,
+                   "line": roe, "is_forecast": is_fc})
+    exhibit = {"n": 0, "judul": "Kinerja keuangan: pendapatan, profitabilitas, leverage",
+               "tipe": "combo_chart",
+               "data": {"cols": labels, "series": series},
+               "catatan_sumber": f"Source: Company, Sektoral Estimates; periode {labels[0]}-{labels[-1]}; "
+                                 "actual solid, forecast lighter; EBITDA hanya bila dimodelkan; "
+                                 "tie-out dengan Key Financials periode sama."}
+    paras = ["Pendapatan dan laba actual menjadi basis; forecast hanya bila driver bersumber.",
+             "Margin dan leverage dibaca bersama capex dan modal kerja di catatan metodologi."]
+    if (intake.get("model_profile") == "financial_ddm"):
+        paras.append("Bank: NIM dan cost-of-credit dibaca dari driver laba/ekuitas; "
+                     "rincian NIM historis tidak dibawa cache Sectors.")
+    return _page("Kinerja keuangan dan profitabilitas", paras, [exhibit])
+
+
+def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     cover_market_data(doc, intake)
     trim_key_financials(doc)
     mining_catalysts(doc, intake)
@@ -636,7 +801,8 @@ def enrich(doc, intake, valuation_inputs=None, va=None):
                 page["exhibit"].insert(anchor + 1, guidance)
                 break
 
-    new_pages = [industry_page(intake), sensitivity_page(valuation_inputs),
+    new_pages = [industry_page(intake), combo_charts_page(intake, fc),
+                 sensitivity_page(valuation_inputs),
                  peer_page(intake, valuation_inputs)]
     catalyst = next((e for p in pages for e in p["exhibit"]
                      if e["judul"] == "Katalis, risiko, dan indikator pemantauan"), None)

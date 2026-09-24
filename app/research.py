@@ -242,7 +242,8 @@ def run_analyst(ticker):
 
 
 def run(ticker, outdir, want_pdf=False, as_of=None,
-        illustrative_scenarios=False, analyst_target=False, refresh_assumptions=False):
+        illustrative_scenarios=False, analyst_target=False, refresh_assumptions=False,
+        method_override=None):
     """Run research and build a report from the same dated news evidence."""
     from agents.research.run import run_live
 
@@ -328,6 +329,7 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                          news_evidence={"rows": combined_news, "full": combined_full,
                                         "search": web_search},
                          analyst_target=analyst_target,
+                         method_override=method_override,
                          assumption_status=next(
                              (assumption_result[key] for key in
                               ("earnings_status", "interim_status")
@@ -427,11 +429,14 @@ def main(argv=None):
     parser.add_argument("--analyst-target", action="store_true",
                         help="opt-in target FY26F EV/EBITDA dari rencana agent tervalidasi")
     parser.add_argument("--refresh-assumptions", action="store_true",
-                        help="panggil ulang agent forecast walau bukti sama sudah punya rencana tersimpan")
+                         help="panggil ulang agent forecast walau bukti sama sudah punya rencana tersimpan")
+    parser.add_argument("--method", default="auto",
+                        help="override analis: auto atau method key (lihat app.build --help)")
     args = parser.parse_args(argv)
     result = run(args.ticker, args.out, want_pdf=args.pdf, as_of=args.as_of,
                  illustrative_scenarios=args.illustrative_scenarios,
                  analyst_target=args.analyst_target,
+                 method_override=None if args.method == "auto" else args.method,
                  refresh_assumptions=args.refresh_assumptions)
     intel = result.pop("intel", None) or {}
     result["analyst"] = {"status": intel.get("status"),

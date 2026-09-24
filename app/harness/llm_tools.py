@@ -63,5 +63,5 @@ Checks (pass/fail + fix):
 7 disclaimer consistent with Buy/Hold/Sell (no denial when publishing rating).
 8 methodology limits still true after new data (no 'data tidak ada' for exhibited data).
 9 house vs guidance/consensus compared on comparable basis when available.
-10 |upside|>50% has 1 fundamental-thesis sentence + 1 model-limitation sentence on p1.
+10 upside>+100% atau downside<-50% has 1 fundamental-thesis sentence + 1 model-limitation sentence on p1.
 Fix text in place; never narrate the check."""

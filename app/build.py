@@ -18,18 +18,41 @@ OUT = Path(__file__).resolve().parent.parent / "out"
 
 def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
           illustrative_scenarios=False, assumption_plan=None,
-          analyst_target=False, assumption_status=None, news_evidence=None):
+          analyst_target=False, assumption_status=None, news_evidence=None,
+          method_override=None):
     doc_in, g1 = intake.load(ticker, as_of=as_of)
     if news_evidence is not None:
         doc_in["news"] = news_evidence["rows"]
         doc_in["news_full"] = news_evidence["full"]
         doc_in["news_search"] = news_evidence["search"]
     fc = forecast.build(doc_in, assumption_plan=assumption_plan)
+    # --method <key>: analis override; sistem tetap simpan proposed order.
+    # "auto" berarti tanpa override. Nilai diteruskan ke valuation.
+    _override = None if (method_override or method) in (None, "auto") else (method_override or method)
     va = valuation.build(doc_in, fc, analyst_target=analyst_target,
-                         assumption_status=assumption_status)
+                         assumption_status=assumption_status,
+                         method_override=_override,
+                         assumption_plan=assumption_plan or fc.get("assumption_plan"))
     doc = narrative.build(doc_in, fc, va, g1, method=method,
                           illustrative_scenarios=illustrative_scenarios or analyst_target)
-    report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va)
+    report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va, fc=fc)
+    # Cover rating status from history store (Inisiasi/Dipertahankan/Naik/Turun).
+    try:
+        from . import rating_history as _rh
+        _cur = (doc.get("meta") or {}).get("rating") or va.get("rating")
+        if isinstance(_cur, str) and _cur in ("Buy", "Hold", "Sell"):
+            _st = _rh.cover_status(ticker, _cur)
+        else:
+            # Draft: status histori tetap informatif bila ada.
+            _hist = _rh.load(ticker)
+            _st = f"Dipertahankan ({_hist[-1]['rating']})" if _hist else "Inisiasi"
+            if (doc.get("meta") or {}).get("status") == "draft_non_distributable":
+                _st = f"{_st} | Dalam peninjauan" if "Dalam" not in _st else _st
+        doc["meta"]["rating_status"] = _st
+        if isinstance(doc.get("cover"), dict):
+            doc["cover"]["rating_status"] = _st
+    except Exception:
+        pass
     doc["forecast_assumptions"] = {
         "plan": fc.get("assumption_plan"),
         "news_effects": fc.get("news_assumptions") or [],
@@ -114,7 +137,7 @@ def main():
     p.add_argument("--out", default=str(OUT))
     p.add_argument("--pdf", action="store_true")
     p.add_argument("--method", default="auto",
-                   help="opsi valuasi analis: auto|dcf|ddm|rnav")
+                   help="override analis: auto atau method key (fcff_dcf, relative_pe, ddm, pbv_roe, sotp_lom, rnav_lom, ev_ebitda_fy, pe_fy_scenario, ev_ebitda_peer, ev_sales_peer, pbv_relative, holding_sotp, property_nav, dcf_reference)")
     p.add_argument("--as-of", default=date.today().isoformat(),
                    help="tanggal laporan YYYY-MM-DD (default: hari ini); harga tetap bertanggal sesuai data Sectors")
     p.add_argument("--illustrative-scenarios", action="store_true",
@@ -122,6 +145,7 @@ def main():
     a = p.parse_args()
     try:
         build(a.ticker, Path(a.out), want_pdf=a.pdf, method=a.method,
+              method_override=None if a.method == "auto" else a.method,
               as_of=a.as_of, illustrative_scenarios=a.illustrative_scenarios)
     except ValueError as e:
         sys.exit(f"refused: {e}")

@@ -1,11 +1,13 @@
 from . import ddm
 from . import fmt
+from . import gate_thresholds
 from . import method_chain
 from . import model_profiles
 from . import rnav
 from . import release
 from . import rating as rating_mod
 from . import sotp as sotp_mod
+from . import stage as stage_mod
 
 def _core(fc, shares, wacc, g, exit_mult, net_debt):
     """Satu basis perhitungan; dipakai TP base, downside, dan grid sensitivitas."""
@@ -160,7 +162,8 @@ def _earnings_candidate(intake, fc, assumption_status):
     return candidate
 
 
-def build(intake, fc, analyst_target=False, assumption_status=None):
+def build(intake, fc, analyst_target=False, assumption_status=None,
+          method_override=None, assumption_plan=None):
     g3, notes = {}, []
     t = intake["ticker"]
     profile = intake.get("model_profile", "unsupported")
@@ -230,7 +233,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
 
     eq_dcf = ev_g - net_debt
     ratio = eq_dcf / intake["market_cap"]
-    g3["G3.1_terminal"] = ("peringatan" if pv_tv / ev_g > 0.75 else "lolos",
+    tv_flag = gate_thresholds.tv_flagged(pv_tv / ev_g if ev_g else None)
+    g3["G3.1_terminal"] = ("peringatan" if tv_flag else "lolos",
                            f"porsi terminal {pv_tv/ev_g*100:.0f}% dari EV")
     g3["G3.2_skala"] = ("lolos" if 0.2 <= ratio <= 3.0 else "gagal-dilabeli",
                         f"ekuitas DCF {ratio*100:.0f}% dari market cap")
@@ -244,10 +248,11 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
     g3["G3.8_method_divergence"] = (
         "lolos" if method_gap <= 0.30 else "gagal",
         f"selisih Gordon vs exit {method_gap*100:.1f}%")
+    _extreme = gate_thresholds.is_extreme_ratio(upside)
     g3["G3.9_extreme_thesis"] = (
-        "gagal" if abs(upside) > 0.50 else "lolos",
+        "gagal" if _extreme else "lolos",
         "upside/downside ekstrem memerlukan tesis fundamental dan validasi analis"
-        if abs(upside) > 0.50 else "band ekstrem tidak terpicu")
+        if _extreme else "band ekstrem tidak terpicu")
 
     impl = {"per": tp / (f_last["net"] / intake["shares"]) if f_last["net"] > 0 else None,
             "ev_ebitda": (tp * intake["shares"] + net_debt) / f_last["ebitda"]
@@ -310,9 +315,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
     r_first = fc["rows"][0] if fc.get("rows") else {}
     ebit_first = r_first.get("ebit", 1.0)
     int_first = r_first.get("interest", 1.0)
-    icr = ebit_first / max(int_first, 1.0) if int_first else 10.0
+    icr_fc = ebit_first / max(int_first, 1.0) if int_first else 10.0
     ebitda_first = r_first.get("ebitda", 1.0)
-    nd_ebitda = net_debt / max(ebitda_first, 1.0) if ebitda_first else 0.0
+    nd_ebitda_fc = net_debt / max(ebitda_first, 1.0) if ebitda_first else 0.0
 
     peer_exit_low = None
     peer_exit_high = None
@@ -322,19 +327,85 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
             peer_exit_low = min(pe_vals)
             peer_exit_high = max(pe_vals)
 
+    # --- 1.1 Real gate inputs: official BS when present, else Sectors; missing stays None.
+    official_ev = intake.get("official_evidence") or {}
+    official_bs = official_ev.get("balance_sheet") or {}
+    stage_info = stage_mod.classify(intake, assumption_plan or fc.get("assumption_plan"))
+    stage_vals = stage_info.get("values") or {}
+
+    def _off_num(*keys):
+        for k in keys:
+            v = official_bs.get(k)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                return float(v)
+        return None
+
+    total_equity_off = _off_num("total_equity", "equity_attributable", "equity")
+    nci_off = _off_num("non_controlling_interest")
+    if total_equity_off is not None and total_equity_off != 0 and nci_off is not None:
+        nci_pct_val = nci_off / total_equity_off * 100.0
+    else:
+        nci_pct_val = None
+    if total_equity_off is not None:
+        equity_pos_val = total_equity_off > 0
+    else:
+        # Fallback to Sectors annuals equity (latest), not market cap.
+        secs_equity = None
+        for a in reversed(annuals):
+            if isinstance(a.get("equity"), (int, float)):
+                secs_equity = a["equity"]
+                break
+        equity_pos_val = (secs_equity > 0) if isinstance(secs_equity, (int, float)) else None
+
+    # D/E, ND/EBITDA, ICR from official BS when present, else forecast/Sectors.
+    d_off = _off_num("total_debt", "total_liabilities")
+    # Official cash may be under cash / cash_and_equivalents
+    cash_off = _off_num("cash", "cash_and_equivalents")
+    if d_off is not None and total_equity_off is not None and (d_off + total_equity_off) != 0:
+        d_de_val = d_off / (d_off + total_equity_off)
+    else:
+        d_de_val = D / max(E + D, 1.0) if isinstance(D, (int, float)) else None
+    if d_off is not None and cash_off is not None and isinstance(ebitda_first, (int, float)) and ebitda_first:
+        nd_ebitda_val = (d_off - cash_off) / max(ebitda_first, 1.0)
+    else:
+        nd_ebitda_val = nd_ebitda_fc
+    # ICR needs official interest; keep forecast-based but None if no interest data.
+    if isinstance(ebit_first, (int, float)) and isinstance(int_first, (int, float)):
+        icr_val = icr_fc
+    else:
+        icr_val = None
+
+    # Revenue drivers: profile + stage commodity flag.
+    rev_drivers = list(intake.get("revenue_drivers") or [])
+    if stage_vals.get("commodity_price_driven"):
+        if "commodity" not in rev_drivers:
+            rev_drivers = rev_drivers + ["commodity"]
+    # Segments: stage dissimilar_segments or intake segments.
+    segs_val = stage_vals.get("dissimilar_segments")
+    if not isinstance(segs_val, int):
+        segs_val = len(intake.get("segments") or []) or None
+    # Steady / life-cycle from stage; unverified defaults labeled via stage_info source.
+    steady_val = stage_vals.get("has_steady_state_3y")
+    lc_val = stage_vals.get("life_cycle_stage")
+    if stage_info.get("source") == "default_unverified":
+        # Conservative defaults, gates will still record unverified via notes.
+        pass
+
     gate_inputs = {
         "domain": profile,
         "model_profile": profile,
-        "filing_history_years": len(annuals),
-        "ebit_positive_count": ebit_pos,
-        "d_de_ratio": D / max(E + D, 1.0),
-        "net_debt_to_ebitda": nd_ebitda,
-        "icr": icr,
-        "equity_positive": E > 0,
-        "nci_pct": 0.0,
-        "revenue_drivers": intake.get("revenue_drivers") or [],
-        "has_steady_state_3y": True,
-        "life_cycle_stage": "mature",
+        "filing_history_years": len(annuals) if annuals else None,
+        "ebit_positive_count": ebit_pos if annuals else None,
+        "d_de_ratio": d_de_val,
+        "net_debt_to_ebitda": nd_ebitda_val,
+        "icr": icr_val,
+        "equity_positive": equity_pos_val,
+        "nci_pct": nci_pct_val,
+        "revenue_drivers": rev_drivers,
+        "has_steady_state_3y": steady_val,
+        "life_cycle_stage": lc_val,
+        "segments_count": segs_val,
+        "segments": intake.get("segments"),
         "upside_pct": upside * 100.0 if upside is not None else None,
         "terminal_value_pct_of_ev": (pv_tv / ev_g * 100.0) if ev_g else None,
         "implied_exit_ev_ebitda": impl.get("ev_ebitda"),
@@ -342,18 +413,43 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         "peer_exit_high": peer_exit_high,
     }
 
-    # --- Rantai metode (§4.1a): kandidat dihitung, urutan dikunci per profile.
+    # --- Rantai metode (§4.1a v3.7): order dari verdict Gates 0-5, fixed sebelum nilai.
+    # Preliminary verdict untuk order (upside DCF awal); Gate 5 final dinilai ulang
+    # pada metode terpilih di bawah.
+    prelim_verdict = model_profiles.evaluate(gate_inputs)
+    prelim_order = method_chain.chain_for(prelim_verdict, profile)
+    # Override analis: --method atau file data/method_overrides/<TICKER>.json
+    override_key = method_override or stage_info.get("method_override")
+    if override_key:
+        override_key = str(override_key).strip()
+        if override_key not in method_chain.LABELS:
+            notes.append(f"override analis {override_key} tidak dikenal; diabaikan.")
+            override_key = None
+        else:
+            notes.append(
+                f"Usulan sistem: {prelim_order[0] if prelim_order else '-'}; "
+                f"dipilih analis: {override_key} "
+                f"({stage_info.get('method_reason') or 'alasan analis'}).")
+
     shares, mcap, price = intake["shares"], intake["market_cap"], intake["price"]
     candidates = {}
-    if profile == "going_concern_fcff":
+    # DCF candidate (going concern + reference for holding/decline)
+    if profile in ("going_concern_fcff",) or "dcf_reference" in prelim_order or "fcff_dcf" in prelim_order:
         reasons = method_chain.scale_reasons(ps_g * 0.5 + ps_x * 0.5, shares, mcap)
         if method_gap > 0.30:
             reasons.append(f"divergensi Gordon vs exit {method_gap*100:.0f}% > 30%")
+        tv_label = []
+        if gate_thresholds.tv_flagged(pv_tv / ev_g if ev_g else None):
+            tv_label = [f"porsi terminal {pv_tv/ev_g*100:.0f}% > {gate_thresholds.TV_SHARE_PCT:.0f}% dari EV"]
         candidates["fcff_dcf"] = method_chain.candidate(
             "fcff_dcf", per_share=(ps_g + ps_x) / 2, per_share_down=tp_down,
-            reasons=reasons,
-            labels=([f"porsi terminal {pv_tv/ev_g*100:.0f}% > 75% dari EV"]
-                    if pv_tv / ev_g > 0.75 else []))
+            reasons=reasons, labels=tv_label)
+        if "dcf_reference" in prelim_order:
+            c = candidates["fcff_dcf"]
+            candidates["dcf_reference"] = method_chain.candidate(
+                "dcf_reference", per_share=c["per_share"], per_share_down=c["per_share_down"],
+                reasons=c["reasons"], labels=c["labels"] + ["DCF konsolidasi hanya referensi"],
+                detail=c["detail"])
     if is_miner:
         # SOTP and RNAV value the physical forecast; while it is a screening
         # proxy they are insufficient, so the chain can still reach the
@@ -384,7 +480,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
             labels=assumption_release.get("limitations") or [])
     else:
         scenario_target = None
-    if is_bank:
+        assumption_release = {"status": "draft_non_distributable", "blockers": [], "limitations": []}
+    if is_bank or "ddm" in prelim_order:
         ddm_reasons = release._check_ddm_present(ddm_result)
         ddm_down, ddm_grid, pbv_down = None, {}, None
         if isinstance(ddm_result, dict):
@@ -413,15 +510,50 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
             "pbv_roe", per_share=tp_inv, per_share_down=pbv_down,
             reasons=pbv_reasons + method_chain.scale_reasons(tp_inv, shares, mcap),
             detail={"fair_pbv": (ddm_result or {}).get("fair_pbv"), "roae": roae, "bvps": bvps})
-    if profile in ("going_concern_fcff", "financial_ddm"):
+    # Generic peer/NAV/SOTP placeholders for gate-driven orders (1.4)
+    fwd = fc["rows"][0] if fc.get("rows") else {}
+    if "relative_pe" in prelim_order or profile in ("going_concern_fcff", "financial_ddm"):
         candidates["relative_pe"] = method_chain.relative_pe(
-            intake.get("peers"), fc["rows"][0].get("eps"), shares, mcap)
+            intake.get("peers"), fwd.get("eps"), shares, mcap)
+    if "pbv_relative" in prelim_order:
+        _bvps_fwd = None
+        try:
+            _bvps_fwd = fwd.get("equity") / shares if fwd.get("equity") and shares else bvps
+        except (TypeError, ZeroDivisionError):
+            _bvps_fwd = bvps
+        candidates["pbv_relative"] = method_chain.pbv_relative(
+            intake.get("peers"), _bvps_fwd, shares, mcap)
+    if "ev_ebitda_peer" in prelim_order:
+        _ebitda_fwd = fwd.get("ebitda")
+        _nd = net_debt
+        # Official net debt when available
+        if d_off is not None and cash_off is not None:
+            _nd = d_off - cash_off
+        candidates["ev_ebitda_peer"] = method_chain.ev_ebitda_peer(
+            intake.get("peers"), _ebitda_fwd, shares, mcap, net_debt=_nd)
+    if "ev_sales_peer" in prelim_order:
+        candidates["ev_sales_peer"] = method_chain.ev_sales_peer(
+            intake.get("peers"), fwd.get("revenue"), shares, mcap, net_debt=net_debt)
+    if "ps_peer" in prelim_order:
+        # P/S peer: no EV data in cache; mark belum tersedia (same provenance rule).
+        candidates["ps_peer"] = method_chain.unavailable(
+            "ps_peer", "peer P/S belum tersedia di cache Sectors; belum dimodelkan")
+    if "holding_sotp" in prelim_order:
+        candidates["holding_sotp"] = method_chain.unavailable(
+            "holding_sotp",
+            "Holding SOTP memerlukan evidence pack per anak usaha; belum tersedia")
+    if "property_nav" in prelim_order:
+        candidates["property_nav"] = method_chain.unavailable(
+            "property_nav",
+            "Property NAV memerlukan evidence pack per aset; belum tersedia")
+    if profile in ("going_concern_fcff", "financial_ddm"):
         # DCF/DDM/P-BV/PER-forward all value the screening forecast. While
         # its data gates fail they are insufficient, so the chain can reach
         # the earnings-scenario route that carries its own evidence gate.
         forecast_data = release.common_blockers(profile, intake, fc)
         if forecast_data:
-            for key in ("fcff_dcf", "ddm", "pbv_roe", "relative_pe"):
+            for key in ("fcff_dcf", "dcf_reference", "ddm", "pbv_roe", "relative_pe",
+                        "pbv_relative", "ev_ebitda_peer", "ev_sales_peer"):
                 c = candidates.get(key)
                 if c:
                     candidates[key] = method_chain.candidate(
@@ -430,7 +562,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
                         detail=c["detail"])
         candidates["pe_fy_scenario"] = _earnings_candidate(intake, fc, assumption_status)
 
-    chain = method_chain.run(profile, candidates, price)
+    chain = method_chain.run(profile, candidates, price, order=prelim_order,
+                             override_key=override_key)
     selected = chain["selected"]
     sel = next((t for t in chain["trace"] if t["key"] == selected), None)
 
@@ -441,6 +574,45 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         gate_inputs.pop("terminal_value_pct_of_ev", None)
         gate_inputs.pop("implied_exit_ev_ebitda", None)
     verdict = model_profiles.evaluate(gate_inputs)
+    # Chain order final dari verdict final (untuk laporan); trace sudah fixed.
+    final_order = method_chain.chain_for(verdict, profile)
+    chain["verdict_order"] = list(final_order)
+    chain["prelim_order"] = list(prelim_order)
+    chain["stage"] = {"values": stage_vals, "source": stage_info.get("source"),
+                      "rationale": stage_info.get("values", {}).get("rationale") if False else None}
+    # 1.5 Mandatory cross-checks: DCF primary, Gate 1c breach, atau NCI 15-40%.
+    try:
+        _nci_for_x = float(nci_pct_val) if nci_pct_val is not None else 0.0
+    except (TypeError, ValueError):
+        _nci_for_x = 0.0
+    needs_x = (
+        (verdict.primary in ("FCFF/WACC DCF", "DCF (shortened horizon)")) or
+        ("1c_capital_structure" in verdict.gates_failed and gate_inputs.get("d_de_ratio") is not None) or
+        (15.0 < _nci_for_x <= 40.0)
+    )
+    chain["cross_check_required"] = bool(needs_x)
+    if needs_x:
+        x_keys = {"relative_pe", "pbv_relative", "ev_ebitda_peer", "ev_sales_peer",
+                  "holding_sotp", "sotp_lom"}
+        has_x = any(t["key"] in x_keys and t["status"] == "sufficient"
+                    for t in chain["trace"] if t["key"] != selected)
+        # Also count selected itself if it is relative/SOTP.
+        if selected in x_keys:
+            has_x = True
+        chain["cross_check_present"] = bool(has_x)
+        if not has_x:
+            has_peer_data = bool(intake.get("peers"))
+            if has_peer_data:
+                chain["cross_check_missing"] = True
+            else:
+                notes.append("keterbatasan: cross-check relatif/SOTP belum tersedia (tanpa peer); "
+                             "dilabeli sebagai limitasi metodologi.")
+                chain["cross_check_missing"] = False
+        else:
+            chain["cross_check_missing"] = False
+    else:
+        chain["cross_check_present"] = None
+        chain["cross_check_missing"] = False
 
     if selected == "ev_ebitda_fy":
         release_result = dict(assumption_release)
@@ -463,20 +635,48 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         release_result = release.assess_release(profile, intake, fc, None)
     else:
         release_result = release.assess_chain(profile, intake, fc, chain)
+        # Generic gate-driven methods: still need data-gate + extreme handling.
+        if chain.get("cross_check_missing"):
+            release_result["blockers"] = list(release_result.get("blockers") or []) + [
+                "cross-check relatif/SOTP wajib belum tersedia padahal peer ada"]
+            release_result["status"] = "draft_non_distributable"
+        extreme_blocker = method_chain.summary_blocker(chain)
+        if extreme_blocker and release_result["status"] != "draft_non_distributable":
+            release_result.update(status="draft_non_distributable",
+                                  blockers=list(release_result.get("blockers") or []) + [extreme_blocker])
+        if override_key:
+            release_result["override"] = {"method": override_key,
+                                          "reason": stage_info.get("method_reason"),
+                                          "proposed_order": chain.get("proposed_order"),
+                                          "system_proposal": (chain.get("proposed_order") or [None])[0]}
     release_result["method_chain"] = {"selected": selected, "route": chain["route"]}
+    release_result["gate_verdict"] = verdict.to_dict()
+    release_result["stage"] = {"values": stage_vals, "source": stage_info.get("source")}
     is_draft = release_result["status"] not in {
         "distributable", "distributable_assumption_led"}
 
     if selected:
-        method = method if selected in ("fcff_dcf", "ddm") else sel["label"]
-        if chain["route"] == "fallback":
+        # Keep DCF label for dcf_reference (reference) but show reference suffix.
+        if selected in ("fcff_dcf", "ddm"):
+            pass
+        elif selected == "dcf_reference":
+            method = sel["label"] + " [referensi]"
+        else:
+            method = sel["label"]
+        if chain["route"] in ("fallback", "override"):
             skipped = [t for t in chain["trace"] if t["decision"] == "skipped"]
-            method += " [fallback: " + ", ".join(
+            tag = "override" if chain["route"] == "override" else "fallback"
+            method += f" [{tag}: " + ", ".join(
                 f"{t['short']} tidak memadai" for t in skipped) + "]"
             notes.append("rantai metode: " + "; ".join(
                 f"{t['short']} dilewati ({method_chain.reader_reason(t['reasons'][0])})"
                 for t in skipped)
                 + f"; dasar nilai {sel['label']}.")
+            if chain["route"] == "override":
+                notes.append(
+                    f"Usulan sistem: {(chain.get('proposed_order') or ['-'])[0]}; "
+                    f"dipilih analis: {override_key} "
+                    f"({stage_info.get('method_reason') or 'alasan analis'}).")
         notes.extend(sel["labels"])
     elif is_miner:
         method = method_chain.LABELS["sotp_lom"]
@@ -539,16 +739,23 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
     valuation_asset = sotp_result if is_miner else (ddm_result if is_bank else None)
     if isinstance(valuation_asset, dict):
         valuation_asset["gate_verdict"] = verdict.to_dict()
-    if pv_tv / ev_g > 0.75 and selected == "fcff_dcf":
-        notes.append(f"peringatan terminal: porsi terminal {pv_tv/ev_g*100:.0f}% > 75% dari EV")
+    if gate_thresholds.tv_flagged(pv_tv / ev_g if ev_g else None) and selected == "fcff_dcf":
+        notes.append(f"peringatan terminal: porsi terminal {pv_tv/ev_g*100:.0f}% > {gate_thresholds.TV_SHARE_PCT:.0f}% dari EV")
     if "5_exit_multiple_out_of_range" in verdict.gates_failed:
         notes.append("implied exit EV/EBITDA di luar rentang peer; periksa cross-check valuasi relatif")
+    if stage_info.get("source") == "default_unverified":
+        notes.append("klasifikasi tahap operasi belum tervalidasi (default konservatif, belum terverifikasi).")
+    elif stage_info.get("source") == "override":
+        notes.append("klasifikasi tahap operasi dari override analis.")
 
     return {"method": method, "model_profile": profile,
             "release": release_result, "sotp": sotp_result,
             "scenario_target": (scenario_target if analyst_target or
                                 selected == "ev_ebitda_fy" else None),
             "ddm": ddm_result, "gate_verdict": verdict.to_dict(),
+            "stage_classification": {"values": stage_vals, "source": stage_info.get("source"),
+                                     "override": stage_info.get("override")},
+            "gate_inputs": gate_inputs,
             "wacc": wacc, "wacc_inputs": {"rf": rf, "erp": erp,
             "beta": beta, "re": re, "rd_after_tax": rd, "g": g, "exit_mult": exit_mult,
             "exit_basis": exit_basis, "news_wacc_bps": news_wacc_bps,
