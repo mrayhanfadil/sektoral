@@ -5,7 +5,7 @@ import { ratingLabel, ratingTone, type RatingTone } from "../lib/labels";
 
 const TONE: Record<RatingTone, string> = {
   buy: "bg-ok-bg text-ok-ink",
-  hold: "bg-brand-50 text-brand",
+  hold: "bg-brand-50 text-brand-ink",
   sell: "bg-err-bg text-err-ink",
   review: "bg-warn-bg text-warn-ink",
 };
@@ -54,7 +54,7 @@ export function ReportCard({ item }: { item: ReportItem }) {
   const files = reportFiles(item.ticker);
   const trace = traceHref(item);
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl border border-rule bg-white transition-colors hover:border-[#B9BDC6]">
+    <article className="flex flex-col overflow-hidden rounded-xl border border-rule bg-surface transition-colors hover:border-rule-strong">
       {item.files.pdf && (
         <a className="block aspect-[210/150] overflow-hidden border-b border-rule-soft bg-canvas" href={files.pdf}
           aria-label={`Buka PDF ${item.ticker}`}>

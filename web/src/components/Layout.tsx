@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Logo } from "./Brand";
+import { ThemeToggle } from "./Theme";
 
 function useScrollToHash() {
   const { pathname, hash } = useLocation();
@@ -21,7 +22,7 @@ function SiteHeader() {
       <a href="#konten" className="absolute -top-12 left-4 z-[100] rounded-b-lg bg-brand px-3.5 py-2 font-bold text-white no-underline focus:top-0">
         Lewati ke konten utama
       </a>
-      <header className="sticky top-0 z-50 border-b border-rule-soft bg-white/90 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-rule-soft bg-surface/85 backdrop-blur-md backdrop-saturate-150">
         <div className="wrap flex h-16 items-center justify-between gap-4">
           <Link to="/" aria-label="Sectoral, beranda" className="flex-none">
             <Logo />
@@ -29,10 +30,11 @@ function SiteHeader() {
           <nav aria-label="Navigasi utama" className="flex items-center gap-1">
             <Link to="/#cara-kerja" className={navLink}>Cara kerja</Link>
             <Link to="/#framework" className={navLink}>Framework</Link>
-            <NavLink to="/laporan" end className={({ isActive }) => `${navLink} ${isActive ? "!text-brand" : ""}`}>
+            <NavLink to="/laporan" end className={({ isActive }) => `${navLink} ${isActive ? "!text-brand-ink" : ""}`}>
               Laporan
             </NavLink>
-            <Link to="/research" className="btn btn-primary ml-2 min-h-0 px-3 py-2 text-[15px] max-md:ml-0">
+            <ThemeToggle />
+            <Link to="/research" className="btn btn-primary ml-1 min-h-0 px-3 py-2 text-[15px] max-md:ml-0">
               Coba riset emiten
             </Link>
           </nav>
@@ -53,7 +55,7 @@ function SiteFooter() {
         </p>
         <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-ink-soft">
           <Logo className="h-5" />
-          <nav aria-label="Tautan footer" className="flex flex-wrap gap-4 [&>a]:text-ink-soft [&>a]:no-underline [&>a:hover]:text-brand">
+          <nav aria-label="Tautan footer" className="flex flex-wrap gap-4 [&>a]:text-ink-soft [&>a]:no-underline [&>a:hover]:text-brand-ink">
             <Link to="/research">Aplikasi riset</Link>
             <Link to="/laporan">Laporan</Link>
             <Link to="/#cara-kerja">Cara kerja</Link>

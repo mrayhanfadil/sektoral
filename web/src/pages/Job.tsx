@@ -4,11 +4,12 @@ import { api, type Job as JobState } from "../lib/api";
 import { PROGRESS_STEPS, progressStep } from "../lib/labels";
 import { IntelHeadline, IntelSections } from "../components/Intel";
 import { Notice } from "../components/State";
+import { Icon } from "../components/Icon";
 import { ResearchPanels } from "./Research";
 
 const STATE_LABEL = { pending: "Menunggu", running: "Sedang diproses", completed: "Selesai", error: "Tidak selesai" };
 const EVENT_DOT = { ok: "bg-ok-bg text-ok-ink", warn: "bg-warn-bg text-warn-ink", error: "bg-err-bg text-err-ink", run: "" };
-const EVENT_ICON = { ok: "✓", warn: "!", error: "×", run: "" };
+const EVENT_ICON = { ok: "check", warn: "alert", error: "x" } as const;
 
 function useJob(id: string) {
   const [job, setJob] = useState<JobState | null>(null);
@@ -48,9 +49,9 @@ function Progress({ job }: { job: JobState }) {
         const done = job.state !== "pending" && i < at;
         const active = job.state !== "pending" && i === at;
         const failed = active && job.state === "error";
-        const bar = failed ? "bg-[#E5A3A3]" : done ? (partial && i === 4 ? "bg-warn-rule" : "bg-brand")
+        const bar = failed ? "bg-err-ink/50" : done ? (partial && i === 4 ? "bg-warn-rule" : "bg-brand")
           : active ? "animate-pulse bg-[linear-gradient(90deg,var(--color-brand)_0_35%,var(--color-brand-100)_35%_100%)]" : "bg-rule-soft";
-        const text = failed ? "text-err-ink" : done ? "text-ink" : active ? "text-brand" : "text-ink-faint";
+        const text = failed ? "text-err-ink" : done ? "text-ink" : active ? "text-brand-ink" : "text-ink-faint";
         return (
           <li key={step.title} aria-current={active ? "step" : undefined} className={`relative pt-[18px] text-sm font-bold ${text}`}>
             <span aria-hidden className={`absolute inset-x-0 top-0 h-1.5 rounded-md ${bar}`} />
@@ -75,14 +76,14 @@ function EventLog({ job }: { job: JobState }) {
       <ol ref={list} className="m-0 mt-3 max-h-[340px] list-none overflow-auto p-0">
         {shown.map((e, i) => (
           <li key={i} className="grid grid-cols-[22px_1fr] gap-2.5 border-b border-dashed border-rule-soft py-[7px] last:border-0">
-            <span aria-hidden className={`mt-0.5 grid size-5 place-items-center rounded-full text-[11px] font-black ${
-              e.status === "run" ? "animate-spin border-2 border-brand-100 border-t-brand bg-brand-50" : EVENT_DOT[e.status]}`}>
-              {EVENT_ICON[e.status]}
+            <span className={`mt-0.5 grid size-5 place-items-center rounded-full ${
+              e.status === "run" ? "animate-spin border-2 border-brand-100 border-t-brand-ink bg-brand-50" : EVENT_DOT[e.status]}`}>
+              {e.status !== "run" && <Icon name={EVENT_ICON[e.status]} className="size-3" />}
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-baseline gap-2 text-[14.5px]">
                 <strong>{e.label}</strong>
-                {e.tool && <code className="rounded-[5px] bg-brand-50 px-1.5 py-px font-mono text-xs text-brand">{e.tool}</code>}
+                {e.tool && <code className="rounded-[5px] bg-brand-50 px-1.5 py-px font-mono text-xs text-brand-ink">{e.tool}</code>}
                 <span className="ml-auto text-xs text-ink-faint tabular-nums max-sm:ml-0">{e.t} dtk</span>
               </div>
               {e.detail && <p className="mt-0.5 text-[13.5px] break-words text-ink-soft">{e.detail}</p>}
