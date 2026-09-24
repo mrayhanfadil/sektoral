@@ -25,3 +25,6 @@ data/yahoo_fundamentals
 data/research_analysis
 data/news_analysis
 data/fx_usdidr.json
+data/sectoral.db
+data/sectoral.db-*
+data/drivers

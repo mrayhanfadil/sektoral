@@ -14,15 +14,16 @@ snapshots; refreshing is an explicit command that needs the network:
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import sys
 import time
 from datetime import date
-from pathlib import Path
 from typing import Callable
 
-STORE_DIR = Path(__file__).resolve().parent.parent / "data" / "yahoo_fundamentals"
+from . import store
+
+# Snapshots live in the app database, keyed by IDX symbol.
+COLLECTION = "yahoo_fundamentals"
 SOURCE = "Yahoo Finance"
 # Yahoo statement rows -> snapshot fields (annual statements, reporting currency).
 ROWS = {"total_debt": "Total Debt", "cash_and_equivalents": "Cash And Cash Equivalents",
@@ -80,13 +81,9 @@ def fetch(symbol: str, ticker_factory: Callable | None = None) -> dict:
     raise ValueError(f"{SOURCE} has no fiscal year with debt, cash and EBITDA for {yahoo}")
 
 
-def load(symbol: str, store_dir: Path | None = None) -> dict | None:
+def load(symbol: str, db=None) -> dict | None:
     """Stored snapshot for a symbol, or None when missing or malformed."""
-    path = Path(store_dir or STORE_DIR) / f"{str(symbol).replace('.JK', '').strip().upper()}.json"
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+    data = store.get(COLLECTION, str(symbol).replace(".JK", "").strip().upper(), db)
     if not isinstance(data, dict) or not str(data.get("source") or "").startswith(SOURCE):
         return None
     if any(_num(data.get(k)) is None for k in ("total_debt", "cash_and_equivalents", "ebitda")):
@@ -96,11 +93,8 @@ def load(symbol: str, store_dir: Path | None = None) -> dict | None:
     return data
 
 
-def refresh(symbols, store_dir: Path | None = None, fetcher: Callable = fetch,
-            pause: float = 1.0) -> dict:
+def refresh(symbols, db=None, fetcher: Callable = fetch, pause: float = 1.0) -> dict:
     """Fetch and persist one snapshot per symbol; failures are reported, not stored."""
-    folder = Path(store_dir or STORE_DIR)
-    folder.mkdir(parents=True, exist_ok=True)
     done, failed = {}, {}
     for i, symbol in enumerate(symbols):
         if i and pause:
@@ -110,10 +104,7 @@ def refresh(symbols, store_dir: Path | None = None, fetcher: Callable = fetch,
         except Exception as error:  # one bad symbol must not stop the batch
             failed[symbol] = f"{type(error).__name__}: {error}"
             continue
-        path = folder / f"{data['symbol']}.json"
-        tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        tmp.replace(path)
+        store.put(COLLECTION, data["symbol"], data, db)
         done[data["symbol"]] = data
     return {"stored": done, "failed": failed}
 

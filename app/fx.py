@@ -1,18 +1,19 @@
 """Explicitly refreshed USD/IDR cache sourced from Yahoo Finance.
 
-The normal report build is offline and deterministic: it reads this artifact only
-when the caller explicitly refreshes it. A missing/stale cache is never silently
+The normal report build is offline and deterministic: it reads the stored quote
+(``fx`` collection of the app database) and it changes only when the caller
+explicitly refreshes it. A missing/stale cache is never silently
 replaced with a fixed or network-derived rate.
 """
 from __future__ import annotations
 
-import json
 import math
 from datetime import date
-from pathlib import Path
 from typing import Callable
 
-DEFAULT_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / "fx_usdidr.json"
+from . import store
+
+COLLECTION, KEY = "fx", "USD/IDR"
 YAHOO_SYMBOL = "IDR=X"  # Yahoo quote convention: IDR per USD
 
 
@@ -41,10 +42,10 @@ def fetch_usd_idr(ticker_factory: Callable | None = None) -> dict:
     }
 
 
-def load_cached_rate(cache_path: Path = DEFAULT_CACHE_PATH) -> dict | None:
+def load_cached_rate(db=None) -> dict | None:
     """Read a valid cached quote; return None on missing, malformed, or invalid data."""
     try:
-        data = json.loads(Path(cache_path).read_text(encoding="utf-8"))
+        data = store.get(COLLECTION, KEY, db)
         rate = data.get("rate")
         if (data.get("pair") != "USD/IDR" or not isinstance(rate, (int, float))
                 or isinstance(rate, bool) or not math.isfinite(rate) or rate <= 0):
@@ -53,14 +54,11 @@ def load_cached_rate(cache_path: Path = DEFAULT_CACHE_PATH) -> dict | None:
         if not isinstance(data.get("source"), str) or not data["source"]:
             return None
         return data
-    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+    except (AttributeError, ValueError, TypeError, KeyError):
         return None
 
 
-def refresh_usd_idr(
-    cache_path: Path = DEFAULT_CACHE_PATH,
-    fetcher: Callable[[], dict] = fetch_usd_idr,
-) -> dict:
+def refresh_usd_idr(db=None, fetcher: Callable[[], dict] = fetch_usd_idr) -> dict:
     """Fetch and atomically persist a valid quote; leave old cache intact on errors."""
     data = fetcher()
     if not isinstance(data, dict):
@@ -75,9 +73,5 @@ def refresh_usd_idr(
         raise ValueError("fetcher did not return a valid USD/IDR date") from exc
     if not isinstance(data.get("source"), str) or not data["source"]:
         raise ValueError("fetcher did not return USD/IDR source provenance")
-    path = Path(cache_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    store.put(COLLECTION, KEY, data, db)
     return data

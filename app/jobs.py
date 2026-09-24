@@ -8,7 +8,6 @@ source data or credentials, so they stay in the local log.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-import json
 import logging
 import re
 import shutil
@@ -17,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 import uuid
 
-from . import cache, gallery, progress, research
+from . import cache, gallery, outputs, progress, research
 
 LOG = logging.getLogger(__name__)
 TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
@@ -179,11 +178,11 @@ class ResearchJobs:
         """Copy a finished run into the reports folder so the gallery lists it."""
         try:
             self.reports.mkdir(parents=True, exist_ok=True)
-            for name in (f"{ticker}.json", f"{ticker}.html", f"{ticker}.pdf",
-                         f"{ticker}-trace.html", f"{ticker}-trace.json"):
+            for name in (f"{ticker}.html", f"{ticker}.pdf", f"{ticker}-trace.html"):
                 source = job_outdir / name
                 if source.is_file():
                     shutil.copy2(source, self.reports / name)
+            outputs.copy(job_outdir, ticker, self.reports)
         except OSError:
             LOG.exception("Could not publish %s to the reports folder", ticker)
 
@@ -210,7 +209,7 @@ class ResearchJobs:
             return result
 
     def artifact(self, job_id: str, name: str, require_done: bool = True) -> Path | None:
-        """``TICKER.html``, ``TICKER-trace.html`` or ``TICKER-trace.json`` of one job.
+        """``TICKER.html`` or ``TICKER-trace.html`` of one job.
 
         Paths are resolved (symlinks included) and must stay inside the job's
         own directory; anything else is None.
@@ -222,7 +221,7 @@ class ResearchJobs:
             if not job or (require_done and job.get("state") != "completed"):
                 return None
             ticker = job["ticker"]
-        if name not in (f"{ticker}.html", f"{ticker}-trace.html", f"{ticker}-trace.json"):
+        if name not in (f"{ticker}.html", f"{ticker}-trace.html"):
             return None
         expected_dir = (self.outdir / job_id).resolve()
         try:
@@ -234,22 +233,17 @@ class ResearchJobs:
         return resolved
 
     def trace(self, job_id: str) -> dict | None:
-        path = self.artifact(job_id, f"{self._ticker(job_id)}-trace.json")
-        return _read_json(path)
-
-    def _ticker(self, job_id: str) -> str:
+        """The stored audit trace of a completed job."""
+        if not JOB_ID.fullmatch(job_id):
+            return None
         with self._lock:
-            return (self._jobs.get(job_id) or {}).get("ticker", "")
+            job = self._jobs.get(job_id)
+            if not job or job.get("state") != "completed":
+                return None
+            ticker = job["ticker"]
+        trace = outputs.load(outputs.TRACE, self.outdir / job_id, ticker)
+        return trace if isinstance(trace, dict) else None
 
     def close(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
-
-def _read_json(path: Path | None) -> dict | None:
-    if path is None:
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    return data if isinstance(data, dict) else None

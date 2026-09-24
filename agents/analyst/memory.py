@@ -1,39 +1,34 @@
 """Per-ticker memory of earlier analyst runs.
 
 Each run appends a compact snapshot (signals, flags, findings, headlines) to
-``data/agent_memory/<TICKER>.json``. The next run reads the latest snapshot to
-brief the planner and to report what changed.
+the ``agent_memory`` collection of the app database, keyed by ticker. The next
+run reads the latest snapshot to brief the planner and to report what changed.
 """
 from __future__ import annotations
 
-import json
-import os
 import re
-import tempfile
-from pathlib import Path
 
-DEFAULT_DIR = Path(__file__).resolve().parents[2] / "data" / "agent_memory"
+from app import store
+
+COLLECTION = "agent_memory"
 KEEP_RUNS = 10
 _TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
 
 
-def _path(ticker, directory=None):
+def _key(ticker):
     if not _TICKER.fullmatch(ticker):
         raise ValueError("ticker format is invalid")
-    return Path(directory or DEFAULT_DIR) / f"{ticker}.json"
+    return ticker
 
 
-def load(ticker, directory=None):
-    try:
-        data = json.loads(_path(ticker, directory).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
+def load(ticker, db=None):
+    data = store.get(COLLECTION, _key(ticker), db)
     return [run for run in data.get("runs", []) if isinstance(run, dict)] \
         if isinstance(data, dict) else []
 
 
-def latest(ticker, directory=None):
-    runs = load(ticker, directory)
+def latest(ticker, db=None):
+    runs = load(ticker, db)
     return runs[-1] if runs else None
 
 
@@ -55,18 +50,9 @@ def snapshot(result):
     }
 
 
-def save(ticker, result, directory=None):
-    path = _path(ticker, directory)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    runs = (load(ticker, directory) + [snapshot(result)])[-KEEP_RUNS:]
-    handle, temp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as stream:
-            json.dump({"ticker": ticker, "runs": runs}, stream, ensure_ascii=False, indent=1)
-        os.replace(temp, path)
-    except BaseException:
-        Path(temp).unlink(missing_ok=True)
-        raise
+def save(ticker, result, db=None):
+    runs = (load(ticker, db) + [snapshot(result)])[-KEEP_RUNS:]
+    store.put(COLLECTION, _key(ticker), {"ticker": ticker, "runs": runs}, db)
     return runs[-1]
 
 
@@ -103,15 +89,12 @@ def diff(previous, current):
             "items": items[:12]}
 
 
-def watchlist(directory=None):
+def watchlist(db=None):
     """Tickers researched before, newest first, with their last flags."""
-    folder = Path(directory or DEFAULT_DIR)
     rows = []
-    for path in folder.glob("*.json"):
-        ticker = path.stem
-        if not _TICKER.fullmatch(ticker):
-            continue
-        runs = load(ticker, directory)
+    for ticker, data in store.items(COLLECTION, db=db):
+        runs = [run for run in (data or {}).get("runs", []) if isinstance(run, dict)] \
+            if _TICKER.fullmatch(ticker) and isinstance(data, dict) else []
         if not runs:
             continue
         last = runs[-1]

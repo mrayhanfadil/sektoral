@@ -1,27 +1,28 @@
 """Report gallery: finished company updates in a local reports folder.
 
 A batch run (``python -m app.batch ... --out out/reports --pdf``) writes
-``{T}.json``, ``{T}.html``, ``{T}.pdf``, ``{T}-trace.html`` and ``{T}-trace.json``
-per ticker. The gallery reads a small public summary from each JSON (rating,
-target, method, status, headline, method chain); the server serves the HTML, PDF
-and trace HTML as files, the trace JSON only through its public view, and a
-cover thumbnail rendered from the PDF.
+``{T}.html``, ``{T}.pdf`` and ``{T}-trace.html`` into the folder and stores the
+report and audit-trace documents in the app database under that folder
+(``app.outputs``). The gallery reads a small public summary from each report
+document (rating, target, method, status, headline, method chain); the server
+serves the HTML, PDF and trace HTML as files, the trace only through its public
+view, and a cover thumbnail rendered from the PDF.
 """
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import subprocess
 from pathlib import Path
+
+from . import outputs
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
                  "going_concern_fcff": "Korporasi"}
 FILES = {"pdf": ("{t}.pdf", "application/pdf"),
          "html": ("{t}.html", "text/html; charset=utf-8"),
-         "trace": ("{t}-trace.html", "text/html; charset=utf-8"),
-         "trace_json": ("{t}-trace.json", "application/json")}
+         "trace": ("{t}-trace.html", "text/html; charset=utf-8")}
 
 
 def _chain(doc):
@@ -51,17 +52,13 @@ def _held_reason(blockers) -> str:
     return "bukti belum lengkap"
 
 
-def summary(path: Path) -> dict | None:
-    """Public fields of one report JSON; None when it is not a report."""
-    try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
+    """Public fields of one report document; None when it is not a report."""
     meta = doc.get("meta") if isinstance(doc, dict) else None
     if not isinstance(meta, dict) or not meta.get("ticker"):
-        return None  # not a report (manifests, notes, other JSON)
+        return None
     ticker = str(meta["ticker"]).upper()
-    if not TICKER.fullmatch(ticker) or ticker != path.stem.upper():
+    if not TICKER.fullmatch(ticker) or ticker != stored_ticker.upper():
         return None
     status = str(meta.get("status") or "")
     published = status.startswith("distributable")
@@ -85,18 +82,18 @@ def summary(path: Path) -> dict | None:
         "chain": _chain(doc),
         "blockers": len((doc.get("harness") or {}).get("blockers") or []),
         "held_reason": _held_reason((doc.get("harness") or {}).get("blockers") or []),
-        "files": {kind: (path.parent / pattern.format(t=ticker)).is_file()
-                  for kind, (pattern, _) in FILES.items()},
+        "files": {**{kind: (folder / pattern.format(t=ticker)).is_file()
+                      for kind, (pattern, _) in FILES.items()},
+                  "trace_json": outputs.exists(outputs.TRACE, folder, ticker)},
     }
 
 
 def load(folder) -> list[dict]:
     """All reports in ``folder``: published first, then by ticker."""
     folder = Path(folder)
-    if not folder.is_dir():
-        return []
-    items = [s for s in (summary(p) for p in sorted(folder.glob("*.json"))
-                         if TICKER.fullmatch(p.stem.upper())) if s]
+    items = [s for s in (summary(outputs.load(outputs.REPORT, folder, t), folder, t)
+                         for t in outputs.tickers(outputs.REPORT, folder)
+                         if TICKER.fullmatch(t)) if s]
     return sorted(items, key=lambda s: (not s["published"], s["ticker"]))
 
 

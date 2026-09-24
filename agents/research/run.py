@@ -18,7 +18,6 @@ if str(ROOT) not in sys.path:
 from agents.estimator import tools as cache_tools
 from agents.estimator.run import _chat, _parse_json, _response_text
 
-RESEARCH_DIR = ROOT / "data" / "research_analysis"
 MAX_TOOL_CALLS = 6
 MAX_INSIGHTS = 3
 _INVESTMENT_ACTION = re.compile(
@@ -1184,7 +1183,7 @@ def _useful_unread_endpoints(ticker, allowlist, seen):
 
 
 def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
-             output_dir=None):
+             db=None):
     """Run the bounded cache-only agent and persist its sanitized brief.
 
     The returned object includes the research document and a machine-readable
@@ -1546,12 +1545,10 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
 
     output_path = None
     if persist:
-        destination = Path(output_dir) if output_dir else RESEARCH_DIR
-        destination.mkdir(parents=True, exist_ok=True)
-        output_path = destination / f"{ticker}.json"
-        output_path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n",
-                               encoding="utf-8")
+        from app import research_context, store
+        store.put(research_context.COLLECTION, ticker, document, db)
+        output_path = f"{research_context.COLLECTION}/{ticker}"
     return {"ok": document["status"] == "research_brief",
             "ticker": ticker, "document": document,
-            "path": str(output_path) if output_path else None,
+            "path": output_path,
             "agent_trace": document["agent_trace"]}

@@ -453,7 +453,7 @@ def test_failed_scenario_subagent_is_not_cached(tmp_path, monkeypatch):
     monkeypatch.setattr(agent, "run_live", lambda intake: dict(failed))
     intake_ = {"ticker": "UJI", "as_of": "2026-09-24", "model_profile": "going_concern_fcff",
                "latest_official_actual": {}, "official_evidence": {}, "news": []}
-    agent.run_cached(intake_, store_dir=tmp_path)
+    agent.run_cached(intake_, db=tmp_path)
     assert not list(tmp_path.glob("UJI-*.json"))
 
 

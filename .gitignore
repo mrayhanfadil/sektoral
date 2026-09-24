@@ -59,3 +59,7 @@ logs/
 # Local notes
 TODO.local.md
 *.local.*
+
+# App database (runtime caches and run outputs); see app/store.py.
+data/sectoral.db
+data/sectoral.db-*

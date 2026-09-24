@@ -25,8 +25,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import gallery, trace_view
-from .jobs import ResearchJobs, _read_json, available_tickers
+from . import gallery, outputs, trace_view
+from .jobs import ResearchJobs, TICKER, available_tickers
 from agents.analyst import memory as agent_memory
 
 LOG = logging.getLogger(__name__)
@@ -83,8 +83,8 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
 
     @app.get("/api/reports/{ticker}/trace")
     def report_trace(ticker: str):
-        found = gallery.artifact(jobs.reports, ticker, "trace_json")
-        view = trace_view.build(_read_json(found[0] if found else None))
+        view = trace_view.build(outputs.load(outputs.TRACE, jobs.reports, ticker)
+                                if TICKER.fullmatch(ticker.upper()) else None)
         if view is None:
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
         return data(view)
@@ -132,8 +132,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
 
     @app.get("/files/jobs/{job_id}/{name}")
     def job_file(job_id: str, name: str):
-        # The trace JSON stays server-side; the browser reads its public view.
-        path = jobs.artifact(job_id, name) if not name.endswith(".json") else None
+        path = jobs.artifact(job_id, name)
         if path is None:
             raise HTTPException(404)
         return FileResponse(path, media_type="text/html; charset=utf-8")

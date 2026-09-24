@@ -416,7 +416,6 @@ _RAMPING_STAGE = {"stage_classification": {
 
 def test_inet_and_gmfi_ramping_stage_moves_the_chain_off_dcf(tmp_path, monkeypatch):
     from app import forecast, intake, peer_fundamentals, valuation
-    monkeypatch.setattr(peer_fundamentals, "STORE_DIR", tmp_path / "none")
     for ticker in ("INET", "GMFI"):
         doc_in, _ = intake.load(ticker, as_of="2026-09-24")
         fc = forecast.build(doc_in)
@@ -535,21 +534,20 @@ def test_yahoo_snapshot_takes_the_latest_year_with_debt_cash_and_ebitda_together
     assert (data["total_debt"], data["cash_and_equivalents"], data["ebitda"]) == (300.0, 100.0, 120.0)
     assert data["source"] == "Yahoo Finance MORA.JK annual statements FY2024"
     assert data["symbol"] == "MORA" and data["currency"] == "IDR"
-    result = PF.refresh(["MORA", "BAD"], store_dir=tmp_path, pause=0,
+    result = PF.refresh(["MORA", "BAD"], db=tmp_path, pause=0,
                         fetcher=lambda s: PF.fetch(s, _FakeTicker) if s == "MORA" else 1 / 0)
     assert list(result["stored"]) == ["MORA"] and "BAD" in result["failed"]
-    assert PF.load("MORA.JK", store_dir=tmp_path)["ebitda"] == 120.0
+    assert PF.load("MORA.JK", db=tmp_path)["ebitda"] == 120.0
     # A snapshot that does not carry Yahoo provenance is never read.
     (tmp_path / "XXX.json").write_text('{"source": "Sectors", "total_debt": 1, '
                                        '"cash_and_equivalents": 1, "ebitda": 1, "fiscal_year": 2025}')
-    assert PF.load("XXX", store_dir=tmp_path) is None
+    assert PF.load("XXX", db=tmp_path) is None
 
 
 def test_peer_ev_falls_back_to_a_yahoo_snapshot_and_says_so(tmp_path, monkeypatch):
     from app import cache, intake as I, peer_fundamentals as PF
     monkeypatch.setattr(cache, "company_report", lambda t: None)
-    monkeypatch.setattr(PF, "STORE_DIR", tmp_path)
-    PF.refresh(["MORA"], store_dir=tmp_path, pause=0,
+    PF.refresh(["MORA"], db=tmp_path, pause=0,
                fetcher=lambda s: PF.fetch(s, _FakeTicker))
     row = I._peer_ev("MORA.JK", 1000.0)
     assert row["ev_source_kind"] == "yahoo" and row["ev_status"] == "ok"
@@ -557,8 +555,8 @@ def test_peer_ev_falls_back_to_a_yahoo_snapshot_and_says_so(tmp_path, monkeypatc
     assert row["ev_year"] == 2024
     assert "Yahoo Finance MORA.JK" in row["ev_source"] and not row["ev_source"].startswith("Sectors")
     assert I._peer_ev("NONE.JK", 1000.0) == {"ev_status": "report_not_cached"}
-    usd = dict(PF.load("MORA", store_dir=tmp_path), currency="USD", symbol="USDX")
-    (tmp_path / "USDX.json").write_text(__import__("json").dumps(usd))
+    usd = dict(PF.load("MORA", db=tmp_path), currency="USD", symbol="USDX")
+    __import__("app.store").store.put(PF.COLLECTION, "USDX", usd, tmp_path)
     assert I._peer_ev("USDX", 1000.0)["ev_status"] == "currency_mismatch"
 
 

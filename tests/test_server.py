@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import jobs as jobs_module, server  # noqa: E402
+from app import jobs as jobs_module, outputs, server  # noqa: E402
 from test_gallery import _report  # noqa: E402
 
 
@@ -64,7 +64,7 @@ def test_run_returns_partial_status_and_only_known_artifacts(monkeypatch, make_c
         assert ticker == "AMMN" and want_pdf is False
         (outdir / "AMMN.html").write_text("<h1>Validated company update</h1>", encoding="utf-8")
         (outdir / "AMMN-trace.html").write_text("<h1>Agent trace</h1>", encoding="utf-8")
-        (outdir / "AMMN-trace.json").write_text(json.dumps({"ticker": "AMMN", "secret": "x"}))
+        outputs.save(outputs.TRACE, outdir, "AMMN", {"ticker": "AMMN", "secret": "x"})
         # Returned arbitrary paths and unexpected fields never reach the response.
         return {"research_ok": False, "report_status": "draft_non_distributable",
                 "report_html": "/etc/passwd", "cache": {"private": "must-not-appear"}}
@@ -85,7 +85,7 @@ def test_run_returns_partial_status_and_only_known_artifacts(monkeypatch, make_c
     assert "Validated company update" in report.text
     # The standalone trace links to its report by relative filename.
     assert "Agent trace" in client.get(f"/files/jobs/{job_id}/AMMN-trace.html").text
-    for bad in (f"/files/jobs/{job_id}/BBCA.html", f"/files/jobs/{job_id}/AMMN-trace.json",
+    for bad in (f"/files/jobs/{job_id}/BBCA.html", f"/files/jobs/{job_id}/AMMN.pdf",
                 f"/files/jobs/{job_id}/..%2F..%2Fetc%2Fpasswd", "/api/jobs/..%2F..%2Fetc%2Fpasswd",
                 "/api/jobs/not-a-job"):
         assert client.get(bad).status_code == 404, bad
@@ -204,7 +204,7 @@ def test_reports_api_and_files_are_confined(make_client, tmp_path):
     pdf = client.get("/files/reports/AAAA.pdf")
     assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf"
     assert client.get("/files/reports/AAAA-trace.html").status_code == 200
-    for bad in ("/files/reports/AAAA.json", "/files/reports/AAAA.secrets",
+    for bad in ("/files/reports/AAAA.json", "/files/reports/AAAA-trace.json", "/files/reports/AAAA.secrets",
                 "/files/reports/..%2FAAAA.pdf", "/files/reports/ZZZZ.pdf"):
         assert client.get(bad).status_code == 404, bad
 
@@ -227,7 +227,7 @@ def test_report_trace_view_returns_only_public_fields(make_client, tmp_path):
             {"year": 2027, "revenue_growth_pct": 5, "rationale": "R"}]}, "api_key": "FAKE"},
         "evidence_register": {"private": "must-not-appear"},
     }
-    (reports / "AAAA-trace.json").write_text(json.dumps(audit))
+    outputs.save(outputs.TRACE, reports, "AAAA", audit)
     view = client_view = make_client(reports=reports).get("/api/reports/AAAA/trace")
     assert view.status_code == 200
     body = client_view.json()
@@ -255,3 +255,27 @@ def test_spa_fallback_serves_index_but_never_escapes_or_shadows_api(make_client,
     assert "secret" not in client.get("/..%2Fsecret.txt").text
     assert client.get("/api/unknown").status_code == 404
     assert client.get("/files/unknown").status_code == 404
+
+
+def test_store_import_moves_old_json_into_the_database_once(tmp_path):
+    from app import store, store_import
+
+    data = tmp_path / "data"
+    (data / "agent_memory").mkdir(parents=True)
+    (data / "agent_memory" / "SIDO.json").write_text(json.dumps({"ticker": "SIDO", "runs": [{"run_at": "x"}]}))
+    (data / "fx_usdidr.json").write_text(json.dumps({"pair": "USD/IDR", "rate": 16000}))
+    run = tmp_path / "out" / "run1"
+    run.mkdir(parents=True)
+    (run / "AAAA.json").write_text(json.dumps({"meta": {"ticker": "AAAA"}}))
+    (run / "AAAA-trace.json").write_text(json.dumps({"ticker": "AAAA"}))
+    (run / "summary.json").write_text(json.dumps([{"ticker": "AAAA"}]))
+    (run / "notes.json").write_text("{}")
+
+    counts = store_import.import_outputs(tmp_path / "out", counts=store_import.import_caches(data))
+    assert counts["agent_memory"] == counts["fx"] == counts["report"] == counts["trace"] == 1
+    assert outputs.load(outputs.REPORT, run, "AAAA") == {"meta": {"ticker": "AAAA"}}
+    assert outputs.load(outputs.BATCH, run) == [{"ticker": "AAAA"}]
+    assert store.get("fx", "USD/IDR")["rate"] == 16000
+    # A second import keeps what the database already has.
+    again = store_import.import_caches(data)
+    assert again == {"kept": 2}
