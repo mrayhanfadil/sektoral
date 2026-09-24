@@ -327,3 +327,39 @@ def test_web_news_tool_turns_articles_into_citable_context(monkeypatch):
     assert result["articles"][0]["id"] == "web.0"
     assert found[0]["kind"] == "web" and found[0]["source"] == T.WEB_SOURCE
     assert found[0]["value"] is None and found[0]["flag"] is None
+
+
+# ------------------------------------------------ malformed model output
+
+@pytest.mark.parametrize("responses", [
+    [PLAN, {"calls": ["find_peers", {"tool": "rank_peers", "args": {"metrics": [{"x": 1}]}}]}],
+    [dict(PLAN, steps=[{"tool": "find_peers", "args": []},
+                       {"tool": "rank_peers", "args": {"metrics": [{"id": "roe"}]}}])],
+    [PLAN, {"done": True}, dict(SYNTHESIS, findings=[dict(SYNTHESIS["findings"][0],
+                                                          signal_ids=[{"id": "peer.roe"}])])],
+    [PLAN, {"done": True}, dict(SYNTHESIS, hypotheses=[{"index": 0, "verdict": "belum terjawab",
+                                                         "signal_ids": [{"id": "x"}], "reason": "r"}])],
+])
+def test_malformed_model_output_never_aborts_the_run(tmp_path, responses):
+    queue = [json.dumps(r) for r in responses]
+
+    def chat(_messages):
+        if queue:
+            return queue.pop(0)
+        raise TimeoutError("no more scripted responses")
+
+    result = A.run("SIDO", chat=chat, memory_dir=tmp_path)
+    assert result["signals"], "tools still ran"
+    assert result["synthesis"]["findings"] is not None
+    assert all(isinstance(i, str) for f in result["synthesis"]["findings"] for i in f["signal_ids"])
+
+
+def test_relative_return_uses_dates_both_series_share():
+    daily = [{"date": "2026-01-01", "close": 100}, {"date": "2026-01-05", "close": 110},
+             {"date": "2026-01-09", "close": 121}]
+    index = [{"date": "2026-01-01", "price": 1000}, {"date": "2026-01-05", "price": 1000}]
+    found, _ = S.price_signals("X", daily, index)
+    relative = next(s for s in found if s["id"] == "price.vs_ihsg")
+    # stock +10% vs index 0% over 01-01..01-05, not the stock's +21% to 01-09
+    assert relative["value"] == pytest.approx(0.10)
+    assert relative["period"] == "2026-01-01 s.d. 2026-01-05"
