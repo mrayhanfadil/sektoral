@@ -26,6 +26,20 @@ _SEL_KOSONG = frozenset({"", "-", "--", "\u2013", "\u2014", "n/a", "na", "tidak 
 _FRASE_HAMPA = ("tanpa tanggal", "aksi korporasi tercatat", "tanpa judul")
 
 
+import re as _re
+
+_DASH_RANGE = _re.compile(r"(?<=\d)\s*[\u2013\u2014]\s*(?=\d)")
+_DASH_CLAUSE = _re.compile(r"\s*[\u2013\u2014]\s*")
+
+
+def normalize_dashes(text):
+    """Spec §5.1 bans em/en dashes: numeric ranges become '-', clause
+    dashes become ', '. Used on LLM prose before it reaches the report."""
+    if not isinstance(text, str):
+        return text
+    return _DASH_CLAUSE.sub(", ", _DASH_RANGE.sub("-", text))
+
+
 def contains_banned(text):
     """True bila teks memuat salah satu untai BANNED (huruf diabaikan)."""
     if not isinstance(text, str):

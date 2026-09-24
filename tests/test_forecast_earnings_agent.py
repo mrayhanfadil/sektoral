@@ -93,3 +93,14 @@ def test_non_mining_outyears_may_leave_ebitda_and_capex_empty():
              "source_ids": ["official"]} for i in range(4)]
     assert agent._validate_outyears(rows, _source()) == []
     assert agent._validate_outyears(rows, _source(profile="finite_life_mining"))
+
+
+def test_llm_prose_dashes_are_normalized_but_titles_kept():
+    fragment = {"earnings_scenario": {
+        "rationale": "Volume naik di sebagian besar segmen — DOC +60% QoQ, rentang 5–7%.",
+        "thesis_points": ["Margin pulih – biaya pakan turun."],
+        "source_refs": {"news:0": {"title": "Japfa — laba naik"}}}}
+    out = agent._normalize_prose(fragment)["earnings_scenario"]
+    assert out["rationale"] == "Volume naik di sebagian besar segmen, DOC +60% QoQ, rentang 5-7%."
+    assert out["thesis_points"] == ["Margin pulih, biaya pakan turun."]
+    assert out["source_refs"]["news:0"]["title"] == "Japfa — laba naik"
