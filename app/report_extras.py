@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 import statistics
-from datetime import date
+from datetime import date, timedelta
 
 from agents.analyst import signals as S
 from agents.analyst import tools as peer_tools
@@ -28,6 +28,13 @@ PAGE_ORDER = ("Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forec
               "Skenario operasi", "Skenario laba", "Berita", "Sensitivitas", "Katalis",
               "Konteks historis", "Target harga", "Cross-check", "Skenario nilai",
               "Perbandingan peer", "Valuasi", "Data keuangan")
+
+
+def _day(value):
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
 
 
 def _num(value):
@@ -378,60 +385,68 @@ def peer_page(intake, valuation_inputs=None):
     return _page("Perbandingan peer", paragraphs, exhibits)
 
 
+PUBLICATION_LAG_DAYS = 90  # annual results assumed public ~3 months after FY end
+
+
 def own_history_bands(intake):
     """1y own-history P/E and P/BV bands; None bila cache tidak cukup.
 
-    Butuh daily closes 1y + EPS/BVPS TTM tiap tanggal. Cache saat ini hanya
-    membawa daily recent + annuals, sehingga sering belum tersedia (labeled limitation).
+    Each close is divided by the annual EPS/BVPS that was already published
+    on that date (FY end + PUBLICATION_LAG_DAYS), so the multiple moves with
+    both price and fundamentals. When one base covers the whole window the
+    series is only a rescaled price band: the row says so instead of showing
+    a reversion "implied price" that would equal the average close.
     """
     try:
         daily = (local_data.cache_get(intake["ticker"], f"/daily/{intake['ticker']}/") or {}).get("data") or []
     except Exception:
         daily = []
-    if len(daily) < 60:
-        return None
-    annuals = intake.get("annuals") or []
-    if len(annuals) < 2:
-        return None
-    # TTM proxy: latest annual EPS/BVPS (cache tidak membawa TTM series per tanggal).
-    latest = annuals[-1]
     shares = intake.get("shares") or 0
-    eps = (latest.get("earnings") / shares) if latest.get("earnings") and shares else None
-    bvps = (latest.get("equity") / shares) if latest.get("equity") and shares else None
-    if not eps and not bvps:
+    annuals = [a for a in intake.get("annuals") or [] if isinstance(a.get("year"), int)]
+    if len(daily) < 60 or len(annuals) < 2 or not shares:
         return None
-    closes = [r.get("close") for r in daily[-250:] if isinstance(r, dict) and r.get("close")]
-    if len(closes) < 60:
+    points = []
+    for row in daily[-250:]:
+        day = _day(row.get("date")) if isinstance(row, dict) else None
+        close = _num(row.get("close")) if isinstance(row, dict) else None
+        if day and close:
+            points.append((day, close))
+    if len(points) < 60:
         return None
+
+    def base_on(day, key):
+        known = [a for a in annuals
+                 if date(a["year"], 12, 31) + timedelta(days=PUBLICATION_LAG_DAYS) <= day
+                 and isinstance(a.get(key), (int, float))]
+        return known[-1][key] / shares if known else None
+
     rows = []
-    import statistics as _st
-    for label, base, kind in (("P/E", eps, "x"), ("P/BV", bvps, "x")):
-        if not base or base <= 0:
+    for label, key in (("P/E", "earnings"), ("P/BV", "equity")):
+        series = [(close / base, base) for day, close in points
+                  for base in [base_on(day, key)] if base and base > 0]
+        if len(series) < 60:
             rows.append([label, "belum dimodelkan", "belum dimodelkan",
-                         "belum dimodelkan", "bukan target harga"])
+                         "belum dimodelkan", "basis fundamental historis tidak cukup"])
             continue
-        mults = sorted(c / base for c in closes if c and base)
-        if len(mults) < 60:
-            rows.append([label, "belum dimodelkan", "belum dimodelkan",
-                         "belum dimodelkan", "bukan target harga"])
-            continue
-        mean = sum(mults) / len(mults)
-        med = _st.median(mults)
-        cur = closes[-1] / base
-        # Percentile of current
+        mults = sorted(m for m, _ in series)
+        mean, med = sum(mults) / len(mults), statistics.median(mults)
+        cur, base_now = series[-1]
         pct = sum(1 for m in mults if m <= cur) / len(mults) * 100
-        # Implied prices from mean/median reversion (disclaimer, bukan TP)
-        imp_mean = mean * base
-        imp_med = med * base
-        rows.append([label, f"{mean:.1f}x", f"{med:.1f}x",
-                     f"{cur:.1f}x (p{pct:.0f})",
-                     f"mean Rp{fmt.rp(round(imp_mean/10)*10)}; median Rp{fmt.rp(round(imp_med/10)*10)}"])
+        if len({round(b, 6) for _, b in series}) == 1:
+            implied = ("belum dimodelkan: basis tetap sepanjang jendela, "
+                       "band hanya rentang harga")
+        else:
+            implied = (f"mean Rp{fmt.rp(round(mean * base_now / 10) * 10)}; "
+                       f"median Rp{fmt.rp(round(med * base_now / 10) * 10)}")
+        rows.append([label, f"{mean:.1f}x", f"{med:.1f}x", f"{cur:.1f}x (p{pct:.0f})", implied])
     return _exhibit(
         "Band historis 1 tahun P/E dan P/BV (bukan target harga)",
         ["Multiple", "Mean", "Median", "Kini (persentil)", "Implikasi mean/median"],
         rows,
-        f"Source: Sectors daily {intake['ticker']} + EPS/BVPS TTM proxy annuals; "
-        f"per {intake.get('as_of') or '-'}; mean/median reversion hanya konteks, bukan target harga.")
+        f"Source: Sectors daily {intake['ticker']} dan laba/ekuitas tahunan yang sudah "
+        f"terbit pada tiap tanggal (akhir tahun buku + {PUBLICATION_LAG_DAYS} hari), saham "
+        f"kini sebagai basis pro forma; per {intake.get('as_of') or '-'}; mean/median "
+        "reversion hanya konteks, bukan target harga.")
 
 
 # ------------------------------------------ ownership and market activity
@@ -716,6 +731,39 @@ def trim_key_financials(doc, actual_years=2, forecast_years=3):
 
 # ------------------------------------------------------------ combo charts (Slide 3)
 
+def chart_forecast_rows(intake, fc):
+    """Forecast points a chart may show, in IDR, never the CAGR screen.
+
+    Validated scenario rows (going concern/bank earnings scenario, mining
+    interim scenario, and their outyear path) or a production forecast.
+    Anything else stays off the chart, matching "belum dimodelkan" in Key
+    Financials.
+    """
+    fc = fc or {}
+    if fc.get("production_ready") is True:
+        return [{"label": r.get("label"), "revenue": r.get("revenue"),
+                 "ebitda": r.get("ebitda"), "net": r.get("net"),
+                 "margin": r.get("margin")} for r in (fc.get("rows") or [])[:3]]
+    anchor = fc.get("earnings_scenario") or fc.get("interim_scenario")
+    if not anchor:
+        return []
+    usd = (intake.get("official_evidence") or {}).get("reporting_currency") == "USD"
+    fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
+    if not (isinstance(fx, (int, float)) and fx > 0):
+        return []
+    idr = lambda v: v * fx if isinstance(v, (int, float)) else None
+    full = anchor.get("full_year") or {}
+    rows = [{"label": f"FY{anchor['year'] % 100:02d}F", "revenue": idr(full.get("revenue")),
+             "ebitda": idr(full.get("ebitda")), "net": idr(full.get("net_profit"))}]
+    for r in ((fc.get("outyear_scenario") or {}).get("rows") or []):
+        rows.append({"label": r.get("label"), "revenue": idr(r.get("revenue")),
+                     "ebitda": idr(r.get("ebitda")), "net": idr(r.get("net_profit"))})
+    for r in rows:
+        r["margin"] = (r["ebitda"] / r["revenue"]
+                       if r.get("ebitda") is not None and r.get("revenue") else None)
+    return rows[:3]
+
+
 def combo_charts_page(intake, fc=None):
     """2x2 combo: Revenue+growth, EBITDA+margin, Net Profit+EPS growth, DER vs ROE.
 
@@ -726,15 +774,12 @@ def combo_charts_page(intake, fc=None):
     annuals = (intake.get("annuals") or [])[-5:]
     if len(annuals) < 2:
         return None
-    frows = (fc or {}).get("rows") or []
+    frows = chart_forecast_rows(intake, fc)
     labels = [str(a.get("year")) for a in annuals] + [r.get("label", "") for r in frows[:3]]
     rev_bars = [a.get("revenue") for a in annuals] + [r.get("revenue") for r in frows[:3]]
-    rev_g = [None]
-    for i in range(1, len(annuals)):
-        prev = annuals[i - 1].get("revenue") or 0
-        cur = annuals[i].get("revenue") or 0
-        rev_g.append((cur / prev - 1) * 100 if prev else None)
-    rev_g += [None] * min(3, len(frows))
+    rev_g = [None] + [(cur / prev - 1) * 100
+                      if isinstance(cur, (int, float)) and isinstance(prev, (int, float)) and prev
+                      else None for prev, cur in zip(rev_bars, rev_bars[1:])]
     ebitda_bars = [a.get("ebitda") for a in annuals] + [r.get("ebitda") for r in frows[:3]]
     has_ebitda = any(isinstance(v, (int, float)) for v in ebitda_bars)
     ebitda_m = []

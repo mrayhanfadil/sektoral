@@ -36,23 +36,6 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     doc = narrative.build(doc_in, fc, va, g1, method=method,
                           illustrative_scenarios=illustrative_scenarios or analyst_target)
     report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va, fc=fc)
-    # Cover rating status from history store (Inisiasi/Dipertahankan/Naik/Turun).
-    try:
-        from . import rating_history as _rh
-        _cur = (doc.get("meta") or {}).get("rating") or va.get("rating")
-        if isinstance(_cur, str) and _cur in ("Buy", "Hold", "Sell"):
-            _st = _rh.cover_status(ticker, _cur)
-        else:
-            # Draft: status histori tetap informatif bila ada.
-            _hist = _rh.load(ticker)
-            _st = f"Dipertahankan ({_hist[-1]['rating']})" if _hist else "Inisiasi"
-            if (doc.get("meta") or {}).get("status") == "draft_non_distributable":
-                _st = f"{_st} | Dalam peninjauan" if "Dalam" not in _st else _st
-        doc["meta"]["rating_status"] = _st
-        if isinstance(doc.get("cover"), dict):
-            doc["cover"]["rating_status"] = _st
-    except Exception:
-        pass
     doc["forecast_assumptions"] = {
         "plan": fc.get("assumption_plan"),
         "news_effects": fc.get("news_assumptions") or [],
@@ -89,6 +72,21 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         doc["meta"].pop("rating", None)
         doc["meta"].pop("tp", None)
         doc["meta"].pop("upside_persen", None)
+    # Cover rating status (Inisiasi/Dipertahankan/Naik/Turun), set after the
+    # harness so it reflects the final release. A draft publishes no rating,
+    # so it never claims one is maintained; history is shown as context only.
+    from . import rating_history as _rh
+    meta = doc["meta"]
+    if meta.get("status") != "draft_non_distributable" and \
+            meta.get("rating") in ("Buy", "Hold", "Sell"):
+        rating_status = _rh.cover_status(ticker, meta["rating"])
+    else:
+        history = _rh.load(ticker)
+        rating_status = ("Dalam peninjauan" + (f" (rating terakhir {history[-1]['rating']})"
+                                              if history else ""))
+    meta["rating_status"] = rating_status
+    if isinstance(doc.get("cover"), dict):
+        doc["cover"]["rating_status"] = rating_status
     # Immutable run manifest, built once after the harness so it records the
     # final release (not the engine's pre-harness status). research.run
     # reuses this object instead of rebuilding it.

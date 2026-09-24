@@ -39,6 +39,9 @@ class GateVerdict:
     reasons: list[str]
     gates_passed: list[str] = field(default_factory=list)
     gates_failed: list[str] = field(default_factory=list)
+    # Gates that could not be judged (missing inputs). They stay in
+    # gates_failed for the release trace, but must not drive method choice.
+    gates_unassessed: list[str] = field(default_factory=list)
 
     def __iter__(self):
         yield self.primary
@@ -104,6 +107,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     """Run Gates 0-5 and return GateVerdict(primary, secondary, thin_data, rating_override, reasons)."""
     gates_passed: list[str] = []
     gates_failed: list[str] = []
+    gates_unassessed: list[str] = []
     reasons: list[str] = []
     thin_data = False
     rating_override: Optional[str] = None
@@ -197,6 +201,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     if filing_history_years is None:
         gates_failed.append("1a_filing_history")
         reasons.append("1a filing history tidak dapat dinilai (data belum tersedia)")
+        gates_unassessed.append("1a_filing_history")
     elif filing_history_years >= 4:
         gates_passed.append("1a_filing_history")
     else:
@@ -209,6 +214,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     if ebit_positive_count is None:
         gates_failed.append("1b_profitability")
         reasons.append("1b profitabilitas tidak dapat dinilai (data EBIT belum tersedia)")
+        gates_unassessed.append("1b_profitability")
     elif ebit_positive_count >= 2:
         gates_passed.append("1b_profitability")
     else:
@@ -220,6 +226,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     if d_de_ratio is None or net_debt_to_ebitda is None or icr is None:
         gates_failed.append("1c_capital_structure")
         reasons.append("1c struktur modal tidak dapat dinilai (D/E, ND/EBITDA atau ICR belum tersedia)")
+        gates_unassessed.append("1c_capital_structure")
     elif d_de_ratio <= 0.80 and net_debt_to_ebitda <= 6.0 and icr >= 1.0:
         gates_passed.append("1c_capital_structure")
     else:
@@ -230,6 +237,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     if equity_positive is None:
         gates_failed.append("1d_equity_base")
         reasons.append("1d basis ekuitas tidak dapat dinilai (ekuitas resmi belum tersedia)")
+        gates_unassessed.append("1d_equity_base")
     elif equity_positive:
         gates_passed.append("1d_equity_base")
     else:
@@ -242,6 +250,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     if _nci_raw is None:
         gates_failed.append("2_nci")
         reasons.append("2 NCI tidak dapat dinilai (NCI resmi belum tersedia)")
+        gates_unassessed.append("2_nci")
         nci_pct = 0.0
         _nci_missing = True
     else:
@@ -250,6 +259,7 @@ def evaluate(inputs: dict) -> GateVerdict:
         except (TypeError, ValueError):
             gates_failed.append("2_nci")
             reasons.append("2 NCI tidak dapat dinilai (format tidak valid)")
+            gates_unassessed.append("2_nci")
             nci_pct = 0.0
             _nci_missing = True
         else:
@@ -292,6 +302,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     elif has_steady_state_3y is None:
         gates_failed.append("3_cyclicality")
         reasons.append("3 tahap operasi tidak dapat dinilai (klasifikasi steady-state belum tervalidasi)")
+        gates_unassessed.append("3_cyclicality")
     elif not has_steady_state_3y:
         gates_passed.append("3_cyclicality")
         primary = "Relative Valuation"
@@ -304,6 +315,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     if _lc_raw is None:
         gates_failed.append("4_life_cycle")
         reasons.append("4 tahap siklus hidup tidak dapat dinilai (klasifikasi LLM/bukti belum tervalidasi)")
+        gates_unassessed.append("4_life_cycle")
         life_cycle_stage = "mature"
     else:
         life_cycle_stage = str(_lc_raw).lower()
@@ -329,6 +341,7 @@ def evaluate(inputs: dict) -> GateVerdict:
         reasons=reasons,
         gates_passed=gates_passed,
         gates_failed=gates_failed,
+        gates_unassessed=gates_unassessed,
     )
 
 
@@ -338,8 +351,7 @@ def is_extreme_upside(upside_ratio) -> bool:
 
 
 def _eval_gate5_override(inputs: dict) -> Optional[str]:
-    upside = inputs.get("upside_pct", inputs.get("upside"))
-    if gate_thresholds.is_extreme_pct(upside):
+    if gate_thresholds.is_extreme_pct(gate_thresholds.gate_upside_pct(inputs)):
         return "Review Required"
     return None
 
@@ -352,8 +364,8 @@ def _eval_gate5(inputs: dict, gates_passed: list[str], gates_failed: list[str], 
     peer_high = inputs.get("peer_exit_high")
 
     if upside is not None:
-        pct = gate_thresholds._upside_pct(upside)
-        if pct is not None and gate_thresholds.is_extreme_pct(upside):
+        pct = gate_thresholds.gate_upside_pct(inputs)
+        if pct is not None and gate_thresholds.is_extreme_pct(pct):
             if pct > 0:
                 gates_failed.append("5_upside_extreme")
                 rating_override = "Review Required"

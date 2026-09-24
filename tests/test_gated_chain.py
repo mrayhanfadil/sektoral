@@ -46,6 +46,7 @@ def test_chain_for_verdict_orders():
     assert MC.chain_for(v_thin, "going_concern_fcff")[0] == "ev_ebitda_peer"
     # Unassessed 1a keeps DCF order
     v_un = {"primary": "FCFF/WACC DCF", "gates_failed": ["1a_filing_history"],
+            "gates_unassessed": ["1a_filing_history"],
             "reasons": ["1a filing history tidak dapat dinilai (data belum tersedia)"]}
     assert MC.chain_for(v_un, "going_concern_fcff")[0] == "fcff_dcf"
     # Decline / pre-revenue
@@ -97,3 +98,101 @@ def test_override_route_keeps_proposed_order():
     assert chain["selected"] == "relative_pe"
     assert chain["proposed_order"] == ["fcff_dcf", "relative_pe", "pe_fy_scenario"]
     assert chain["trace"][0]["role"] == "override"
+
+
+def test_unassessed_gates_are_explicit_not_parsed_from_text():
+    v = MP.evaluate({"domain": "single_business"})
+    assert {"1a_filing_history", "1b_profitability", "1d_equity_base"} <= set(v.gates_unassessed)
+    # Wording of a reason no longer matters: same verdict, reasons removed.
+    stripped = dict(v.to_dict(), reasons=[])
+    assert MC.chain_for(stripped, "going_concern_fcff")[0] == "fcff_dcf"
+
+
+def test_short_history_miner_keeps_mining_chain():
+    thin = {"primary": "DCF (shortened horizon)", "gates_failed": ["1a_filing_history"],
+            "reasons": ["1a filing history 2y < 4y"]}
+    assert MC.chain_for(thin, "finite_life_mining") == ("sotp_lom", "rnav_lom", "ev_ebitda_fy")
+
+
+def test_gate5_percent_is_never_read_as_ratio():
+    assert GT.is_extreme_pct(1.5) is False and GT.is_extreme_pct(-1.2) is False
+    assert GT.gate_upside_pct({"upside_pct": 1.5}) == 1.5
+    assert GT.gate_upside_pct({"upside": 1.5}) == 150.0
+    v = MP.evaluate({"domain": "single_business", "upside_pct": 1.5})
+    assert v.rating_override is None
+
+
+# ------------------------------------------------------- PR #5 review fixes
+
+def _built(ticker):
+    from app import forecast, intake, valuation
+    doc_in, _ = intake.load(ticker, as_of="2026-09-24")
+    fc = forecast.build(doc_in)
+    return doc_in, fc, valuation.build(doc_in, fc)
+
+
+def test_usd_reporter_gate_ratios_convert_official_bs_to_idr():
+    doc_in, _, va = _built("AMMN")
+    nd_ebitda = va["gate_inputs"]["net_debt_to_ebitda"]
+    if doc_in.get("fx_spot"):
+        assert 0.5 < nd_ebitda < 20  # was ~0.0003 when USD net debt met IDR EBITDA
+    else:
+        assert nd_ebitda is not None
+
+
+def test_total_liabilities_is_never_financial_debt(monkeypatch):
+    doc_in, fc, _ = _built("JPFA")
+    from app import valuation
+    bs = doc_in["official_evidence"]["balance_sheet"]
+    assert "total_debt" not in bs and "total_liabilities" in bs
+    va = valuation.build(doc_in, fc)
+    liab_ratio = bs["total_liabilities"] / (bs["total_liabilities"] + bs["total_equity"])
+    assert abs(va["gate_inputs"]["d_de_ratio"] - liab_ratio) > 1e-6
+
+
+def test_nci_share_uses_total_equity():
+    doc_in, _, va = _built("SSIA")
+    bs = doc_in["official_evidence"]["balance_sheet"]
+    expected = bs["non_controlling_interest"] / (
+        bs["equity_attributable"] + bs["non_controlling_interest"]) * 100
+    assert abs(va["gate_inputs"]["nci_pct"] - expected) < 1e-6
+
+
+def test_charts_never_plot_the_screening_forecast():
+    from app import report_extras as R
+    doc_in, fc, _ = _built("JPFA")
+    assert fc["forecast_basis"] == "historical_screening_proxy"
+    assert R.chart_forecast_rows(doc_in, fc) == []
+    scenario = {"year": 2026, "full_year": {"revenue": 70e12, "net_profit": 5e12}}
+    rows = R.chart_forecast_rows(doc_in, dict(fc, earnings_scenario=scenario))
+    assert rows[0]["label"] == "FY26F" and rows[0]["revenue"] == 70e12
+
+
+def test_stage_citations_must_be_supplied_and_consistent():
+    payload = {"life_cycle_stage": "pre_revenue", "has_steady_state_3y": False,
+               "commodity_price_driven": False, "dissimilar_segments": 1,
+               "rationale": "Perusahaan masih tahap awal tanpa pendapatan berulang material.",
+               "source_ids": ["official"]}
+    annuals = [{"revenue": 900, "earnings": 50}, {"revenue": 1000, "earnings": 60}]
+    ok, errors, _ = ST.validate(payload, annuals, allowed_sources={"official"})
+    assert not ok and any("pre_revenue contradicts" in e for e in errors)
+    ghost = dict(payload, life_cycle_stage="decline", source_ids=["news:9"])
+    ok, errors, _ = ST.validate(ghost, [{"revenue": 100}, {"revenue": 80}],
+                                allowed_sources={"official", "news:0"})
+    assert not ok and any("not supplied" in e for e in errors)
+
+
+def test_draft_cover_never_claims_a_maintained_rating(tmp_path, monkeypatch):
+    from app import build, rating_history
+    monkeypatch.setattr(rating_history, "DIR", tmp_path)
+    (tmp_path / "BBRI.json").write_text(
+        '{"history": [{"date": "2026-06-01", "rating": "Buy", "tp": 5000}]}')
+    doc = build.build("BBRI", tmp_path, as_of="2026-09-24")
+    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert doc["meta"]["rating_status"] == "Dalam peninjauan (rating terakhir Buy)"
+
+
+def test_draft_method_note_uses_chain_label():
+    from app import narrative
+    assert narrative._method_label("relative_pe") == MC.LABELS["relative_pe"]
+    assert narrative._method_label("rnav") == "RNAV LoM (Rp)"

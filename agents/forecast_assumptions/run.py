@@ -93,8 +93,9 @@ def _source_payload(intake):
     return {
         "ticker": intake["ticker"], "as_of": intake["as_of"],
         "model_profile": intake.get("model_profile"),
-        "annuals": [{"year": a.get("year"), "revenue": a.get("revenue")}
-                    for a in (intake.get("annuals") or []) if isinstance(a, dict)][:6],
+        "annuals": [{"year": a.get("year"), "revenue": a.get("revenue"),
+                     "earnings": a.get("earnings")}
+                    for a in (intake.get("annuals") or []) if isinstance(a, dict)][-6:],
         "tavily_search": {"status": search.get("status"),
                           "queries": search.get("queries") or ([search.get("query")] if search.get("query") else []),
                           "window": search.get("window")},
@@ -494,7 +495,10 @@ def _validate_stage(payload, source):
     if not isinstance(payload, dict):
         return ["stage_classification must be an object"]
     annuals = source.get("annuals") or []
-    ok, errors, _ = _stage.validate(payload, annuals)
+    allowed = {f"news:{item['index']}" for item in source.get("news") or []}
+    if source.get("official"):
+        allowed.add("official")
+    ok, errors, _ = _stage.validate(payload, annuals, allowed_sources=allowed)
     return errors
 
 
