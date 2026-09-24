@@ -7,7 +7,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import build, intake, news_fetch, news_sources, research_context, tavily, ui
+from . import build, evidence as evidence_mod, intake, news_fetch, news_sources, research_context, run_manifest, tavily, ui
 from .progress import emit
 
 _TRACE_CSS = (
@@ -111,13 +111,35 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
     parts.append("</div><h2>Berita untuk asumsi forecast</h2>")
     news_sources = news_sources or {}
     search = news_sources.get("search") or {}
+    queries = search.get("queries") or ([search.get("query")] if search.get("query") else [])
     parts.append(f"<p class='muted'>Tavily: {esc(search.get('status'))}; "
-                 f"as-of {esc(search.get('as_of'))}</p><div class='card'><ol>")
+                 f"as-of {esc(search.get('as_of'))}")
+    if queries:
+        if isinstance(queries[0], dict):
+            parts.append("<br>Query: " + esc("; ".join(
+                str(q.get('query') or '')[:80] for q in queries)) + "</p>")
+        else:
+            parts.append("<br>Query: " + esc(str(queries[0])[:120]) + "</p>")
+    else:
+        parts.append("</p>")
+    parts.append("<div class='card'><ol>")
     for article in news_sources.get("articles") or []:
-        parts.append(f"<li>{esc(article.get('timestamp'))} · "
+        parts.append(f"<li>{esc(article.get('register_id') or '')} · "
+                     f"{esc(article.get('timestamp'))} · "
                      f"{esc(', '.join(article.get('origins') or []))} · "
                      f"<a href='{esc(article.get('source'))}'>{esc(article.get('title'))}</a></li>")
-    parts.append("</ol></div><h2>Temuan dan hubungan sebab-akibat</h2>")
+    parts.append("</ol></div>")
+    rejected = news_sources.get("rejected") or []
+    if rejected:
+        parts.append("<h2>Berita ditolak (dampak nol / tidak relevan)</h2>"
+                     "<div class='card'><ol>")
+        for item in rejected[:10]:
+            parts.append(f"<li>{esc(str(item.get('title') or '')[:120])} — "
+                         f"<small>{esc(item.get('reason'))}</small></li>")
+        if len(rejected) > 10:
+            parts.append(f"<li><small>… +{len(rejected) - 10} penolakan lain</small></li>")
+        parts.append("</ol></div>")
+    parts.append("<h2>Temuan dan hubungan sebab-akibat</h2>")
     for insight in insights:
         if not isinstance(insight, dict):
             continue
@@ -139,12 +161,28 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
     parts.append(f"<p class='muted'>Status: {esc(forecast_assumptions.get('status'))}</p>")
     plan = forecast_assumptions.get("plan") or {}
     for effect in plan.get("news_effects") or []:
+        chain = []
+        if effect.get("event_date") or effect.get("event_window"):
+            chain.append(f"event {effect.get('event_date') or effect.get('event_window')}")
+        if effect.get("conditions") or effect.get("probability"):
+            chain.append(f"syarat {effect.get('conditions') or effect.get('probability')}")
+        if effect.get("base_value") is not None:
+            chain.append(f"base {effect.get('base_value')}")
+        if effect.get("uncertainty_range") is not None:
+            chain.append(f"rentang {effect.get('uncertainty_range')}")
+        if effect.get("assumption_type"):
+            chain.append(str(effect.get("assumption_type")))
         parts.append("<section class='card'>"
                      f"<strong>{esc(effect.get('driver'))}: {esc(effect.get('change'))}</strong> "
                      f"({esc(', '.join(str(y) for y in effect.get('years') or []))})<br>"
                      f"{esc(effect.get('rationale'))}<br><small>"
                      f"{esc(effect.get('timestamp'))} · {esc(effect.get('source_url'))}"
-                     "</small></section>")
+                     + (f" · {esc('; '.join(chain))}" if chain else "")
+                     + (f"<br>Fakta: {esc(effect.get('factual_basis'))}" if effect.get("factual_basis") else "")
+                     + (f"<br>Mekanisme: {esc(effect.get('mechanism'))}" if effect.get("mechanism") else "")
+                     + (f"<br>Ketidakpastian: {esc(effect.get('uncertainty'))}" if effect.get("uncertainty") else "")
+                     + (f"<br>Kutipan: {esc((effect.get('full_text_quote') or '')[:200])}" if effect.get("full_text_quote") else "")
+                     + "</small></section>")
     interim = plan.get("interim_scenario") or {}
     if interim:
         parts.append("<section class='card'><strong>Skenario hasil interim</strong><br>"
@@ -233,17 +271,37 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     report_as_of = as_of or date.today().isoformat()
     from agents.forecast_assumptions.run import run_cached as forecast_agent
     forecast_intake, _ = intake.load(t, as_of=report_as_of)
+    if not isinstance(forecast_intake, dict):
+        forecast_intake = {}
+    intake_name = forecast_intake.get("name") or t
+    intake_profile = forecast_intake.get("model_profile")
     try:
         # Stored Tavily results remain usable when a key is not configured.
-        found = tavily.news_context(t, forecast_intake["name"], report_as_of)
+        # Profile-relevant future-driver queries run on every standard run,
+        # independently of whether the analyst agent chose web_news.
+        found = tavily.news_context(t, intake_name, report_as_of, profile=intake_profile)
         web_search = {**found, "status": "searched" if found["items"] else
                       "no_relevant_results", "as_of": report_as_of}
     except tavily.TavilyError as error:
         web_search = {"status": "failed" if tavily.configured() else "unavailable",
                       "items": [], "as_of": report_as_of, "error": str(error)}
-    combined_news = news_sources.combine(
-        t, forecast_intake["name"], report_as_of,
+    register = news_sources.build_register(
+        t, intake_name, report_as_of,
         forecast_intake.get("news"), web_search["items"])
+    combined_news = register["articles"]
+    # Tavily status reflects relevant, issuer-verified articles that reach the
+    # forecast assumption process, not raw retrieval counts. Irrelevant
+    # headlines (issuer mismatch, future-dated, unverifiable URL) yield
+    # no_relevant_results with explicit rejections; failures stay visible.
+    if web_search.get("status") not in ("failed", "unavailable"):
+        tavily_relevant = sum(1 for row in combined_news
+                              if isinstance(row, dict) and "tavily" in (row.get("origins") or []))
+        if tavily_relevant:
+            web_search["status"] = "searched"
+        else:
+            web_search["status"] = "no_relevant_results"
+        web_search["relevant_tavily"] = tavily_relevant
+        web_search["relevant_total"] = len(combined_news)
     existing_full = {row.get("source_url"): row for row in
                      forecast_intake.get("news_full") or [] if isinstance(row, dict)}
     combined_full = [existing_full.get(row["source"]) or news_fetch.enrich_one(row)
@@ -251,6 +309,7 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     forecast_intake["news"] = combined_news
     forecast_intake["news_full"] = combined_full
     forecast_intake["news_search"] = web_search
+    forecast_intake["news_register"] = register
     print(f"{t}: news Sectors+Tavily {len(combined_news)} artikel; "
           f"Tavily {web_search['status']}", flush=True)
     emit("forecast", "Agent asumsi forecast membaca berita dan rilis resmi", status="run")
@@ -284,12 +343,37 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
         "validation_status": validation_status,
     }
     emit("report", "Company update tersusun", report["meta"].get("status"))
+    try:
+        evidence_register = evidence_mod.build(
+            t, report_as_of, forecast_intake, register, combined_full,
+            assumption_result.get("plan"))
+    except Exception:
+        evidence_register = {"ticker": t, "as_of": report_as_of, "rows": [],
+                             "violations": [], "counts": {}}
+    try:
+        manifest = run_manifest.build_manifest(
+            ticker=t, as_of=report_as_of, intake=forecast_intake,
+            forecast=report.get("forecast_assumptions") or {},
+            valuation={"method": report.get("method"),
+                       "tp": report["meta"].get("tp"),
+                       "release": report.get("log_gate", {}).get("release")},
+            news_evidence={"rows": combined_news, "full": combined_full,
+                           "search": web_search},
+            assumption_plan=assumption_result.get("plan"),
+            release=report.get("log_gate", {}).get("release"),
+            spec_sha=assumption_result.get("spec_sha256"))
+    except Exception:
+        manifest = {"ticker": t, "as_of": report_as_of}
     audit = {
         "ticker": t,
         "analyst": intel,
         "research": safe_research,
         "forecast_assumptions": assumption_result,
-        "news_sources": {"search": web_search, "articles": combined_news},
+        "news_sources": {"search": web_search, "articles": combined_news,
+                         "rejected": register.get("rejected"),
+                         "stats": register.get("stats")},
+        "evidence_register": evidence_register,
+        "run_manifest": manifest,
         "product_sales_scenario": report.get("forecast_assumptions", {}).get(
             "product_sales_scenario"),
         "news_deepdive": forecast_intake.get("news_full") or [],
@@ -310,6 +394,11 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                                       forecast_intake.get("news_full"),
                                       analyst=intel,
                                       news_sources=audit["news_sources"]), encoding="utf-8")
+    try:
+        (destination / f"{t}-manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
     emit("done", "Selesai")
     return {"ticker": t, "research_ok": safe_research["ok"], "intel": intel,
             "report_status": report["meta"].get("status"),

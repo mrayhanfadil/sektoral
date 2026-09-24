@@ -216,6 +216,14 @@ def build(intake, n_years=5, assumption_plan=None):
             "payability/TC-RC/royalti/mix; dijelaskan di narasi valuasi.")
     operating_bridge = intake.get("operating_bridge")
     is_mining = intake.get("model_profile") == "finite_life_mining"
+    is_ddm = intake.get("model_profile") == "financial_ddm"
+    driver_evidence = (normalized_plan.get("driver_evidence")
+                       if isinstance(normalized_plan.get("driver_evidence"), dict)
+                       else None) or intake.get("driver_evidence") or intake.get("drivers")
+    interim_scenario = _interim_scenario(intake, normalized_plan)
+    # Production readiness is computed from source coverage + reconciliation,
+    # never hardcoded. A historical screen stays a labeled fallback.
+    production_blockers = []
     if is_mining:
         # Source rows by themselves are not a physical-to-financial forecast.
         # Until that engine is implemented and reconciled, CAGR remains a
@@ -224,20 +232,78 @@ def build(intake, n_years=5, assumption_plan=None):
         g2["catatan"].append(
             "G2.9: forecast fisik-ke-keuangan belum dihitung; angka CAGR hanya "
             "screening proxy dan tidak layak menjadi forecast produksi.")
+        forecast_basis, production_ready = "historical_screening_proxy", False
     else:
-        g2["G2.9_driver_forecast"] = "gagal"
-        g2["catatan"].append(
-            "G2.9: angka CAGR dan capex=D&A hanyalah screen; forecast driver, "
-            "modal kerja, serta jadwal utang belum direkonsiliasi.")
-    interim_scenario = _interim_scenario(intake, normalized_plan)
+        required = ("net_profit", "equity", "payout") if is_ddm else (
+            "revenue", "ebitda", "net_profit", "capex")
+        missing = []
+        if not isinstance(driver_evidence, dict):
+            missing = list(required)
+        else:
+            as_of_day = str(intake.get("as_of") or "")[:10]
+            for series in required:
+                lookup = series
+                if is_ddm and series == "net_profit" and series not in driver_evidence \
+                        and "profit" in driver_evidence:
+                    lookup = "profit"
+                row = driver_evidence.get(lookup)
+                if not isinstance(row, dict):
+                    missing.append(series)
+                    continue
+                src = str(row.get("source") or "")
+                has_https = "https://" in src.lower()
+                has_cache = "sectors_cache" in src.lower() or "sectors cache" in src.lower()
+                s_date = str(row.get("source_date") or "")[:10]
+                note = str(row.get("note") or row.get("claim") or row.get("status") or row.get("basis") or "")
+                if not (has_https or has_cache) or not s_date or not note.strip():
+                    missing.append(series)
+                elif as_of_day and s_date > as_of_day:
+                    missing.append(f"{series}:future-dated")
+        # Interim reconciliation: a validated current-year anchor must be
+        # consistent with the published FY row; otherwise the forecast year
+        # does not reconcile to valuation.
+        if interim_scenario and rows:
+            try:
+                anchor_rev = float((interim_scenario.get("full_year") or {}).get("revenue") or 0)
+                row_rev = float(rows[0].get("revenue") or 0)
+                if anchor_rev > 0 and row_rev > 0 and abs(anchor_rev / row_rev - 1) > 0.50:
+                    production_blockers.append(
+                        f"interim anchor FY{interim_scenario.get('year')} "
+                        f"deviates {abs(anchor_rev/row_rev-1)*100:.0f}% from forecast row; "
+                        "reconcile before production release")
+            except (TypeError, ValueError):
+                pass
+        base_g2_failed = [k for k, v in g2.items()
+                          if k != "catatan" and (v == "gagal" or (isinstance(v, tuple) and str(v[0]).startswith("gagal")))]
+        if not missing and not production_blockers and not base_g2_failed:
+            g2["G2.9_driver_forecast"] = "lolos"
+            g2["catatan"].append(
+                "G2.9: rantai driver-ke-laba/arus kas bersumber dan direkonsiliasi; "
+                f"coverage {', '.join(required)}.")
+            forecast_basis = "financial_driver_forecast" if is_ddm else "driver_forecast"
+            production_ready = True
+        else:
+            g2["G2.9_driver_forecast"] = "gagal"
+            reasons = []
+            if missing:
+                reasons.append(f"driver {', '.join(missing)} belum bersumber")
+            if production_blockers:
+                reasons.extend(production_blockers)
+            if base_g2_failed:
+                reasons.append(f"gate {', '.join(base_g2_failed)} gagal")
+            g2["catatan"].append(
+                "G2.9: angka CAGR dan capex=D&A hanyalah screen; forecast driver, "
+                f"modal kerja, serta jadwal utang belum direkonsiliasi ({'; '.join(reasons)}).")
+            forecast_basis, production_ready = "historical_screening_proxy", False
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
             "outyear_scenario": _outyear_scenario(interim_scenario, assumption_plan),
             "operating_bridge": operating_bridge,
-            "driver_evidence": intake.get("driver_evidence") or intake.get("drivers"),
-            "forecast_basis": "historical_screening_proxy",
-            "production_ready": False,
+            "driver_evidence": driver_evidence,
+            "forecast_basis": forecast_basis,
+            "production_ready": production_ready,
+            "production_blockers": production_blockers,
             "assumption_plan": normalized_plan,
             "base": {"cash": cash0, "debt": debt0, "equity": eq0,
                      "other_liab": oth_liab, "noncash": nc0}}
