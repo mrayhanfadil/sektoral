@@ -207,3 +207,18 @@ def test_web_header_shows_logo_wordmark_and_title():
     assert "#1DCD9F" in web._LOGO_SVG
     assert "#3ED628" in web._LOGO_SVG
     assert "Sectoral" in page
+
+
+def test_source_lines_open_with_the_house_line_and_keep_provenance():
+    from app import fmt
+    assert fmt.house_source_line("Source: Sectors, Sektoral Estimates") == \
+        "Source: Company, Sektoral Estimates; Sectors"
+    assert fmt.house_source_line("Sumber: PER TTM data Sectors") == \
+        "Source: Company, Sektoral Estimates; PER TTM data Sectors"
+    assert fmt.house_source_line("Source: Company, Sektoral Estimates") == \
+        "Source: Company, Sektoral Estimates"
+
+
+def test_header_date_uses_day_dd_month_yyyy():
+    html_out = render._report_header("2026-09-24", {"ticker": "JPFA"})
+    assert "Kamis, 24 September 2026" in html_out

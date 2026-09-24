@@ -137,6 +137,18 @@ def source_citation(note: str = "") -> str:
     return s
 
 
+def house_source_line(note) -> str:
+    """Struktur rule: every exhibit's source line opens with the house line
+    'Source: Company, Sektoral Estimates'; the exhibit's own provenance
+    (data set, dates, method) follows it instead of replacing it."""
+    import re
+    detail = re.sub(r"^\s*(Source|Sumber)\s*:\s*", "", str(note or "")).strip()
+    detail = re.sub(r"^Company,\s*Sektoral Estimates[.;,]?\s*", "", detail)
+    detail = re.sub(r"^Sectors,\s*Sektoral Estimates", "Sectors", detail)
+    detail = re.sub(r"^Sektoral Estimates[.;,]?\s*", "", detail)
+    return DEFAULT_SOURCE + (f"; {detail}" if detail.strip(" ;.") else "")
+
+
 def is_valid_source_citation(note: str) -> bool:
     """Validasi baris sitasi sumber agar sesuai aturan house format."""
     if not note or not isinstance(note, str):

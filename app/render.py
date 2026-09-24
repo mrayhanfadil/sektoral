@@ -403,7 +403,7 @@ def _price_chart(ticker, as_of, number=None, source=None):
         f"<title id='price-chart-title'>Harga penutupan {safe_ticker} dan kinerja "
         f"relatif terhadap IHSG, {dates[0].isoformat()} sampai {dates[-1].isoformat()}</title>"
         + "".join(parts) + "</svg>"
-        f"<div class='info-src'>{html.escape(source or 'Source: Sectors, Sektoral Estimates')}; "
+        f"<div class='info-src'>{html.escape(fmt.house_source_line(source or 'Sectors'))}; "
         f"{safe_ticker} {pct(issuer_return)}%, IHSG {pct(ihsg_return)}%. "
         f"Selisih {pct(issuer_return - ihsg_return)} poin persentase; "
         f"{len(dates)} tanggal sama, tidak termasuk dividen</div>")
@@ -492,7 +492,7 @@ def _table(ex):
             f"<caption>Exhibit {ex['n']}. {html.escape(ex['judul'])}</caption>"
             f"<colgroup>{colgroup}</colgroup><thead><tr>{head}</tr></thead>"
             f"{body}</table>"
-            f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
+            f"<p class='src'>{html.escape(fmt.house_source_line(ex['catatan_sumber']))}</p></div>")
 
 
 def _nice_max(value):
@@ -608,7 +608,7 @@ def _combo_chart(ex):
                  f"<rect x='130' y='{ly - 7}' width='8' height='8' fill='{SERIES[3]}'/>"
                  f"<text x='142' y='{ly}' font-size='8' fill='{INK}'>Garis (sumbu sendiri)</text>")
     parts.append("</svg>")
-    parts.append(f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
+    parts.append(f"<p class='src'>{html.escape(fmt.house_source_line(ex['catatan_sumber']))}</p></div>")
     return "".join(parts)
 
 
@@ -649,7 +649,7 @@ def _bar_chart(ex):
     parts.append(f"<text x='745' y='26' text-anchor='end' font-size='12' "
                  f"fill='{INK}'>{html.escape(data['unit'])}</text>")
     parts.append("</svg>")
-    parts.append(f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
+    parts.append(f"<p class='src'>{html.escape(fmt.house_source_line(ex['catatan_sumber']))}</p></div>")
     return "".join(parts)
 
 
@@ -701,7 +701,7 @@ def _band_chart(ex):
                  f"<text x='212' y='{legend_y}' {label} fill='{INK}'>Median {html.escape(fmt.mult(data['median']))}</text>"
                  f"<text x='290' y='{legend_y}' {label} fill='{INK}'>Kini p{data['percentile']:.0f}</text>")
     parts.append("</svg>")
-    parts.append(f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
+    parts.append(f"<p class='src'>{html.escape(fmt.house_source_line(ex['catatan_sumber']))}</p></div>")
     return "".join(parts)
 
 
@@ -752,9 +752,12 @@ def _report_header(report_date, meta):
     """Build the report header from the Figma layout and current report data."""
     try:
         day = date.fromisoformat(str(report_date)[:10])
-        months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-        display_date = f"{day.day} {months[day.month - 1]} {day.year}"
+        # Struktur header: "Day, DD Month YYYY", in the report's language.
+        weekdays = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
+        months = ("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli",
+                  "Agustus", "September", "Oktober", "November", "Desember")
+        display_date = (f"{weekdays[day.weekday()]}, {day.day:02d} "
+                        f"{months[day.month - 1]} {day.year}")
     except (TypeError, ValueError):
         display_date = str(report_date)
 

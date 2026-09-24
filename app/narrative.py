@@ -3523,19 +3523,27 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                     row[col] = money(value)
         annual = {str(x["year"]): x.get("earnings") for x in intake.get("annuals") or []}
         eps_row, per_row = ["EPS (Rp)"], ["PER (x)"]
+        eps_values = []
         for name in cols[1:]:
             proj = projections.get(name)
             eps = (eps_of(proj["net_profit_attributable"]) if proj and
                    proj.get("net_profit_attributable") is not None else
                    annual.get(name) / d["shares"] if annual.get(name) else None)
             eps_row.append(fmt.rp(round(eps)) if eps else "-")
+            eps_values.append(eps)
             per_row.append(fmt.mult(intake["price"] / eps, 1) if eps and eps > 0 else "-")
         # Replace the official table's per-share rows rather than repeat them,
         # and drop rows with no value in any period (DPS, PBV, ...).
         key_fin["data"]["rows"] = [
             row for row in key_fin["data"]["rows"]
             if not row[0].startswith(("EPS", "PER"))
-            and any(cell not in ("-", "NA") for cell in row[1:])] + [eps_row, per_row]
+            and any(cell not in ("-", "NA") for cell in row[1:])] + [
+                eps_row,
+                # Struktur Exhibit 3: EPS growth sits under EPS.
+                ["Pertumbuhan EPS (%)", "-"] + [
+                    fmt.pct(now / before - 1) if now and before and before > 0 else "-"
+                    for before, now in zip(eps_values, eps_values[1:])],
+                per_row]
         key_fin["catatan_sumber"] = (
             (key_fin.get("catatan_sumber") or "") +
             f" {label} dan tahun sesudahnya: skenario laba analis; EBITDA tidak dimodelkan. "
