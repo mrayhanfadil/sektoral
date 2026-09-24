@@ -221,8 +221,8 @@ def build(intake, n_years=5, assumption_plan=None):
                        if isinstance(normalized_plan.get("driver_evidence"), dict)
                        else None) or intake.get("driver_evidence") or intake.get("drivers")
     interim_scenario = _interim_scenario(intake, normalized_plan)
-    # Production readiness is computed from source coverage + reconciliation,
-    # never hardcoded. A historical screen stays a labeled fallback.
+    # Source coverage is necessary, but cannot turn the historical screening
+    # rows above into a calculated driver forecast.
     production_blockers = []
     if is_mining:
         # Source rows by themselves are not a physical-to-financial forecast.
@@ -278,26 +278,25 @@ def build(intake, n_years=5, assumption_plan=None):
                 pass
         base_g2_failed = [k for k, v in g2.items()
                           if k != "catatan" and (v == "gagal" or (isinstance(v, tuple) and str(v[0]).startswith("gagal")))]
-        if not missing and not production_blockers and not base_g2_failed:
-            g2["G2.9_driver_forecast"] = "lolos"
-            g2["catatan"].append(
-                "G2.9: rantai driver-ke-laba/arus kas bersumber dan direkonsiliasi; "
-                f"coverage {', '.join(required)}.")
-            forecast_basis = "financial_driver_forecast" if is_ddm else "driver_forecast"
-            production_ready = True
+        if is_ddm:
+            production_blockers.append(
+                "financial driver-to-earnings/capital bridge is not calculated; "
+                "historical revenue/margins and assumed payout remain screening inputs")
         else:
-            g2["G2.9_driver_forecast"] = "gagal"
-            reasons = []
-            if missing:
-                reasons.append(f"driver {', '.join(missing)} belum bersumber")
-            if production_blockers:
-                reasons.extend(production_blockers)
-            if base_g2_failed:
-                reasons.append(f"gate {', '.join(base_g2_failed)} gagal")
-            g2["catatan"].append(
-                "G2.9: angka CAGR dan capex=D&A hanyalah screen; forecast driver, "
-                f"modal kerja, serta jadwal utang belum direkonsiliasi ({'; '.join(reasons)}).")
-            forecast_basis, production_ready = "historical_screening_proxy", False
+            production_blockers.append(
+                "operating driver-to-FCFF bridge is not calculated; historical CAGR, "
+                "capex=D&A, flat debt and balancing cash remain screening inputs")
+        g2["G2.9_driver_forecast"] = "gagal"
+        reasons = []
+        if missing:
+            reasons.append(f"driver {', '.join(missing)} belum bersumber")
+        reasons.extend(production_blockers)
+        if base_g2_failed:
+            reasons.append(f"gate {', '.join(base_g2_failed)} gagal")
+        g2["catatan"].append(
+            "G2.9: forecast masih screening; bukti driver belum dihitung menjadi "
+            f"proyeksi yang direkonsiliasi ({'; '.join(reasons)}).")
+        forecast_basis, production_ready = "historical_screening_proxy", False
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,

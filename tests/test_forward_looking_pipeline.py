@@ -182,18 +182,34 @@ def _sourced_driver(series):
                 "note": f"sourced {s}"} for s in series}
 
 
-def test_forecast_production_path_needs_full_driver_coverage():
+def test_sourced_driver_metadata_does_not_promote_screening_rows():
     complete = _fcff_intake(_sourced_driver(("revenue", "ebitda", "net_profit", "capex")))
     fc = forecast_mod.build(complete)
-    assert fc["forecast_basis"] == "driver_forecast"
-    assert fc["production_ready"] is True
-    assert fc["g2"]["G2.9_driver_forecast"] == "lolos"
+    assert fc["forecast_basis"] == "historical_screening_proxy"
+    assert fc["production_ready"] is False
+    assert fc["g2"]["G2.9_driver_forecast"] == "gagal"
+    assert all(row["capex"] == row["da"] for row in fc["rows"])
+    assert any("driver-to-FCFF bridge is not calculated" in reason
+               for reason in fc["production_blockers"])
+    assert any("driver-to-FCFF bridge is not calculated" in reason
+               for reason in release_mod._check_driver_forecast(fc, complete))
 
     partial = _fcff_intake(_sourced_driver(("revenue", "net_profit")))
     fc2 = forecast_mod.build(partial)
     assert fc2["forecast_basis"] == "historical_screening_proxy"
     assert fc2["production_ready"] is False
     assert fc2["g2"]["G2.9_driver_forecast"] == "gagal"
+
+
+def test_bank_source_metadata_does_not_promote_screening_rows():
+    intake = _fcff_intake(_sourced_driver(("net_profit", "equity", "payout")))
+    intake["model_profile"] = "financial_ddm"
+    fc = forecast_mod.build(intake)
+    assert fc["forecast_basis"] == "historical_screening_proxy"
+    assert fc["production_ready"] is False
+    assert fc["g2"]["G2.9_driver_forecast"] == "gagal"
+    assert any("driver-to-earnings/capital bridge is not calculated" in reason
+               for reason in fc["production_blockers"])
 
 
 def test_release_ddm_does_not_require_fcff_capex():
