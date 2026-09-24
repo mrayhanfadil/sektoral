@@ -12,12 +12,13 @@ import html
 import json
 import logging
 import re
+import shutil
 import threading
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 import uuid
 
-from . import cache, landing, progress, research, ui
+from . import cache, gallery, gallery_page, landing, progress, research, ui
 from agents.analyst import memory as agent_memory
 
 LOG = logging.getLogger(__name__)
@@ -66,15 +67,23 @@ input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px var(--blu
 /* side explainer */
 .side h2{font-size:18px;margin:0 0 16px}
 .side ol{list-style:none;margin:0;padding:0;counter-reset:s}
-.side li{position:relative;padding:0 0 18px 40px}
-.side li:last-child{padding-bottom:0}
-.side li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;
+.side ol > li{position:relative;padding:0 0 18px 40px}
+.side ol > li:last-child{padding-bottom:0}
+.side ol > li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;
   border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:900;
   background:var(--blue-50);color:var(--blue)}
-.side li:not(:last-child)::after{content:"";position:absolute;left:12.5px;top:30px;bottom:4px;width:1px;
+.side ol > li:not(:last-child)::after{content:"";position:absolute;left:12.5px;top:30px;bottom:4px;width:1px;
   background:var(--rule)}
-.side strong{display:block;font-size:15px}
-.side span{font-size:14px;color:var(--ink-soft)}
+.side ol strong{display:block;font-size:15px}
+.history{margin-bottom:26px;padding-bottom:22px;border-bottom:1px solid var(--rule-soft)}
+.history h3{font-size:16px}
+.history ul{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}
+.history li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
+  padding:8px 10px;border:1px solid var(--rule-soft);border-radius:10px}
+.history .chip{min-width:62px;white-space:nowrap;text-align:center;font-weight:900}
+.history li span{font-size:13px;color:var(--ink-soft);line-height:1.4}
+.history li a{font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap}
+.side ol span{font-size:14px;color:var(--ink-soft)}
 
 /* job status */
 .job-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
@@ -432,6 +441,8 @@ async function refreshJob(){
     links.replaceChildren();
     if(job.report_url) addLink(links,job.report_url,'Buka company update','btn btn-primary');
     if(job.trace_url) addLink(links,job.trace_url,'Lihat jejak agent','btn btn-ghost');
+    if(job.pdf_url) addLink(links,job.pdf_url,'Buka PDF','btn btn-ghost');
+    if(job.gallery_url) addLink(links,job.gallery_url,'Lihat di galeri laporan','btn btn-ghost');
     if(job.state==='completed') renderIntel(job.intel);
     if(job.state==='pending'||job.state==='running') setTimeout(refreshJob,1000);
   }catch(_error){
@@ -451,8 +462,8 @@ _JOB_MARKUP = """<section class="card" aria-labelledby="job-title">
     <li>Rencana<small>Pertanyaan &amp; hipotesis</small></li>
     <li>Tool &amp; sinyal<small>Data Sectors, peer, anomali</small></li>
     <li>Uji hipotesis<small>Kesimpulan tervalidasi</small></li>
-    <li>Company update<small>Brief bersitasi &amp; laporan</small></li>
-    <li>Hasil siap<small>Laporan dan jejak agent</small></li>
+    <li>Skenario &amp; valuasi<small>Asumsi, rantai metode, harness</small></li>
+    <li>Hasil siap<small>Laporan, PDF, dan jejak</small></li>
   </ol>
   <p id="job-detail" class="muted" aria-live="polite">Agent membaca data Sectors untuk emiten ini.</p>
   <div id="job-links" class="links"></div>
@@ -485,7 +496,7 @@ _JOB_MARKUP = """<section class="card" aria-labelledby="job-title">
 </section>"""
 
 
-def _history_markup() -> str:
+def _history_markup(reports=None) -> str:
     try:
         rows = agent_memory.watchlist()[:6]
     except OSError:
@@ -495,13 +506,16 @@ def _history_markup() -> str:
     items = "".join(
         f'<li><button type="button" class="chip" data-ticker="{html.escape(r["ticker"])}" aria-pressed="false">'
         f'{html.escape(r["ticker"])}</button><span>{r["runs"]} kali · data {html.escape(str(r.get("market_date") or "—"))}'
-        f' · {r["flags"]} sinyal bertanda</span></li>' for r in rows)
+        f' · {r["flags"]} sinyal bertanda</span>'
+        + (f'<a href="/laporan/{html.escape(r["ticker"])}/pdf">PDF</a>'
+           if reports and gallery.artifact(reports, r["ticker"], "pdf") else "<span></span>")
+        + '</li>' for r in rows)
     return (f'<div class="history"><h3 id="history-title">Riwayat riset</h3>'
             f'<p class="muted small">Agent mengingat riset sebelumnya dan melaporkan apa yang berubah.</p>'
             f'<ul aria-labelledby="history-title">{items}</ul></div>')
 
 
-def _page(job_id: str | None = None, error: str | None = None) -> bytes:
+def _page(job_id: str | None = None, error: str | None = None, reports=None) -> bytes:
     tickers = _available_tickers()
     job_markup = ""
     if job_id:
@@ -544,13 +558,13 @@ def _page(job_id: str | None = None, error: str | None = None) -> bytes:
     <p class="note">Hasil menyajikan informasi dan analisis, bukan rekomendasi investasi. Kesimpulan ditandai parsial jika bukti belum cukup.</p>
   </section>
   <aside class="card side" aria-labelledby="side-title">
-    {_history_markup()}
+    {_history_markup(reports)}
     <h2 id="side-title">Setelah Anda menekan Mulai riset</h2>
     <ol>
       <li><strong>Agent menyusun rencana</strong><span>Pertanyaan riset dan hipotesis yang bisa diuji, sesuai jenis usaha emiten.</span></li>
       <li><strong>Agent memilih tool</strong><span>Peer, kuartalan, harga, arus asing, valuasi, berita. Setiap hasil bisa mengubah langkah berikutnya.</span></li>
       <li><strong>Sinyal & hipotesis diuji</strong><span>Peringkat peer dan anomali dihitung deterministik; kesimpulan wajib mengutip sinyal.</span></li>
-      <li><strong>Company update tersusun</strong><span>Brief bersitasi divalidasi, lalu laporan dan jejak agent siap ditinjau.</span></li>
+      <li><strong>Skenario, valuasi, pemeriksaan</strong><span>Agen asumsi menyusun skenario laba dan risiko; gerbang memilih rantai metode; harness memutuskan terbit atau tahan.</span></li>
     </ol>
   </aside>
 </div>
@@ -588,9 +602,12 @@ window.addEventListener('pageshow',()=>{const b=document.querySelector('#run-for
 class ResearchWeb:
     """Job registry and bounded artifact access for one local server instance."""
 
-    def __init__(self, outdir: str | Path):
+    def __init__(self, outdir: str | Path, reports: str | Path | None = None, want_pdf: bool = False):
         self.outdir = Path(outdir).resolve()
         self.outdir.mkdir(parents=True, exist_ok=True)
+        # Finished reports shown on /laporan and the landing page.
+        self.reports = Path(reports).resolve() if reports else self.outdir / "reports"
+        self.want_pdf = want_pdf
         self._jobs: dict[str, dict] = {}
         self._lock = threading.Lock()
         # A single worker keeps generated output writes predictable. Each run
@@ -621,7 +638,7 @@ class ResearchWeb:
                         events.append(event)
 
             with progress.capture(record):
-                result = research.run(ticker, job_outdir, want_pdf=False)
+                result = research.run(ticker, job_outdir, want_pdf=self.want_pdf)
             report = self._safe_known_artifact(job_id, ticker, "report")
             trace = self._safe_known_artifact(job_id, ticker, "trace")
             if report is None or trace is None:
@@ -631,6 +648,7 @@ class ResearchWeb:
             ).lower()
             status = result.get("report_status")
             safe_status = status if isinstance(status, str) and _SAFE_STATUS.fullmatch(status) else None
+            self._publish(job_outdir, ticker)
             with self._lock:
                 self._jobs[job_id].update({
                     "state": "completed",
@@ -645,6 +663,17 @@ class ResearchWeb:
             with self._lock:
                 self._jobs[job_id].update({"state": "error", "quality": "partial"})
 
+    def _publish(self, job_outdir: Path, ticker: str) -> None:
+        """Copy a finished run into the reports folder so /laporan lists it."""
+        try:
+            self.reports.mkdir(parents=True, exist_ok=True)
+            for name in (f"{ticker}.json", f"{ticker}.html", f"{ticker}.pdf", f"{ticker}-trace.html"):
+                source = job_outdir / name
+                if source.is_file():
+                    shutil.copy2(source, self.reports / name)
+        except OSError:
+            LOG.exception("Could not publish %s to the reports folder", ticker)
+
     def snapshot(self, job_id: str) -> dict | None:
         with self._lock:
             job = self._jobs.get(job_id)
@@ -657,6 +686,9 @@ class ResearchWeb:
             if job["state"] == "completed":
                 result["report_url"] = f"/artifact/{job_id}/report"
                 result["trace_url"] = f"/artifact/{job_id}/trace"
+                if gallery.artifact(self.reports, job["ticker"], "pdf"):
+                    result["pdf_url"] = f"/laporan/{job['ticker']}/pdf"
+                result["gallery_url"] = "/laporan"
                 if job.get("report_status"):
                     result["report_status"] = job["report_status"]
                 if job.get("intel"):
@@ -718,10 +750,34 @@ def make_handler(app: ResearchWeb):
             parsed = urlsplit(self.path)
             path = parsed.path
             if path == "/":
-                self._send(200, landing.render_landing().encode("utf-8"), "text/html; charset=utf-8")
+                page = landing.render_landing(gallery.load(app.reports))
+                self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
                 return
             if path == "/research":
-                self._send(200, _page(), "text/html; charset=utf-8")
+                self._send(200, _page(reports=app.reports), "text/html; charset=utf-8")
+                return
+            if path in ("/laporan", "/laporan/"):
+                page = gallery_page.render_gallery(gallery.load(app.reports))
+                self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
+                return
+            if path.startswith("/laporan/"):
+                pieces = path.split("/")
+                if len(pieces) == 4 and pieces[3] == "cover.png":
+                    try:
+                        png = gallery.cover(app.reports, pieces[2])
+                    except Exception:
+                        LOG.exception("cover thumbnail failed")
+                        png = None
+                    if png is None:
+                        self._send(404, b"Not found", "text/plain; charset=utf-8")
+                    else:
+                        self._send(200, png.read_bytes(), "image/png")
+                    return
+                found = gallery.artifact(app.reports, pieces[2], pieces[3]) if len(pieces) == 4 else None
+                if found is None:
+                    self._send(404, b"Not found", "text/plain; charset=utf-8")
+                else:
+                    self._send(200, found[0].read_bytes(), found[1])
                 return
             if path in {"/assets/brand/sectoral-logo.svg", "/assets/brand/research-flow.svg"}:
                 filename = "sectoral-logo.svg" if path.endswith("sectoral-logo.svg") else "research-flow.svg"
@@ -739,7 +795,7 @@ def make_handler(app: ResearchWeb):
                 if snapshot is None:
                     self._send(404, _page(error="Run tidak ditemukan."), "text/html; charset=utf-8")
                 else:
-                    self._send(200, _page(job_id), "text/html; charset=utf-8")
+                    self._send(200, _page(job_id, reports=app.reports), "text/html; charset=utf-8")
                 return
             if path.startswith("/api/jobs/"):
                 job_id = path.removeprefix("/api/jobs/")
@@ -789,8 +845,9 @@ def make_handler(app: ResearchWeb):
     return Handler
 
 
-def create_server(outdir: str | Path = "out/demo", host: str = "127.0.0.1", port: int = 8765):
-    app = ResearchWeb(outdir)
+def create_server(outdir: str | Path = "out/demo", host: str = "127.0.0.1", port: int = 8765,
+                  reports: str | Path | None = None, want_pdf: bool = False):
+    app = ResearchWeb(outdir, reports, want_pdf)
     server = ThreadingHTTPServer((host, port), make_handler(app))
     server.research_app = app
     return server
@@ -801,9 +858,12 @@ def main(argv=None):
     parser.add_argument("--out", default="out/demo", help="generated research output directory")
     parser.add_argument("--host", default="127.0.0.1", help="bind address (default: localhost)")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--reports", default=None,
+                        help="folder of finished reports for /laporan (default: <out>/reports)")
+    parser.add_argument("--pdf", action="store_true", help="also render the PDF for browser runs")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    server = create_server(args.out, args.host, args.port)
+    server = create_server(args.out, args.host, args.port, args.reports, args.pdf)
     print(f"Sektoral local research UI: http://{args.host}:{server.server_address[1]}", flush=True)
     try:
         server.serve_forever()

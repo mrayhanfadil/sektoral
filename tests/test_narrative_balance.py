@@ -1,3 +1,4 @@
+import re
 from app.build import build
 
 
@@ -8,7 +9,9 @@ def test_bank_report_with_missing_cash_remains_explicit_and_renderable(tmp_path)
     html = (tmp_path / "BBRI.html").read_text(encoding="utf-8")
     assert "Kas belum tersedia" in html
     assert "utang bersih belum dapat dihitung" in html
-    assert "Rp0" not in html
+    # Search reader-visible markup only; embedded base64 fonts can contain any bytes.
+    visible = re.sub(r"<style>.*?</style>", "", html, flags=re.S)
+    assert "Rp0" not in visible
 
 
 def test_segment_evidence_without_prior_period_remains_renderable(tmp_path):

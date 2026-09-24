@@ -66,10 +66,10 @@ def test_fcff_bridge_ties():
         < max(val["ev_gordon"] * 1e-9, 1.0)
     assert by["(=) Nilai skenario per Saham Gordon (Rp)"][-1] == fmt.rp(
         val["ps_gordon"])
-    tp = round((val["ps_gordon"] + val["ps_exit"]) / 2 / 10) * 10
-    assert tp == val["tp"]
+    tp = fmt.tick((val["ps_gordon"] + val["ps_exit"]) / 2)
+    assert tp == val["dcf_blend"]
     assert by["Nilai skenario gabungan per saham Gordon+exit (Rp)"][-1] == \
-        fmt.rp(val["tp"])
+        fmt.rp(val["dcf_blend"])
     # FCFF baris = fcf forecast tiap tahun (persis, bukan turunan ulang).
     fcff_row = [r for r in ex["data"]["rows"] if r[0] == "FCFF"][0]
     assert fcff_row[1:-1] == [fmt.miliar(r["fcf"]) for r in fc["rows"]]
@@ -99,7 +99,7 @@ def test_sens_base_cell():
     g0 = val["wacc_inputs"]["g"]
     gcol = [i for i, c in enumerate(ex["data"]["cols"])
             if f"g {fmt.pct(g0)} (base)" == c][0]
-    assert base[gcol] == fmt.rp(val["tp"]) + " *"
+    assert base[gcol] == fmt.rp(val["dcf_blend"]) + " *"
 
 
 def test_ddm_exact():

@@ -37,10 +37,11 @@ def test_issuer_vs_ihsg_uses_common_dates_and_latest_cached_values(monkeypatch):
     assert "TEST +300,0%" in chart
     assert "IHSG +10,0%" in chart
     assert "Selisih +290,0 poin persentase" in chart
-    assert "2026-01-02 - 2026-01-04" in chart
-    # Dual axis: price on the left, performance relative to IHSG on the right.
-    assert "Relatif vs IHSG +290,0 pp" in chart
-    assert "harga Rp, sumbu kiri" in chart
+    assert "2026-01-02 sampai 2026-01-04" in chart
+    # Dual axis (Figma cover Exhibit 1): price on the left, performance
+    # relative to IHSG on the right.
+    assert "Harga (Rp, kiri)" in chart
+    assert "Relatif vs IHSG (%, kanan)" in chart
 
 
 def test_comparison_requires_two_shared_trading_dates(monkeypatch):

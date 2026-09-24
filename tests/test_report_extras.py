@@ -18,7 +18,8 @@ def test_pages_follow_spec_order_and_exhibits_are_numbered_in_reading_order(tmp_
         first = next(i for i, t in enumerate(titles) if t.startswith(earlier))
         second = next(i for i, t in enumerate(titles) if t.startswith(later))
         assert first < second, (earlier, later, titles)
-    reading = [1] + [e["n"] for page in doc["bagian"] for e in page["exhibit"]]
+    # The cover holds Exhibit 1 (price vs IHSG) and Exhibit 2 (Key Financials).
+    reading = [1, 2] + [e["n"] for page in doc["bagian"] for e in page["exhibit"]]
     assert reading == list(range(1, len(reading) + 1))
     assert [e["n"] for e in doc["exhibits"]] == reading
 
@@ -29,16 +30,17 @@ def test_industry_peer_ownership_and_financial_pages_come_from_local_data(tmp_pa
     assert "Harga komoditas utama emiten" in titles
     assert any(t.startswith("Valuasi dan pertumbuhan sub-sektor") for t in titles)
     assert any(t.startswith("Perbandingan peer") for t in titles)
-    assert {"Pemegang saham utama", "Aktivitas investor asing", "Laba rugi historis",
-            "Neraca historis"} <= titles
+    assert {"Pemegang saham utama", "Aktivitas investor asing", "Laba rugi",
+            "Neraca", "Rasio utama"} <= titles
     commodity = next(e for e in doc["exhibits"] if e["judul"] == "Harga komoditas utama emiten")
     assert len(commodity["data"]["cols"]) == len(set(commodity["data"]["cols"]))
 
 
 def test_cover_shows_two_actual_three_forecast_periods_and_market_data(tmp_path):
     doc = _doc(tmp_path)
-    cols = doc["exhibits"][0]["data"]["cols"]
-    assert doc["exhibits"][0]["judul"] == "Key Financials"
+    assert doc["exhibits"][0]["tipe"] == "price_chart"
+    assert doc["exhibits"][1]["judul"] == "Key Financials"
+    cols = doc["exhibits"][1]["data"]["cols"]
     assert len(cols) == 6 and cols[-1].endswith("F") and not cols[2].endswith("F")
     market = doc["cover"]["data_pasar"]
     assert market["adtv"] != "-" and market["free_float"] != "-"
@@ -103,3 +105,108 @@ def test_renumber_keeps_key_financials_first():
     doc = {"exhibits": [other, key], "bagian": [{"exhibit": [other]}]}
     X.renumber(doc)
     assert (key["n"], other["n"]) == (1, 2)
+
+
+def test_draft_report_carries_quantified_fallback_risks(tmp_path):
+    doc = _doc(tmp_path)
+    assert 1 <= len(doc["risks"]) <= 5
+    assert all(r["kategori"] and any(ch.isdigit() for ch in r["isi"]) for r in doc["risks"])
+    page = next(p for p in doc["bagian"] if p["judul"] == "Katalis, risiko, dan kepemilikan")
+    assert page["risks"] == doc["risks"]
+    assert "Risiko utama:" in doc["cover"]["paragraf"][-1]["isi"]
+
+
+def test_published_report_without_risks_is_blocked():
+    from app.harness.narrative_tool import check_narrative
+    doc = {"meta": {"status": "distributable_assumption_led"},
+           "cover": {"headline": "Laba naik", "paragraf": [{"judul": "Valuasi", "isi": "Target."}]},
+           "risks": []}
+    assert any(b.startswith("N.risiko") for b in check_narrative(doc)["blockers"])
+    doc["meta"]["status"] = "draft_non_distributable"
+    assert not any(b.startswith("N.risiko") for b in check_narrative(doc)["blockers"])
+
+
+def test_peer_median_and_average_use_the_valuation_band():
+    rows = [{"is_self": False, "metrics": {"pe": pe, "pb": pb}} for pe, pb in
+            ((6.8, 1.5), (646.0, 40.5), (131.9, 8.5), (9.2, 0.7), (3.2, 0.5), (-4.0, 17.9))]
+    rows.append({"is_self": True, "metrics": {"pe": 5.1, "pb": 1.3}})
+    stats = X._peer_stats(rows)
+    assert stats["pe"] == (6.8, (6.8 + 9.2 + 3.2) / 3)
+    assert stats["pb"][0] == 1.1  # 0.5, 0.7, 1.5, 8.5 inside 0-10x
+
+
+def test_band_and_statements_use_indonesian_format_and_hide_zero_ebitda(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    html_out = render.render(doc)
+    cells = re.findall(r"<td class='[^']*'>([^<]*)</td>", html_out)
+    assert not [c for c in cells if re.search(r"\d\.\dx", c)]
+    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi")
+    ebitda = next(r for r in income["data"]["rows"] if r[0] == "EBITDA")
+    assert "0" not in ebitda[1:]
+
+
+def test_statements_follow_struktur_with_two_actual_and_three_forecast_years(tmp_path):
+    doc = _doc(tmp_path)  # AMMN draft: forecast columns are NA
+    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi")
+    assert income["data"]["cols"] == ["Rp miliar", "2024A", "2025A", "FY26F", "FY27F", "FY28F"]
+    labels = [r[0] for r in income["data"]["rows"]]
+    assert labels[:5] == ["Pendapatan", "Beban pokok pendapatan", "Laba kotor", "Beban usaha",
+                          "Laba usaha (EBIT)"]
+    assert labels[-1] == "Laba bersih"
+    balance = next(e for e in doc["exhibits"] if e["judul"] == "Neraca")
+    rows = {r[0]: r for r in balance["data"]["rows"]}
+    assert rows["Total aset"][1:3] == rows["Total liabilitas dan ekuitas"][1:3]
+    ratios = next(e for e in doc["exhibits"] if e["judul"] == "Rasio utama")
+    assert [r[0] for r in ratios["data"]["rows"] if r[0].startswith("Blok ")] == [
+        "Blok Pertumbuhan (%)", "Blok Profitabilitas (%)", "Blok Leverage (x)"]
+
+
+def test_bank_statements_switch_to_bank_layout(tmp_path):
+    doc = B.build("BBRI", tmp_path, as_of="2026-09-24")
+    titles = {e["judul"] for e in doc["exhibits"]}
+    assert {"Laba rugi bank", "Neraca bank"} <= titles
+    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi bank")
+    assert "Laba sebelum provisi (PPOP)" in [r[0] for r in income["data"]["rows"]]
+    ratios = next(e for e in doc["exhibits"] if e["judul"] == "Rasio utama")
+    labels = [r[0] for r in ratios["data"]["rows"]]
+    assert {"Marjin bunga bersih (NIM)", "Kredit terhadap simpanan (LDR)",
+            "Rasio kecukupan modal (CAR)"} <= set(labels)
+
+
+def test_non_mining_issuer_gets_an_industry_and_sentiment_page(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    page = next(p for p in doc["bagian"] if p["judul"] == "Industri dan sentimen")
+    table = page["exhibit"][0]
+    assert table["judul"].startswith("Kondisi sub-sektor")
+    assert [r[0] for r in table["data"]["rows"]][:2] == [
+        "Kapitalisasi pasar (Rp triliun)", "Perubahan kapitalisasi pasar 1 tahun"]
+    text = " ".join(page["paragraf"])
+    assert "IHSG" in text and "-" not in re.findall(r"(?:naik|turun) (\S+)", text)[0]
+    titles = [p["judul"] for p in doc["bagian"]]
+    assert titles.index("Industri dan sentimen") < titles.index("Katalis, risiko, dan kepemilikan")
+
+
+def test_band_reports_its_real_window_and_implied_prices(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    table = next(e for e in doc["exhibits"] if e["judul"].startswith("Band historis"))
+    assert "1 tahun" not in table["judul"] and "bulan" in table["judul"]
+    pe = next(r for r in table["data"]["rows"] if r[0] == "P/E")
+    assert re.fullmatch(r"Rp[\d.]+ / Rp[\d.]+", pe[4])
+    charts = [e for e in doc["exhibits"] if e.get("tipe") == "band_chart"]
+    assert [c["data"]["label"] for c in charts] == ["P/E", "P/BV"]
+    html_out = render.render(doc)
+    assert "class='band-pair'" in html_out and "class='band-chart'" in html_out
+
+
+def test_performance_charts_are_four_narrated_exhibits(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    panels = [e for e in doc["exhibits"] if e.get("tipe") == "combo_panel"]
+    assert [p["judul"].split(" (")[0] for p in panels] == [
+        "Pendapatan dan pertumbuhan", "EBITDA dan margin", "Laba bersih dan pertumbuhan",
+        "DER dan ROE"]
+    assert all(p["narasi"] and any(ch.isdigit() for ch in p["narasi"]) for p in panels)
+    assert [p["n"] for p in panels] == list(range(panels[0]["n"], panels[0]["n"] + 4))
+    bank = B.build("BBRI", tmp_path / "bank", as_of="2026-09-24")
+    fourth = [e for e in bank["exhibits"] if e.get("tipe") == "combo_panel"][3]
+    assert fourth["judul"].startswith("NIM dan biaya kredit")
+    assert "Rp-" not in " ".join(p for page in doc["bagian"] for p in page["paragraf"])

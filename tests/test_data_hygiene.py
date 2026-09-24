@@ -244,3 +244,19 @@ def test_rendered_report_on_ammn_has_no_long_dashes(tmp_path):
 
     assert "\u2013" not in html_content, "Found U+2013 en-dash in built AMMN.html"
     assert "\u2014" not in html_content, "Found U+2014 em-dash in built AMMN.html"
+
+
+def test_doc_prose_pass_normalises_periods_outside_agent_plans():
+    from app import scrub
+    doc = {"cover": {"headline": "Laba naik", "bullets": ["Capex sampai Q4 2027."],
+                     "paragraf": [{"judul": "Valuasi", "isi": "Selesai hingga Q4 2027; H1 2026 naik."}]},
+           "bagian": [{"paragraf": ["CIP berjalan sampai Q4 2027."]}],
+           "risks": [{"isi": "Tertunda ke Q1 2028."}],
+           "exhibits": [{"narasi": "Pendapatan H1 2026 naik.", "catatan_sumber": "Q4 2027 report"}]}
+    scrub.normalize_doc_prose(doc)
+    assert doc["cover"]["paragraf"][0]["isi"] == "Selesai hingga 4Q27; 1H26 naik."
+    assert doc["cover"]["bullets"] == ["Capex sampai 4Q27."]
+    assert doc["bagian"][0]["paragraf"] == ["CIP berjalan sampai 4Q27."]
+    assert doc["risks"][0]["isi"] == "Tertunda ke 1Q28."
+    assert doc["exhibits"][0]["narasi"] == "Pendapatan 1H26 naik."
+    assert doc["exhibits"][0]["catatan_sumber"] == "Q4 2027 report"  # provenance untouched

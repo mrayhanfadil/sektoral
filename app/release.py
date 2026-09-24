@@ -66,6 +66,10 @@ def _date(value):
 
 _FINANCIAL_METRICS = ("revenue", "ebitda", "net_profit", "capex")
 _REQUIRED_DRIVER_SERIES = ("revenue", "ebitda", "net_profit", "capex")
+# Financial DDM never inherits FCFF/capex/NWC/EV/WACC as a release
+# requirement (§3.1, §4.5). Its production bridge is profit/equity/payout.
+_REQUIRED_DRIVER_SERIES_DDM = ("net_profit", "equity", "payout")
+_DDM_PROFIT_ALIASES = {"net_profit", "profit"}
 _EVIDENCE_FIELDS = (
     "claim", "value", "unit", "period", "status", "source",
     "source_date", "page",
@@ -232,14 +236,27 @@ def _check_operating_bridge(forecast: object) -> list[str]:
     return blockers
 
 
-def _check_driver_forecast(forecast: object, intake: object) -> list[str]:
+def _check_driver_forecast(forecast: object, intake: object,
+                           profile: object = None) -> list[str]:
     if not isinstance(forecast, Mapping):
         return ["sourced operating and cash-flow forecast is incomplete"]
     blockers = []
-    if forecast.get("forecast_basis") != "driver_forecast":
-        blockers.append("sourced operating and cash-flow forecast is incomplete")
+    normalized = str(profile or "").strip().lower() if isinstance(profile, str) else ""
+    if not normalized and isinstance(intake, Mapping):
+        normalized = str(intake.get("model_profile") or "").strip().lower()
+    is_ddm = normalized == "financial_ddm"
+    required_series = _REQUIRED_DRIVER_SERIES_DDM if is_ddm else _REQUIRED_DRIVER_SERIES
+    expected_basis = "driver_forecast"
+    if forecast.get("forecast_basis") != expected_basis:
+        if is_ddm and forecast.get("forecast_basis") == "financial_driver_forecast":
+            pass
+        else:
+            blockers.append("sourced operating and cash-flow forecast is incomplete")
     if forecast.get("production_ready") is not True:
         blockers.append("forecast is not verified as production-ready")
+    for reason in forecast.get("production_blockers") or []:
+        if isinstance(reason, str) and reason.strip():
+            blockers.append(f"forecast: {reason}")
 
     g2 = forecast.get("g2")
     if isinstance(g2, Mapping):
@@ -258,11 +275,24 @@ def _check_driver_forecast(forecast: object, intake: object) -> list[str]:
         return blockers
 
     as_of = intake.get("as_of") or intake.get("price_date") if isinstance(intake, Mapping) else None
-    for series in _REQUIRED_DRIVER_SERIES:
-        if series not in driver_evidence:
-            blockers.append(f"driver forecast missing required series: {series}")
-            continue
-        row = driver_evidence[series]
+    for series in required_series:
+        # DDM profit alias: net_profit satisfies profit and vice versa.
+        lookup = series
+        if is_ddm and series == "net_profit" and series not in driver_evidence:
+            if "profit" in driver_evidence:
+                lookup = "profit"
+        if lookup not in driver_evidence:
+            if is_ddm and series in _DDM_PROFIT_ALIASES:
+                sibling = "profit" if series == "net_profit" else "net_profit"
+                if sibling in driver_evidence:
+                    lookup = sibling
+                else:
+                    blockers.append(f"driver forecast missing required series: {series}")
+                    continue
+            else:
+                blockers.append(f"driver forecast missing required series: {series}")
+                continue
+        row = driver_evidence[lookup]
         prefix = f"driver forecast {series}"
         if not isinstance(row, Mapping):
             blockers.append(f"{prefix}: must be a driver evidence object")
@@ -357,6 +387,456 @@ def _check_sotp(result: object, intake: object) -> list[str]:
     return blockers
 
 
+def common_blockers(profile, intake, forecast):
+    """Data/forecast blockers shared by every valuation method of a profile.
+
+    Method-specific completeness (SOTP bridge, DDM result) is checked
+    separately so the method chain can fall back without losing these.
+    """
+    blockers = []
+    normalized_profile = profile.strip().lower() if isinstance(profile, str) else ""
+    supported_profiles = {"finite_life_mining", "going_concern_fcff", "financial_ddm"}
+    if normalized_profile not in supported_profiles:
+        blockers.append(f"unsupported model profile: {profile or 'missing'}")
+    if normalized_profile == "finite_life_mining":
+        blockers.extend(_check_latest_interim_actuals(intake))
+        blockers.extend(_check_operating_bridge(forecast))
+        if (not isinstance(forecast, Mapping) or
+                forecast.get("forecast_basis") != "physical_driver_forecast" or
+                forecast.get("production_ready") is not True):
+            blockers.append(
+                "mining forecast is not a verified physical-driver production forecast")
+        g2 = (forecast or {}).get("g2") if isinstance(forecast, Mapping) else None
+        if isinstance(g2, Mapping) and g2.get("G2.9_operating_bridge") == "gagal":
+            blockers.append("forecast gate failed: G2.9 physical-to-financial operating bridge is not reconciled")
+    elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
+        blockers.extend(_official_actual_blockers(intake))
+        blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile))
+    return blockers
+
+
+def _check_ddm_present(result):
+    has_ddm = (
+        isinstance(result, Mapping)
+        and (
+            result.get("status") in {"complete", "draft"}
+            or "tp_gordon" in result
+            or result.get("method") == "ddm"
+        )
+    ) or result == "draft"
+    return [] if has_ddm else [
+        "financial DDM/residual-income primary valuation is not implemented"]
+
+
+def assess_chain(profile, intake, forecast, chain):
+    """Release for the method selected by :mod:`app.method_chain`.
+
+    Common data blockers always apply; the skipped methods' own gaps stay in
+    the chain trace instead of blocking the selected fallback.
+    """
+    from . import method_chain
+    blockers = common_blockers(profile, intake, forecast)
+    chain_blocker = method_chain.summary_blocker(chain or {})
+    if chain_blocker:
+        blockers.append(chain_blocker)
+    return {"status": "draft_non_distributable" if blockers else "distributable",
+            "blockers": blockers, "route": (chain or {}).get("route"),
+            "method_key": (chain or {}).get("selected")}
+
+
+def _official_actual_blockers(intake):
+    actual = intake.get("latest_official_actual") if isinstance(intake, Mapping) else None
+    if not isinstance(actual, Mapping):
+        return ["latest official interim actual is missing or unverified"]
+    if not all(actual.get(key) for key in
+               ("period", "period_end", "published_at", "source_url", "metrics")):
+        return ["latest official interim actual has incomplete provenance"]
+    blockers = []
+    report_date = _date((intake or {}).get("as_of"))
+    publication = _date(actual.get("published_at"))
+    period_end = _date(actual.get("period_end"))
+    if not publication or not period_end or period_end > publication or (
+            report_date and publication > report_date):
+        blockers.append("latest official interim dates are inconsistent")
+    metrics = actual.get("metrics")
+    if (not isinstance(metrics, Mapping) or
+            any(not isinstance(metrics.get(key), (int, float)) for key in
+                ("revenue", "net_profit"))):
+        blockers.append("latest official interim revenue/net profit are missing")
+    return blockers
+
+
+def _fresh_close_blockers(intake, publication):
+    """Sourced close on/after the release and at most five days before the report.
+
+    A dated quote pack is preferred; a Sectors daily close in the local cache is
+    accepted with cache provenance.
+    """
+    report_day = _date(intake.get("as_of"))
+    quote = intake.get("market_quote") or {}
+    if quote:
+        quote_day, sourced = _date(quote.get("date")), _verified_source_reference(
+            quote.get("source_url"))
+        same_price = quote.get("price") == intake.get("price")
+    else:
+        # A cache close needs a provenance record whose date matches and whose
+        # value was confirmed against the cached daily series.
+        provenance = intake.get("price_provenance") or {}
+        quote_day = _date(intake.get("price_date"))
+        sourced = (provenance.get("verified") is True and
+                   _verified_source_reference(provenance.get("source")) and
+                   _date(provenance.get("date")) == quote_day)
+        same_price = True
+    if (not report_day or not publication or not quote_day or not sourced or
+            not same_price or not publication <= quote_day <= report_day or
+            (report_day - quote_day).days > 5):
+        return ["fresh sourced close after latest release is required"]
+    return []
+
+
+def assess_earnings_led(intake, forecast, valuation, assumption_status):
+    """FY PER release for going concern/bank built on a validated earnings scenario.
+
+    Mirrors :func:`assess_assumption_led`: the screening forecast stays in the
+    trace, but the release rests on the official 1H actual, the agent's
+    validated H2 assumption, a fresh close, official shares and peer PER.
+    """
+    blockers = []
+    profile = intake.get("model_profile")
+    if profile not in {"going_concern_fcff", "financial_ddm"}:
+        blockers.append("earnings-led method requires going_concern_fcff or financial_ddm")
+    blockers.extend(_official_actual_blockers(intake))
+    actual = intake.get("latest_official_actual") or {}
+    scenario = (forecast or {}).get("earnings_scenario") or {}
+    if assumption_status != "validated":
+        blockers.append("forecast agent scenario has not passed validation")
+    if not scenario:
+        blockers.append("earnings scenario is missing (needs official 1H revenue/net profit "
+                        "and a validated H2 assumption)")
+    elif (scenario.get("source_url") != actual.get("source_url") or
+          scenario.get("published_at") != actual.get("published_at")):
+        blockers.append("earnings scenario does not match the official actual release")
+    blockers.extend(_fresh_close_blockers(intake, _date(actual.get("published_at"))))
+    evidence = intake.get("official_evidence") or {}
+    if evidence.get("reporting_currency") == "USD":
+        fx = intake.get("fx_spot") or {}
+        fx_day, report_day = _date(fx.get("date")), _date(intake.get("as_of"))
+        if (not report_day or not fx_day or fx_day > report_day or
+                (report_day - fx_day).days > 7 or not _text(fx.get("source")) or
+                not _number(fx.get("rate")) or fx["rate"] <= 0):
+            blockers.append("fresh sourced USD/IDR quote is required")
+    detail = (valuation or {}).get("detail") or {}
+    if not _number(detail.get("shares")) or detail["shares"] <= 0:
+        blockers.append("official share count is missing from the balance sheet")
+    if not detail.get("peer_count") or detail["peer_count"] < 3:
+        blockers.append("peer PER set has fewer than three valid peers")
+    if _number(detail.get("eps_idr")) and detail["eps_idr"] <= 0:
+        blockers.append("FY earnings per share is not positive; PER is not meaningful")
+    q = [detail.get(k) for k in ("q1_pe", "median_pe", "q3_pe")]
+    if all(_number(v) for v in q) and not q[0] <= q[1] <= q[2]:
+        blockers.append("peer PER sensitivity is not ordered")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "FY PER peer (earnings scenario)",
+        "blockers": blockers,
+        "limitations": ["EPS FY adalah skenario analis dari aktual 1H + asumsi H2, "
+                        "bukan forecast driver terekonsiliasi",
+                        "PER peer TTM dari data Sectors; peer dianggap sebanding",
+                        "arus kas, capex dan neraca setelah periode interim belum dimodelkan"],
+    }
+
+
+def assess_pbv_roe_fy(intake, forecast, valuation, assumption_status):
+    """Justified P/BV release for a bank on the validated earnings scenario.
+
+    Framework Gate 0: banks are valued on equity (DDM / excess return). Same
+    evidence as :func:`assess_earnings_led` (official 1H actual, validated
+    scenario, fresh close, official shares) without the peer PER set, plus
+    the excess-return inputs: positive equity, CoE above g, ROE above g.
+    """
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share"))]
+    if (intake or {}).get("model_profile") != "financial_ddm":
+        blockers.append("justified P/BV on the earnings scenario is a bank method")
+    detail = (valuation or {}).get("detail") or {}
+    if not _number(detail.get("equity")) or detail["equity"] <= 0:
+        blockers.append("parent equity is missing or not positive")
+    coe, g, roe = detail.get("coe"), detail.get("g"), detail.get("roe")
+    if not (_number(coe) and _number(g)) or coe <= g:
+        blockers.append("cost of equity must exceed long-term growth")
+    if not _number(roe) or (_number(g) and roe <= g):
+        blockers.append("FY ROE does not exceed long-term growth; justified P/BV undefined")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "Justified P/BV (ROE FY earnings scenario)",
+        "blockers": blockers,
+        "limitations": ["ROE FY dari skenario laba analis (aktual 1H + asumsi H2) atas "
+                        "ekuitas pemilik induk terakhir, bukan forecast driver terekonsiliasi",
+                        "CoE CAPM dan pertumbuhan jangka panjang adalah parameter kebijakan "
+                        "analis yang diuji di tabel sensitivitas"],
+    }
+
+
+def _scenario_base(intake, forecast, valuation, assumption_status):
+    """Earnings-led evidence gate without the peer PER set (scenario methods)."""
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share"))]
+    rows = ((forecast or {}).get("outyear_scenario") or {}).get("rows") or []
+    if len(rows) != 4:
+        blockers.append("four validated out-year rows are required for an explicit horizon")
+    return blockers
+
+
+def assess_ddm_scenario(intake, forecast, valuation, assumption_status):
+    """Bank primary DDM on the validated scenario (spec Opsi B).
+
+    Same evidence as the earnings-led route (official 1H actual, validated
+    scenario, fresh close, official shares), plus a five-year explicit
+    dividend path, a Sectors payout with dividend history, and CoE above g.
+    """
+    blockers = _scenario_base(intake, forecast, valuation, assumption_status)
+    if (intake or {}).get("model_profile") != "financial_ddm":
+        blockers.append("scenario DDM is the bank primary method")
+    detail = (valuation or {}).get("detail") or {}
+    if str((intake or {}).get("payout_basis") or "").startswith("asumsi analis") or \
+            not _number(detail.get("payout")):
+        blockers.append("sourced historical payout is required for DDM")
+    if len((intake or {}).get("dps_hist") or []) < 3:
+        blockers.append("dividend history shorter than three years; payout not representative")
+    coe, g = detail.get("coe"), detail.get("g")
+    if not (_number(coe) and _number(g)) or coe <= g:
+        blockers.append("cost of equity must exceed long-term growth")
+    lines = detail.get("lines") or []
+    if len(lines) != 5 or any(not _number(x.get("dps")) or x["dps"] <= 0 for x in lines):
+        blockers.append("five positive forecast dividends are required")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "DDM (dividend scenario, Cost of Equity)",
+        "blockers": blockers,
+        "limitations": ["laba FY dan empat tahun lanjutan adalah skenario analis (aktual 1H "
+                        "resmi + asumsi H2 + asumsi tahunan), bukan forecast driver "
+                        "terekonsiliasi",
+                        "payout historis data Sectors dianggap berlanjut; CoE CAPM dan "
+                        "pertumbuhan jangka panjang adalah parameter kebijakan analis"],
+    }
+
+
+def assess_fcff_scenario(intake, forecast, valuation, assumption_status):
+    """Going-concern primary FCFF DCF on the validated scenario (spec Opsi A).
+
+    Same evidence as the earnings-led route plus revenue/EBITDA/capex for all
+    five explicit years, a sourced cash/debt bridge, WACC above g and a
+    positive terminal cash flow and equity value.
+    """
+    blockers = _scenario_base(intake, forecast, valuation, assumption_status)
+    if (intake or {}).get("model_profile") != "going_concern_fcff":
+        blockers.append("scenario FCFF DCF is the going-concern primary method")
+    detail = (valuation or {}).get("detail") or {}
+    lines = detail.get("lines") or []
+    if len(lines) != 5 or any(not _number(x.get(k)) for x in lines
+                              for k in ("revenue", "ebitda", "capex", "fcff")):
+        blockers.append("five explicit years of revenue, EBITDA, capex and FCFF are required")
+    wacc, g = detail.get("wacc"), detail.get("g")
+    if not (_number(wacc) and _number(g)) or wacc <= g:
+        blockers.append("WACC must exceed long-term growth")
+    if not _number(detail.get("terminal_fcff")) or detail["terminal_fcff"] <= 0:
+        blockers.append("terminal FCFF is not positive; Gordon value undefined")
+    for key in ("cash", "debt", "shares"):
+        if not _number(detail.get(key)):
+            blockers.append(f"enterprise-to-equity bridge is missing {key}")
+    if not _number(detail.get("equity")) or detail["equity"] <= 0:
+        blockers.append("equity value is not positive")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "FCFF DCF (earnings scenario, Gordon terminal)",
+        "blockers": blockers,
+        "limitations": ["pendapatan, margin EBITDA dan capex adalah skenario analis (aktual 1H "
+                        "resmi + asumsi H2 + asumsi tahunan), bukan forecast driver "
+                        "terekonsiliasi",
+                        "D&A, tarif pajak efektif dan intensitas modal kerja dari sejarah; "
+                        "WACC dan pertumbuhan terminal adalah parameter kebijakan analis",
+                        "exit EV/EBITDA historis hanya cross-check; selisihnya diungkapkan, "
+                        "tidak dirata-rata"],
+    }
+
+
+def assess_holding_sotp(intake, forecast, valuation, assumption_status):
+    """Holding SOTP as the primary for a group with dissimilar lines (Gate 0).
+
+    The value needs no forecast: official parent equity, listed stakes from
+    the issuer pack at market capitalisation, the rest at book. The report
+    still rests on the official 1H actual, a fresh close and the validated
+    earnings scenario that carries its thesis.
+    """
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share",
+                                     "official share count"))]
+    if (intake or {}).get("model_profile") != "going_concern_fcff":
+        blockers.append("holding SOTP is the going-concern holding method")
+    detail = (valuation or {}).get("detail") or {}
+    if not _number(detail.get("shares")) or detail["shares"] <= 0:
+        blockers.append("official share count is missing from the balance sheet")
+    if not _number(detail.get("parent_equity")) or detail["parent_equity"] <= 0:
+        blockers.append("parent equity is missing or not positive")
+    components = detail.get("components") or []
+    if not components:
+        blockers.append("holding SOTP needs at least one listed subsidiary at market value")
+    for c in components:
+        if not _text(c.get("stake_source")) or not _text(c.get("market_source")):
+            blockers.append(f"holding SOTP component {c.get('ticker', '?')} lacks a source")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "Holding SOTP (listed stakes at market, rest at book)",
+        "blockers": blockers,
+        "limitations": ["segmen tanpa harga pasar dinilai pada nilai buku (lahan industri pada "
+                        "biaya perolehan), sehingga nilainya konservatif",
+                        "diskon holding 20-30% adalah asumsi analis untuk sensitivitas",
+                        "DCF konsolidasi atas skenario analis hanya referensi"],
+    }
+
+
+_LOM_ASSUMPTIONS = ("discount_rate_usd", "elang_risk_factor", "elang_development_capex_usd",
+                    "elang_sustaining_capex_usd_per_year", "stockpile_rehandle_usd_per_t",
+                    "stockpile_phase_sustaining_share")
+
+
+def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
+    """Mining primary SOTP/LoM built on the physical chain (spec §4.1, §4.5).
+
+    Replaces the production gate's 'verified physical-driver forecast' with
+    the evidence the LoM actually uses: the official interim, every operating
+    bridge stage sourced, a complete SOTP bridge, a fresh close and dated FX,
+    and each undisclosed input as a labelled, sourced analyst assumption.
+    """
+    blockers = []
+    if (intake or {}).get("model_profile") != "finite_life_mining":
+        blockers.append("SOTP/LoM on the physical chain is the mining primary method")
+    blockers.extend(_check_latest_interim_actuals(intake))
+    if assumption_status != "validated":
+        blockers.append("forecast agent scenario has not passed validation")
+    detail = (valuation or {}).get("detail") or {}
+    blockers.extend(_check_operating_bridge({"operating_bridge": detail.get("operating_bridge")}))
+    blockers.extend(_check_sotp(detail.get("sotp"), intake))
+    actual = (intake or {}).get("latest_official_actual") or {}
+    blockers.extend(_fresh_close_blockers(intake, _date(actual.get("published_at"))))
+    fx = (intake or {}).get("fx_spot") or {}
+    fx_day, report_day = _date(fx.get("date")), _date((intake or {}).get("as_of"))
+    if (not report_day or not fx_day or fx_day > report_day or (report_day - fx_day).days > 7
+            or not _number(fx.get("rate")) or fx["rate"] <= 0):
+        blockers.append("fresh sourced USD/IDR quote is required")
+    lom = ((intake or {}).get("analyst_scenario") or {}).get("lom_assumptions") or {}
+    missing = [key for key in _LOM_ASSUMPTIONS if lom.get(key) in (None, {}, "")]
+    if missing:
+        blockers.append("LoM analyst assumptions missing: " + ", ".join(missing))
+    if not (_verified_source_reference(lom.get("broker_source_url"))
+            and _source_date(lom.get("broker_source_date"))):
+        blockers.append("LoM analyst assumptions need a dated, traceable source")
+    elif (_source_date((intake or {}).get("as_of"))
+          and lom["broker_source_date"] > str(intake["as_of"])[:10]):
+        blockers.append("LoM analyst assumption source is dated after the report")
+    if detail.get("gaps"):
+        blockers.append("LoM inputs missing: " + ", ".join(detail["gaps"]))
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "SOTP/LoM (asset NAV, no perpetual terminal)",
+        "blockers": blockers,
+        "limitations": [
+            "harga rata-rata 12 bulan data Sectors dianggap datar sepanjang umur tambang; "
+            "harga cadangan JORC emiten ditampilkan sebagai sensitivitas",
+            "capex dan jadwal Elang tidak diungkapkan emiten; capex dari riset broker dan "
+            "faktor risiko 50% adalah asumsi analis",
+            "logam di atas kapasitas smelter dijual sebagai konsentrat dengan asumsi izin "
+            "ekspor diperpanjang",
+            "cadangan Elang sesudah 2050 dan modal kerja tidak dinilai"],
+    }
+
+
+def assess_ev_ebitda_scenario(intake, forecast, valuation, assumption_status):
+    """Forward EV/EBITDA peer on the validated FY scenario (spec §4.1a: history
+    < 4 years or ramping asset).
+
+    Same evidence as the earnings-led route without the peer PER set
+    (official 1H actual, validated scenario, fresh close, official shares),
+    plus the agent's FY EBITDA, at least three ordered Sectors peer EV/EBITDA
+    points, a one-balance-sheet bridge and a positive equity value. One
+    forward year, so no out-year rows are required.
+    """
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share"))]
+    if (intake or {}).get("model_profile") != "going_concern_fcff":
+        blockers.append("forward EV/EBITDA peer on the scenario is a going-concern method")
+    detail = (valuation or {}).get("detail") or {}
+    if not _number(detail.get("ebitda")) or detail["ebitda"] <= 0:
+        blockers.append("FY EBITDA scenario is missing or not positive")
+    if not detail.get("peer_count") or detail["peer_count"] < 3:
+        blockers.append("peer EV/EBITDA set has fewer than three valid peers")
+    q = [detail.get(k) for k in ("q1_ev_ebitda", "median_ev_ebitda", "q3_ev_ebitda")]
+    if all(_number(v) for v in q) and not q[0] <= q[1] <= q[2]:
+        blockers.append("peer EV/EBITDA sensitivity is not ordered")
+    for key in ("cash", "debt", "shares"):
+        if not _number(detail.get(key)):
+            blockers.append(f"enterprise-to-equity bridge is missing {key}")
+    if not _number(detail.get("equity")) or detail["equity"] <= 0:
+        blockers.append("equity value is not positive")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "Forward EV/EBITDA peer (earnings scenario)",
+        "blockers": blockers,
+        "limitations": ["EBITDA FY adalah skenario analis (aktual 1H resmi + margin EBITDA "
+                        "asumsi agen), bukan forecast driver terekonsiliasi",
+                        f"EV/EBITDA peer FY terakhir dari {detail.get('peer_source') or 'sumber peer'} "
+                        "(market cap tabel peer Sectors + utang - kas laporan peer) diterapkan "
+                        "ke EBITDA forward; peer dianggap sebanding",
+                        "kas, utang dan minoritas dari satu neraca; arus kas dan neraca "
+                        "setelahnya belum dimodelkan"],
+    }
+
+
+SCENARIO_ASSESSORS = {"ddm": assess_ddm_scenario, "fcff_dcf": assess_fcff_scenario,
+                      "dcf_reference": assess_fcff_scenario,
+                      "sotp_lom": assess_sotp_lom_scenario,
+                      "ev_ebitda_peer": assess_ev_ebitda_scenario}
+
+
+ASSET_HEAVY_SHARE = 0.5
+
+
+def assess_pbv_book(intake, forecast, valuation, assumption_status):
+    """Relative P/BV on reported book for an asset-heavy going concern.
+
+    Framework: P/BV applies to asset-heavy businesses. Last step of the going
+    concern chain, used when DCF and PER have no valid basis (e.g. too few
+    peers with a PER inside the band). Same evidence gate as the earnings
+    route without the peer PER set, plus asset intensity, positive reported
+    equity and at least three peers with a P/B in band.
+    """
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share"))]
+    detail = (valuation or {}).get("detail") or {}
+    if (intake or {}).get("model_profile") != "going_concern_fcff":
+        blockers.append("relative P/BV on reported book is a going-concern fallback")
+    share = detail.get("fixed_asset_share")
+    if not _number(share) or share < ASSET_HEAVY_SHARE:
+        blockers.append("fixed assets below half of total assets; P/BV is not the asset-heavy method")
+    if not _number(detail.get("equity")) or detail["equity"] <= 0:
+        blockers.append("reported parent equity is missing or not positive")
+    if not detail.get("peer_count") or detail["peer_count"] < 3:
+        blockers.append("peer P/BV set has fewer than three valid peers")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "Relative P/BV on reported book (asset-heavy)",
+        "blockers": blockers,
+        "limitations": ["P/B peer TTM dari data Sectors; peer dianggap sebanding",
+                        "nilai buku terlapor pada neraca interim resmi, tanpa revaluasi aset",
+                        "skenario laba FY adalah konteks tesis, bukan dasar target"],
+    }
+
+
 def assess_release(profile, intake, forecast, sotp_result):
     """Assess whether a model may be published as a production report.
 
@@ -375,54 +855,12 @@ def assess_release(profile, intake, forecast, sotp_result):
     Returns ``{"status": ..., "blockers": [...]}``. Non-mining profiles do
     not inherit any of these mining-only requirements.
     """
-    blockers = []
     normalized_profile = profile.strip().lower() if isinstance(profile, str) else ""
-    supported_profiles = {"finite_life_mining", "going_concern_fcff", "financial_ddm"}
-    if normalized_profile not in supported_profiles:
-        blockers.append(f"unsupported model profile: {profile or 'missing'}")
+    blockers = common_blockers(profile, intake, forecast)
     if normalized_profile == "finite_life_mining":
-        blockers.extend(_check_latest_interim_actuals(intake))
-        blockers.extend(_check_operating_bridge(forecast))
-        if (not isinstance(forecast, Mapping) or
-                forecast.get("forecast_basis") != "physical_driver_forecast" or
-                forecast.get("production_ready") is not True):
-            blockers.append(
-                "mining forecast is not a verified physical-driver production forecast")
-        g2 = (forecast or {}).get("g2") if isinstance(forecast, Mapping) else None
-        if isinstance(g2, Mapping) and g2.get("G2.9_operating_bridge") == "gagal":
-            blockers.append("forecast gate failed: G2.9 physical-to-financial operating bridge is not reconciled")
         blockers.extend(_check_sotp(sotp_result, intake))
-    elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
-        actual = intake.get("latest_official_actual") if isinstance(intake, Mapping) else None
-        if not isinstance(actual, Mapping):
-            blockers.append("latest official interim actual is missing or unverified")
-        elif not all(actual.get(key) for key in
-                     ("period", "period_end", "published_at", "source_url", "metrics")):
-            blockers.append("latest official interim actual has incomplete provenance")
-        else:
-            report_date = _date((intake or {}).get("as_of"))
-            publication = _date(actual.get("published_at"))
-            period_end = _date(actual.get("period_end"))
-            if not publication or not period_end or period_end > publication or (
-                    report_date and publication > report_date):
-                blockers.append("latest official interim dates are inconsistent")
-            metrics = actual.get("metrics")
-            if (not isinstance(metrics, Mapping) or
-                    any(not isinstance(metrics.get(key), (int, float)) for key in
-                        ("revenue", "net_profit"))):
-                blockers.append("latest official interim revenue/net profit are missing")
-        blockers.extend(_check_driver_forecast(forecast, intake))
-        if normalized_profile == "financial_ddm":
-            has_ddm = (
-                isinstance(sotp_result, Mapping)
-                and (
-                    sotp_result.get("status") in {"complete", "draft"}
-                    or "tp_gordon" in sotp_result
-                    or sotp_result.get("method") == "ddm"
-                )
-            ) or sotp_result == "draft"
-            if not has_ddm:
-                blockers.append("financial DDM/residual-income primary valuation is not implemented")
+    elif normalized_profile == "financial_ddm":
+        blockers.extend(_check_ddm_present(sotp_result))
     thin_data = False
     if isinstance(sotp_result, Mapping):
         gv = sotp_result.get("gate_verdict")

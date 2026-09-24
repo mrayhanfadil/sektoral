@@ -197,7 +197,7 @@ def test_gate4_lifecycle_stages():
 
 
 def test_gate5_output_sanity():
-    """Gate 5: upside extremes trigger Review Required; tv_share > 75% flags warning without override."""
+    """Gate 5: upside extremes trigger Review Required; tv_share > 80% flags warning without override."""
     # Extreme upside > 100%
     v_up = evaluate({"domain": "single_business", "upside_pct": 115.0})
     assert v_up.rating_override == "Review Required"
@@ -208,7 +208,7 @@ def test_gate5_output_sanity():
     assert v_down.rating_override == "Review Required"
     assert "5_downside_extreme" in v_down.gates_failed
 
-    # High TV share (>75%) -> flag without rating override
+    # High TV share (>80%) -> flag without rating override
     v_tv = evaluate({"domain": "single_business", "terminal_value_pct_of_ev": 82.0})
     assert v_tv.rating_override is None
     assert "5_tv_share_high" in v_tv.gates_failed

@@ -24,6 +24,13 @@ python3 -m app.web
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten**, enter a ticker, and select **Mulai riset**. Follow the status page, then open **Buka company update** or **Lihat jejak agent** when the run finishes. If evidence is incomplete, the UI says the analysis is partial. The browser server binds to localhost by default. The agent needs network access to its configured LLM endpoint, but market data comes only from the local Sectors cache. The BBCA CLI and browser workflows have been end-to-end tested on this working checkout; rerun QA on the frozen submission checkout before recording or submitting.
 
+**Report gallery.** `/laporan` lists every finished company update in a reports folder (rating, target, method, status, cover thumbnail, PDF, web version and audit trace), and the landing page features one real report with its method chain. Fill the folder with a batch run, then point the server at it; add `--pdf` so runs started in the browser also produce a PDF and appear in the gallery when they finish:
+
+```bash
+python3 -m app.batch BBCA BBRI AMMN SSIA INET POWR JPFA GMFI --jobs 2 --out out/reports --pdf
+python3 -m app.web --reports out/reports --pdf
+```
+
 For a terminal-only run, use the one-command CLI below. It writes the HTML report and trace to `out/demo/`; `--pdf` is optional and requires PDF support. Omit it to use HTML only.
 
 ```bash

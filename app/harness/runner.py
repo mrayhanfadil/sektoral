@@ -19,8 +19,30 @@ from .schema import check_output_schema
 from .profiles import normalize
 
 
+def _earnings_gate_passes(intake, forecast, valuation, assumption_status,
+                          key="pe_fy_scenario") -> bool:
+    from app import release as _release
+    trace = next((t for t in (valuation.get("method_chain") or {}).get("trace") or []
+                  if t.get("key") == key), None)
+    if not trace:
+        return False
+    # The agent status comes from the caller (the agent run), never from the
+    # engine's recorded gate result, so the harness re-checks it independently.
+    assess = {"pbv_roe_fy": _release.assess_pbv_roe_fy,
+              "pbv_book": _release.assess_pbv_book,
+              "holding_sotp": _release.assess_holding_sotp}.get(key, _release.assess_earnings_led)
+    if (trace.get("detail") or {}).get("basis") == "scenario":
+        # Primary DDM / FCFF DCF valued on the validated scenario.
+        assess = _release.SCENARIO_ASSESSORS.get(key)
+        if assess is None:
+            return False
+    again = assess(intake, forecast, {"detail": trace.get("detail") or {}}, assumption_status)
+    return again["status"] == "distributable_assumption_led"
+
+
 def run_all(intake: dict | None = None, forecast: dict | None = None,
-            valuation: dict | None = None, doc: dict | None = None) -> dict:
+            valuation: dict | None = None, doc: dict | None = None,
+            assumption_status: str | None = None) -> dict:
     intake, forecast, valuation = intake or {}, forecast or {}, valuation or {}
     profile = normalize(intake.get("model_profile") or (doc.get("meta") or {}).get("model_profile")
                         if isinstance(doc, dict) else intake.get("model_profile"))
@@ -43,7 +65,13 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
         sotp_like = valuation.get("sotp") if isinstance(valuation, dict) else None
         if profile == "financial_ddm" and isinstance(valuation, dict) and valuation.get("ddm"):
             sotp_like = valuation.get("ddm")
-        er = _release.assess_release(profile, intake, forecast, sotp_like)
+        chain = valuation.get("method_chain") if isinstance(valuation, dict) else None
+        if isinstance(chain, dict) and chain.get("order"):
+            # Method chain (§4.1a): common data gates + selected-method sanity;
+            # skipped methods' gaps stay in the chain trace.
+            er = _release.assess_chain(profile, intake, forecast, chain)
+        else:
+            er = _release.assess_release(profile, intake, forecast, sotp_like)
         engine_status = er.get("status")
         engine_blockers = list(er.get("blockers") or [])
     except Exception as e:  # fail closed
@@ -57,20 +85,35 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
     # findings in the gate trace without treating them as blockers for this
     # route. Every other harness check remains mandatory.
     assumption_release = valuation.get("release") if isinstance(valuation, dict) else None
-    assumption_led = (
-        profile == "finite_life_mining" and
-        isinstance(assumption_release, dict) and
-        assumption_release.get("status") == "distributable_assumption_led" and
-        assumption_release.get("method") == "FY26F EV/EBITDA 8x" and
-        not (assumption_release.get("blockers") or [])
+    selected_method = ((valuation.get("method_chain") or {}).get("selected")
+                       if isinstance(valuation, dict) else None)
+    # The selected method carries its own evidence gate, re-assessed here from
+    # the same inputs (not trusted blindly). Its release then replaces the
+    # screening-forecast gate (G2.9); a Gate 5 extreme stop stays a blocker.
+    own_gate = (
+        isinstance(assumption_release, dict) and (
+            (profile == "finite_life_mining" and
+             assumption_release.get("method") == "FY26F EV/EBITDA 8x") or
+            (profile == "finite_life_mining" and selected_method == "sotp_lom" and
+             _earnings_gate_passes(intake, forecast, valuation, assumption_status,
+                                   "sotp_lom")) or
+            (profile in ("going_concern_fcff", "financial_ddm") and
+             selected_method in ("pe_fy_scenario", "pbv_roe_fy", "pbv_book", "ddm",
+                                 "fcff_dcf", "dcf_reference", "holding_sotp",
+                                 "ev_ebitda_peer") and
+             _earnings_gate_passes(intake, forecast, valuation, assumption_status,
+                                   selected_method)))
     )
+    assumption_led = (
+        own_gate and
+        assumption_release.get("status") == "distributable_assumption_led" and
+        not (assumption_release.get("blockers") or []))
     g2_blockers = list(r2["blockers"])
-    if assumption_led:
+    if own_gate:
         g2_blockers = [b for b in g2_blockers if not b.startswith("G2.9:")]
-        # The selected method has a separately validated release assessment;
-        # the incomplete SOTP assessment remains attached as audit context.
+        # The incomplete SOTP/screening assessment remains attached as audit context.
         engine_status = assumption_release["status"]
-        engine_blockers = []
+        engine_blockers = list(assumption_release.get("blockers") or [])
 
     blockers = ([f"G1.{b}" for b in r1["blockers"]] + [f"G2.{b}" for b in g2_blockers] +
                 [f"G3.{b}" for b in r3["blockers"]] + [f"N.{b}" for b in rn["blockers"]] +
@@ -99,7 +142,11 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
                 "narrative": {c["check"]: c["status"] for c in rn["checks"]},
                 "schema": {c["check"]: c["status"] for c in rs["checks"]},
                 "release": {"status": status, "engine_status": engine_status,
-                            "route": "analyst_target" if assumption_led else "primary_method",
+                            "route": "analyst_target" if assumption_led else
+                            ((valuation.get("method_chain") or {}).get("route") or "primary_method")
+                            if isinstance(valuation, dict) else "primary_method",
+                            "method_key": (valuation.get("method_chain") or {}).get("selected")
+                            if isinstance(valuation, dict) else None,
                             "limitations": (assumption_release.get("limitations") or [])
                             if assumption_led else [],
                             "underlying_sotp": assumption_release.get("underlying_sotp")

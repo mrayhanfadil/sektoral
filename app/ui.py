@@ -138,19 +138,22 @@ LOGO_URL = "/assets/brand/sectoral-logo.svg"
 LOGO_SVG = (_ASSETS / "brand" / "sectoral-logo.svg").read_text(encoding="utf-8").replace(
     "Roboto, Arial, sans-serif", "Roboto, sans-serif")
 FLOW_URL = "/assets/brand/research-flow.svg"
+# Inlined on the landing page so the diagram text uses the embedded Roboto.
+FLOW_SVG = (_ASSETS / "brand" / "research-flow.svg").read_text(encoding="utf-8")
 
 
 def site_header(current: str = "") -> str:
     """Shared top bar. ``current`` is ``"home"`` or ``"research"``."""
     home = "#" if current == "home" else "/#"
     research_attr = ' aria-current="page"' if current == "research" else ""
+    laporan_attr = ' aria-current="page"' if current == "laporan" else ""
     return f"""<a href="#konten" class="skip-link">Lewati ke konten utama</a>
 <header class="site-header"><div class="wrap">
   <a href="/" class="brand" aria-label="Sectoral, beranda">{LOGO_SVG}</a>
   <nav class="nav" aria-label="Navigasi utama">
     <a href="{home}cara-kerja">Cara kerja</a>
-    <a href="{home}pemeriksaan">Pemeriksaan bukti</a>
-    <a href="{home}batasan">Batasan</a>
+    <a href="{home}framework">Framework</a>
+    <a href="/laporan"{laporan_attr}>Laporan</a>
     <a href="/research" class="nav-cta"{research_attr}>Coba riset emiten</a>
   </nav>
 </div></header>"""
@@ -164,12 +167,22 @@ def site_footer() -> str:
   <div class="footer-row">
     <img src="{LOGO_URL}" alt="Sectoral" width="92" height="20">
     <nav class="footer-links" aria-label="Tautan footer">
-      <a href="/research">Aplikasi riset</a><a href="/#cara-kerja">Cara kerja</a>
+      <a href="/research">Aplikasi riset</a><a href="/laporan">Laporan</a><a href="/#cara-kerja">Cara kerja</a>
       <a href="/#pemeriksaan">Pemeriksaan bukti</a><a href="/#batasan">Batasan</a>
     </nav>
     <span>© 2026 Sektoral · Sectors Hackathon 2026</span>
   </div>
 </div></footer>"""
+
+
+# Browser-tab icon: the logo's three bars (blue, teal, green) on white.
+FAVICON = ("data:image/svg+xml,"
+           "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+           "%3Crect width='32' height='32' rx='7' fill='%23FFFFFF'/%3E"
+           "%3Crect x='6' y='7' width='20' height='4.5' rx='2.2' fill='%230928B1'/%3E"
+           "%3Crect x='6' y='13.8' width='14' height='4.5' rx='2.2' fill='%231DCD9F'/%3E"
+           "%3Crect x='6' y='20.5' width='20' height='4.5' rx='2.2' fill='%233ED628'/%3E"
+           "%3C/svg%3E")
 
 
 def document(title: str, description: str, css: str, body: str, script: str = "") -> str:
@@ -180,6 +193,7 @@ def document(title: str, description: str, css: str, body: str, script: str = ""
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{description}">
+<link rel="icon" href="{FAVICON}">
 <style>{font_faces()}
 {BASE_CSS}
 {css}</style>
