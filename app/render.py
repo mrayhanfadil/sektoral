@@ -196,7 +196,11 @@ def _daily_prices(endpoint, value_field, as_of):
 
 
 def _comparison_series(ticker, as_of):
-    """Align issuer and IHSG on common dates and rebase both to 100."""
+    """Align issuer and IHSG on common dates and rebase both to 100.
+
+    Raw closes come back with the rebased pair: the chart plots price on the
+    left axis and the issuer-minus-IHSG spread on the right.
+    """
     issuer = _daily_prices(f"/daily/{ticker}/", "close", as_of)
     ihsg = _daily_prices("/index-daily/ihsg/", "price", as_of)
     dates = sorted(issuer.keys() & ihsg.keys())
@@ -204,54 +208,91 @@ def _comparison_series(ticker, as_of):
         return None
     issuer_base, ihsg_base = issuer[dates[0]], ihsg[dates[0]]
     return (dates,
+            [issuer[day] for day in dates],
             [100 * issuer[day] / issuer_base for day in dates],
             [100 * ihsg[day] / ihsg_base for day in dates])
 
 
+# Round tick steps per axis, so the four gridlines land on figures a reader can
+# hold in their head instead of on thirds of the raw range.
+PRICE_STEPS = (5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500,
+               5000, 10000, 20000, 25000, 50000)
+REL_STEPS = (1, 2, 5, 10, 20, 25, 50, 100, 200, 500)
+
+
+def _axis_scale(values, steps):
+    """Snap a series range to three intervals of a round step."""
+    low, high = min(values), max(values)
+    if high <= low:
+        high = low + 1
+    head = (high - low) * 0.07
+    low, high = low - head, high + head
+    span = high - low
+    step = next((c for c in steps if span / c <= 3.0), span / 3)
+    base = math.floor(low / step) * step
+    if base + 3 * step < high:
+        base = math.ceil(high / step) * step - 3 * step
+    return base, base + 3 * step
+
+
 def _price_chart(ticker, as_of):
-    """Plot issuer and IHSG price performance on identical trading dates."""
+    """Close on the left axis, performance vs IHSG on the right.
+
+    Adapted from sectors-hackathon's svg_price_vs_jci. The two scales are
+    deliberate: the relative line is read against its own zero line (above it
+    the issuer beat the index), a reading a shared rebased scale flattens.
+    """
     series = _comparison_series(ticker, as_of)
     if series is None:
         return ("<p class='small'>Perbandingan harga belum tersedia: "
                 "kurang dari dua tanggal perdagangan yang sama di data Sectors.</p>")
 
-    dates, issuer, ihsg = series
-    all_values = issuer + ihsg
-    padding = max(4, (max(all_values) - min(all_values)) * 0.08)
-    lower = 10 * math.floor((min(all_values) - padding) / 10)
-    upper = 10 * math.ceil((max(all_values) + padding) / 10)
-    if upper <= lower:
-        upper = lower + 10
-    x0, x1, y0, y1 = 32, 232, 17, 91
-    days = (dates[-1] - dates[0]).days
+    dates, closes, issuer, ihsg = series
+    relative = [a - b for a, b in zip(issuer, ihsg)]
+    p_lo, p_hi = _axis_scale(closes, PRICE_STEPS)
+    r_lo, r_hi = _axis_scale(relative, REL_STEPS)
+    x0, x1, y0, y1 = 30, 212, 15, 101
+    days = (dates[-1] - dates[0]).days or 1
 
-    def xy(day, value):
-        x = x0 + (day - dates[0]).days / days * (x1 - x0)
-        y = y1 - (value - lower) / (upper - lower) * (y1 - y0)
-        return x, y
+    def x_of(day):
+        return x0 + (day - dates[0]).days / days * (x1 - x0)
 
-    def polyline(values, color, dash=""):
-        points = " ".join(f"{x:.1f},{y:.1f}" for x, y in
-                          (xy(day, value) for day, value in zip(dates, values)))
+    def y_of(value, lo, hi):
+        return y1 - (value - lo) / (hi - lo) * (y1 - y0)
+
+    def points(values, lo, hi):
+        return " ".join(f"{x_of(day):.1f},{y_of(value, lo, hi):.1f}"
+                        for day, value in zip(dates, values))
+
+    def line(values, lo, hi, color, dash=""):
         dashed = f" stroke-dasharray='{dash}'" if dash else ""
-        end_x, end_y = xy(dates[-1], values[-1])
-        return (f"<polyline points='{points}' fill='none' stroke='{color}' "
+        return (f"<polyline points='{points(values, lo, hi)}' fill='none' stroke='{color}' "
                 f"stroke-width='2' stroke-linecap='round' stroke-linejoin='round'{dashed}/>"
-                f"<circle cx='{end_x:.1f}' cy='{end_y:.1f}' r='2.4' fill='{color}'/>")
+                f"<circle cx='{x_of(dates[-1]):.1f}' cy='{y_of(values[-1], lo, hi):.1f}' "
+                f"r='2.4' fill='{color}'/>")
 
-    ticks = {lower, 100, upper}
-    if 100 - lower >= 40:
-        ticks.add(10 * round((lower + 100) / 20))
-    if upper - 100 >= 40:
-        ticks.add(10 * round((upper + 100) / 20))
-    ticks = sorted(ticks)
-    grid = "".join(
-        f"<line x1='{x0}' x2='{x1}' y1='{xy(dates[0], tick)[1]:.1f}' "
-        f"y2='{xy(dates[0], tick)[1]:.1f}' stroke='{'#000000' if tick == 100 else '#E6E6E6'}' "
-        f"stroke-width='{'1.2' if tick == 100 else '0.5'}'/>"
-        f"<text x='26' y='{xy(dates[0], tick)[1] + 2.5:.1f}' text-anchor='end' "
-        f"font-size='7.5' fill='{MUT}'>{tick}</text>"
-        for tick in ticks if lower <= tick <= upper)
+    # Four gridlines, price labelled left and relative performance right.
+    grid = [f"<rect x='{x0}' y='{y0}' width='{x1 - x0}' height='{y1 - y0}' "
+            f"fill='none' stroke='#E6E6E6' stroke-width='0.5'/>"]
+    for i in range(4):
+        y = y0 + i * (y1 - y0) / 3
+        price_tick = p_hi - i * (p_hi - p_lo) / 3
+        rel_tick = r_hi - i * (r_hi - r_lo) / 3
+        grid.append(
+            f"<line x1='{x0}' x2='{x1}' y1='{y:.1f}' y2='{y:.1f}' "
+            f"stroke='#E6E6E6' stroke-width='0.5'/>"
+            f"<text x='{x0 - 3}' y='{y + 2.5:.1f}' text-anchor='end' font-size='7' "
+            f"fill='{MUT}'>{fmt.rp(price_tick)}</text>"
+            f"<text x='{x1 + 3}' y='{y + 2.5:.1f}' font-size='7' "
+            f"fill='{MUT}'>{rel_tick:+.0f}%</text>")
+    # Parity: above this line the issuer outperformed the index.
+    if r_lo <= 0 <= r_hi:
+        zero_y = y_of(0, r_lo, r_hi)
+        grid.append(f"<line x1='{x0}' x2='{x1}' y1='{zero_y:.1f}' y2='{zero_y:.1f}' "
+                    f"stroke='#000000' stroke-width='1.2'/>")
+
+    area = (f"<polygon points='{x0},{y1} {points(closes, p_lo, p_hi)} {x1},{y1}' "
+            f"fill='{ISSUER_COLOR}' fill-opacity='0.07'/>")
 
     issuer_return = issuer[-1] - 100
     ihsg_return = ihsg[-1] - 100
@@ -262,22 +303,29 @@ def _price_chart(ticker, as_of):
 
     safe_ticker = html.escape(ticker)
     return (
-        "<svg class='price-chart' viewBox='0 0 240 145' width='240' height='145' "
+        "<svg class='price-chart' viewBox='0 0 240 152' width='240' height='152' "
         "style='display:block;width:100%;height:auto' role='img' aria-labelledby='price-chart-title'>"
-        f"<title id='price-chart-title'>Kinerja harga {safe_ticker} dan IHSG, "
-        f"{dates[0].isoformat()} sampai {dates[-1].isoformat()}, awal 100</title>"
-        f"{grid}{polyline(ihsg, INDEX_COLOR, '4 3')}{polyline(issuer, ISSUER_COLOR)}"
-        f"<text x='{x0}' y='105' font-size='7.5' fill='{MUT}'>{dates[0]:%Y-%m}</text>"
-        f"<text x='{x1}' y='105' text-anchor='end' font-size='7.5' fill='{MUT}'>{dates[-1]:%Y-%m}</text>"
-        f"<line x1='32' x2='44' y1='120' y2='120' stroke='{ISSUER_COLOR}' stroke-width='2'/>"
-        f"<text x='48' y='123' font-size='8' fill='{INK}'>{safe_ticker} {pct(issuer_return)}%</text>"
-        f"<line x1='135' x2='147' y1='120' y2='120' stroke='{INDEX_COLOR}' stroke-width='2' stroke-dasharray='4 3'/>"
-        f"<text x='151' y='123' font-size='8' fill='{INK}'>IHSG {pct(ihsg_return)}%</text>"
-        f"<text x='32' y='140' font-size='7.8' fill='{MUT}'>Selisih {pct(spread)} poin persentase</text>"
+        f"<title id='price-chart-title'>Harga penutupan {safe_ticker} dan kinerja "
+        f"relatif terhadap IHSG, {dates[0].isoformat()} sampai {dates[-1].isoformat()}</title>"
+        f"{''.join(grid)}{area}"
+        f"{line(relative, r_lo, r_hi, INDEX_COLOR, '4 3')}"
+        f"{line(closes, p_lo, p_hi, ISSUER_COLOR)}"
+        f"<text x='{x0}' y='112' font-size='7.5' fill='{MUT}'>{dates[0]:%Y-%m}</text>"
+        f"<text x='{x1}' y='112' text-anchor='end' font-size='7.5' fill='{MUT}'>{dates[-1]:%Y-%m}</text>"
+        f"<line x1='{x0}' x2='{x0 + 12}' y1='124' y2='124' stroke='{ISSUER_COLOR}' stroke-width='2'/>"
+        f"<text x='{x0 + 16}' y='127' font-size='7.5' fill='{INK}'>{safe_ticker} "
+        f"{pct(issuer_return)}% - harga Rp, sumbu kiri</text>"
+        f"<line x1='{x0}' x2='{x0 + 12}' y1='136' y2='136' stroke='{INDEX_COLOR}' "
+        "stroke-width='2' stroke-dasharray='4 3'/>"
+        f"<text x='{x0 + 16}' y='139' font-size='7.5' fill='{INK}'>Relatif vs IHSG "
+        f"{pct(spread)} pp - sumbu kanan</text>"
+        f"<text x='{x0}' y='149' font-size='7' fill='{MUT}'>IHSG {pct(ihsg_return)}%. "
+        f"Selisih {pct(spread)} poin persentase</text>"
         "</svg>"
         f"<p class='src'>Sumber: Sectors; {len(dates)} tanggal sama "
         f"({dates[0].isoformat()} - {dates[-1].isoformat()}). "
-        "Kinerja harga, awal = 100; tidak termasuk dividen.</p>")
+        "Sumbu kiri harga penutupan (Rp); sumbu kanan kinerja relatif terhadap "
+        "IHSG dalam poin persentase, awal = 0; tidak termasuk dividen.</p>")
 
 
 def _column_widths(cols):
