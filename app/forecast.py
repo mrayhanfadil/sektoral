@@ -83,20 +83,24 @@ def _outyear_scenario(interim, plan):
     if [row.get("year") for row in assumptions if isinstance(row, dict)] != expected:
         return None
     previous_revenue = interim["full_year"]["revenue"]
+    share = interim.get("attributable_share") or 1.0
     rows = []
+    optional = lambda revenue, pct: None if pct is None else revenue * pct / 100
     for assumption in assumptions:
         revenue = previous_revenue * (1 + assumption["revenue_growth_pct"] / 100)
+        net = revenue * assumption["net_income_margin_pct"] / 100
         rows.append({
             "year": assumption["year"],
             "label": f"FY{assumption['year'] % 100:02d}F",
             "revenue": revenue,
-            "ebitda": revenue * assumption["ebitda_margin_pct"] / 100,
-            "net_profit": revenue * assumption["net_income_margin_pct"] / 100,
-            "capex": revenue * assumption["capex_to_revenue_pct"] / 100,
+            "ebitda": optional(revenue, assumption.get("ebitda_margin_pct")),
+            "net_profit": net,
+            "net_profit_attributable": net * share,
+            "capex": optional(revenue, assumption.get("capex_to_revenue_pct")),
             "revenue_growth_pct": assumption["revenue_growth_pct"],
-            "ebitda_margin_pct": assumption["ebitda_margin_pct"],
+            "ebitda_margin_pct": assumption.get("ebitda_margin_pct"),
             "net_income_margin_pct": assumption["net_income_margin_pct"],
-            "capex_to_revenue_pct": assumption["capex_to_revenue_pct"],
+            "capex_to_revenue_pct": assumption.get("capex_to_revenue_pct"),
             "rationale": assumption["rationale"],
             "source_ids": assumption["source_ids"],
         })
@@ -331,12 +335,13 @@ def build(intake, n_years=5, assumption_plan=None):
             "G2.9: forecast masih screening; bukti driver belum dihitung menjadi "
             f"proyeksi yang direkonsiliasi ({'; '.join(reasons)}).")
         forecast_basis, production_ready = "historical_screening_proxy", False
+    earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
-            "earnings_scenario": (None if is_mining else
-                                  _earnings_scenario(intake, normalized_plan)),
-            "outyear_scenario": _outyear_scenario(interim_scenario, assumption_plan),
+            "earnings_scenario": earnings_scenario,
+            "outyear_scenario": _outyear_scenario(
+                interim_scenario if is_mining else earnings_scenario, assumption_plan),
             "operating_bridge": operating_bridge,
             "driver_evidence": driver_evidence,
             "forecast_basis": forecast_basis,

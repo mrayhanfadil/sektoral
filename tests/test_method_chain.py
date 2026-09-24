@@ -254,7 +254,21 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
         "h2_net_margin_pct": metrics["net_profit"] / metrics["revenue"] * 100,
         "rationale": "H2 mengikuti run-rate 1H dengan kenaikan musiman ringan.",
         "source_ids": ["official"], "source_url": actual["source_url"],
-        "published_at": actual["published_at"]}}
+        "published_at": actual["published_at"],
+        "thesis_points": ["Volume pakan dan unggas menjaga pendapatan H2 setara 1H.",
+                          "Margin laba bersih bertahan karena biaya bahan baku stabil."],
+        "catalysts_risks": [
+            {"item": "Harga jagung", "timing": "H2 2026",
+             "driver_path": "Kenaikan harga jagung menaikkan biaya pakan dan menekan margin.",
+             "direction": "Negatif", "source_ids": ["official"]},
+            {"item": "Permintaan unggas", "timing": "Akhir tahun",
+             "driver_path": "Permintaan musiman menaikkan volume dan pendapatan kuartal empat.",
+             "direction": "Positif", "source_ids": ["official"]}]},
+        "outyear_scenario": [
+            {"year": 2027 + i, "revenue_growth_pct": 6.0, "ebitda_margin_pct": None,
+             "net_income_margin_pct": 7.0, "capex_to_revenue_pct": None,
+             "rationale": "Pertumbuhan volume moderat dengan margin sedikit normal.",
+             "source_ids": ["official"]} for i in range(4)]}
     doc = build.build("JPFA", tmp_path, as_of="2026-09-24", assumption_plan=plan,
                       assumption_status="validated")
     assert doc["meta"]["status"] == "distributable_assumption_led"
@@ -264,6 +278,18 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
     assert "Skenario laba FY26F: aktual 1H dan asumsi H2" in titles
     assert "Target harga: PER peer x EPS FY26F" in titles
     assert "Rantai metode valuasi" in titles
+    assert "Skenario laba FY27F-FY30F" in titles
+    risk = next(e for e in doc["exhibits"] if e["judul"].startswith("Katalis"))
+    assert risk["data"]["rows"][0][0] == "Harga jagung"
+    assert doc["cover"]["bullets"][1].startswith("Volume pakan")
+    key_fin = doc["exhibits"][0]
+    assert key_fin["judul"] == "Key Financials"
+    fy27 = key_fin["data"]["cols"].index("FY27F")
+    assert all(row[fy27] != "-" for row in key_fin["data"]["rows"]
+               if row[0].startswith(("Pendapatan", "Laba bersih", "EPS", "PER")))
+    body = " ".join(p for page in doc["bagian"] for p in page["paragraf"])
+    assert "Pisahkan driver" not in " ".join(doc["cover"]["bullets"])
+    assert "belum cukup untuk menerbitkan" not in body
     # Without the validated agent scenario the same issuer stays draft.
     draft = build.build("JPFA", tmp_path, as_of="2026-09-24")
     assert draft["meta"]["status"] == "draft_non_distributable"

@@ -328,7 +328,11 @@ def _validate_outyears(rows, source):
                   "ebitda_margin_pct": (0, 85),
                   "net_income_margin_pct": (-30, 60),
                   "capex_to_revenue_pct": (0, 60)}
+        optional = (set() if source.get("model_profile") == "finite_life_mining"
+                    else {"ebitda_margin_pct", "capex_to_revenue_pct"})
         for field, (lower, upper) in bounds.items():
+            if field in optional and row.get(field) is None:
+                continue
             if not _number(row.get(field), lower, upper):
                 problems.append(f"outyear_scenario[{year}].{field} outside bounds")
         rationale = row.get("rationale")
@@ -404,7 +408,63 @@ def _validate_earnings(scenario, source):
     if departs and not cites_driver:
         problems.append("earnings_scenario departs from the 1H run-rate without a cited "
                         "news article or official guidance")
+    problems.extend(_validate_thesis(scenario, allowed))
     return problems
+
+
+_RECOMMENDATION = re.compile(
+    r"\b(?:rekomendasi|akumulasi|buy|sell|hold|overweight|underweight|"
+    r"target\s+harga|(?:beli|jual|tahan|lepas)\s+(?:saham|posisi))\b", re.I)
+DIRECTIONS = {"Positif", "Negatif", "Dua arah"}
+
+
+def _validate_thesis(scenario, allowed):
+    """Forward thesis and sourced catalysts/risks for a published report."""
+    problems = []
+    points = scenario.get("thesis_points")
+    if (not isinstance(points, list) or not 2 <= len(points) <= 3 or
+            any(not isinstance(p, str) or not 40 <= len(p.strip()) <= 280 for p in points)):
+        problems.append("thesis_points must be 2-3 sentences of 40-280 characters")
+        points = []
+    items = scenario.get("catalysts_risks")
+    if not isinstance(items, list) or not 2 <= len(items) <= 5:
+        problems.append("catalysts_risks must list 2-5 items")
+        items = []
+    texts = list(points)
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            problems.append(f"catalysts_risks[{i}] must be an object")
+            continue
+        for field, (lo, hi) in {"item": (8, 90), "timing": (4, 120),
+                                "driver_path": (30, 280)}.items():
+            if not isinstance(item.get(field), str) or not lo <= len(item[field].strip()) <= hi:
+                problems.append(f"catalysts_risks[{i}].{field} length invalid")
+        if item.get("direction") not in DIRECTIONS:
+            problems.append(f"catalysts_risks[{i}].direction must be one of {sorted(DIRECTIONS)}")
+        ids = item.get("source_ids")
+        if not isinstance(ids, list) or not ids or any(x not in allowed for x in ids):
+            problems.append(f"catalysts_risks[{i}] must cite valid source_ids")
+        texts += [str(item.get(f) or "") for f in ("item", "timing", "driver_path")]
+    if items and not any(isinstance(x, dict) and x.get("direction") in ("Negatif", "Dua arah")
+                         for x in items):
+        problems.append("catalysts_risks must include at least one downside risk")
+    texts.append(str(scenario.get("rationale") or ""))
+    if any(_RECOMMENDATION.search(t) for t in texts):
+        problems.append("thesis/risks must not contain recommendation or target-price language")
+    if any(re.search(r"[\u4e00-\u9fff]", t) for t in texts):
+        problems.append("thesis/risks must use Indonesian text")
+    return problems
+
+
+def _earnings_anchor(source, earnings):
+    official = source["official"]
+    metrics = official["metrics"]
+    revenue_h2 = metrics["revenue"] * earnings["h2_revenue_to_h1"]
+    return {"year": int(str(official["period_end"])[:4]), "unit": official.get("unit"),
+            "source_url": official.get("source_url"),
+            "full_year": {"revenue": metrics["revenue"] + revenue_h2,
+                          "net_profit": metrics["net_profit"] +
+                          revenue_h2 * earnings["h2_net_margin_pct"] / 100}}
 
 
 def _interim_anchor(source, interim):
@@ -521,10 +581,18 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "pricing, volume, cost, funding or credit-cost reason, and cite it in "
             "source_ids. Price/index moves, broker calls and sentiment are not "
             "reasons. For Tavily articles rely on fetched full_text, not the headline. "
-            "Separate reported facts from your judgment in the rationale. Never "
-            "write a target price, valuation multiple, rating, production_ready or "
-            "forecast_basis; the engine applies peer PER. Return null if the "
-            "evidence cannot support a full-year view."
+            "Separate reported facts from your judgment in the rationale. Also "
+            "return thesis_points: 2-3 Indonesian sentences (40-280 characters "
+            "each), each a forward-looking claim tied to a measurable earnings "
+            "driver (claim -> number -> earnings implication). And "
+            "catalysts_risks: 2-5 objects {item (short name), timing (date, "
+            "window or condition), driver_path (driver -> revenue/margin/cost/"
+            "funding -> earnings effect), direction (Positif | Negatif | Dua arah), "
+            "source_ids}; include at least one downside risk. Use only supplied "
+            "evidence; issuer-specific risks beat generic ones. Never write a "
+            "target price, valuation multiple, rating, buy/sell/hold/akumulasi, "
+            "production_ready or forecast_basis; the engine applies peer PER. "
+            "Return null if the evidence cannot support a full-year view."
         )
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                    "model_profile": source["model_profile"],
@@ -537,7 +605,12 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "full_text", "full_text_status")} for item in source["news"]],
                    "json_shape": {"earnings_scenario": {
                        "h2_revenue_to_h1": "number", "h2_net_margin_pct": "number",
-                       "rationale": "Indonesian text", "source_ids": ["official"]}}}
+                       "rationale": "Indonesian text", "source_ids": ["official"],
+                       "thesis_points": ["Indonesian sentence"],
+                       "catalysts_risks": [{"item": "text", "timing": "text",
+                                            "driver_path": "text",
+                                            "direction": "Negatif",
+                                            "source_ids": ["official"]}]}}}
     else:
         role = (
             "Role: OUTYEAR EARNINGS SCENARIO ANALYST. Build an assumption-led "
@@ -564,6 +637,14 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "simply repeat one flat value every year without a causal explanation. "
             "Return compact JSON only; rationale must be at most two short sentences."
         )
+        if source.get("model_profile") != "finite_life_mining":
+            role += (
+                " This issuer is not a miner: ignore mine-life wording. The anchor "
+                "is an FY earnings scenario (revenue and net profit). Set "
+                "ebitda_margin_pct and capex_to_revenue_pct to null unless the "
+                "official release reports EBITDA/capex; never invent them. Drive "
+                "revenue growth and net margin from demand, pricing, capacity, "
+                "costs, funding or credit quality as the evidence supports.")
         news_by_id = {f"news:{item['article_index']}": {
             "title": item["title"], "timestamp": item["timestamp"],
             "url": item["source_url"], "driver": item.get("driver"),
@@ -619,12 +700,27 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                 else:
                     scenario = {key: scenario[key] for key in (
                         "h2_revenue_to_h1", "h2_net_margin_pct", "rationale",
-                        "source_ids") if key in scenario}
+                        "source_ids", "thesis_points", "catalysts_risks")
+                                if key in scenario}
                     # Provenance is bound to the official release, not the model.
                     scenario["source_url"] = source["official"]["source_url"]
                     scenario["published_at"] = source["official"]["published_at"]
                     fragment = {"earnings_scenario": scenario}
                     problems = _validate_earnings(scenario, source)
+                    # Resolve cited ids to titles/URLs so the report never
+                    # re-derives article positions from a different list.
+                    by_id = {f"news:{item['index']}": item for item in source["news"]}
+                    cited = set(scenario.get("source_ids") or []) | {
+                        x for item in scenario.get("catalysts_risks") or []
+                        if isinstance(item, dict) for x in item.get("source_ids") or []}
+                    scenario["source_refs"] = {
+                        x: ({"title": source["official"].get("period") and
+                             f"Rilis resmi {source['official']['period']}",
+                             "url": source["official"]["source_url"],
+                             "date": source["official"]["published_at"]} if x == "official" else
+                            {"title": by_id[x]["title"], "url": by_id[x]["url"],
+                             "date": str(by_id[x]["timestamp"])[:10]})
+                        for x in cited if x == "official" or x in by_id}
             elif name == "outyears":
                 if set(fragment) != {"outyear_scenario"}:
                     problems = ["outyear agent must return only outyear_scenario"]
@@ -738,6 +834,18 @@ def run_live(intake):
                     "outyears", source, spec, interim_anchor=anchor,
                     news_effects=(news_result.get("fragment") or {}).get("news_effects"))
             except Exception as error:  # noqa: BLE001 — preserve the FY actual scenario
+                results["outyears"] = {
+                    "status": "invalid", "fragment": None,
+                    "problems": [f"{type(error).__name__}: {str(error)[:180]}"]}
+    earnings_result = results.get("earnings") or {}
+    if earnings_result.get("status") == "validated" and "outyears" not in results:
+        earnings = (earnings_result.get("fragment") or {}).get("earnings_scenario")
+        if isinstance(earnings, dict):
+            try:
+                results["outyears"] = _run_subagent(
+                    "outyears", source, spec, interim_anchor=_earnings_anchor(source, earnings),
+                    news_effects=(news_result.get("fragment") or {}).get("news_effects"))
+            except Exception as error:  # noqa: BLE001 — keep the FY scenario
                 results["outyears"] = {
                     "status": "invalid", "fragment": None,
                     "problems": [f"{type(error).__name__}: {str(error)[:180]}"]}

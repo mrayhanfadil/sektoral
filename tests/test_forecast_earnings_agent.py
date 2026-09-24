@@ -22,7 +22,17 @@ def _scenario(**kw):
     base = {"h2_revenue_to_h1": 1.05, "h2_net_margin_pct": 11.0,
             "rationale": "Kinerja H2 mengikuti pola musiman tahun lalu tanpa katalis baru.",
             "source_ids": ["official"], "source_url": OFFICIAL["source_url"],
-            "published_at": OFFICIAL["published_at"]}
+            "published_at": OFFICIAL["published_at"],
+            "thesis_points": [
+                "Volume penjualan H2 ditopang kapasitas baru sehingga pendapatan naik.",
+                "Harga bahan baku yang stabil menjaga margin laba bersih di atas 10%."],
+            "catalysts_risks": [
+                {"item": "Harga bahan baku", "timing": "Sepanjang H2 2026",
+                 "driver_path": "Kenaikan harga jagung menekan margin kotor dan laba bersih.",
+                 "direction": "Negatif", "source_ids": ["official"]},
+                {"item": "Kapasitas baru", "timing": "Mulai 4Q26",
+                 "driver_path": "Tambahan kapasitas menaikkan volume dan pendapatan tahunan.",
+                 "direction": "Positif", "source_ids": ["official"]}]}
     base.update(kw)
     return base
 
@@ -53,3 +63,29 @@ def test_earnings_task_is_scheduled_for_banks_and_going_concern():
     assert agent._earnings_eligible(_source())
     assert agent._earnings_eligible(_source(profile="financial_ddm"))
     assert not agent._earnings_eligible(_source(profile="finite_life_mining"))
+
+
+def test_thesis_and_risks_are_required_and_recommendation_free():
+    assert any("thesis_points" in p for p in agent._validate_earnings(
+        _scenario(thesis_points=[]), _source()))
+    only_upside = [dict(x, direction="Positif") for x in _scenario()["catalysts_risks"]]
+    assert any("downside risk" in p for p in agent._validate_earnings(
+        _scenario(catalysts_risks=only_upside), _source()))
+    advice = _scenario(thesis_points=[
+        "Kami merekomendasikan akumulasi saham karena laba H2 membaik tajam.",
+        "Harga bahan baku yang stabil menjaga margin laba bersih di atas 10%."])
+    assert any("recommendation" in p for p in agent._validate_earnings(advice, _source()))
+    # "harga jual" (selling price) is an earnings driver, not advice.
+    price = _scenario(thesis_points=[
+        "Kenaikan harga jual ayam hidup menaikkan margin laba bersih H2.",
+        "Harga bahan baku yang stabil menjaga margin laba bersih di atas 10%."])
+    assert agent._validate_earnings(price, _source()) == []
+
+
+def test_non_mining_outyears_may_leave_ebitda_and_capex_empty():
+    rows = [{"year": 2027 + i, "revenue_growth_pct": 8.0, "ebitda_margin_pct": None,
+             "net_income_margin_pct": 9.0, "capex_to_revenue_pct": None,
+             "rationale": "Pertumbuhan volume moderat dengan margin stabil sesuai 1H.",
+             "source_ids": ["official"]} for i in range(4)]
+    assert agent._validate_outyears(rows, _source()) == []
+    assert agent._validate_outyears(rows, _source(profile="finite_life_mining"))

@@ -279,7 +279,10 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
         # Stored Tavily results remain usable when a key is not configured.
         # Profile-relevant future-driver queries run on every standard run,
         # independently of whether the analyst agent chose web_news.
-        found = tavily.news_context(t, intake_name, report_as_of, profile=intake_profile)
+        found = tavily.news_context(
+            t, intake_name, report_as_of, profile=intake_profile,
+            industry=forecast_intake.get("sub_industry") or forecast_intake.get("industry")
+            or forecast_intake.get("sub_sector"))
         web_search = {**found, "status": "searched" if found["items"] else
                       "no_relevant_results", "as_of": report_as_of}
     except tavily.TavilyError as error:
