@@ -3,6 +3,8 @@ fastapi>=0.115,<1
 uvicorn>=0.30,<1
 # PDF rendering and cover thumbnails; also run `playwright install chromium`
 # outside Docker (the image ships Chromium).
-playwright==1.59.0
+# Kept to a range: the Docker image ships 1.60 matched to its Chromium, and
+# pip must not replace it.
+playwright>=1.59,<1.61
 # Optional quote-refresh utility dependency; report builds remain offline.
 yfinance>=0.2.65

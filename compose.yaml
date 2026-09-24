@@ -3,9 +3,9 @@ services:
   sectoral:
     build:
       context: .
-      # Reuse the layers of the last local build (dependency layers rarely change).
-      cache_from:
-        - sectoral:local
+      # Build from local base images only (see the ARGs in the Dockerfile);
+      # rebuilds reuse the local layer cache and the npm/pip/apt cache mounts.
+      pull: false
     image: sectoral:local
     ports:
       - "127.0.0.1:${SECTORAL_PORT:-8765}:8765"
