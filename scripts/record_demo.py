@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.web import create_server
+from app.server import create_app
 
 
 _TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
@@ -33,6 +33,26 @@ def normalize_ticker(value: str) -> str:
     if not _TICKER.fullmatch(ticker):
         raise ValueError("Ticker must be 1-10 letters/digits with optional dot or hyphen.")
     return ticker
+
+
+def _start_server(outdir: Path):
+    """Run the API + built React app on a free localhost port in a thread."""
+    import socket
+    import uvicorn
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(create_app(outdir), host="127.0.0.1", port=port,
+                                           log_level="warning"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 15
+    while not server.started:
+        if time.monotonic() > deadline or not thread.is_alive():
+            raise RuntimeError("The local web server did not start.")
+        time.sleep(0.05)
+    return server, thread, f"http://127.0.0.1:{port}"
 
 
 def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
@@ -48,17 +68,13 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
 
     ticker = normalize_ticker(ticker)
     video_dir.mkdir(parents=True, exist_ok=True)
-    server = create_server(ROOT / "out" / "demo", host="127.0.0.1", port=0)
-    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread.start()
-    host, port = server.server_address
-    base_url = f"http://{host}:{port}"
+    server, server_thread, base_url = _start_server(ROOT / "out" / "demo")
     video_path = None
     run_error = None
     # The UI returns generic failures, while the internal logger may include
     # exception text from a data provider. Keep that material out of the
     # screen-recording session's terminal output as well.
-    app_logger = logging.getLogger("app.web")
+    app_logger = logging.getLogger("app.jobs")
     was_disabled = app_logger.disabled
     app_logger.disabled = True
     try:
@@ -96,11 +112,8 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
 
                 # Give the live status and its final honest quality label time
                 # to render before navigating to the generated pages.
-                page.wait_for_function(
-                    "document.querySelector('#job-state')?.textContent === 'Selesai' "
-                    "|| document.querySelector('#job-state')?.textContent === 'Tidak selesai'",
-                    timeout=10_000,
-                )
+                page.get_by_text(re.compile(r"^(Selesai|Selesai, parsial|Tidak selesai)$")).first.wait_for(
+                    timeout=10_000)
                 if state["state"] == "error":
                     raise RuntimeError(
                         "Research job failed. The browser shows the failure state; "
@@ -146,13 +159,13 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
                         # a research card; keep a real report page on screen.
                         _scroll_and_hold(page, page.locator(".page").last)
 
-                page.goto(base_url + trace_url, wait_until="domcontentloaded")
-                if page.locator("body").inner_text().strip() == "Not found":
+                page.goto(base_url + trace_url, wait_until="networkidle")
+                if page.get_by_text("Jejak riset tidak ditemukan").count():
                     raise RuntimeError("The generated agent trace could not be opened.")
-                trace_sections = page.locator("section.card")
+                trace_sections = page.locator("main article")
                 if trace_sections.count():
                     _scroll_and_hold(page, trace_sections.first)
-                trace_citations = page.locator("section.card li small")
+                trace_citations = page.locator("main article li")
                 if trace_citations.count():
                     _scroll_and_hold(page, trace_citations.first)
                 else:
@@ -175,9 +188,7 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
                 browser.close()
     finally:
         app_logger.disabled = was_disabled
-        server.shutdown()
-        server.server_close()
-        server.research_app.close()
+        server.should_exit = True
         server_thread.join(timeout=5)
 
     if run_error is not None:
