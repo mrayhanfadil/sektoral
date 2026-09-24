@@ -37,7 +37,9 @@ def check_g3(intake: dict | None, forecast: dict | None, valuation: dict | None)
     price = _num(intake.get("price"))
     mcap = _num(intake.get("market_cap"))
     tp = _num(valuation.get("tp"))
-    tv_share = _num(valuation.get("tv_share"))
+    chain = valuation.get("method_chain") or {}
+    dcf_selected = not chain.get("order") or chain.get("selected") == "fcff_dcf"
+    tv_share = _num(valuation.get("tv_share")) if dcf_selected else None
     g3log = valuation.get("g3") or {}
 
     # G3.1 terminal share >75% flagged. N/A for LoM without terminal.
@@ -139,7 +141,7 @@ def check_g3(intake: dict | None, forecast: dict | None, valuation: dict | None)
                          "TP ekstrem |upside|>50%: butuh tesis fundamental + keterbatasan model di hlm 1",
                          True))
     ps_g, ps_x = _num(valuation.get("ps_gordon")), _num(valuation.get("ps_exit"))
-    if ps_g is not None and ps_x is not None:
+    if dcf_selected and ps_g is not None and ps_x is not None:
         div = abs(ps_g - ps_x) / max(abs(ps_g), abs(ps_x), 1)
         if div > 0.30:
             checks.append(_v("G3.8_divergence", False,

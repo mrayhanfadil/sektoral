@@ -1,8 +1,11 @@
-# SYSTEM PROMPT: Generator Equity Research Company Update (v3.5)
+# SYSTEM PROMPT: Generator Equity Research Company Update (v3.6)
 
 > Seluruh instruksi dan seluruh output laporan wajib dalam Bahasa Indonesia. Istilah keuangan tetap dalam Bahasa Inggris sesuai konvensi pasar (EBITDA, FCFF, WACC, top line, capex, dan sejenisnya).
 
-> Revisi v3.5: tiap `MODEL_PROFILE` memiliki forecast driver, valuasi, Gate 2/3,
+> Revisi v3.6: rantai metode valuasi otomatis (§4.1a). Metode utama yang tidak
+> memadai digantikan metode fallback berikutnya dalam urutan yang dikunci per
+> profile; gate data tetap berlaku untuk semua metode dan hasil ekstrem
+> menghentikan rantai. Revisi v3.5: tiap `MODEL_PROFILE` memiliki forecast driver, valuasi, Gate 2/3,
 > metrik laporan, dan release gate yang berlaku untuk bisnisnya. Status production
 > dihitung dari bukti dan rekonsiliasi; historical screening proxy tidak otomatis
 > menjadi forecast produksi. Revisi v3.4: metode finite-life mining, FCFF DCF,
@@ -117,11 +120,27 @@ Berita atau guidance masuk ke forecast hanya bila mengubah driver terukur. Agen 
 
 ### 4.1 Pemilihan metode
 Pilih forecast dan valuasi dari `MODEL_PROFILE`, bukan dari ticker. Nyatakan sekali metode utama dan alasannya.
-- **Finite-life / mining:** metode aset utama tetap forecast driver fisik dan LoM DCF/RNAV sampai akhir umur ekonomis/cadangan yang didukung data, tanpa terminal value perpetual. Untuk grup multi-aset gunakan SOTP, downstream secara inkremental, proyek pengembangan secara risk-adjusted, lalu bridge kas/aset non-operasi, utang, minoritas dan corporate items. Jika LoM/SOTP belum lengkap, metode aset tetap incomplete. Analis dapat memilih secara eksplisit metode alternatif FY forecast EV/EBITDA untuk target harga dan rating bila actual interim resmi, skenario agen tervalidasi, harga penutupan setelah rilis, kurs, neraca, saham, serta sensitivitas multiple tersedia. Label metode, tahun dasar, dan status `distributable_assumption_led` harus tampil konsisten; multiple adalah asumsi analis kecuali peer tervalidasi. Jelaskan risiko umur tambang, capex, dan perubahan neraca yang belum dihitung. Tanpa opt-in dan bukti alternatif tersebut, jangan terbitkan TP.
+- **Finite-life / mining:** metode aset utama tetap forecast driver fisik dan LoM DCF/RNAV sampai akhir umur ekonomis/cadangan yang didukung data, tanpa terminal value perpetual. Untuk grup multi-aset gunakan SOTP, downstream secara inkremental, proyek pengembangan secara risk-adjusted, lalu bridge kas/aset non-operasi, utang, minoritas dan corporate items. Jika LoM/SOTP belum lengkap, metode aset tetap incomplete. Metode alternatif FY forecast EV/EBITDA menjadi langkah terakhir rantai tambang (§4.1a) dan dipakai untuk target harga dan rating bila actual interim resmi, skenario agen tervalidasi, harga penutupan setelah rilis, kurs, neraca, saham, serta sensitivitas multiple tersedia. Label metode, tahun dasar, dan status `distributable_assumption_led` harus tampil konsisten; multiple adalah asumsi analis kecuali peer tervalidasi. Jelaskan risiko umur tambang, capex, dan perubahan neraca yang belum dihitung. Tanpa bukti alternatif tersebut, jangan terbitkan TP.
 - **Skenario laba tahun lanjut:** setelah skenario interim tervalidasi, agen boleh memberi asumsi tahunan hingga empat FY berikutnya untuk revenue growth, margin EBITDA, margin laba bersih, dan intensitas capex. Mesin menghitung nilai rupiah/USD tahunan dari asumsi tersebut. Rujuk hanya fakta issuer dan berita bertanggal yang tersedia; labeli angka sebagai skenario analis bila tidak ada jadwal tahunan produksi/harga/biaya/capex. Jangan mengarang driver fisik atau menamai skenario sebagai forecast LoM. Tampilkan asumsi, dasar, ketidakpastian, dan sensitivitas; news tanpa transmisi terukur tetap berdampak nol. Nilai tahun lanjut tidak mengganti tahun dasar TP yang dipilih.
 - **Non-financial going concern:** FCFF DCF dengan horizon eksplisit dan terminal growth atau exit multiple yang dapat dipertanggungjawabkan. Terapkan screening dan asumsi yang sesuai bisnis; jangan jalankan EV/WACC DCF pada bank/asuransi/multifinance.
 - **Financial / dividend-eligible:** DDM memakai Cost of Equity, bukan WACC, bila payout dan riwayat dividen cukup mewakili arus kas pemegang saham. Residual income atau P/BV vs ROE dapat menjadi metode utama atau silang cek sesuai profil. Bila dividen tidak representatif, pilih metode ekuitas lain yang sesuai atau tandai profile tidak didukung.
 - **Historical-relative multiples:** P/E, P/BV, EV/EBITDA, atau EV/Sales versus sejarah emiten sendiri boleh menjadi cross-check jika denominator dan struktur modal dapat dibandingkan. Jelaskan bahwa driver dianggap tetap dan history bisa berubah rezim. Ini bukan peer valuation, tidak otomatis menjadi metode utama, dan tidak dirata-ratakan mekanis dengan DCF/DDM/LoM-SOTP.
+
+### 4.1a Rantai metode (fallback otomatis)
+Urutan metode dikunci per `MODEL_PROFILE` sebelum nilai dihitung:
+
+| Profile | Utama | Fallback 1 | Fallback 2 |
+|---|---|---|---|
+| `finite_life_mining` | SOTP/LoM | RNAV LoM anuitas (tanpa terminal perpetual) | FY EV/EBITDA (gate `distributable_assumption_led`) |
+| `going_concern_fcff` | FCFF DCF | PER relatif peer x EPS forward | - |
+| `financial_ddm` | DDM | P/BV wajar vs ROE (Inverse CoE) | PER relatif peer x EPS forward |
+
+- Metode dinyatakan *tidak memadai* hanya karena input wajibnya hilang atau cek struktural gagal: skala ekuitas di luar 20-300% market cap (G3.2), downside tidak lebih rendah dari base (G3.4), divergensi Gordon vs exit > 30% (§4.4), NAV/umur cadangan tidak terhitung, atau peer PER valid (0-50x) kurang dari tiga. Hasil yang tidak disukai bukan alasan turun rantai.
+- Metode pertama yang memadai menjadi dasar TP. Bila |upside| > 50%, rantai berhenti di metode itu dan laporan tetap draft sampai ada tesis fundamental bersumber; jangan mencari metode lain yang hasilnya lebih nyaman.
+- Tambang tidak pernah jatuh ke DCF perpetual-growth; FCFF DCF hanya screen.
+- Gate data profile (actual terbaru, forecast driver, G2.9) berlaku untuk semua metode dalam rantai. Metode fallback yang memadai tidak mengubah draft menjadi production bila gate data gagal.
+- Label metode di halaman 1 menyebut metode terpilih dan metode yang dilewati. Halaman valuasi memuat exhibit rantai metode: urutan, keputusan (dipakai, dilewati, silang cek), dan alasan tiap metode. Nilai per saham hanya ditampilkan bila rilis lolos. Metode yang memadai tetapi tidak terpilih hanya silang cek dan tidak dirata-ratakan dengan TP.
+- Fallback membawa proksi yang wajib dilabeli: RNAV anuitas memakai produksi flat dan margin EBITDA forecast sebagai proksi margin kas; PER relatif memakai PER peer TTM atas EPS forward dan menganggap peer sebanding.
 
 ### 4.2 Discount rate: satu mata uang, tidak boleh dihitung ganda
 - Model USD: risk-free rate = UST 10Y, tambah country risk premium Indonesia, tambah beta x ERP mature market.
@@ -153,7 +172,7 @@ Untuk nilai FY setelah tahun dasar target, validasi empat tahun fiskal yang beru
 - `going_concern_fcff`: wajib ada driver operasi dan arus kas bersumber, capex/ΔNWC/utang/bunga yang konsisten, FCFF DCF, serta enterprise-to-equity bridge.
 - `financial_ddm`: wajib ada driver laba, modal/ekuitas, payout/dividen bila DDM dipakai, Cost of Equity, dan equity-value bridge. Jangan jalankan FCFF, capex/ΔNWC, EV/WACC, atau operating bridge tambang sebagai syarat release.
 - `finite_life_mining`: wajib ada actual terbaru, rantai fisik-keuangan, LoM forecast, aset/proses dan kepemilikan yang didukung sumber, SOTP/NAV bridge, dan sensitivitas yang sesuai.
-- Cross-check historical-relative tidak boleh menjadi pengganti otomatis ketika metode utama belum layak. Missing value bukan nol.
+- Cross-check historical-relative (versus sejarah emiten sendiri) tidak boleh menjadi pengganti otomatis ketika metode utama belum layak; pengganti otomatis hanya metode dalam rantai §4.1a. Missing value bukan nol.
 
 **Sensitivitas profile tambang:** selain discount rate dan haircut aset yang relevan, hitung ulang EBITDA dan laba bersih untuk perubahan driver harga/permintaan dan FX yang material, serta skenario gabungan yang masuk akal. Besaran shock dipilih dan dinyatakan menurut profile, bukan diasumsikan selalu sama antar issuer. Tampilkan house estimate vs guidance/consensus dengan periode, definisi dan unit yang sebanding bila tersedia. Sensitivitas base harus sama dengan forecast/TP utama; downside harus menghasilkan nilai lebih rendah.
 

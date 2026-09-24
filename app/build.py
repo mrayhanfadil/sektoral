@@ -29,7 +29,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
                          assumption_status=assumption_status)
     doc = narrative.build(doc_in, fc, va, g1, method=method,
                           illustrative_scenarios=illustrative_scenarios or analyst_target)
-    report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va))
+    report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va)
     doc["forecast_assumptions"] = {
         "plan": fc.get("assumption_plan"),
         "news_effects": fc.get("news_assumptions") or [],
