@@ -13,8 +13,8 @@ import math
 
 CHAINS = {
     "finite_life_mining": ("sotp_lom", "rnav_lom", "ev_ebitda_fy"),
-    "going_concern_fcff": ("fcff_dcf", "relative_pe"),
-    "financial_ddm": ("ddm", "pbv_roe", "relative_pe"),
+    "going_concern_fcff": ("fcff_dcf", "relative_pe", "pe_fy_scenario"),
+    "financial_ddm": ("ddm", "pbv_roe", "relative_pe", "pe_fy_scenario"),
 }
 
 LABELS = {
@@ -25,11 +25,12 @@ LABELS = {
     "relative_pe": "Relatif PER peer (median) x EPS forward",
     "ddm": "DDM dividen eksplisit + terminal Gordon (CoE, bukan WACC)",
     "pbv_roe": "P/BV wajar vs ROE (Inverse CoE)",
+    "pe_fy_scenario": "FY26F PER median peer x EPS skenario analis",
 }
 
 SHORT = {"sotp_lom": "SOTP/LoM", "rnav_lom": "RNAV LoM", "ev_ebitda_fy": "EV/EBITDA FY",
          "fcff_dcf": "DCF FCFF", "relative_pe": "PER relatif", "ddm": "DDM",
-         "pbv_roe": "P/BV-ROE"}
+         "pbv_roe": "P/BV-ROE", "pe_fy_scenario": "PER FY skenario"}
 
 SCALE_BAND = (0.2, 3.0)
 EXTREME_UPSIDE = 0.50
@@ -69,11 +70,28 @@ def candidate(key, per_share=None, per_share_down=None, reasons=(),
             "detail": detail or {}}
 
 
+def peer_pes(peers) -> list[float]:
+    """PER peer valid (0 < PER <= 50), terurut."""
+    lo, hi = PEER_PE_BAND
+    return sorted(p.get("pe") for p in peers or []
+                  if _finite(p.get("pe")) and lo < p["pe"] <= hi)
+
+
+def _median(xs):
+    mid = len(xs) // 2
+    return xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2
+
+
+def pe_quartiles(pes) -> tuple[float, float, float]:
+    """(kuartil bawah, median, kuartil atas) dari PER peer terurut."""
+    half = max(1, len(pes) // 2)
+    return _median(pes[:half]), _median(pes), _median(pes[-half:])
+
+
 def relative_pe(peers, eps_fwd, shares, market_cap) -> dict:
     """Median PER peer (0 < PER <= 50) x EPS forward; downside = kuartil bawah."""
-    lo, hi = PEER_PE_BAND
-    pes = sorted(p.get("pe") for p in peers or []
-                 if _finite(p.get("pe")) and lo < p["pe"] <= hi)
+    hi = PEER_PE_BAND[1]
+    pes = peer_pes(peers)
     reasons = []
     if len(pes) < MIN_PEERS:
         reasons.append(f"peer PER valid {len(pes)} < {MIN_PEERS} (band 0-{hi:.0f}x)")
@@ -81,10 +99,7 @@ def relative_pe(peers, eps_fwd, shares, market_cap) -> dict:
         reasons.append("EPS forward <= 0; PER tidak bermakna")
     if reasons:
         return candidate("relative_pe", reasons=reasons)
-    mid = len(pes) // 2
-    median = pes[mid] if len(pes) % 2 else (pes[mid - 1] + pes[mid]) / 2
-    q1 = pes[: max(1, len(pes) // 2)]
-    q1 = q1[len(q1) // 2] if len(q1) % 2 else (q1[len(q1) // 2 - 1] + q1[len(q1) // 2]) / 2
+    q1, median, _q3 = pe_quartiles(pes)
     ps = median * eps_fwd
     return candidate(
         "relative_pe", per_share=ps, per_share_down=q1 * eps_fwd,
@@ -136,6 +151,14 @@ _READER_REASONS = (
     ("mining forecast is not", "forecast fisik tambang masih screening"),
     ("operating bridge missing", "jembatan operasi fisik ke keuangan belum ada"),
     ("forecast gate failed", "forecast belum lolos rekonsiliasi G2.9"),
+    ("sourced operating and cash-flow forecast", "forecast driver bersumber belum lengkap"),
+    ("forecast is not verified", "forecast masih screening"),
+    ("forecast: ", "forecast masih screening"),
+    ("driver forecast missing", "seri driver forecast belum bersumber"),
+    ("latest official interim actual", "hasil interim resmi belum tervalidasi"),
+    ("earnings scenario", "skenario laba FY belum tervalidasi"),
+    ("peer PER", "peer PER valid kurang dari tiga"),
+    ("official share count", "jumlah saham resmi belum tersedia"),
 )
 
 

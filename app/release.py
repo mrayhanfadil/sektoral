@@ -410,24 +410,7 @@ def common_blockers(profile, intake, forecast):
         if isinstance(g2, Mapping) and g2.get("G2.9_operating_bridge") == "gagal":
             blockers.append("forecast gate failed: G2.9 physical-to-financial operating bridge is not reconciled")
     elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
-        actual = intake.get("latest_official_actual") if isinstance(intake, Mapping) else None
-        if not isinstance(actual, Mapping):
-            blockers.append("latest official interim actual is missing or unverified")
-        elif not all(actual.get(key) for key in
-                     ("period", "period_end", "published_at", "source_url", "metrics")):
-            blockers.append("latest official interim actual has incomplete provenance")
-        else:
-            report_date = _date((intake or {}).get("as_of"))
-            publication = _date(actual.get("published_at"))
-            period_end = _date(actual.get("period_end"))
-            if not publication or not period_end or period_end > publication or (
-                    report_date and publication > report_date):
-                blockers.append("latest official interim dates are inconsistent")
-            metrics = actual.get("metrics")
-            if (not isinstance(metrics, Mapping) or
-                    any(not isinstance(metrics.get(key), (int, float)) for key in
-                        ("revenue", "net_profit"))):
-                blockers.append("latest official interim revenue/net profit are missing")
+        blockers.extend(_official_actual_blockers(intake))
         blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile))
     return blockers
 
@@ -459,6 +442,101 @@ def assess_chain(profile, intake, forecast, chain):
     return {"status": "draft_non_distributable" if blockers else "distributable",
             "blockers": blockers, "route": (chain or {}).get("route"),
             "method_key": (chain or {}).get("selected")}
+
+
+def _official_actual_blockers(intake):
+    actual = intake.get("latest_official_actual") if isinstance(intake, Mapping) else None
+    if not isinstance(actual, Mapping):
+        return ["latest official interim actual is missing or unverified"]
+    if not all(actual.get(key) for key in
+               ("period", "period_end", "published_at", "source_url", "metrics")):
+        return ["latest official interim actual has incomplete provenance"]
+    blockers = []
+    report_date = _date((intake or {}).get("as_of"))
+    publication = _date(actual.get("published_at"))
+    period_end = _date(actual.get("period_end"))
+    if not publication or not period_end or period_end > publication or (
+            report_date and publication > report_date):
+        blockers.append("latest official interim dates are inconsistent")
+    metrics = actual.get("metrics")
+    if (not isinstance(metrics, Mapping) or
+            any(not isinstance(metrics.get(key), (int, float)) for key in
+                ("revenue", "net_profit"))):
+        blockers.append("latest official interim revenue/net profit are missing")
+    return blockers
+
+
+def _fresh_close_blockers(intake, publication):
+    """Sourced close on/after the release and at most five days before the report.
+
+    A dated quote pack is preferred; a Sectors daily close in the local cache is
+    accepted with cache provenance.
+    """
+    report_day = _date(intake.get("as_of"))
+    quote = intake.get("market_quote") or {}
+    if quote:
+        quote_day, sourced = _date(quote.get("date")), _verified_source_reference(
+            quote.get("source_url"))
+        same_price = quote.get("price") == intake.get("price")
+    else:
+        quote_day, sourced, same_price = _date(intake.get("price_date")), True, True
+    if (not report_day or not publication or not quote_day or not sourced or
+            not same_price or not publication <= quote_day <= report_day or
+            (report_day - quote_day).days > 5):
+        return ["fresh sourced close after latest release is required"]
+    return []
+
+
+def assess_earnings_led(intake, forecast, valuation, assumption_status):
+    """FY PER release for going concern/bank built on a validated earnings scenario.
+
+    Mirrors :func:`assess_assumption_led`: the screening forecast stays in the
+    trace, but the release rests on the official 1H actual, the agent's
+    validated H2 assumption, a fresh close, official shares and peer PER.
+    """
+    blockers = []
+    profile = intake.get("model_profile")
+    if profile not in {"going_concern_fcff", "financial_ddm"}:
+        blockers.append("earnings-led method requires going_concern_fcff or financial_ddm")
+    blockers.extend(_official_actual_blockers(intake))
+    actual = intake.get("latest_official_actual") or {}
+    scenario = (forecast or {}).get("earnings_scenario") or {}
+    if assumption_status != "validated":
+        blockers.append("forecast agent scenario has not passed validation")
+    if not scenario:
+        blockers.append("earnings scenario is missing (needs official 1H revenue/net profit "
+                        "and a validated H2 assumption)")
+    elif (scenario.get("source_url") != actual.get("source_url") or
+          scenario.get("published_at") != actual.get("published_at")):
+        blockers.append("earnings scenario does not match the official actual release")
+    blockers.extend(_fresh_close_blockers(intake, _date(actual.get("published_at"))))
+    evidence = intake.get("official_evidence") or {}
+    if evidence.get("reporting_currency") == "USD":
+        fx = intake.get("fx_spot") or {}
+        fx_day, report_day = _date(fx.get("date")), _date(intake.get("as_of"))
+        if (not report_day or not fx_day or fx_day > report_day or
+                (report_day - fx_day).days > 7 or not _text(fx.get("source")) or
+                not _number(fx.get("rate")) or fx["rate"] <= 0):
+            blockers.append("fresh sourced USD/IDR quote is required")
+    detail = (valuation or {}).get("detail") or {}
+    if not _number(detail.get("shares")) or detail["shares"] <= 0:
+        blockers.append("official share count is missing from the balance sheet")
+    if not detail.get("peer_count") or detail["peer_count"] < 3:
+        blockers.append("peer PER set has fewer than three valid peers")
+    if _number(detail.get("eps_idr")) and detail["eps_idr"] <= 0:
+        blockers.append("FY earnings per share is not positive; PER is not meaningful")
+    q = [detail.get(k) for k in ("q1_pe", "median_pe", "q3_pe")]
+    if all(_number(v) for v in q) and not q[0] <= q[1] <= q[2]:
+        blockers.append("peer PER sensitivity is not ordered")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "FY PER peer (earnings scenario)",
+        "blockers": blockers,
+        "limitations": ["EPS FY adalah skenario analis dari aktual 1H + asumsi H2, "
+                        "bukan forecast driver terekonsiliasi",
+                        "PER peer TTM dari data Sectors; peer dianggap sebanding",
+                        "arus kas, capex dan neraca setelah periode interim belum dimodelkan"],
+    }
 
 
 def assess_release(profile, intake, forecast, sotp_result):

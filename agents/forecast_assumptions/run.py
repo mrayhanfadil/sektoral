@@ -348,6 +348,65 @@ def _validate_outyears(rows, source):
     return list(dict.fromkeys(problems))
 
 
+EARNINGS_PROFILES = {"going_concern_fcff", "financial_ddm"}
+EARNINGS_LIMITS = {"h2_revenue_to_h1": (0.4, 2.5), "h2_net_margin_pct": (-30, 60)}
+
+
+def _earnings_eligible(source):
+    official = source.get("official") or {}
+    metrics = official.get("metrics") or {}
+    return (source.get("model_profile") in EARNINGS_PROFILES and
+            str(official.get("period") or "").startswith("1H") and
+            _number(metrics.get("revenue"), 1e-9, float("inf")) and
+            _number(metrics.get("net_profit"), float("-inf"), float("inf")))
+
+
+def _validate_earnings(scenario, source):
+    """H2 earnings assumption for going concern / bank, anchored to official 1H.
+
+    Departures from the 1H run-rate need a cited article or official guidance,
+    so news is what moves the number away from a mechanical 1H x 2.
+    """
+    if not _earnings_eligible(source):
+        return ["earnings_scenario requires official 1H revenue and net profit"]
+    if not isinstance(scenario, dict):
+        return ["earnings_scenario must be an object"]
+    problems = []
+    official = source["official"]
+    for field, (lower, upper) in EARNINGS_LIMITS.items():
+        if not _number(scenario.get(field), lower, upper):
+            problems.append(f"earnings_scenario.{field} outside bounds")
+    if (scenario.get("source_url") != official.get("source_url") or
+            scenario.get("published_at") != official.get("published_at")):
+        problems.append("earnings_scenario source does not match official release")
+    if not _dated_on_or_before(official.get("published_at"), source["as_of"]):
+        problems.append("earnings_scenario official release is future-dated")
+    rationale = scenario.get("rationale")
+    if not isinstance(rationale, str) or not 40 <= len(rationale.strip()) <= 1400:
+        problems.append("earnings_scenario needs a 40-1400 character rationale")
+    elif re.search(r"[\u4e00-\u9fff]", rationale):
+        problems.append("earnings_scenario rationale must use Indonesian text")
+    allowed = {"official"} | {f"news:{item['index']}" for item in source["news"]}
+    source_ids = scenario.get("source_ids")
+    if (not isinstance(source_ids, list) or "official" not in source_ids or
+            any(item not in allowed for item in source_ids)):
+        problems.append("earnings_scenario must cite official plus valid news source_ids")
+        source_ids = []
+    metrics = official["metrics"]
+    h1_margin = metrics["net_profit"] / metrics["revenue"] * 100
+    departs = (
+        _number(scenario.get("h2_revenue_to_h1"), 0, float("inf")) and
+        not 0.8 <= scenario["h2_revenue_to_h1"] <= 1.25) or (
+        _number(scenario.get("h2_net_margin_pct"), -1e9, 1e9) and
+        abs(scenario["h2_net_margin_pct"] - h1_margin) > 5)
+    cites_driver = any(item.startswith("news:") for item in source_ids) or bool(
+        official.get("guidance"))
+    if departs and not cites_driver:
+        problems.append("earnings_scenario departs from the 1H run-rate without a cited "
+                        "news article or official guidance")
+    return problems
+
+
 def _interim_anchor(source, interim):
     official = source["official"]
     actual = official["metrics"]
@@ -447,6 +506,38 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                    "model_profile": source["model_profile"],
                    "official": source["official"]}
+    elif name == "earnings":
+        role = (
+            "Role: FY EARNINGS SCENARIO ANALYST (non-mining). Return "
+            "{\"earnings_scenario\": object or null}. Anchor on the official 1H "
+            "revenue and net profit, then choose the H2 assumption: "
+            "h2_revenue_to_h1 [0.4,2.5] and h2_net_margin_pct [-30,60] (H2 net "
+            "profit / H2 revenue, in percent), plus rationale (4-6 short Indonesian "
+            "sentences, 40-1400 characters) and source_ids chosen from "
+            "[\"official\", \"news:0\", ...]. Start from the 1H run-rate and the "
+            "issuer's seasonality in annual_actuals. Move away from it (revenue ratio "
+            "outside 0.8-1.25 or net margin more than 5pp from 1H) only when a "
+            "supplied article or official guidance gives a measurable operating, "
+            "pricing, volume, cost, funding or credit-cost reason, and cite it in "
+            "source_ids. Price/index moves, broker calls and sentiment are not "
+            "reasons. For Tavily articles rely on fetched full_text, not the headline. "
+            "Separate reported facts from your judgment in the rationale. Never "
+            "write a target price, valuation multiple, rating, production_ready or "
+            "forecast_basis; the engine applies peer PER. Return null if the "
+            "evidence cannot support a full-year view."
+        )
+        payload = {"ticker": source["ticker"], "as_of": source["as_of"],
+                   "model_profile": source["model_profile"],
+                   "official": {key: source["official"].get(key) for key in (
+                       "source_url", "published_at", "period", "period_end", "unit",
+                       "metrics", "guidance", "operating_context", "revenue_breakdown",
+                       "annual_actuals")},
+                   "news": [{key: item.get(key) for key in (
+                       "index", "title", "timestamp", "url", "origin", "body",
+                       "full_text", "full_text_status")} for item in source["news"]],
+                   "json_shape": {"earnings_scenario": {
+                       "h2_revenue_to_h1": "number", "h2_net_margin_pct": "number",
+                       "rationale": "Indonesian text", "source_ids": ["official"]}}}
     else:
         role = (
             "Role: OUTYEAR EARNINGS SCENARIO ANALYST. Build an assumption-led "
@@ -517,6 +608,23 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                 else:
                     problems = _validate({"news_effects": fragment["news_effects"],
                                           "interim_scenario": None}, source)
+            elif name == "earnings":
+                scenario = fragment.get("earnings_scenario", fragment)
+                if scenario is None:
+                    problems = ["earnings agent returned no scenario"]
+                    fragment = None
+                elif not isinstance(scenario, dict):
+                    problems = ["earnings_scenario must be an object"]
+                    fragment = None
+                else:
+                    scenario = {key: scenario[key] for key in (
+                        "h2_revenue_to_h1", "h2_net_margin_pct", "rationale",
+                        "source_ids") if key in scenario}
+                    # Provenance is bound to the official release, not the model.
+                    scenario["source_url"] = source["official"]["source_url"]
+                    scenario["published_at"] = source["official"]["published_at"]
+                    fragment = {"earnings_scenario": scenario}
+                    problems = _validate_earnings(scenario, source)
             elif name == "outyears":
                 if set(fragment) != {"outyear_scenario"}:
                     problems = ["outyear agent must return only outyear_scenario"]
@@ -573,6 +681,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
     if problems:
         return {"status": "invalid", "fragment": None, "problems": problems}
     binding = ("official_evidence" if name == "interim" else
+               "official_evidence_and_dated_news" if name == "earnings" else
                "official_evidence_and_dated_news" if name == "outyears" else
                "sectors_and_tavily_news")
     return {"status": "validated", "fragment": fragment, "problems": [],
@@ -605,6 +714,8 @@ def run_live(intake):
             str(source["official"].get("period") or "").startswith("1H")
             and not missing_interim):
         tasks.append("interim")
+    if _earnings_eligible(source):
+        tasks.append("earnings")
     results = {}
     with ThreadPoolExecutor(max_workers=min(len(tasks), 2) or 1) as pool:
         futures = {name: pool.submit(_run_subagent, name, source, spec) for name in tasks}
@@ -631,7 +742,7 @@ def run_live(intake):
                     "status": "invalid", "fragment": None,
                     "problems": [f"{type(error).__name__}: {str(error)[:180]}"]}
     plan = {"news_effects": [], "interim_scenario": None,
-            "outyear_scenario": None}
+            "outyear_scenario": None, "earnings_scenario": None}
     problems = []
     for name, result in results.items():
         if result["status"] == "validated":
@@ -653,6 +764,7 @@ def run_live(intake):
             plan = None
     return {"status": status, "plan": plan, "problems": problems,
             "interim_status": (results.get("interim") or {}).get("status", "not_run"),
+            "earnings_status": (results.get("earnings") or {}).get("status", "not_run"),
             "outyears_status": (results.get("outyears") or {}).get("status", "not_run"),
             "subagents": {name: {"status": result["status"],
                                  "problems": result["problems"]}

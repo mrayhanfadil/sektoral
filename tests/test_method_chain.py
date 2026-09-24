@@ -22,7 +22,8 @@ def test_primary_sufficient_is_selected_and_rest_are_cross_checks():
                                      "relative_pe": MC.candidate("relative_pe", reasons=["x"])},
                    PRICE)
     assert chain["selected"] == "ddm" and chain["route"] == "primary"
-    assert [t["decision"] for t in chain["trace"]] == ["selected", "cross_check", "not_needed"]
+    assert [t["decision"] for t in chain["trace"]] == [
+        "selected", "cross_check", "not_needed", "not_needed"]
     assert MC.summary_blocker(chain) is None
 
 
@@ -118,12 +119,17 @@ def test_harness_follows_chain_not_skipped_primary(monkeypatch):
     assert not any("G3.8" in b for b in result["blockers"])
 
 
-def test_data_gates_still_block_a_sufficient_fallback():
+def test_data_gates_make_screening_methods_yield():
     intake_, fc, _ = test_valtables._fixture()
     eps = fc["rows"][0]["eps"]
     intake_["peers"] = [{"pe": test_valtables.PRICE / eps * f} for f in (0.9, 1.0, 1.1)]
     va = valuation.build(intake_, fc)
-    assert va["method_chain"]["selected"] == "relative_pe"
+    trace = {t["key"]: t for t in va["method_chain"]["trace"]}
+    # PER on screening EPS is numerically fine but rests on an unreleased forecast.
+    assert trace["relative_pe"]["decision"] == "skipped"
+    assert any("latest official interim" in r for r in trace["relative_pe"]["reasons"])
+    assert trace["pe_fy_scenario"]["decision"] == "skipped"
+    assert va["method_chain"]["selected"] is None
     assert va["release"]["status"] == "draft_non_distributable"
     assert va["tp"] is None and va["rating"] == "DRAFT NON-DISTRIBUTABLE"
 
@@ -162,3 +168,102 @@ def test_mining_reaches_assumption_led_route_when_its_gate_passes(monkeypatch):
     assert va["method_chain"]["route"] == "fallback"
     assert va["release"]["status"] == "distributable_assumption_led"
     assert va["tp"] == 5000 and va["scenario_target"] is target
+
+
+# ---------------------------------------------------------------- earnings-led
+
+def _earnings_fixture(monkeypatch, h2_ratio=1.0, h2_margin=10.0, peers=(2.5, 2.8, 3.1)):
+    intake_, fc, _ = test_valtables._fixture()
+    shares = test_valtables.SHARES
+    actual = {"period": "1H26", "period_end": "2026-06-30", "published_at": "2026-08-20",
+              "source_url": "https://issuer.example/1h26.pdf",
+              "metrics": {"revenue": 50e12, "net_profit": 5e12,
+                          "net_profit_attributable": 4.5e12}}
+    intake_.update(as_of="2026-09-24", price_date="2026-09-22",
+                   latest_official_actual=actual,
+                   official_evidence={"reporting_currency": "IDR",
+                                      "balance_sheet": {"shares_outstanding": shares}},
+                   peers=[{"pe": p} for p in peers])
+    plan = {"earnings_scenario": {"h2_revenue_to_h1": h2_ratio, "h2_net_margin_pct": h2_margin,
+                                  "rationale": "x" * 50, "source_ids": ["official"],
+                                  "source_url": actual["source_url"],
+                                  "published_at": actual["published_at"]}}
+    fc["earnings_scenario"] = forecast._earnings_scenario(intake_, plan)
+    return intake_, fc
+
+
+def test_earnings_scenario_math_uses_attributable_share():
+    intake_, fc = _earnings_fixture(None)
+    fy = fc["earnings_scenario"]["full_year"]
+    assert fy["revenue"] == 100e12 and fy["net_profit"] == 10e12
+    assert fy["net_profit_attributable"] == 9e12  # 1H attributable share 90%
+
+
+def test_going_concern_reaches_earnings_led_route_and_releases():
+    intake_, fc = _earnings_fixture(None)
+    va = valuation.build(intake_, fc, assumption_status="validated")
+    chain = va["method_chain"]
+    assert chain["selected"] == "pe_fy_scenario" and chain["route"] == "fallback"
+    assert [t["decision"] for t in chain["trace"]] == ["skipped", "skipped", "selected"]
+    assert va["release"]["status"] == "distributable_assumption_led"
+    eps = 9e12 / test_valtables.SHARES
+    assert va["tp"] == round(2.8 * eps / 10) * 10  # median peer PER
+    assert va["tp_down"] == round(2.5 * eps / 10) * 10
+    assert va["method"].startswith("FY26F PER median peer x EPS skenario analis")
+    assert abs(va["implied"]["per"] - va["tp"] / eps) < 1e-9
+    result = runner.run_all(intake_, fc, va)
+    assert result["gates"]["engine_status"] == "distributable_assumption_led"
+    assert result["log_gate"]["release"]["route"] == "analyst_target"
+
+
+def test_earnings_led_needs_validated_agent_fresh_close_and_peers():
+    intake_, fc = _earnings_fixture(None)
+    assert valuation.build(intake_, fc)["release"]["status"] == "draft_non_distributable"
+    stale = dict(intake_, price_date="2026-08-01")
+    va = valuation.build(stale, fc, assumption_status="validated")
+    assert va["method_chain"]["selected"] is None
+    assert any("fresh sourced close" in r for t in va["method_chain"]["trace"]
+               for r in t["reasons"])
+    thin, fc2 = _earnings_fixture(None, peers=(2.5, 2.8))
+    va = valuation.build(thin, fc2, assumption_status="validated")
+    assert va["method_chain"]["selected"] is None
+
+
+def test_earnings_led_extreme_result_stays_draft():
+    intake_, fc = _earnings_fixture(None, h2_margin=60.0, peers=(30.0, 40.0, 50.0))
+    va = valuation.build(intake_, fc, assumption_status="validated")
+    assert va["method_chain"]["extreme"] is True
+    assert va["release"]["status"] == "draft_non_distributable"
+    assert va["tp"] is None
+
+
+def test_mining_profile_never_gets_earnings_scenario():
+    doc_in, _ = intake.load("AMMN")
+    plan = {"earnings_scenario": {"h2_revenue_to_h1": 1.0, "h2_net_margin_pct": 10,
+                                  "rationale": "x" * 50, "source_ids": ["official"]}}
+    assert forecast.build(doc_in, assumption_plan=plan)["earnings_scenario"] is None
+
+
+def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
+    from app import build
+    doc_in, _ = intake.load("JPFA", as_of="2026-09-24")
+    actual = doc_in["latest_official_actual"]
+    metrics = actual["metrics"]
+    plan = {"news_effects": [], "earnings_scenario": {
+        "h2_revenue_to_h1": 1.05,
+        "h2_net_margin_pct": metrics["net_profit"] / metrics["revenue"] * 100,
+        "rationale": "H2 mengikuti run-rate 1H dengan kenaikan musiman ringan.",
+        "source_ids": ["official"], "source_url": actual["source_url"],
+        "published_at": actual["published_at"]}}
+    doc = build.build("JPFA", tmp_path, as_of="2026-09-24", assumption_plan=plan,
+                      assumption_status="validated")
+    assert doc["meta"]["status"] == "distributable_assumption_led"
+    assert doc["harness"]["status"] == "distributable_assumption_led"
+    assert doc["meta"]["tp"] and doc["meta"]["rating"] in {"Buy", "Hold", "Sell"}
+    titles = [e["judul"] for e in doc["exhibits"]]
+    assert "Skenario laba FY26F: aktual 1H dan asumsi H2" in titles
+    assert "Target harga: PER peer x EPS FY26F" in titles
+    assert "Rantai metode valuasi" in titles
+    # Without the validated agent scenario the same issuer stays draft.
+    draft = build.build("JPFA", tmp_path, as_of="2026-09-24")
+    assert draft["meta"]["status"] == "draft_non_distributable"

@@ -96,8 +96,8 @@ def attach_method_chain(doc, va):
     exhibit = method_chain_exhibit(va)
     if not exhibit:
         return
-    page = next((p for p in doc["bagian"] if str(p.get("judul", "")).startswith(
-        ("Valuasi", "Skenario nilai", "Target harga"))), None)
+    page = next((p for prefix in ("Target harga", "Valuasi", "Skenario nilai")
+                 for p in doc["bagian"] if str(p.get("judul", "")).startswith(prefix)), None)
     if page is None:
         doc["bagian"].append(_page(
             "Valuasi: rantai metode",

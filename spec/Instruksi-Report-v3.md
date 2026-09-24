@@ -129,16 +129,17 @@ Pilih forecast dan valuasi dari `MODEL_PROFILE`, bukan dari ticker. Nyatakan sek
 ### 4.1a Rantai metode (fallback otomatis)
 Urutan metode dikunci per `MODEL_PROFILE` sebelum nilai dihitung:
 
-| Profile | Utama | Fallback 1 | Fallback 2 |
+| Profile | Utama | Fallback | Langkah terakhir (gate `distributable_assumption_led`) |
 |---|---|---|---|
-| `finite_life_mining` | SOTP/LoM | RNAV LoM anuitas (tanpa terminal perpetual) | FY EV/EBITDA (gate `distributable_assumption_led`) |
-| `going_concern_fcff` | FCFF DCF | PER relatif peer x EPS forward | - |
-| `financial_ddm` | DDM | P/BV wajar vs ROE (Inverse CoE) | PER relatif peer x EPS forward |
+| `finite_life_mining` | SOTP/LoM | RNAV LoM anuitas (tanpa terminal perpetual) | FY EV/EBITDA atas skenario interim |
+| `going_concern_fcff` | FCFF DCF | PER relatif peer x EPS forward | FY PER median peer x EPS skenario laba |
+| `financial_ddm` | DDM | P/BV wajar vs ROE (Inverse CoE), lalu PER relatif peer | FY PER median peer x EPS skenario laba |
 
 - Metode dinyatakan *tidak memadai* hanya karena input wajibnya hilang atau cek struktural gagal: skala ekuitas di luar 20-300% market cap (G3.2), downside tidak lebih rendah dari base (G3.4), divergensi Gordon vs exit > 30% (§4.4), NAV/umur cadangan tidak terhitung, atau peer PER valid (0-50x) kurang dari tiga. Hasil yang tidak disukai bukan alasan turun rantai.
 - Metode pertama yang memadai menjadi dasar TP. Bila |upside| > 50%, rantai berhenti di metode itu dan laporan tetap draft sampai ada tesis fundamental bersumber; jangan mencari metode lain yang hasilnya lebih nyaman.
 - Tambang tidak pernah jatuh ke DCF perpetual-growth; FCFF DCF hanya screen.
-- Gate data profile (actual terbaru, forecast driver, G2.9) berlaku untuk semua metode dalam rantai. Metode fallback yang memadai tidak mengubah draft menjadi production bila gate data gagal.
+- Metode yang menilai forecast driver (SOTP/LoM, RNAV, DCF, DDM, P/BV, PER forward) dinyatakan tidak memadai selama gate data profile (actual terbaru, forecast driver, G2.9) gagal, agar rantai dapat mencapai langkah terakhir.
+- Langkah terakhir berbasis asumsi memakai gate sendiri, bukan G2.9: actual 1H resmi, skenario agen tervalidasi yang terikat ke rilis itu, harga penutupan bersumber sesudah rilis (maksimal lima hari sebelum laporan), kurs bertanggal bila mata uang pelaporan USD, jumlah saham dari neraca resmi, dan sensitivitas multiple yang berurutan. Untuk going concern dan bank, agen hanya memilih rasio pendapatan H2/H1 dan margin laba bersih H2; penyimpangan material dari run-rate 1H (rasio di luar 0,8-1,25 atau margin berbeda lebih dari 5pp) wajib mengutip artikel bertanggal atau panduan resmi. Mesin menghitung EPS FY (porsi induk dari 1H bila dilaporkan) dan menerapkan PER median minimal tiga peer valid; kuartil bawah dan atas menjadi sensitivitas. Label metode dan status `distributable_assumption_led` wajib tampil konsisten.
 - Label metode di halaman 1 menyebut metode terpilih dan metode yang dilewati. Halaman valuasi memuat exhibit rantai metode: urutan, keputusan (dipakai, dilewati, silang cek), dan alasan tiap metode. Nilai per saham hanya ditampilkan bila rilis lolos. Metode yang memadai tetapi tidak terpilih hanya silang cek dan tidak dirata-ratakan dengan TP.
 - Fallback membawa proksi yang wajib dilabeli: RNAV anuitas memakai produksi flat dan margin EBITDA forecast sebagai proksi margin kas; PER relatif memakai PER peer TTM atas EPS forward dan menganggap peer sebanding.
 
