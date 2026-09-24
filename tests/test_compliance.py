@@ -80,7 +80,7 @@ def test_draft_does_not_promote_cache_reserve_life_to_valuation(tmp_path):
     notes = " ".join(d["catatan_metodologi"]).lower()
     assert "tp" not in d["meta"]
     assert "rating" not in d["meta"]
-    assert "umur cadangan tidak ada di cache" not in notes
+    assert "umur cadangan tidak ada di data Sectors" not in notes
     assert "rnav annuitas indikatif" in notes
     assert "bukan nilai wajar" in notes
 

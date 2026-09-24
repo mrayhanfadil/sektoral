@@ -34,7 +34,7 @@ def test_ammn_end_to_end(tmp_path):
     assert "Forecast fisik tambang" in body
     assert "Jembatan operasi ke keuangan" in body
     assert "Valuasi SOTP/LoM" in body
-    assert "Kinerja kuartalan yang tersedia di cache" in body
+    assert "Kinerja kuartalan yang tersedia di data Sectors" in body
     assert "KB Valbury" not in body
     assert "BRI Danareksa" not in body
     assert doc["log_gate"]["release"]["status"] == "draft_non_distributable"
@@ -65,7 +65,7 @@ def test_ammn_illustrative_pages_keep_release_boundary(tmp_path):
     assert doc["meta"]["illustrative_scenarios"] is True
     assert "tp" not in doc["meta"] and "rating" not in doc["meta"]
     titles = {item["judul"] for item in doc["exhibits"]}
-    assert "Riwayat keuangan dalam cache" in titles
+    assert "Riwayat keuangan dalam data Sectors" in titles
     assert "Screen proyeksi historis, bukan forecast produksi" in titles
     assert "Perbandingan nilai model lama, bukan target harga" in titles
     assert "Sensitivitas Gordon ilustratif (Rp/saham)" in titles

@@ -1,7 +1,7 @@
 """Catatan metodologi kondisional (spesifikasi Instruksi-Report-v3.md 3.1, 4.1, 4.4).
 
 Aturan: setiap kalimat keterbatasan harus mencerminkan data yang
-benar-benar dipakai laporan ini. Kalimat "tidak ada di cache" dilarang
+benar-benar dipakai laporan ini. Kalimat "tidak ada di data Sectors" dilarang
 muncul untuk data yang sudah ditampilkan di exhibit.
 """
 
@@ -28,7 +28,7 @@ def methodology_notes(intake, fc, val, mineops_or_none):
     """Catatan metodologi kondisional: miner, bank, FX."""
     notes = list(val.get("notes") or []) if isinstance(val, dict) else []
     out = [n for n in notes
-           if "umur cadangan tidak ada di cache" not in n]
+           if "umur cadangan tidak ada di" not in n]
     if _is_miner(intake):
         life = None
         basis = None
@@ -40,13 +40,13 @@ def methodology_notes(intake, fc, val, mineops_or_none):
                  "akhir umur aset tanpa terminal perpetual; umur cadangan "
                  "tembaga terhitung %s tahun (%s) dan ditampilkan di exhibit, "
                  "sehingga Gordon + exit multiple dipakai sebagai proksi "
-                 "karena profil produksi tahunan tidak ada di cache."
+                 "karena profil produksi tahunan tidak ada di data Sectors."
                  % (_fmt_tahun(life), basis or "basis cadangan"))
             out.append(s)
         else:
             out.append("keterbatasan model: emiten tambang idealnya DCF "
                        "sampai akhir umur aset tanpa terminal perpetual; "
-                       "umur cadangan tidak ada di cache sehingga dipakai "
+                       "umur cadangan tidak ada di data Sectors sehingga dipakai "
                        "Gordon + exit multiple sebagai proksi.")
     if _is_bank(intake) and not any("bank idealnya" in n for n in out):
         out.append("keterbatasan model: bank idealnya pendekatan GGM ekuitas "
@@ -74,8 +74,8 @@ def capex_impact_line(has_project_capex, missing_what):
     """Kalimat dampak tangga fallback capex proyek level 4 (spesifikasi 3.1)."""
     if has_project_capex:
         return ("capex proyek mengikuti guidance/timeline yang tersedia "
-                "di cache dan tercermin di FCFF.")
-    return ("capex proyek Rp0 karena %s tidak ada di cache; bila proyek "
+                "di data Sectors dan tercermin di FCFF.")
+    return ("capex proyek Rp0 karena %s tidak ada di data Sectors; bila proyek "
             "berjalan, FCFF overstated sebesar belanja yang hilang."
             % (missing_what or "guidance/timeline"))
 

@@ -64,7 +64,7 @@ def _research_citation_labels(citations):
         refs.append(ref)
 
     for index, article in news_articles.items():
-        title = _word_cut(str(article.get("title") or "Berita cache"), 90)
+        title = _word_cut(str(article.get("title") or "Berita Sectors"), 90)
         timestamp = str(article.get("timestamp") or "")[:10]
         source = str(article.get("source") or "")
         domain = urlsplit(source).netloc if source else ""
@@ -177,7 +177,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                     [money(row.get("ebitda")) for row in history] + f_dashes,
                     [f"Laba bersih ({unit})"] +
                     [money(row.get("earnings")) for row in history] + f_dashes]
-        key_note = ("Sumber: Sectors cache, company/report. Kolom forecast dan "
+        key_note = ("Sumber: Sectors, company/report. Kolom forecast dan "
                     "multiple belum tersedia karena model belum lolos validasi.")
     years = [str(row["year"]) for row in history]
     add("Key Financials", ["Tahun buku 31 Des"] + years +
@@ -229,7 +229,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             ["Rasio", previous.get("period", "Periode lalu"), actual["period"]],
             diagnostic_rows,
             f"Sumber: {actual['source_title']}, {page_reference}; "
-            "rasio dihitung dari angka resmi, nilai negatif ditampilkan sebagai '-'.")
+            "rasio dihitung dari angka resmi; nilai negatif ditampilkan dalam kurung.")
         chart_metrics = [
             {"label": "Pendapatan", "prior": prior_metrics.get("revenue"),
              "current": metrics.get("revenue")},
@@ -255,7 +255,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                 [[label, money(quarter.get(key))] for label, key in
                  (("Pendapatan", "revenue"), ("EBITDA", "ebitda"),
                   ("Laba bersih", "earnings"))],
-                f"Sumber: Sectors cache, financials/quarterly/{ticker}; "
+                f"Sumber: Sectors, financials/quarterly/{ticker}; "
                 "cakupan kumulatif dan tanggal publikasi belum terverifikasi.")
 
     revenue_breakdown = evidence.get("revenue_breakdown") or {}
@@ -415,11 +415,11 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                      ["Kepentingan nonpengendali", f"US${check_money(crosscheck['minority_interest_usd'])} juta",
                       "Dikurangkan dari enterprise value setelah utang bersih."],
                      ["USD/IDR", fmt._id(crosscheck["fx"]["rate"], 0),
-                      f"Kurs {crosscheck['fx']['date']}; harga saham cache "
+                      f"Kurs {crosscheck['fx']['date']}; harga saham Sectors "
                       f"{intake['price_date']} lebih lama."],
                      ["Saham beredar", fmt._id(crosscheck["shares"] / 1e6, 1) + " juta",
                       "Sesudah saham treasuri; dilusi berikutnya belum dimodelkan."]],
-                    "Sumber: rilis interim resmi dan cache FX bertanggal. Skenario "
+                    "Sumber: rilis interim resmi dan kurs FX bertanggal. Skenario "
                     "multiple mengabaikan umur tambang, capex LoM, dan nilai aset "
                     "terpisah; hanya cross-check internal.")
                 illustrative_pages.append({
@@ -438,20 +438,20 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                 ("Laba bersih", "earnings"), ("Arus kas operasi", "ocf"),
                 ("Belanja modal", "capex_out"), ("Arus kas bebas tercatat", "fcf"))
             history_exhibit = add(
-                "Riwayat keuangan dalam cache",
+                "Riwayat keuangan dalam data Sectors",
                 ["Rp miliar"] + years,
                 [[label] + [cache_money(row.get(key)) for row in annual_cache]
                  for label, key in history_items],
-                f"Sumber: Sectors cache, company/report/{ticker}, financials.historical_financials. "
+                f"Sumber: Sectors, company/report/{ticker}, financials.historical_financials. "
                 "Angka Rp historis adalah konteks terpisah dari laporan interim resmi "
                 f"bermata uang {currency}; belum direkonsiliasi ke model.")
             balance_items = (("Kas", "cash"), ("Utang", "total_debt"),
                              ("Ekuitas", "equity"), ("Aset", "assets"))
             balance_exhibit = add(
-                "Neraca historis dalam cache", ["Rp miliar"] + years,
+                "Neraca historis dalam data Sectors", ["Rp miliar"] + years,
                 [[label] + [cache_money(row.get(key)) for row in annual_cache]
                  for label, key in balance_items],
-                f"Sumber: Sectors cache, company/report/{ticker}, financials.historical_financials; "
+                f"Sumber: Sectors, company/report/{ticker}, financials.historical_financials; "
                 "basis historis, bukan jembatan SOTP.")
             history_page_exhibits = [history_exhibit, balance_exhibit]
             holders = intake.get("major_holders") or []
@@ -468,15 +468,15 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                         fmt._id(shares_held / 1e6, 1)
                         if isinstance(shares_held, (int, float)) else "-"])
                 history_page_exhibits.append(add(
-                    "Pemegang saham utama dalam cache",
+                    "Pemegang saham utama dalam data Sectors",
                     ["Pemegang saham", "Porsi", "Saham (juta)"], holder_rows,
-                    f"Sumber: Sectors cache, company/report/{ticker}, ownership.major_shareholders; "
-                    "snapshot cache dapat berbeda dari tanggal laporan interim."))
+                    f"Sumber: Sectors, company/report/{ticker}, ownership.major_shareholders; "
+                    "snapshot Sectors dapat berbeda dari tanggal laporan interim."))
             illustrative_pages.append({
                 "halaman": 0, "judul": "Konteks historis dan kepemilikan",
                 "layout": "stack",
                 "paragraf": ["Tabel historis berikut membantu membaca siklus operasi dan pendanaan. "
-                             "Angka cache dalam rupiah dan angka rilis interim dalam mata uang "
+                             "Angka Sectors dalam rupiah dan angka rilis interim dalam mata uang "
                              "pelaporan ditampilkan terpisah; perbedaan definisi belum "
                              "direkonsiliasi."],
                 "exhibit": history_page_exhibits})
@@ -494,7 +494,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                  ["Laba bersih proksi"] + screen_money("net"),
                  ["Belanja modal proksi"] + screen_money("capex"),
                  ["Arus kas proksi"] + screen_money("fcf")],
-                "Sumber: Sectors cache annuals; kalkulasi screen historis Sektoral "
+                "Sumber: Sectors, data tahunan; kalkulasi screen historis Sektoral "
                 "dengan penyesuaian berita tervalidasi bila tercatat. "
                 "CAGR/margin diproyeksikan mekanis, capex disamakan dengan D&A dan "
                 "modal kerja belum dimodelkan. Rilis interim terbaru belum masuk "
@@ -513,7 +513,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                  ["Capex = D&A (Rp miliar)"] + screen_money("capex"),
                  ["Utang tetap (Rp miliar)"] + screen_money("debt"),
                  ["Perubahan modal kerja"] + ["belum dihitung"] * len(screen)],
-                "Sumber: screen historis Sektoral dari Sectors cache. Asumsi "
+                "Sumber: screen historis Sektoral dari data Sectors. Asumsi "
                 "capex, utang dan modal kerja belum memiliki jadwal operasi/pendanaan "
                 "yang bersumber; angka tidak boleh dipakai sebagai forecast produksi.")
             page_exhibits = [screen_exhibit, assumption_exhibit]
@@ -544,7 +544,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                     "Berita sebagai asumsi skenario",
                     ["Tanggal", "Berita", "Dampak ke model", "Dasar keputusan"],
                     event_rows,
-                    "Sumber: berita bertanggal dalam Sectors cache: " +
+                    "Sumber: berita bertanggal dalam data Sectors: " +
                     "; ".join(dict.fromkeys(event_sources)) +
                     ". Dampak numerik adalah asumsi analis, bukan fakta emiten.")
             illustrative_pages.append({
@@ -586,7 +586,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                       "bukan discount rate dan life aset tervalidasi."],
                      ["Porsi nilai terminal", fmt.pct(va.get("tv_share") or 0),
                       "Ketergantungan terminal tinggi mengurangi kegunaan screen."]],
-                    "Sumber: Sektoral historical screening model dari Sectors cache; "
+                    "Sumber: Sektoral historical screening model dari data Sectors; "
                     "tidak memasukkan LoM/SOTP, jadwal proyek, dan jembatan 1H terbaru. "
                     "Tidak ada rating, target harga, atau nilai wajar produksi dari tabel ini.")
                 grid = valuation_mod.gordon_screen_grid(
@@ -639,7 +639,8 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                 segment = max(segments, key=lambda row: row.get("current") or 0)
                 watch_rows.append([
                     f"Bauran {segment['name']}",
-                    f"Penjualan {segment['name']} {money_phrase(segment.get('current'))} "
+                    f"{segment['name'] if segment['name'].lower().startswith('penjualan') else 'Penjualan ' + segment['name']} "
+                    f"{money_phrase(segment.get('current'))} "
                     f"pada {actual['period']}.",
                     "Pantau volume, harga realisasi dan waktu pengakuan penjualan."])
             if guidance:
@@ -693,14 +694,11 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             value = current.get(key)
             if value is None:
                 continue
-            fact = f"{label} {money_phrase(value)}"
-            prior_value = prior.get(key)
-            if prior_value is not None:
-                fact += f" ({pct_change(value, prior_value)} yoy)"
-            lead_facts.append(fact)
-        lead = (f"{ticker} mencatat " + ", ".join(lead_facts) + ". " +
-                f"{material_mix}{runrate}"
-                f"Hasil ini berasal dari laporan resmi terbit {actual['published_at']}.")
+            lead_facts.append(
+                _change_sentence(label, value, prior.get(key), actual["period"],
+                                 prior.get("period", "periode pembanding"), money_phrase))
+        lead = (f"{ticker} menerbitkan hasil {actual['period']} pada {actual['published_at']}. " +
+                " ".join(lead_facts[:3]) + " " + f"{material_mix}{runrate}").strip()
         operating = evidence.get("operating_context") or []
         driver = operating[0]["fact"] if operating else "Rincian driver operasional belum tervalidasi."
         if revenue_breakdown and not mining:
@@ -772,9 +770,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             valuation_text = ("Data aktual yang tersedia belum cukup untuk "
                               "menerbitkan nilai wajar atau rekomendasi produksi. "
                               "Pemeriksaan yang belum selesai tercantum pada halaman valuasi.")
-        first_bullet = (f"Pendapatan {actual['period']} tumbuh "
-                        f"{pct_change(current.get('revenue'), prior.get('revenue'))} yoy "
-                        f"ke {money_phrase(current.get('revenue'))}.")
+        first_bullet = _change_sentence("pendapatan", current.get("revenue"), prior.get("revenue"),
+                                        actual["period"], prior.get("period", "periode pembanding"),
+                                        money_phrase)
         if mining:
             segments = revenue_breakdown.get("segments") or []
             segment_facts = ", ".join(
@@ -885,8 +883,8 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
              ["Equity Risk Premium (Damodaran)", fmt.pct(wi["erp"])],
              ["(=) Cost of Equity dipakai", fmt.pct(wi["re"])],
              ["Jalur band (pola BBTN):", ""],
-             ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di cache)"],
-             ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di cache)"],
+             ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
+             ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
              ["Offset dari mean", "n.a.: dipakai hasil CAPM"]],
             "Source: Company, Sektoral Estimates; Rf = INDOGB 10Y, "
             "ERP = Damodaran, Beta = Bloomberg")
@@ -1028,8 +1026,7 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
     doc["method"] = va["method"]
     doc["log_gate"]["G3"] = va["g3"]
     doc["log_gate"]["release"] = va["release"]
-    doc["cover"]["headline"] = (
-        f"{va['rating']}: {forecast_label} EBITDA dan valuasi 8x EV/EBITDA")
+    doc["cover"]["headline"] = _assumption_headline(va["rating"], forecast_label)
     doc["cover"]["bullets"][2] = (
         f"Target Rp{fmt.rp(va['tp'])} memberi {fmt.pct(va['upside'])} terhadap "
         f"penutupan Rp{fmt.rp(intake['price'])} pada {intake['price_date']}; "
@@ -1090,7 +1087,9 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
                 "bukan panduan emiten atau forecast produksi LoM.")}
         doc["exhibits"].append(assumptions_exhibit)
         anchor = next((index for index, page in enumerate(doc["bagian"])
-                       if page["judul"] == "Forecast FY26 dari rilis terbaru"), 0)
+                       if page["judul"] in ("Skenario FY26 dari rilis terbaru",
+                                            f"Forecast {forecast_label} dari rilis terbaru")),
+                      len(doc["bagian"]) - 1)
         doc["bagian"].insert(anchor + 1, {
             "halaman": 0,
             "judul": "Skenario laba FY27F-FY30F",
@@ -1234,6 +1233,39 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
     return doc
 
 
+def _change_sentence(label, value, prior, period, prior_period, money_phrase):
+    """One metric per sentence (spec §5.1: at most three figures per sentence).
+
+    Growth off a near-zero or loss base is described in words, not as a
+    four-digit percentage that says nothing about the business.
+    """
+    subject = label[:1].upper() + label[1:]
+    if value is None:
+        return ""
+    if prior is None:
+        return f"{subject} {period} {money_phrase(value)}."
+    if prior < 0 <= value:
+        return (f"{subject} {period} {money_phrase(value)}, berbalik dari rugi "
+                f"{money_phrase(abs(prior))} pada {prior_period}.")
+    if prior > 0 and value / prior - 1 > 3:
+        return (f"{subject} {period} naik ke {money_phrase(value)} dari basis rendah "
+                f"{money_phrase(prior)} pada {prior_period}.")
+    if prior > 0:
+        change = value / prior - 1
+        return (f"{subject} {period} {'naik' if change >= 0 else 'turun'} "
+                f"{fmt.pct(abs(change))} yoy ke {money_phrase(value)}.")
+    return f"{subject} {period} {money_phrase(value)}."
+
+
+def _assumption_headline(rating, forecast_label):
+    """Forward thesis with a verb, at most ten words (spec §5.2)."""
+    return {
+        "Buy": f"Pemulihan {forecast_label} Belum Tercermin pada Harga Saham",
+        "Hold": f"Pemulihan {forecast_label} Berjalan, Harga Mendekati Nilai Wajar",
+        "Sell": f"Pemulihan {forecast_label} Sudah Tercermin, Valuasi Membatasi Ruang Naik",
+    }.get(rating, f"Pemulihan {forecast_label} Berjalan, Valuasi Menunggu Bukti")
+
+
 def _research_section(intake, page=2):
     """Build print-friendly cards from the upstream-validated research brief."""
     brief = intake.get("research_analysis")
@@ -1315,9 +1347,9 @@ def _build_draft(intake, fc, va, g1, method="auto",
         ["EBITDA (Rp miliar)"] + [_draft_value(a.get("ebitda")) for a in hist],
         ["Laba bersih (Rp miliar)"] + [_draft_value(a.get("earnings")) for a in hist],
     ]
-    hist_no = add("Laporan historis di cache",
+    hist_no = add("Laporan historis di data Sectors",
                   ["Metrik"] + [str(a.get("year", "-")) for a in hist], hist_rows,
-                  "Sumber: Sectors cache, company/report; angka historis belum direkonsiliasi ke interim terbaru.")
+                  "Sumber: Sectors, company/report; angka historis belum direkonsiliasi ke interim terbaru.")
 
     quarter = intake.get("latest_quarterly_actual")
     quarter_no = None
@@ -1334,10 +1366,10 @@ def _build_draft(intake, fc, va, g1, method="auto",
                          for label, key in quarter_metrics]
         period_end = str(quarter.get("date") or "-")
         quarter_no = add(
-            "Kinerja kuartalan yang tersedia di cache",
+            "Kinerja kuartalan yang tersedia di data Sectors",
             ["Metrik", period_end], quarter_rows,
-            f"Sumber: Sectors cache, financials/quarterly/{t}; tanggal adalah akhir periode. "
-            "Cache tidak menyimpan tanggal publikasi/halaman untuk memvalidasi ketersediaan historis.")
+            f"Sumber: Sectors, financials/quarterly/{t}; tanggal adalah akhir periode. "
+            "Data Sectors tidak menyimpan tanggal publikasi/halaman untuk memvalidasi ketersediaan historis.")
 
     screening_no = None
     if F:
@@ -1376,14 +1408,14 @@ def _build_draft(intake, fc, va, g1, method="auto",
             deepdive_note = (
                 f" Teks lengkap otomatis tersedia untuk {len(fetched)} dari "
                 f"{len(deepdive)} tautan berita di atas; kutipan yang dipakai "
-                "agen tetap merujuk pada judul dan tautan yang sama dengan cache."
+                "agen tetap merujuk pada judul dan tautan yang sama dengan data Sectors."
             )
         news_no = add(
-            "Konteks berita dari cache dan implikasi",
+            "Konteks berita dari Sectors dan implikasi",
             ["Tanggal", "Narasi ulang", "Kaitan ke tesis", "Batasan"], news_rows,
-            "Analisis agen atas berita ticker-spesifik di sectors_cache /news/. "
+            "Analisis agen atas berita ticker-spesifik di data Sectors /news/. "
             "Berita adalah konteks media, bukan guidance; tidak mengubah forecast numerik "
-            "tanpa dukungan data finansial/operasi cache. Referensi: " +
+            "tanpa dukungan data finansial/operasi Sectors. Referensi: " +
             "; ".join(news_sources) + "." + deepdive_note)
 
     blocker_groups = {}
@@ -1391,8 +1423,8 @@ def _build_draft(intake, fc, va, g1, method="auto",
         if item.startswith("latest interim actuals"):
             latest_date = ((intake.get("latest_quarterly_actual") or {}).get("date")
                            or "belum tersedia")
-            blocker_groups["Validasi interim dari cache"] = (
-                f"Baris kuartalan terakhir berakhir {latest_date}; cache belum memberi "
+            blocker_groups["Validasi interim dari data Sectors"] = (
+                f"Baris kuartalan terakhir berakhir {latest_date}; data Sectors belum memberi "
                 "tanggal publikasi dan metadata kelengkapan untuk membuktikan data terbaru "
                 f"per {intake.get('as_of') or intake.get('price_date')}.")
         elif item.startswith("operating bridge"):
@@ -1453,12 +1485,12 @@ def _build_draft(intake, fc, va, g1, method="auto",
     profile_basis = intake.get("model_profile_basis") or "basis profil tidak tersedia"
     price_date = intake.get("price_date")
     profile_text = (f"Model profile: {profile} ({profile_basis}). Fakta yang ditampilkan "
-                    "dan angka historis hanya berasal dari sectors cache. Belum ada "
+                    "dan angka historis hanya berasal dari data Sectors. Belum ada "
                     "forecast fisik-ke-keuangan yang lolos rekonsiliasi; nilai CAGR dan "
                     "RNAV annuitas tidak dipakai sebagai target.")
     release_text = ("Dokumen ini berstatus DRAFT NON-DISTRIBUTABLE. Skenario nilai belum "
                     "disajikan karena data interim, forecast fisik, dan provenance "
-                    "yang tersedia di cache belum lengkap; SOTP/LoM belum dapat direkonsiliasi. "
+                    "yang tersedia di data Sectors belum lengkap; SOTP/LoM belum dapat direkonsiliasi. "
                     "Tidak ada target DCF substitusi.")
     sections = [
         {"halaman": 2, "judul": "Kinerja dan bukti yang tersedia",
@@ -1477,9 +1509,9 @@ def _build_draft(intake, fc, va, g1, method="auto",
     if news_no:
         sections.append({"halaman": next_page, "judul": "Konteks berita dan kaitannya ke tesis",
                          "layout": "stack",
-                         "paragraf": ["Ringkasan berikut diparafrase dari berita dalam cache. "
+                         "paragraf": ["Ringkasan berikut diparafrase dari berita dalam data Sectors. "
                                       "Kaitan ke operasi/laba dibedakan dari sentimen pasar; "
-                                      "berita tidak menjadi asumsi angka tanpa bukti cache."],
+                                      "berita tidak menjadi asumsi angka tanpa bukti dari data Sectors."],
                          "exhibit": [exhibits[news_no - 1]]})
         next_page += 1
     if screening_no:
@@ -1501,7 +1533,7 @@ def _build_draft(intake, fc, va, g1, method="auto",
         "headline": "Bukti Model Belum Lengkap",
             "bullets": [
                 "Skenario nilai belum disajikan karena bukti penting masih kurang.",
-                "Data sumber dibatasi pada sectors cache; sumber riset eksternal tidak dipakai.",
+                "Data sumber dibatasi pada data Sectors; sumber riset eksternal tidak dipakai.",
                 "Berita yang lolos validasi diparafrase dan dihubungkan ke tesis dengan caveat.",
                 "SOTP/LoM belum dapat direkonsiliasi dari input yang tersedia.",
             ],
@@ -1530,10 +1562,10 @@ def _build_draft(intake, fc, va, g1, method="auto",
             "DRAFT NON-DISTRIBUTABLE: skenario nilai belum disajikan karena bukti belum lengkap.",
             "SOTP/LoM memerlukan NAV per aset, kepemilikan, net debt, minority interest, "
             "overhead korporat dan saham terdilusi dengan provenance.",
-            "Validasi latest interim memakai metadata yang tersedia di cache; data di luar cache tidak dipakai.",
-            "News context hanya memakai berita ticker-spesifik dari cache dan tidak langsung menjadi angka forecast.",
+            "Validasi latest interim memakai metadata yang tersedia di data Sectors; data di luar Sectors tidak dipakai.",
+            "News context hanya memakai berita ticker-spesifik dari data Sectors dan tidak langsung menjadi angka forecast.",
             "Forecast tambang harus dihitung dari driver fisik; proyeksi CAGR hanya screening.",
-            "RNAV annuitas indikatif dari overlay cache bukan nilai wajar karena bukan SOTP asset-level.",
+            "RNAV annuitas indikatif dari overlay data Sectors bukan nilai wajar karena bukan SOTP asset-level.",
         ],
         "exhibits": exhibits,
     }
@@ -1544,9 +1576,9 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
     if method not in ("auto", "dcf", "ddm", "rnav"):
         raise ValueError(f"method tak dikenal: {method} (auto|dcf|ddm|rnav)")
     if method == "ddm" and intake.get("payout") is None:
-        raise ValueError("method ddm ditolak: tanpa payout di cache")
+        raise ValueError("method ddm ditolak: tanpa payout di data Sectors")
     if method == "rnav" and not intake.get("mineops"):
-        raise ValueError("method rnav ditolak: tanpa overlay operasional di cache")
+        raise ValueError("method rnav ditolak: tanpa overlay operasional di data Sectors")
     if (va.get("release") or {}).get("status") == "distributable_assumption_led":
         return _build_assumption_led(intake, fc, va, g1, method=method)
     if (va.get("release") or {}).get("status") != "distributable":
@@ -1574,7 +1606,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
     peer_txt = (f"median PER TTM peer {fmt.mult(intake['peer_median_pe'])} dibanding "
                 f"PER {f1['label']} model {fmt.mult(per1)}"
                 if intake.get("peer_median_pe") and per1 else
-                "tanpa pembanding peer yang memadai di cache")
+                "tanpa pembanding peer yang memadai di data Sectors")
 
     headline = _headline(intake, fc)
     b1 = _trim(f"Laba {F[0]['label']} diproyeksikan Rp{fmt.miliar(f1['net'])} miliar "
@@ -1765,7 +1797,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
                   f"cadangan sekitar {mo['reserve_life_cu_yr']:.0f} tahun pada "
                   f"laju produksi saat ini. Harga acuan: tembaga {cup_s}, emas "
                   f"{aup_s}. Data volume penjualan dan jadwal belanja modal "
-                  f"proyek tidak ada di cache sehingga tidak dimodelkan.")
+                  f"proyek tidak ada di data Sectors sehingga tidak dimodelkan.")
 
     asu_cols = ["Driver", "Satuan"] + [r["label"] for r in F] + ["Dasar"]
 
@@ -1794,7 +1826,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
       {"cols": ["Pemegang saham", "Porsi"],
        "rows": [[h.get("name", "?"),
                  fmt.pct(float(h.get("share_percentage") or 0))]
-                for h in (intake["major_holders"] or [])[:5]] or [["Tidak ada di cache", "-"]]})
+                for h in (intake["major_holders"] or [])[:5]] or [["Tidak ada di data Sectors", "-"]]})
 
     E("Ringkasan skenario DCF", "tabel",
       {"cols": ["Komponen", "Rp miliar"],
@@ -1853,8 +1885,8 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
                      ["Equity Risk Premium (Damodaran)", fmt.pct(wi["erp"])],
                      ["(=) Cost of Equity dipakai", fmt.pct(wi["re"])],
                      ["Jalur band (pola BBTN):", ""],
-                     ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di cache)"],
-                     ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di cache)"],
+                     ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
+                     ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
                      ["Offset dari mean", "n.a.: dipakai hasil CAPM"]]},
           note="Source: Company, Sektoral Estimates; Rf = INDOGB 10Y, "
                "ERP = Damodaran, Beta = Bloomberg")
@@ -1899,7 +1931,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
     E("Peer", "tabel",
       {"cols": ["Peer", "PER TTM", "PBV"],
        "rows": [[c["symbol"], fmt.mult(c["pe"] or 0), fmt.mult(c["pb"] or 0)]
-                for c in intake["peers"][:8]] or [["Tanpa peer di cache", "-", "-"]]})
+                for c in intake["peers"][:8]] or [["Tanpa peer di data Sectors", "-", "-"]]})
     br = fc.get("bridge")
     if br and br.get("gross_usd_bn"):
         E("Jembatan pendapatan tambang", "tabel",
@@ -1927,7 +1959,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
           f"menangkap nilai cadangan yang dipotong terminal Gordon; skenario DCF "
                  f"dengan kesadaran keterbatasan itu. "
                  f"Diskon RNAV 0% adalah pure judgment assumption tanpa basis "
-                 f"pembanding discount historis/sektor di cache.")
+                 f"pembanding discount historis/sektor di data Sectors.")
         _tn, _sh = lom["total_nav_rpbn"], intake["shares"]
         _cb, _db = fc["base"]["cash"] / 1e9, fc["base"]["debt"] / 1e9
         E("Discount Rate per Aset", "tabel",
@@ -1936,7 +1968,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
                      f"{(s['life'] or 0):.0f}"] for s in lom["streams"]]},
           note="Source: Sektoral Estimates; satu tarif (WACC model) untuk "
                "semua aset tahap produksi; tidak ada diferensiasi "
-               "matang-vs-development di cache")
+               "matang-vs-development di data Sectors")
         _dp_rows = []
         for _dd in (0.0, 0.10, 0.20, 0.30):
             _dp_rows.append(
@@ -2023,14 +2055,14 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
     if method not in ("auto", "dcf", "ddm", "rnav"):
         raise ValueError(f"method tak dikenal: {method} (auto|dcf|ddm|rnav)")
     if method == "ddm" and intake.get("payout") is None:
-        raise ValueError("method ddm ditolak: tanpa payout di cache")
+        raise ValueError("method ddm ditolak: tanpa payout di data Sectors")
     if method == "rnav" and not intake.get("mineops"):
-        raise ValueError("method rnav ditolak: tanpa overlay operasional di cache")
+        raise ValueError("method rnav ditolak: tanpa overlay operasional di data Sectors")
     method_label = {"auto": "DCF (FCFF, Rp)", "dcf": "DCF (FCFF, Rp)",
                     "ddm": "DDM (dividen, Rp)", "rnav": "RNAV LoM (Rp)"}[method]
     if method != "auto":
         mnotes = [f"metode valuasi dipilih analis: {method_label}."] + mnotes
-    metodo = (["Angka bersumber dari snapshot cache Sectors (salinan lokal yang bisa "
+    metodo = (["Angka bersumber dari snapshot data Sectors (salinan lokal yang bisa "
                "kedaluwarsa; pembacaan tidak memakai kuota API). Tanpa angka karangan "
                "di luar asumsi berlabel pada tabel Asumsi."]
               + ([f"skala valuasi: {g32[1]} (ambang 20-300% dari market cap, "

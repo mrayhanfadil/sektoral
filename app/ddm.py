@@ -48,14 +48,14 @@ def value_bank(net_profits, payout_hist, dps_hist, shares, coe, g, roae_fwd,
         m = _median(payout_hist or [])
         if m is not None:
             payout_used = m
-            payout_basis = "median payout historis di cache"
+            payout_basis = "median payout historis di data Sectors"
         elif (dps_hist or []) and net_profits[0]:
             payout_used = dps_hist[-1] * shares / net_profits[0]
             payout_basis = ("DPS terakhir atas laba forecast tahun pertama "
-                            "(tanpa payout historis di cache)")
+                            "(tanpa payout historis di data Sectors)")
         else:
             payout_used = 0.25
-            payout_basis = "asumsi analis 25% (tanpa payout historis di cache)"
+            payout_basis = "asumsi analis 25% (tanpa payout historis di data Sectors)"
     payout_used = max(0.0, min(1.5, payout_used))
 
     dps_forecast = [max(n, 0) * payout_used / shares for n in net_profits]

@@ -127,7 +127,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         notes.append(f"WACC screen adjusted {news_wacc_bps:+g} bp by cited news scenario judgments.")
     g = 0.035  # terminal growth FIX analis, wajib < rf
     exit_mult = 8.0
-    exit_basis = "asumsi analis 8,0x (tanpa EV/EBITDA peer di cache)"
+    exit_basis = "asumsi analis 8,0x (tanpa EV/EBITDA peer di data Sectors)"
     if intake.get("peer_median_pe"):
         exit_basis += f"; silang cek median PER peer {intake['peer_median_pe']:.1f}x"
 

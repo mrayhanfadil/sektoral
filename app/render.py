@@ -11,6 +11,7 @@ import re
 from datetime import date
 from pathlib import Path
 from . import cache as cache_mod
+from . import fmt
 
 FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 BRAND_DIR = Path(__file__).resolve().parent / "assets" / "brand"
@@ -200,7 +201,7 @@ def _price_chart(ticker, as_of):
     series = _comparison_series(ticker, as_of)
     if series is None:
         return ("<p class='small'>Perbandingan harga belum tersedia: "
-                "kurang dari dua tanggal perdagangan yang sama di cache.</p>")
+                "kurang dari dua tanggal perdagangan yang sama di data Sectors.</p>")
 
     dates, issuer, ihsg = series
     all_values = issuer + ihsg
@@ -262,7 +263,7 @@ def _price_chart(ticker, as_of):
         f"<text x='151' y='123' font-size='8' fill='{INK}'>IHSG {pct(ihsg_return)}%</text>"
         f"<text x='32' y='140' font-size='7.8' fill='{MUT}'>Selisih {pct(spread)} poin persentase</text>"
         "</svg>"
-        f"<p class='src'>Sumber: Sectors cache; {len(dates)} tanggal sama "
+        f"<p class='src'>Sumber: Sectors; {len(dates)} tanggal sama "
         f"({dates[0].isoformat()} - {dates[-1].isoformat()}). "
         "Kinerja harga, awal = 100; tidak termasuk dividen.</p>")
 
@@ -288,6 +289,8 @@ def _column_widths(cols):
         return [driver_w, satuan_w] + [year_w] * n_years + [dasar_w]
     if {"katalis", "waktu", "kenapa penting", "arah"}.issubset(labels):
         return [50, 13, 28, 9]
+    if labels and labels[0].startswith("katalis / risiko"):
+        return [18, 36, 30, 16]
     return {3: [42, 29, 29], 4: [34, 22, 22, 22],
             5: [48, 12, 12, 12, 16],
             6: [34, 13.2, 13.2, 13.2, 13.2, 13.2],
@@ -335,6 +338,9 @@ def _table(ex):
         classes = " class='total-row'" if total else ""
         rendered = []
         for cell, kind in zip(cells, kinds):
+            if kind == "num":
+                # Spec §5.5: negative figures in brackets.
+                cell = re.sub(r"^[-−](\d[\d.,]*)(%|x)?$", r"(\1\2)", cell)
             short = " short" if kind == "num" and len(cell) <= 13 and " " not in cell else ""
             rendered.append(f"<td class='cell-{kind}{short}'>{html.escape(cell)}</td>")
         groups[-1].append(f"<tr{classes}>" + "".join(rendered) + "</tr>")
@@ -465,7 +471,7 @@ def _render_page_content(b):
                        f"<p><b>Observasi.</b> {html.escape(card['observation'])}</p>"
                        f"<p><b>Kaitan.</b> {html.escape(card['implication'])}</p>"
                        f"<p><b>Batasan.</b> {html.escape(card['caveat'])}</p>"
-                       f"<p class='research-cite'><b>Rujukan cache:</b> {html.escape(refs)}</p>"
+                       f"<p class='research-cite'><b>Rujukan data:</b> {html.escape(refs)}</p>"
                        "</article>")
 
     elif b.get("layout") == "stack":
@@ -524,9 +530,43 @@ def _render_page_content(b):
     return "\n".join(res)
 
 
+def _css_string(text):
+    return '"' + str(text).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _running_header(m):
+    """Repeat the report header on every printed page, including overflow pages.
+
+    Section headers live inside each section's HTML, so a section that spills
+    onto a second sheet would otherwise print without header or draft label.
+    """
+    ticker = str(m.get("ticker") or "").upper()
+    left = f"{ticker} IJ" if ticker else "Equity Research"
+    if m.get("rating"):
+        left += f" | {str(m['rating']).upper()}"
+        if m.get("tp") is not None:
+            left += f" · TP Rp {fmt.rp(m['tp'])}"
+    elif m.get("status") == "draft_non_distributable":
+        left += " | DRAFT · Dalam Peninjauan"
+    try:
+        day = date.fromisoformat(str(m.get("tanggal"))[:10])
+        months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        right = f"Equity Research - Company Update | {day.day} {months[day.month - 1]} {day.year}"
+    except (TypeError, ValueError):
+        right = "Equity Research - Company Update"
+    box = ("font-family:Arial,sans-serif;font-size:7.4pt;color:" + PRIMARY +
+           ";vertical-align:bottom;padding-bottom:2mm;border-bottom:1.5px solid " + PRIMARY)
+    return ("@page{margin-top:19mm;"
+            f"@top-left{{content:{_css_string(left)};font-weight:700;{box}}}"
+            f"@top-right{{content:{_css_string(right)};text-align:right;{box}}}}}"
+            "@page:first{margin-top:12mm;@top-left{content:none;border:0}"
+            "@top-right{content:none;border:0}}"
+            "@media print{.page>.report-header{display:none}}")
+
+
 def render(doc):
     m, cov = doc["meta"], doc["cover"]
-    h = [f"<html><head><meta charset='utf-8'><style>{CSS}</style></head><body>"]
+    h = [f"<html><head><meta charset='utf-8'><style>{CSS}{_running_header(m)}</style></head><body>"]
     h.append(_report_header(m["tanggal"], m))
     h.append(_draft_banner(m))
     report_status = (m.get("rating") or
@@ -542,16 +582,16 @@ def render(doc):
     price_label = (f"Harga Terakhir (Rp; {m['harga_tanggal']})"
                    if m.get("harga_tanggal") and m.get("harga_tanggal") != m["tanggal"]
                    else "Harga Terakhir (Rp)")
-    harga_val = f"{m['harga']:,.0f}" if m.get("harga") is not None else "n.a."
+    harga_val = fmt.rp(m["harga"]) if m.get("harga") is not None else "n.a."
     h.append(_kv(price_label, harga_val))
     h.append(_kv("Target Harga (Rp)",
-                 f"{m['tp']:,.0f}" if m.get("rating") and m.get("tp") is not None else "-"))
+                 fmt.rp(m["tp"]) if m.get("rating") and m.get("tp") is not None else "-"))
     h.append(_kv("TP Sebelumnya (Rp)", str(m.get("tp_sebelumnya") or "n.a.")))
     h.append(_kv("Upside/Downside", f"{m['upside_persen']:.1f}%".replace(".", ",")
                  if m.get("rating") and m.get("upside_persen") is not None else "-"))
     dp = cov.get("data_pasar") or {}
-    saham_val = f"{dp['saham']/1e6:,.0f}" if dp.get("saham") is not None else "n.a."
-    mcap_val = f"{dp['market_cap']/1e9:,.0f}" if dp.get("market_cap") is not None else "n.a."
+    saham_val = fmt._id(dp["saham"] / 1e6, 0) if dp.get("saham") is not None else "n.a."
+    mcap_val = fmt._id(dp["market_cap"] / 1e9, 0) if dp.get("market_cap") is not None else "n.a."
     h.append(_kv("Jumlah Saham (juta)", saham_val))
     h.append(_kv("Kap. Pasar (Rp miliar)", mcap_val))
     h.append(_kv("Rata-rata T/O Harian (Rp miliar)", str(dp.get("adtv", "-"))))

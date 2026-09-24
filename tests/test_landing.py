@@ -7,7 +7,7 @@ Spec under test:
 - Sectoral brand colors (#0928B1 primary, #333333 charcoal, #D9D9D9 rule, #B4C7FF accent/fill) and Roboto typography.
 - Primary landing CTA linking to /research and secondary anchor linking to #cara-kerja (with target id="cara-kerja").
 - Brand assets: logo (/assets/brand/sectoral-logo.svg) and research flow illustration (/assets/brand/research-flow.svg).
-- Cache-only source caveat (sectors_cache.db / local cache) and no-investment-advice disclaimer.
+- Dated Sectors-data source caveat (no live market feed, no internal cache wording) and no-investment-advice disclaimer.
 - Explicit partial-evidence handling policy (no silent guessing or synthetic fabrication).
 - Negative compliance: no unsupported copy (no real-time/live market data, no trading/execution, no invented metrics/testimonials, no guaranteed outcomes).
 - Responsive layout, focus affordances, and reduced-motion affordance when animations/transitions are defined.
@@ -215,19 +215,30 @@ def test_brand_asset_references(landing_html: str):
 # ----------------------------- caveats, disclaimers, & partial evidence
 
 
-def test_cache_only_source_caveat(landing_html: str):
-    """Verifies clear disclosure that market data is grounded exclusively in local Sectors cache."""
-    text_content = re.sub(r"<[^>]+>", " ", landing_html).lower()
-    has_cache_disclosure = (
-        "sectors cache" in text_content
-        or "sectors_cache.db" in text_content
-        or "cache lokal" in text_content
-        or "data cache" in text_content
-        or "local cache" in text_content
+def _visible_text(html: str) -> str:
+    html = re.sub(r"<!--[\s\S]*?-->", " ", html)
+    html = re.sub(r"<(script|style)[^>]*>[\s\S]*?</\1>", " ", html, flags=re.IGNORECASE)
+    return re.sub(r"<[^>]+>", " ", html).lower()
+
+
+def test_dated_sectors_source_caveat(landing_html: str):
+    """Verifies disclosure that market data comes from dated Sectors data, not a live feed."""
+    text_content = _visible_text(landing_html)
+    assert "data sectors" in text_content, (
+        "Landing page must state that market data is sourced from Sectors data"
     )
-    assert has_cache_disclosure, (
-        "Landing page must state that market data is sourced only from the local Sectors cache"
+    assert "tanpa panggilan data pasar langsung" in text_content, (
+        "Landing page must state that research runs without live market-data calls"
     )
+
+
+def test_visible_copy_avoids_cache_wording(landing_html: str):
+    """Internal storage wording ("cache", database paths) stays out of product copy."""
+    text_content = _visible_text(landing_html)
+    alt_text = " ".join(re.findall(r'alt=["\']([^"\']*)', landing_html)).lower()
+    assert "cache" not in text_content
+    assert "cache" not in alt_text
+    assert "sectors_cache.db" not in landing_html
 
 
 def test_no_investment_advice_disclaimer(landing_html: str):
