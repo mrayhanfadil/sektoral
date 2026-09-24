@@ -476,6 +476,10 @@ def _peer_stats(rows):
         if key in bands:
             lo, hi = bands[key]
             vals = [v for v in vals if lo < v <= hi]
+        elif key in ("roe", "net_margin"):
+            # The table shows ratios beyond 500% as n.m.; one tiny base must
+            # not drag the average to -2.306%.
+            vals = [v for v in vals if abs(v) <= 5]
         out[key] = ((statistics.median(vals), sum(vals) / len(vals)) if vals
                     else (None, None))
     return out
@@ -491,7 +495,7 @@ def peer_page(intake, valuation_inputs=None):
         rows, ["market_cap", "pe", "pb", "roe", "net_margin", "leverage"], peers["source"])}
     m = lambda row, key, kind: ("-" if row["metrics"].get(key) is None else
                                 _signed_pct(row["metrics"][key], cap=5) if kind == "pct" else
-                                fmt.mult(row["metrics"][key]) if kind == "x" else
+                                fmt.mult(row["metrics"][key], cap=fmt.MULT_CAP) if kind == "x" else
                                 _rp_bn(row["metrics"][key]))
     table = []
     for row in sorted(rows, key=lambda r: r["metrics"].get("market_cap") or 0, reverse=True):
@@ -666,10 +670,12 @@ def own_history_bands(intake):
         if not m:
             rows.append([label, "NA", "NA", "NA", "basis fundamental historis tidak cukup"])
             continue
-        implied = (f"Rp{fmt.rp(fmt.tick(m['mean'] * m['base_now']))} / "
+        meaningless = max(m["mean"], m["median"]) > fmt.MULT_CAP
+        implied = ("n.m." if meaningless else
+                   f"Rp{fmt.rp(fmt.tick(m['mean'] * m['base_now']))} / "
                    f"Rp{fmt.rp(fmt.tick(m['median'] * m['base_now']))}")
-        rows.append([label, fmt.mult(m["mean"]), fmt.mult(m["median"]),
-                     f"{fmt.mult(m['current'])} (p{m['percentile']:.0f})", implied])
+        rows.append([label, fmt.mult(m["mean"], cap=fmt.MULT_CAP), fmt.mult(m["median"], cap=fmt.MULT_CAP),
+                     f"{fmt.mult(m['current'], cap=fmt.MULT_CAP)} (p{m['percentile']:.0f})", implied])
     constant = [label for label, m in data["multiples"].items() if m["constant_base"]]
     return _exhibit(
         f"Band historis {data['window']} P/E dan P/BV (bukan target harga)",
@@ -679,7 +685,8 @@ def own_history_bands(intake):
         f"{data['end'].isoformat()} dan laba/ekuitas tahunan Sectors yang "
         f"sudah terbit pada tiap tanggal (akhir tahun buku + {PUBLICATION_LAG_DAYS} hari), saham "
         "kini sebagai basis pro forma. Harga implisit = multiple mean/median x EPS/BVPS terakhir "
-        "dengan driver tetap; cross-check reversion, bukan target harga."
+        "dengan driver tetap; cross-check reversion, bukan target harga. Multiple di atas "
+        f"{fmt.MULT_CAP}x ditulis n.m. karena basis laba atau ekuitas sangat kecil."
         + (f" Basis {', '.join(constant)} tidak berubah sepanjang jendela, sehingga harga "
            "implisitnya sama dengan rata-rata/median harga penutupan." if constant else ""))
 
@@ -1163,6 +1170,35 @@ def _rank(title):
     return len(PAGE_ORDER)
 
 
+# The bank screening DDM (historical payout on a CAGR screen), not a target.
+SCREENING_GRIDS = ("Sensitivitas DDM (CoE x g)", "Sensitivitas Inverse CoE (CoE x ROE)")
+_SCREENING_TEXT = "DDM Gordon memberi Rp"
+
+
+def drop_screening_values(doc):
+    """Remove screening fair values a reader could take for the target.
+
+    A draft withholds its target (unless it was built as an illustrative
+    internal draft), so it must not print a per-share value elsewhere; and when
+    a scenario DDM sets the target, a second screening DDM grid with another
+    base value only contradicts it. Runs after the harness has fixed the
+    release status, then renumbers exhibits.
+    """
+    meta = doc.get("meta") or {}
+    draft = meta.get("status") == "draft_non_distributable" and not meta.get("illustrative_scenarios")
+    scenario_ddm = str(doc.get("method") or "").startswith("DDM dividen skenario")
+    if not (draft or scenario_ddm):
+        return
+    keep = lambda e: e.get("judul") not in SCREENING_GRIDS
+    doc["exhibits"] = [e for e in doc["exhibits"] if keep(e)]
+    for page in doc.get("bagian") or []:
+        if page.get("exhibit"):
+            page["exhibit"] = [e for e in page["exhibit"] if keep(e)]
+        if draft and page.get("paragraf"):
+            page["paragraf"] = [p for p in page["paragraf"] if _SCREENING_TEXT not in p]
+    renumber(doc)
+
+
 def renumber(doc):
     """Cover exhibits first (price vs IHSG, then Key Financials); the rest
     follow page order."""
@@ -1220,9 +1256,12 @@ def chart_forecast_rows(intake, fc):
         return []
     idr = lambda v: v * fx if isinstance(v, (int, float)) else None
     full = anchor.get("full_year") or {}
+    # The mining interim anchor records net profit without a separate parent
+    # share; Key Financials shows that figure, so the tables must too.
+    parent = full.get("net_profit_attributable")
     rows = [{"label": f"FY{anchor['year'] % 100:02d}F", "revenue": idr(full.get("revenue")),
              "ebitda": idr(full.get("ebitda")), "net": idr(full.get("net_profit")),
-             "net_attr": idr(full.get("net_profit_attributable"))}]
+             "net_attr": idr(parent if parent is not None else full.get("net_profit"))}]
     for r in ((fc.get("outyear_scenario") or {}).get("rows") or []):
         rows.append({"label": r.get("label"), "revenue": idr(r.get("revenue")),
                      "ebitda": idr(r.get("ebitda")), "net": idr(r.get("net_profit")),

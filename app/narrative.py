@@ -396,7 +396,9 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                       if isinstance(source_page, int) or
                       (isinstance(source_page, str) and source_page.replace("-", "").isdigit())
                       else f"rujukan {source_page}")
-    pct_change = lambda now, prior: (fmt.pct(now / prior - 1)
+    pct_change = lambda now, prior: ("n.m." if now is not None and prior is not None and
+                                     prior > 0 and now >= 0 and now / prior - 1 > 5 else
+                                     fmt.pct(now / prior - 1)
                                      if now is not None and prior is not None and
                                      prior > 0 and now >= 0 else "n.m." if
                                      now is not None and prior is not None and
@@ -476,13 +478,18 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
         f_labels = [r["label"] for r in F] if F else [
             f"FY{(int(history[-1]['year']) + 1 + i) % 100:02d}F" for i in range(5)]
         f_dashes = ["NA"] * len(f_labels)
-        key_rows = [[f"Pendapatan ({unit})"] +
-                    [money(row.get("revenue")) for row in history] + f_dashes,
+        # Sectors history is in rupiah whatever the issuer reports in, so this
+        # table is in Rp miliar; USD scenario columns are converted when filled.
+        rp_money = lambda value: ("-" if value is None else
+                                  f"({fmt._id(abs(value) / 1e9, 1)})" if value < 0 else
+                                  fmt._id(value / 1e9, 1))
+        key_rows = [["Pendapatan (Rp miliar)"] +
+                    [rp_money(row.get("revenue")) for row in history] + f_dashes,
                     # Sectors reports an unfiled EBITDA as 0; show it as missing.
-                    [f"EBITDA ({unit})"] +
-                    [money(row.get("ebitda") or None) for row in history] + f_dashes,
-                    [f"Laba bersih ({unit})"] +
-                    [money(row.get("earnings")) for row in history] + f_dashes]
+                    ["EBITDA (Rp miliar)"] +
+                    [rp_money(row.get("ebitda") or None) for row in history] + f_dashes,
+                    ["Laba bersih (Rp miliar)"] +
+                    [rp_money(row.get("earnings")) for row in history] + f_dashes]
         key_note = ("Sumber: Sectors, company/report. Kolom forecast dan "
                     "multiple belum tersedia karena model belum lolos validasi "
                     "(NA: belum dimodelkan).")
@@ -2544,7 +2551,7 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                  f"Rp{fmt.rp(fmt.tick(_vb['tp_gordon']))}/saham pada payout "
                  f"{fmt.pct(_vb['payout_used'])} ({intake.get('payout_basis')}); silang cek "
                  f"Inverse CoE Rp{fmt.rp(fmt.tick(_vb['tp_inverse']))}/saham "
-                 f"(P/BV wajar {fmt.mult(_vb['fair_pbv'], 2)}x). Payout {fmt.pct(_vb['payout_used'])} "
+                 f"(P/BV wajar {fmt.mult(_vb['fair_pbv'], 2)}). Payout {fmt.pct(_vb['payout_used'])} "
                  f"dinilai sustain sepanjang kebutuhan modal pertumbuhan kredit/aset "
                  f"tidak menuntut retensi di atas level historis; "
                  f"{intake.get('dps_basis')}.")
@@ -4114,13 +4121,15 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     sensitivity = None
     if d.get("median_pe"):
         rows = []
-        for name, pe in (("Kuartil bawah", d["q1_pe"]), ("Median (basis)", d["median_pe"]),
+        for name, pe in (("Kuartil bawah", d["q1_pe"]),
+                         ("Median" if sotp_h else "Median (basis)", d["median_pe"]),
                          ("Kuartil atas", d["q3_pe"])):
             value = fmt.tick(pe * d["eps_idr"])
             rows.append([name, fmt.mult(pe, 1), f"Rp{fmt.rp(value)}",
                          fmt.pct(value / intake["price"] - 1)])
         sensitivity = {
-            "n": 0, "judul": f"Target harga: PER peer x EPS {label}", "tipe": "tabel",
+            "n": 0, "judul": (f"Silang cek: PER peer x EPS {label}" if sotp_h
+                              else f"Target harga: PER peer x EPS {label}"), "tipe": "tabel",
             "data": {"cols": ["PER peer", "Kelipatan", "Nilai per saham", "Terhadap harga"],
                      "rows": rows},
             "catatan_sumber": (
@@ -4215,8 +4224,11 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     key_fin = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
     if key_fin:
         cols = key_fin["data"]["cols"]
-        projections = {label: {**fy, "ebitda": fy.get("ebitda") if (dcf_s or ev_s) else None}}
+        # Scenario EBITDA is shown wherever the scenario carries it, the same
+        # rule as the financial tables and charts, so every table agrees.
+        projections = {label: dict(fy)}
         projections.update({r["label"]: r for r in forward})
+        modelled_ebitda = any(p.get("ebitda") is not None for p in projections.values())
         # Prior-year base for forecast growth: official annuals, then the scenario.
         raw = {str(r["year"]): r for r in
                (intake.get("official_evidence") or {}).get("annual_actuals") or []}
@@ -4254,7 +4266,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                    annual.get(name) / d["shares"] if annual.get(name) else None)
             eps_row.append(fmt.rp(round(eps)) if eps else "-")
             eps_values.append(eps)
-            per_row.append(fmt.mult(intake["price"] / eps, 1) if eps and eps > 0 else "-")
+            per_row.append(fmt.mult(intake["price"] / eps, 1, cap=fmt.MULT_CAP) if eps and eps > 0 else "-")
         # Replace the official table's per-share rows rather than repeat them,
         # and drop rows with no value in any period (DPS, PBV, ...).
         key_fin["data"]["rows"] = [
@@ -4267,10 +4279,15 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                     fmt.pct(now / before - 1) if now and before and before > 0 else "-"
                     for before, now in zip(eps_values, eps_values[1:])],
                 per_row]
+        # The base note says forecast columns are not modelled; they now are.
+        base_note = re.sub(r"\s*(Kolom forecast dan multiple belum tersedia karena model belum lolos "
+                           r"validasi \(NA: belum dimodelkan\)\.|\S+-\S+ belum diterbitkan "
+                           r"\(NA: belum dimodelkan\)\.)", "", key_fin.get("catatan_sumber") or "")
         key_fin["catatan_sumber"] = (
-            (key_fin.get("catatan_sumber") or "") +
+            base_note +
             f" {label} dan tahun sesudahnya: skenario laba analis"
-            + ("; EBITDA dari margin skenario DCF. " if dcf_s else "; EBITDA tidak dimodelkan. ") +
+            + ("; EBITDA dari margin skenario DCF. " if dcf_s else
+               "; EBITDA dari margin skenario analis. " if modelled_ebitda else "; EBITDA tidak dimodelkan. ") +
             f"EPS memakai saham {actual.get('period_end', '-')}"
             + (f" dari {_shares_source(intake.get('official_evidence'))}"
                if _shares_source(intake.get("official_evidence")) else " dari neraca")
@@ -5087,7 +5104,7 @@ def build(intake, fc, va, s1, method="auto", illustrative_scenarios=False):
                  f"Rp{fmt.rp(fmt.tick(_vb['tp_gordon']))}/saham pada payout "
                  f"{fmt.pct(_vb['payout_used'])} ({intake.get('payout_basis')}); silang cek "
                  f"Inverse CoE Rp{fmt.rp(fmt.tick(_vb['tp_inverse']))}/saham "
-                 f"(P/BV wajar {fmt.mult(_vb['fair_pbv'], 2)}x). Payout {fmt.pct(_vb['payout_used'])} "
+                 f"(P/BV wajar {fmt.mult(_vb['fair_pbv'], 2)}). Payout {fmt.pct(_vb['payout_used'])} "
                  f"dinilai sustain sepanjang kebutuhan modal pertumbuhan kredit/aset "
                  f"tidak menuntut retensi di atas level historis; "
                  f"{intake.get('dps_basis')}.")
