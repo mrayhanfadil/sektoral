@@ -24,7 +24,7 @@ TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensit
 COMMODITY_UNITS = {"Copper": ("Tembaga", "USD/ton"), "Gold": ("Emas", "USD/oz"),
                    "Nickel": ("Nikel", "USD/ton"), "Coal": ("Batu bara", "USD/ton")}
 # Page order from spec §5.4, matched on page title prefixes.
-PAGE_ORDER = ("Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
+PAGE_ORDER = ("Tesis investasi", "Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
               "Skenario operasi", "Skenario laba", "Berita", "Sensitivitas", "Katalis",
               "Konteks historis", "Target harga", "Cross-check", "Skenario nilai",
               "Perbandingan peer", "Valuasi", "Data keuangan")
@@ -794,16 +794,20 @@ def combo_charts_page(intake, fc=None):
     net_bars = [(a.get("earnings") if a.get("earnings") is not None else a.get("net_profit"))
                 for a in annuals] + [r.get("net") for r in frows[:3]]
     is_fc = [False] * len(annuals) + [True] * min(3, len(frows))
+    net_g = [None] + [(cur / prev - 1) * 100
+                      if isinstance(cur, (int, float)) and isinstance(prev, (int, float)) and prev > 0
+                      else None for prev, cur in zip(net_bars, net_bars[1:])]
     series = [
-        {"label": "Pendapatan + pertumbuhan", "bars": rev_bars, "line": rev_g, "is_forecast": is_fc},
-        {"label": "Laba bersih + pertumbuhan", "bars": net_bars, "line": [None] * len(labels),
+        {"label": "Pendapatan (Rp) & pertumbuhan", "bars": rev_bars, "line": rev_g,
+         "is_forecast": is_fc},
+        {"label": "Laba bersih (Rp) & pertumbuhan", "bars": net_bars, "line": net_g,
          "is_forecast": is_fc},
     ]
     if has_ebitda:
-        series.insert(1, {"label": "EBITDA + margin", "bars": ebitda_bars,
+        series.insert(1, {"label": "EBITDA (Rp) & margin", "bars": ebitda_bars,
                           "line": ebitda_m, "is_forecast": is_fc})
     else:
-        series.insert(1, {"label": "EBITDA belum dimodelkan", "bars": [0] * len(labels),
+        series.insert(1, {"label": "EBITDA belum dimodelkan", "bars": [None] * len(labels),
                           "line": [None] * len(labels), "is_forecast": is_fc})
     # DER vs ROE placeholder: leverage from annuals liab/equity; ROE from earnings/equity.
     der = []
@@ -815,7 +819,7 @@ def combo_charts_page(intake, fc=None):
         roe.append(earn / eq * 100 if eq else None)
     der += [None] * min(3, len(frows))
     roe += [None] * min(3, len(frows))
-    series.append({"label": "DER vs ROE (bank: NIM+CoC konteks)", "bars": der,
+    series.append({"label": "DER (x) & ROE", "bars": der,
                    "line": roe, "is_forecast": is_fc})
     exhibit = {"n": 0, "judul": "Kinerja keuangan: pendapatan, profitabilitas, leverage",
                "tipe": "combo_chart",
@@ -870,7 +874,8 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
             pages.append(page)
     if va:
         attach_method_chain(doc, va)
-    doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"])) if p["exhibit"] or p["paragraf"]]
+    doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
+                     if p["exhibit"] or p["paragraf"] or p.get("cards")]
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2
     renumber(doc)
