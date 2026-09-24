@@ -163,6 +163,47 @@ def _earnings_candidate(intake, fc, assumption_status):
     return candidate
 
 
+def _pbv_roe_fy_candidate(intake, fc, assumption_status, coe, g):
+    """Bank excess-return value on the validated earnings scenario:
+    justified P/BV = (ROE - g) / (CoE - g) times BVPS, where ROE is FY
+    parent profit over the latest parent equity. Downside: CoE +1pp."""
+    scenario = fc.get("earnings_scenario") or {}
+    evidence = intake.get("official_evidence") or {}
+    balance = evidence.get("balance_sheet") or {}
+    usd = evidence.get("reporting_currency") == "USD"
+    fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
+    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    equity, equity_source = balance.get("equity_attributable"), "neraca interim resmi"
+    if equity is None and balance.get("total_equity") is not None:
+        equity = balance["total_equity"] - (balance.get("non_controlling_interest") or 0)
+    if equity is not None and fx:
+        equity *= fx
+    if equity is None:
+        last = next((a for a in reversed(intake.get("annuals") or []) if a.get("equity")), None)
+        if last:
+            equity, equity_source = last["equity"], f"Sectors FY{last.get('year')}"
+    net = (scenario.get("full_year") or {}).get("net_profit_attributable")
+    net = net * fx if isinstance(net, (int, float)) and fx else None
+    roe = net / equity if net is not None and equity else None
+    detail = {"shares": shares, "equity": equity, "equity_source": equity_source,
+              "coe": coe, "g": g, "roe": roe, "year": scenario.get("year"),
+              "bvps": equity / shares if equity and shares else None}
+    ps = down = None
+    if roe is not None and detail["bvps"] and coe > g and roe > g:
+        detail["fair_pbv"] = (roe - g) / (coe - g)
+        detail["fair_pbv_down"] = (roe - g) / (coe + 0.01 - g)
+        ps = detail["fair_pbv"] * detail["bvps"]
+        down = detail["fair_pbv_down"] * detail["bvps"]
+    gate = release.assess_pbv_roe_fy(intake, fc, {"detail": detail}, assumption_status)
+    label_year = f"FY{scenario['year'] % 100:02d}F" if scenario.get("year") else "FY"
+    candidate = method_chain.candidate("pbv_roe_fy", per_share=ps, per_share_down=down,
+                                       reasons=gate["blockers"], labels=gate["limitations"],
+                                       detail=detail)
+    candidate["label"] = f"P/BV wajar dari ROE {label_year} skenario analis"
+    candidate["gate"] = gate
+    return candidate
+
+
 def _holding_sotp_candidate(intake):
     """Holding SOTP inputs: stakes from the issuer pack (IDX register), each
     listed subsidiary's market cap and book equity from the Sectors peer
@@ -561,6 +602,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "pbv_roe", per_share=tp_inv, per_share_down=pbv_down,
             reasons=pbv_reasons + method_chain.scale_reasons(tp_inv, shares, mcap),
             detail={"fair_pbv": (ddm_result or {}).get("fair_pbv"), "roae": roae, "bvps": bvps})
+    if "pbv_roe_fy" in prelim_order:
+        candidates["pbv_roe_fy"] = _pbv_roe_fy_candidate(intake, fc, assumption_status, re, g)
     # Generic peer/NAV/SOTP placeholders for gate-driven orders (1.4)
     fwd = fc["rows"][0] if fc.get("rows") else {}
     if "relative_pe" in prelim_order or profile in ("going_concern_fcff", "financial_ddm"):
@@ -681,7 +724,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         if extreme_blocker and release_result["status"] != "draft_non_distributable":
             release_result.update(status="draft_non_distributable",
                                   blockers=release_result["blockers"] + [extreme_blocker])
-    elif selected == "pe_fy_scenario":
+    elif selected in ("pe_fy_scenario", "pbv_roe_fy"):
         release_result = dict(sel["gate"])
         release_result["underlying_primary"] = release.common_blockers(profile, intake, fc)
         release_result["route"], release_result["method_key"] = chain["route"], selected
@@ -750,7 +793,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         upside = tp / price - 1
         if tp_down is None and sel["per_share_down"] is not None:
             tp_down = fmt.tick(sel["per_share_down"])
-        rating = (rating_mod.classify(upside) if selected in ("ev_ebitda_fy", "pe_fy_scenario")
+        rating = (rating_mod.classify(upside) if selected in ("ev_ebitda_fy", "pe_fy_scenario",
+                                                              "pbv_roe_fy")
                   else verdict.rating_override or rating_mod.classify(upside))
         if selected == "ev_ebitda_fy":
             tp_down, grid = None, {}
@@ -764,6 +808,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         impl["per"] = tp / (f_last["net"] / shares)
     if selected == "pe_fy_scenario" and tp is not None:
         impl["per"] = tp / sel["detail"]["eps_idr"]
+    if selected == "pbv_roe_fy" and tp is not None and sel["detail"].get("bvps"):
+        impl["pbv"] = tp / sel["detail"]["bvps"]
     if selected not in (None, "fcff_dcf") and tp is not None:
         impl["ev_ebitda"] = ((tp * shares + net_debt) / f_last["ebitda"]
                              if f_last["ebitda"] > 0 and not is_bank else None)

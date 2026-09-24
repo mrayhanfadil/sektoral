@@ -233,3 +233,26 @@ def test_ssia_nci_band_runs_holding_sotp_as_cross_check_not_target(tmp_path):
     table = next(e for e in chain if e["judul"] == "Rantai metode valuasi")
     assert any(r[0].startswith("x. ") and "Gate 2" in r[3] for r in table["data"]["rows"])
     assert doc["meta"].get("method") != "Holding SOTP"
+
+
+def test_bank_chain_puts_justified_pbv_before_peer_per():
+    order = MC.chain_for(_verdict("DDM / Excess Return"), "financial_ddm")
+    assert order.index("pbv_roe_fy") < order.index("relative_pe") < order.index("pe_fy_scenario")
+
+
+def test_justified_pbv_gate_needs_coe_and_roe_above_growth():
+    from app import release
+    base = {"model_profile": "financial_ddm"}
+    ok = release.assess_pbv_roe_fy(base, {}, {"detail": {"equity": 100.0, "coe": 0.109,
+                                                         "g": 0.035, "roe": 0.2, "shares": 10}},
+                                   "validated")
+    assert not any("growth" in b for b in ok["blockers"])
+    assert not any(b.startswith("peer PER") for b in ok["blockers"])
+    bad = release.assess_pbv_roe_fy(base, {}, {"detail": {"equity": 100.0, "coe": 0.03,
+                                                          "g": 0.035, "roe": 0.02, "shares": 10}},
+                                    "validated")
+    assert any("cost of equity must exceed" in b for b in bad["blockers"])
+    assert any("ROE does not exceed" in b for b in bad["blockers"])
+    other = release.assess_pbv_roe_fy({"model_profile": "going_concern_fcff"}, {}, {"detail": {}},
+                                      "validated")
+    assert any("bank method" in b for b in other["blockers"])

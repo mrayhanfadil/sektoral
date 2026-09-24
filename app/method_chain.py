@@ -36,6 +36,7 @@ LABELS = {
     "relative_pe": "Relatif PER peer (median) x EPS forward",
     "ddm": "DDM dividen eksplisit + terminal Gordon (CoE, bukan WACC)",
     "pbv_roe": "P/BV wajar vs ROE (Inverse CoE)",
+    "pbv_roe_fy": "P/BV wajar dari ROE skenario laba FY",
     "pe_fy_scenario": "FY26F PER median peer x EPS skenario analis",
 }
 
@@ -45,7 +46,8 @@ SHORT = {"sotp_lom": "SOTP/LoM", "rnav_lom": "RNAV LoM", "ev_ebitda_fy": "EV/EBI
          "holding_sotp": "Holding SOTP", "property_nav": "Property NAV",
          "dcf_reference": "DCF referensi",
          "fcff_dcf": "DCF FCFF", "relative_pe": "PER relatif", "ddm": "DDM",
-         "pbv_roe": "P/BV-ROE", "pe_fy_scenario": "PER FY skenario"}
+         "pbv_roe": "P/BV-ROE", "pbv_roe_fy": "P/BV-ROE FY skenario",
+         "pe_fy_scenario": "PER FY skenario"}
 
 SCALE_BAND = gate_thresholds.SCALE_BAND
 # Deprecated alias: extreme is now asymmetric (+100%/-50%) via gate_thresholds.
@@ -303,7 +305,7 @@ def chain_for(verdict, profile: str) -> tuple:
 
     # Financial institution
     if primary.startswith("DDM") or prof == "financial_ddm":
-        return ("ddm", "pbv_roe", "relative_pe", "pe_fy_scenario")
+        return ("ddm", "pbv_roe", "pbv_roe_fy", "relative_pe", "pe_fy_scenario")
     # REIT / property investment (subset finite; NAV first)
     if "REIT" in primary.upper() or "PROPERTY" in primary.upper():
         return ("property_nav", "pbv_relative", "pe_fy_scenario")
@@ -336,7 +338,7 @@ def chain_for(verdict, profile: str) -> tuple:
     if prof == "finite_life_mining":
         return ("sotp_lom", "rnav_lom", "ev_ebitda_fy")
     if prof == "financial_ddm":
-        return ("ddm", "pbv_roe", "relative_pe", "pe_fy_scenario")
+        return ("ddm", "pbv_roe", "pbv_roe_fy", "relative_pe", "pe_fy_scenario")
     return ("fcff_dcf", "relative_pe", "pe_fy_scenario")
 
 

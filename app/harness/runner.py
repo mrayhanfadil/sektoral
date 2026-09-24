@@ -19,16 +19,18 @@ from .schema import check_output_schema
 from .profiles import normalize
 
 
-def _earnings_gate_passes(intake, forecast, valuation, assumption_status) -> bool:
+def _earnings_gate_passes(intake, forecast, valuation, assumption_status,
+                          key="pe_fy_scenario") -> bool:
     from app import release as _release
     trace = next((t for t in (valuation.get("method_chain") or {}).get("trace") or []
-                  if t.get("key") == "pe_fy_scenario"), None)
+                  if t.get("key") == key), None)
     if not trace:
         return False
     # The agent status comes from the caller (the agent run), never from the
     # engine's recorded gate result, so the harness re-checks it independently.
-    again = _release.assess_earnings_led(
-        intake, forecast, {"detail": trace.get("detail") or {}}, assumption_status)
+    assess = (_release.assess_pbv_roe_fy if key == "pbv_roe_fy"
+              else _release.assess_earnings_led)
+    again = assess(intake, forecast, {"detail": trace.get("detail") or {}}, assumption_status)
     return again["status"] == "distributable_assumption_led"
 
 
@@ -88,8 +90,9 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
             # Going concern / bank: FY PER on a validated earnings scenario,
             # re-assessed here from the same inputs (not trusted blindly).
             (profile in ("going_concern_fcff", "financial_ddm") and
-             selected_method == "pe_fy_scenario" and
-             _earnings_gate_passes(intake, forecast, valuation, assumption_status)))
+             selected_method in ("pe_fy_scenario", "pbv_roe_fy") and
+             _earnings_gate_passes(intake, forecast, valuation, assumption_status,
+                                   selected_method)))
     )
     g2_blockers = list(r2["blockers"])
     if assumption_led:
