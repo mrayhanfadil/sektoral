@@ -93,6 +93,8 @@ def _source_payload(intake):
     return {
         "ticker": intake["ticker"], "as_of": intake["as_of"],
         "model_profile": intake.get("model_profile"),
+        "annuals": [{"year": a.get("year"), "revenue": a.get("revenue")}
+                    for a in (intake.get("annuals") or []) if isinstance(a, dict)][:6],
         "tavily_search": {"status": search.get("status"),
                           "queries": search.get("queries") or ([search.get("query")] if search.get("query") else []),
                           "window": search.get("window")},
@@ -486,6 +488,16 @@ def _interim_anchor(source, interim):
     }
 
 
+def _validate_stage(payload, source):
+    """Stage classifier: life-cycle, steady-state, commodity, segments."""
+    from app import stage as _stage
+    if not isinstance(payload, dict):
+        return ["stage_classification must be an object"]
+    annuals = source.get("annuals") or []
+    ok, errors, _ = _stage.validate(payload, annuals)
+    return errors
+
+
 def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
     """Run one isolated analyst role and one evidence-preserving repair if needed."""
     common = (
@@ -611,6 +623,30 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                                             "driver_path": "text",
                                             "direction": "Negatif",
                                             "source_ids": ["official"]}]}}}
+    elif name == "stage":
+        role = (
+            "Role: STAGE CLASSIFIER. Return {\"stage_classification\": object}. "
+            "Classify operating stage from sourced evidence: life_cycle_stage "
+            "(pre_revenue | high_growth_pre_profit | mature | decline), "
+            "has_steady_state_3y (boolean), commodity_price_driven (boolean), "
+            "dissimilar_segments (int 1-10), rationale (Bahasa Indonesia 40-600 karakter), "
+            "source_ids ([\"official\", \"news:0\", ...]). Default konservatif mature/true/false/1; "
+            "non-default wajib mengutip official atau artikel bertanggal. "
+            "Decline butuh revenue annuals turun atau restrukturisasi bersumber. "
+            "Return null bila bukti tidak cukup."
+        )
+        payload = {"ticker": source["ticker"], "as_of": source["as_of"],
+                   "model_profile": source["model_profile"],
+                   "annuals": source.get("annuals") or [],
+                   "official": source.get("official"),
+                   "news": [{key: item.get(key) for key in (
+                       "index", "title", "timestamp", "url", "origin", "body",
+                       "full_text", "full_text_status")} for item in source["news"]],
+                   "json_shape": {"stage_classification": {
+                       "life_cycle_stage": "mature", "has_steady_state_3y": True,
+                       "commodity_price_driven": False, "dissimilar_segments": 1,
+                       "rationale": "Indonesian text 40-600 chars",
+                       "source_ids": ["official"]}}}
     else:
         role = (
             "Role: OUTYEAR EARNINGS SCENARIO ANALYST. Build an assumption-led "
@@ -721,6 +757,21 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                             {"title": by_id[x]["title"], "url": by_id[x]["url"],
                              "date": str(by_id[x]["timestamp"])[:10]})
                         for x in cited if x == "official" or x in by_id}
+            elif name == "stage":
+                sc = fragment.get("stage_classification", fragment)
+                if sc is None:
+                    problems = ["stage agent returned no classification"]
+                    fragment = None
+                elif not isinstance(sc, dict):
+                    problems = ["stage_classification must be an object"]
+                    fragment = None
+                else:
+                    sc = {k: sc[k] for k in (
+                        "life_cycle_stage", "has_steady_state_3y",
+                        "commodity_price_driven", "dissimilar_segments",
+                        "rationale", "source_ids") if k in sc}
+                    fragment = {"stage_classification": sc}
+                    problems = _validate_stage(sc, source)
             elif name == "outyears":
                 if set(fragment) != {"outyear_scenario"}:
                     problems = ["outyear agent must return only outyear_scenario"]
@@ -779,6 +830,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
     binding = ("official_evidence" if name == "interim" else
                "official_evidence_and_dated_news" if name == "earnings" else
                "official_evidence_and_dated_news" if name == "outyears" else
+               "official_evidence_and_annuals" if name == "stage" else
                "sectors_and_tavily_news")
     return {"status": "validated", "fragment": fragment, "problems": [],
             "provenance_binding": binding}
@@ -795,6 +847,7 @@ def run_live(intake):
     if not source["news"] and not source["official"]:
         return {"status": "no_event_evidence", "plan": None, "problems": [],
                 "interim_status": "not_run", "outyears_status": "not_run",
+                "earnings_status": "not_run", "stage_status": "not_run",
                 "subagents": {},
                 "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
                 "spec_sha256": spec_sha256,
@@ -812,6 +865,9 @@ def run_live(intake):
         tasks.append("interim")
     if _earnings_eligible(source):
         tasks.append("earnings")
+    # Stage classifier runs whenever annuals/official exist (cheap, cached).
+    if source.get("annuals") or source.get("official"):
+        tasks.append("stage")
     results = {}
     with ThreadPoolExecutor(max_workers=min(len(tasks), 2) or 1) as pool:
         futures = {name: pool.submit(_run_subagent, name, source, spec) for name in tasks}
@@ -850,7 +906,8 @@ def run_live(intake):
                     "status": "invalid", "fragment": None,
                     "problems": [f"{type(error).__name__}: {str(error)[:180]}"]}
     plan = {"news_effects": [], "interim_scenario": None,
-            "outyear_scenario": None, "earnings_scenario": None}
+            "outyear_scenario": None, "earnings_scenario": None,
+            "stage_classification": None}
     problems = []
     for name, result in results.items():
         if result["status"] == "validated":
@@ -874,6 +931,7 @@ def run_live(intake):
             "interim_status": (results.get("interim") or {}).get("status", "not_run"),
             "earnings_status": (results.get("earnings") or {}).get("status", "not_run"),
             "outyears_status": (results.get("outyears") or {}).get("status", "not_run"),
+            "stage_status": (results.get("stage") or {}).get("status", "not_run"),
             "subagents": {name: {"status": result["status"],
                                  "problems": result["problems"]}
                           for name, result in results.items()},

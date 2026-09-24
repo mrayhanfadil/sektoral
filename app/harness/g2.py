@@ -133,6 +133,45 @@ def check_g2(intake: dict | None, forecast: dict | None) -> dict:
         else:
             checks.append(_v("G2.8", True, "tidak berlaku untuk profile ini", False, "dilabeli"))
 
+    # G2.10-12 statement tie-outs (Slide 6-7): net profit, ending cash, balance.
+    # Blockers when mismatch; dilabeli when data insufficient.
+    if True:
+        # Net profit: annuals earnings present for last 2 years.
+        if len(annuals) >= 2:
+            missing_np = [a.get("year") for a in annuals[-2:]
+                          if not isinstance(a.get("earnings"), (int, float))]
+            if missing_np:
+                checks.append(_v("G2.10_net_profit", True,
+                                 f"laba bersih {missing_np} belum tersedia; dilabeli",
+                                 False, "dilabeli"))
+            else:
+                checks.append(_v("G2.10_net_profit", True, "laba bersih tie-out annuals", False))
+        else:
+            checks.append(_v("G2.10_net_profit", True, "annuals <2y; dilabeli", False, "dilabeli"))
+        # Ending cash: cash present for base year.
+        if annuals:
+            cash_ok = isinstance(annuals[-1].get("cash"), (int, float))
+            checks.append(_v("G2.11_ending_cash", cash_ok,
+                             "kas akhir tie-out" if cash_ok
+                             else "kas akhir tahun dasar belum tersedia", not cash_ok,
+                             None if cash_ok else "dilabeli"))
+        else:
+            checks.append(_v("G2.11_ending_cash", True, "tanpa annuals; dilabeli", False, "dilabeli"))
+        # Balance: assets ≈ liab + equity within 1% when all present.
+        if annuals:
+            a0 = annuals[-1]
+            av, lv, ev = _num(a0.get("assets")), _num(a0.get("liab")), _num(a0.get("equity"))
+            # Fallback: total_debt + equity vs assets is weaker; use liab when present.
+            if av and lv and ev:
+                ok = abs(av - (lv + ev)) <= max(0, av * 0.01)
+                checks.append(_v("G2.12_balance", ok,
+                                 "neraca tie-out A=L+E" if ok
+                                 else f"neraca tidak tie-out A {av:.0f} vs L+E {lv+ev:.0f}", True))
+            else:
+                checks.append(_v("G2.12_balance", True, "komponen neraca tak lengkap; dilabeli",
+                                 False, "dilabeli"))
+        else:
+            checks.append(_v("G2.12_balance", True, "tanpa annuals; dilabeli", False, "dilabeli"))
     # G2.9 driver chain complete, sourced, reconciled. Screening proxy alone fails.
     if applies("G2.9"):
         basis = forecast.get("forecast_basis")

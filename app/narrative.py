@@ -3902,14 +3902,66 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
                     "catatan_sumber": note})
         return n[0]
 
+    def _pct_change(cur, prev):
+        try:
+            if cur is None or prev in (None, 0):
+                return "belum dimodelkan"
+            return fmt.pct(cur / prev - 1)
+        except (TypeError, ZeroDivisionError):
+            return "belum dimodelkan"
+
+    _eps_hist = [(a["earnings"] or 0) / intake["shares"] if a.get("earnings") is not None else None
+                 for a in A[-2:]]
+    _eps_f = [r.get("eps") for r in F]
+    _eps_all = _eps_hist + _eps_f
+    _eps_g = ["-"] + [_pct_change(_eps_all[i], _eps_all[i - 1]) if _eps_all[i] is not None and _eps_all[i - 1] not in (None, 0) else "belum dimodelkan"
+              for i in range(1, len(_eps_all))]
+    _rev_all = [a["revenue"] for a in A[-2:]] + [r["revenue"] for r in F]
+    _rev_g = ["-"] + [_pct_change(_rev_all[i], _rev_all[i - 1]) for i in range(1, len(_rev_all))]
+    _ebitda_all = [(a.get("ebitda") or 0) for a in A[-2:]] + [r.get("ebitda") for r in F]
+    _ebitda_g = ["-"] + [_pct_change(_ebitda_all[i], _ebitda_all[i - 1]) if _ebitda_all[i - 1] else "belum dimodelkan"
+                 for i in range(1, len(_ebitda_all))]
     kf_rows = [["Pendapatan (Rp miliar)"] + [fmt.miliar(a["revenue"]) for a in A[-2:]]
                + [fmt.miliar(r["revenue"]) for r in F]]
+    kf_rows += [["Pertumbuhan pendapatan (%)"] + _rev_g[1:3] + _rev_g[3:]]
     kf_rows += [["EBITDA (Rp miliar)"] + [fmt.miliar(a["ebitda"] or 0) for a in A[-2:]]
                 + [fmt.miliar(r["ebitda"]) for r in F]]
+    kf_rows += [["Pertumbuhan EBITDA (%)"] + _ebitda_g[1:3] + _ebitda_g[3:]]
     kf_rows += [["Laba bersih (Rp miliar)"] + [fmt.miliar(a["earnings"] or 0) for a in A[-2:]]
                 + [fmt.miliar(r["net"]) for r in F]]
     kf_rows += [["EPS (Rp)"] + [fmt.rp((a["earnings"] or 0) / intake["shares"]) for a in A[-2:]]
                 + [fmt.rp(r["eps"]) for r in F]]
+    kf_rows += [["Pertumbuhan EPS (%)"] + _eps_g[1:3] + _eps_g[3:]]
+    # Multiples: PER/PBV from price, EV/EBITDA where applicable (never for banks).
+    _is_bank = (intake.get("model_profile") == "financial_ddm")
+    _per_row, _pbv_row, _ev_row = [], [], []
+    for a in A[-2:]:
+        _eps = (a.get("earnings") or 0) / intake["shares"] if intake.get("shares") else None
+        _bvps = (a.get("equity") or 0) / intake["shares"] if intake.get("shares") and a.get("equity") else None
+        _per_row.append(fmt.mult(intake["price"] / _eps) if _eps and _eps > 0 else "belum dimodelkan")
+        _pbv_row.append(fmt.mult(intake["price"] / _bvps) if _bvps and _bvps > 0 else "belum dimodelkan")
+        if _is_bank:
+            _ev_row.append("-")
+        else:
+            _ev = (intake.get("market_cap") or 0)
+            _eb = a.get("ebitda") or 0
+            _ev_row.append(fmt.mult(_ev / _eb) if _eb and _eb > 0 else "belum dimodelkan")
+    for r in F:
+        _eps = r.get("eps")
+        _per_row.append(fmt.mult(intake["price"] / _eps) if _eps and _eps > 0 else "belum dimodelkan")
+        _pbv_row.append("belum dimodelkan")
+        _ev_row.append("-" if _is_bank else "belum dimodelkan")
+    kf_rows += [["PER (x)"] + _per_row]
+    kf_rows += [["PBV (x)"] + _pbv_row]
+    kf_rows += [["EV/EBITDA (x)"] + _ev_row]
+    if _is_bank:
+        # Bank rows only where evidence exists (payout/DPS/equity).
+        _roe_row = []
+        for a in A[-2:]:
+            _roe_row.append(fmt.pct((a.get("earnings") or 0) / a["equity"]) if a.get("equity") else "belum dimodelkan")
+        for r in F:
+            _roe_row.append(fmt.pct(r["net"] / r["equity"]) if r.get("equity") and r.get("net") else "belum dimodelkan")
+        kf_rows += [["ROE (%)"] + _roe_row]
     kf_cols = ["Key Financials"] + [str(a["year"]) for a in A[-2:]] + [r["label"] for r in F]
     E("Key Financials", "tabel", {"cols": kf_cols, "rows": kf_rows})
 
