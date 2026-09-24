@@ -293,6 +293,28 @@ def industry_page(intake):
 
 # ------------------------------------------------------------ peer page
 
+def _band_label(band):
+    lo, hi = band
+    return f"{lo:.0f}-{hi:.0f}x"
+
+
+def _peer_stats(rows):
+    """(median, average) per metric over peers other than the issuer. P/E and
+    P/B use the valuation's peer bands, so the table, its narrative and the
+    target price all read the same peer set."""
+    bands = {"pe": method_chain.PEER_PE_BAND, "pb": method_chain.PEER_PB_BAND}
+    out = {}
+    for key in ("market_cap", "pe", "pb", "roe", "net_margin", "leverage"):
+        vals = [r["metrics"].get(key) for r in rows if not r["is_self"]]
+        vals = [v for v in vals if isinstance(v, (int, float)) and v == v]
+        if key in bands:
+            lo, hi = bands[key]
+            vals = [v for v in vals if lo < v <= hi]
+        out[key] = ((statistics.median(vals), sum(vals) / len(vals)) if vals
+                    else (None, None))
+    return out
+
+
 def peer_page(intake, valuation_inputs=None):
     ticker = intake["ticker"]
     peers = peer_tools.find_peers(ticker)
@@ -313,19 +335,14 @@ def peer_page(intake, valuation_inputs=None):
     median_row, avg_row, rank_row = (["Median peer (tanpa emiten)"],
                                      ["Rata-rata peer (tanpa emiten)"],
                                      [f"Peringkat {ticker}"])
+    stats = _peer_stats(rows)
     for key, kind in (("market_cap", "rp"), ("pe", "x"), ("pb", "x"), ("roe", "pct"),
                       ("net_margin", "pct"), ("leverage", "x")):
         signal = ranked.get(f"peer.{key}") or {}
-        median = signal.get("median")
+        median, avg = stats[key]
         median_row.append("-" if median is None else
                           fmt.pct(median) if kind == "pct" else
                           fmt.mult(median) if kind == "x" else _rp_bn(median))
-        # Average: mean of valid metrics, excluding outliers >100x for PE.
-        vals = [r["metrics"].get(key) for r in rows if not r["is_self"]]
-        vals = [v for v in vals if isinstance(v, (int, float)) and v == v]
-        if key == "pe":
-            vals = [v for v in vals if 0 < v <= 100]
-        avg = sum(vals) / len(vals) if vals else None
         avg_row.append("-" if avg is None else
                        fmt.pct(avg) if kind == "pct" else
                        fmt.mult(avg) if kind == "x" else _rp_bn(avg))
@@ -338,6 +355,8 @@ def peer_page(intake, valuation_inputs=None):
         f"Sumber: {peers['source']} ({peers['basis']}); per {intake.get('as_of') or intake.get('price_date') or '-'}; "
         "kriteria: model bisnis dan eksposur sebanding, kapitalisasi sebanding, outlier dijelaskan; "
         "P/E negatif tidak diperingkat; rasio di atas 500% ditulis n.m. karena basis pendapatan atau ekuitas sangat kecil. "
+        f"Median dan rata-rata P/E memakai peer dengan P/E {_band_label(method_chain.PEER_PE_BAND)} "
+        f"dan P/B {_band_label(method_chain.PEER_PB_BAND)}, rentang yang sama dengan valuasi. "
         "Rasio dihitung dari laba, ekuitas, pendapatan dan liabilitas tabel peer. "
         "Emiten yang dibahas disorot '(emiten)'.")]
     caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
@@ -348,30 +367,32 @@ def peer_page(intake, valuation_inputs=None):
         f"miliar sampai Rp{_rp_bn(max(caps))} miliar." if caps else "",
     ]
     pe_signal, roe_signal = ranked.get("peer.pe") or {}, ranked.get("peer.roe") or {}
-    if pe_signal.get("value") is not None and pe_signal.get("median"):
+    pe_median, pb_median = stats["pe"][0], stats["pb"][0]
+    if pe_signal.get("value") is not None and pe_median:
         paragraphs.append(
             f"P/E {ticker} {fmt.mult(pe_signal['value'])} dibanding median peer "
-            f"{fmt.mult(pe_signal['median'])}, sementara ROE berada di peringkat "
+            f"{fmt.mult(pe_median)}, sementara ROE berada di peringkat "
             f"{roe_signal.get('rank') or '-'} dari {roe_signal.get('n') or '-'}.")
-    outliers = [r["symbol"] for r in rows if (r["metrics"].get("pe") or 0) > 100]
+    outliers = [r["symbol"] for r in rows
+                if (r["metrics"].get("pe") or 0) > method_chain.PEER_PE_BAND[1]]
     negative = [r["symbol"] for r in rows if r["metrics"].get("pe") is None and not r["is_self"]]
     if outliers or negative:
         paragraphs.append(
             "Pencilan: " + ", ".join(
-                ([f"P/E di atas 100x ({', '.join(outliers)})"] if outliers else []) +
+                ([f"P/E di atas {method_chain.PEER_PE_BAND[1]:.0f}x ({', '.join(outliers)})"]
+                 if outliers else []) +
                 ([f"laba negatif atau P/E tidak tersedia ({', '.join(negative)})"] if negative else []))
-            + "; median dipakai agar pencilan tidak mendominasi.")
+            + "; pencilan tidak masuk median dan rata-rata.")
     cross = []
     inputs = valuation_inputs or {}
-    if inputs.get("eps_idr") and pe_signal.get("median"):
-        implied = pe_signal["median"] * inputs["eps_idr"]
-        cross.append([f"P/E median peer x EPS {inputs['label']}", fmt.mult(pe_signal["median"]),
+    if inputs.get("eps_idr") and pe_median:
+        implied = pe_median * inputs["eps_idr"]
+        cross.append([f"P/E median peer x EPS {inputs['label']}", fmt.mult(pe_median),
                       f"Rp{fmt.rp(fmt.tick(implied))}"])
-    pb_signal = ranked.get("peer.pb") or {}
-    if inputs.get("bvps_idr") and pb_signal.get("median"):
-        implied = pb_signal["median"] * inputs["bvps_idr"]
+    if inputs.get("bvps_idr") and pb_median:
+        implied = pb_median * inputs["bvps_idr"]
         cross.append([f"P/B median peer x BVPS {inputs.get('bvps_period', 'terakhir')}",
-                      fmt.mult(pb_signal["median"]), f"Rp{fmt.rp(fmt.tick(implied))}"])
+                      fmt.mult(pb_median), f"Rp{fmt.rp(fmt.tick(implied))}"])
     if cross:
         if inputs.get("tp"):
             cross.append(["Target harga metode utama", inputs.get("method_label", "-"),
@@ -448,7 +469,7 @@ def own_history_bands(intake):
         else:
             implied = (f"mean Rp{fmt.rp(fmt.tick(mean * base_now))}; "
                        f"median Rp{fmt.rp(fmt.tick(med * base_now))}")
-        rows.append([label, f"{mean:.1f}x", f"{med:.1f}x", f"{cur:.1f}x (p{pct:.0f})", implied])
+        rows.append([label, fmt.mult(mean), fmt.mult(med), f"{fmt.mult(cur)} (p{pct:.0f})", implied])
     return _exhibit(
         "Band historis 1 tahun P/E dan P/BV (bukan target harga)",
         ["Multiple", "Mean", "Median", "Kini (persentil)", "Implikasi mean/median"],
@@ -498,7 +519,9 @@ def financials_page(intake):
     years = [str(r["year"]) for r in history]
 
     def line(label, key):
-        return [label] + [_rp_bn(_num(r.get(key))) for r in history]
+        # Sectors stores an unreported EBITDA as 0; show it as missing.
+        return [label] + [_rp_bn(_num(r.get(key)) or None if key == "ebitda"
+                                 else _num(r.get(key))) for r in history]
 
     def derived(label, fn):
         values = []
@@ -793,11 +816,12 @@ def combo_charts_page(intake, fc=None):
     rev_g = [None] + [(cur / prev - 1) * 100
                       if isinstance(cur, (int, float)) and isinstance(prev, (int, float)) and prev
                       else None for prev, cur in zip(rev_bars, rev_bars[1:])]
-    ebitda_bars = [a.get("ebitda") for a in annuals] + [r.get("ebitda") for r in frows[:3]]
+    # An unreported EBITDA arrives as 0 from Sectors; it is a gap, not a zero bar.
+    ebitda_bars = [a.get("ebitda") or None for a in annuals] + [r.get("ebitda") for r in frows[:3]]
     has_ebitda = any(isinstance(v, (int, float)) for v in ebitda_bars)
     ebitda_m = []
     for a in annuals:
-        rev, eb = a.get("revenue") or 0, a.get("ebitda")
+        rev, eb = a.get("revenue") or 0, a.get("ebitda") or None
         ebitda_m.append(eb / rev * 100 if rev and isinstance(eb, (int, float)) else None)
     ebitda_m += [((r.get("margin") or 0) * 100) if r.get("margin") is not None else None
                  for r in frows[:3]]
