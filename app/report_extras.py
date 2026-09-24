@@ -853,6 +853,144 @@ def price_chart_exhibit(intake):
             "catatan_sumber": "Source: Sectors, Sektoral Estimates"}
 
 
+def fallback_risks(intake):
+    """Spec §5.4 risks computed from filed data when no validated agent list
+    exists: leverage, control, free float, margin trend, commodity and mine
+    life. Each carries the number that sizes it; none is generic filler."""
+    evidence = intake.get("official_evidence") or {}
+    balance = evidence.get("balance_sheet") or {}
+    usd = evidence.get("reporting_currency") == "USD"
+    source = (evidence.get("latest_actual") or {}).get("source_title") or "laporan keuangan emiten"
+    money = (lambda v: f"US${fmt._id(v / 1e6, 1)} juta") if usd else (
+        lambda v: f"Rp{fmt._id(v / 1e9, 1)} miliar")
+    risks = []
+    annual = sorted((row for row in evidence.get("annual_actuals") or [] if row.get("year")),
+                    key=lambda row: row["year"])
+    debt, cash = balance.get("total_debt"), balance.get("cash")
+    sectors = sorted((r for r in intake.get("annuals") or [] if r.get("year")),
+                     key=lambda r: r["year"])
+    # Sectors annuals are in rupiah; only a rupiah reporter can mix them with the balance sheet.
+    ebitda_rows = [r for r in annual if r.get("ebitda")] or (
+        [] if usd else [r for r in sectors if r.get("ebitda")])
+    as_of = balance.get("period_end", "neraca terakhir")
+    if (debt is None or cash is None) and not usd and sectors and \
+            intake.get("model_profile") != "financial_ddm":
+        debt, cash = sectors[-1].get("total_debt"), sectors[-1].get("cash")
+        as_of = f"akhir {sectors[-1]['year']}"
+    last = ebitda_rows[-1] if ebitda_rows else None
+    leverage = ((debt - cash) / last["ebitda"] if debt is not None and cash is not None
+                and last and last["ebitda"] > 0 else None)
+    # Net debt under 2x EBITDA is not a material funding risk.
+    if debt is not None and cash is not None and debt > cash and (leverage is None or leverage >= 2):
+        cover = f", setara {fmt.mult(leverage, 1)} EBITDA {last['year']}" if leverage else ""
+        risks.append({"kategori": "Pendanaan", "judul": "Utang bersih serta biaya bunga",
+                      "isi": f"Utang bersih {money(debt - cash)} per {as_of}{cover}. "
+                             "Kenaikan bunga, refinancing, atau EBITDA yang lebih rendah "
+                             "langsung menekan laba bersih dan nilai ekuitas.",
+                      "sumber": source})
+    holders = [(name, pct) for name, pct in _holders(intake) if pct is not None]
+    public = next((pct for name, pct in holders
+                   if name.lower() in ("public", "publik", "masyarakat")), None)
+    control = max((h for h in holders if h[0].lower() not in ("public", "publik", "masyarakat")),
+                  key=lambda h: h[1], default=None)
+    top3 = sorted((h for h in holders if h[0].lower() not in ("public", "publik", "masyarakat")),
+                  key=lambda h: -h[1])[:3]
+    if control and control[1] <= 50 and sum(pct for _, pct in top3) > 50:
+        risks.append({"kategori": "Tata kelola", "judul": "Kepemilikan terkonsentrasi",
+                      "isi": f"Tiga pemegang saham terbesar memegang "
+                             f"{fmt._id(sum(pct for _, pct in top3), 1)}% saham. Kebijakan dividen "
+                             "dan aksi korporasi ditentukan oleh sedikit pihak, dan penjualan "
+                             "blok saham dapat menekan harga.",
+                      "sumber": "data kepemilikan Sectors"})
+    if control and control[1] > 50:
+        risks.append({"kategori": "Tata kelola", "judul": "Kendali pemegang saham mayoritas",
+                      "isi": f"{control[0]} memegang {fmt._id(control[1], 1)}% saham. Transaksi "
+                             "pihak berelasi, kebijakan dividen, dan aksi korporasi mengikuti "
+                             "kepentingan pengendali, sehingga minoritas menanggung risikonya.",
+                      "sumber": "data kepemilikan Sectors"})
+    if public is not None and public < 7.5:
+        risks.append({"kategori": "Regulasi", "judul": "Free float di bawah batas minimum",
+                      "isi": f"Free float {fmt._id(public, 1)}% di bawah batas 7,5% bursa. "
+                             "Pemenuhannya lewat penerbitan saham baru atau penjualan pengendali "
+                             "dapat mendilusi atau menekan harga saham.",
+                      "sumber": "data kepemilikan Sectors"})
+    # Filed annuals when extracted, otherwise the Sectors annual history.
+    history = [(row["year"], row.get("revenue"), row.get("net_profit")) for row in annual] or [
+        (row["year"], row.get("revenue"), row.get("earnings")) for row in sectors]
+    margins = [(year, profit / revenue) for year, revenue, profit in history[-2:]
+               if revenue and profit is not None]
+    # A decline of at least 1pp is material; a small drift is not a risk.
+    if len(margins) == 2 and margins[1][1] <= margins[0][1] - 0.01:
+        (y0, m0), (y1, m1) = margins
+        risks.append({"kategori": "Operasi",
+                      "judul": ("Laba bersih berbalik rugi" if m1 < 0
+                                else "Margin laba bersih menyempit"),
+                      "isi": (f"Margin laba bersih {fmt.pct(m0)} pada {y0} berbalik menjadi rugi "
+                              f"bersih {fmt.pct(-m1)} dari pendapatan pada {y1}. "
+                              if m1 < 0 else
+                              f"Margin laba bersih turun dari {fmt.pct(m0)} pada {y0} ke "
+                              f"{fmt.pct(m1)} pada {y1}. ")
+                             + "Bila tekanan biaya berlanjut, pertumbuhan pendapatan tidak "
+                               "sepenuhnya menjadi laba.",
+                      "sumber": source})
+    if intake.get("model_profile") == "financial_ddm":
+        loans, deposits = balance.get("loans"), balance.get("deposits")
+        if loans and deposits:
+            risks.append({"kategori": "Pendanaan", "judul": "Likuiditas serta biaya dana",
+                          "isi": f"Rasio kredit terhadap simpanan {fmt.pct(loans / deposits)} "
+                                 f"per {balance.get('period_end', 'neraca terakhir')}. Pertumbuhan "
+                                 "kredit bergantung pada kenaikan simpanan; persaingan dana "
+                                 "menaikkan biaya dana dan menekan margin bunga bersih.",
+                          "sumber": source})
+        last = next((row for row in reversed(intake.get("annuals") or [])
+                     if row.get("equity") and row.get("assets")), None)
+        if last:
+            risks.append({"kategori": "Modal", "judul": "Ruang modal untuk pertumbuhan kredit",
+                          "isi": f"Ekuitas setara {fmt.pct(last['equity'] / last['assets'])} dari "
+                                 f"aset pada {last.get('year', 'tahun terakhir')}. Kenaikan kredit "
+                                 "bermasalah atau pembayaran dividen yang besar menggerus modal "
+                                 "yang menopang pertumbuhan kredit.",
+                          "sumber": "data keuangan Sectors"})
+    if intake.get("model_profile") == "finite_life_mining":
+        for name in reversed(_commodities(intake)):
+            change = _change_12m(_series(name))
+            label = COMMODITY_UNITS.get(name, (name,))[0].lower()
+            if change is not None:
+                risks.insert(0, {"kategori": "Komoditas", "judul": f"Harga {label}",
+                              "isi": f"Harga {label} {'naik' if change >= 0 else 'turun'} "
+                                     f"{fmt.pct(abs(change))} dalam 12 bulan. Harga realisasi "
+                                     "mengalir langsung ke pendapatan dan EBITDA, sehingga "
+                                     "koreksi harga menurunkan laba dan nilai aset.",
+                              "sumber": "harga komoditas Sectors"})
+        life = evidence.get("mine_life_context") or {}
+        if life.get("elang_fid_target") or life.get("elang_first_ore"):
+            risks.insert(sum(r["kategori"] == "Komoditas" for r in risks), {"kategori": "Proyek", "judul": "Umur tambang serta capex pengembangan",
+                          "isi": f"Target keputusan investasi {life.get('elang_fid_target', '-')} "
+                                 f"dan bijih pertama {life.get('elang_first_ore', '-')}. "
+                                 "Penundaan atau kenaikan capex menekan arus kas bebas sebelum "
+                                 "cadangan baru menggantikan tambang yang menua.",
+                          "sumber": source})
+    return risks[:5]
+
+
+def attach_risks(doc, intake, page):
+    """Place 'Risiko utama' on the catalyst page and name the risks on the
+    cover's valuation paragraph (spec §5.4: cover paragraph 3 is valuasi/risiko)."""
+    risks = (doc.get("risks") or fallback_risks(intake))[:5]
+    doc["risks"] = risks
+    if not risks:
+        return
+    page["risks"] = risks
+    page["risks_after"] = 1 if any(e["judul"] == "Katalis, risiko, dan indikator pemantauan"
+                                   for e in page["exhibit"]) else 0
+    paragraphs = (doc.get("cover") or {}).get("paragraf") or []
+    if paragraphs and isinstance(paragraphs[-1], dict):
+        names = [r["judul"][:1].lower() + r["judul"][1:] for r in risks[:3]]
+        joined = (" dan ".join(names) if len(names) <= 2
+                  else ", ".join(names[:-1]) + ", dan " + names[-1])
+        paragraphs[-1]["isi"] = paragraphs[-1]["isi"].rstrip() + f" Risiko utama: {joined}."
+
+
 def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if not any(e.get("tipe") == "price_chart" for e in doc["exhibits"]):
         doc["exhibits"].insert(0, price_chart_exhibit(intake))
@@ -879,14 +1017,16 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     catalyst = next((e for p in pages for e in p["exhibit"]
                      if e["judul"] == "Katalis, risiko, dan indikator pemantauan"), None)
     owner_exhibits, owner_paragraphs = ownership_exhibits(intake)
-    if catalyst or owner_exhibits:
-        for page in pages:
-            page["exhibit"] = [e for e in page["exhibit"] if e is not catalyst]
-        new_pages.append(_page(
-            "Katalis, risiko, dan kepemilikan",
-            ["Katalis dan risiko dipilih menurut dampaknya ke volume, harga realisasi, biaya dan "
-             "neraca; kepemilikan dan arus asing ditampilkan sebagai konteks pasar."] + owner_paragraphs,
-            ([catalyst] if catalyst else []) + owner_exhibits))
+    risk_page = _page(
+        "Katalis, risiko, dan kepemilikan",
+        ["Katalis dan risiko dipilih menurut dampaknya ke volume, harga realisasi, biaya dan "
+         "neraca; kepemilikan dan arus asing ditampilkan sebagai konteks pasar."] + owner_paragraphs,
+        ([catalyst] if catalyst else []) + owner_exhibits)
+    for page in pages:
+        page["exhibit"] = [e for e in page["exhibit"] if e is not catalyst]
+    attach_risks(doc, intake, risk_page)
+    if catalyst or owner_exhibits or risk_page.get("risks"):
+        new_pages.append(risk_page)
     if not ({"Riwayat keuangan dalam data Sectors", "Laba rugi historis"} & exhibit_titles):
         new_pages.append(financials_page(intake))
     for page in new_pages:
@@ -895,7 +1035,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if va:
         attach_method_chain(doc, va)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
-                     if p["exhibit"] or p["paragraf"] or p.get("cards")]
+                     if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2
     renumber(doc)

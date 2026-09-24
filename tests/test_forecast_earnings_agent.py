@@ -32,7 +32,20 @@ def _scenario(**kw):
                  "direction": "Negatif", "source_ids": ["official"]},
                 {"item": "Kapasitas baru", "timing": "Mulai 4Q26",
                  "driver_path": "Tambahan kapasitas menaikkan volume dan pendapatan tahunan.",
-                 "direction": "Positif", "source_ids": ["official"]}]}
+                 "direction": "Positif", "source_ids": ["official"]}],
+            "key_risks": [
+                {"category": "Komoditas", "headline": "Harga jagung dan bungkil kedelai",
+                 "explanation": "Bahan baku pakan setara 60% beban pokok; kenaikan harga jagung "
+                                "10% menekan margin kotor sekitar 2pp tanpa kenaikan harga jual.",
+                 "source_ids": ["official"]},
+                {"category": "Pendanaan", "headline": "Utang bank jangka pendek",
+                 "explanation": "Utang jangka pendek Rp5.000 miliar jatuh tempo dalam 12 bulan; "
+                                "kenaikan bunga 100bp menambah beban bunga sekitar Rp50 miliar.",
+                 "source_ids": ["official"]},
+                {"category": "Operasi", "headline": "Oversupply ayam pedaging",
+                 "explanation": "Populasi DOC naik 8% yoy; kelebihan pasokan menurunkan harga "
+                                "livebird dan margin segmen peternakan komersial.",
+                 "source_ids": ["official"]}]}
     base.update(kw)
     return base
 
@@ -84,6 +97,22 @@ def test_thesis_and_risks_are_required_and_recommendation_free():
         "Kenaikan harga jual ayam hidup menaikkan margin laba bersih H2.",
         "Harga bahan baku yang stabil menjaga margin laba bersih di atas 10%."])
     assert agent._validate_earnings(price, _source()) == []
+
+
+def test_key_risks_are_categorised_quantified_and_cited():
+    risks = _scenario()["key_risks"]
+    assert any("key_risks must list" in p for p in agent._validate_earnings(
+        _scenario(key_risks=risks[:2]), _source()))
+    bad = [dict(risks[0], category="Makro")] + risks[1:]
+    assert any("category" in p for p in agent._validate_earnings(
+        _scenario(key_risks=bad), _source()))
+    vague = [dict(risks[0], explanation="Harga bahan baku bisa naik dan menekan margin kotor "
+                                        "serta laba bersih perusahaan ke depan secara umum.")]
+    assert any("quantify" in p for p in agent._validate_earnings(
+        _scenario(key_risks=vague + risks[1:]), _source()))
+    uncited = [dict(risks[0], source_ids=["news:9"])] + risks[1:]
+    assert any("key_risks[0] must cite" in p for p in agent._validate_earnings(
+        _scenario(key_risks=uncited), _source()))
 
 
 def test_non_mining_outyears_may_leave_ebitda_and_capex_empty():

@@ -69,6 +69,9 @@ def _body_texts(doc: dict) -> list[str]:
         if isinstance(sec, dict):
             for p in sec.get("paragraf") or []:
                 out.append(str(p))
+    for risk in (doc or {}).get("risks") or []:
+        if isinstance(risk, dict):
+            out.append(f"{risk.get('judul') or ''}. {risk.get('isi') or ''}")
     return out
 
 
@@ -231,6 +234,17 @@ def check_narrative(doc: dict | None) -> dict:
         v("N.exhibit_nomor", True, "tanpa exhibit; dilabeli", False, "dilabeli")
         v("N.exhibit_sumber", True, "tanpa exhibit; dilabeli", False, "dilabeli")
         v("N.baris_sampah", True, "tanpa exhibit; dilabeli", False, "dilabeli")
+
+    # Spec §5.4: a published report names its main risks on page 4 and on the cover.
+    risks = [r for r in doc.get("risks") or [] if isinstance(r, dict) and r.get("isi")]
+    cover_text = " ".join(str(p.get("isi") or "") for p in
+                          (doc.get("cover") or {}).get("paragraf") or [] if isinstance(p, dict))
+    published = (doc.get("meta") or {}).get("status") not in (None, "draft_non_distributable")
+    ok = len(risks) >= 3 and "Risiko utama:" in cover_text
+    v("N.risiko", ok,
+      f"{len(risks)} risiko utama" + ("" if "Risiko utama:" in cover_text
+                                      else "; cover tidak menyebut risiko"),
+      published, None if ok or published else "peringatan")
 
     # N-TP consistency + extreme + downside are cross-checked in G3; re-assert presence.
     meta = doc.get("meta") or {}

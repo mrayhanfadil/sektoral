@@ -78,7 +78,8 @@ def normalize_prose(text):
 # Analyst prose fields that reach the report body. Source titles, URLs and
 # timestamps are provenance and must stay exactly as supplied.
 PROSE_KEYS = frozenset({"rationale", "factual_basis", "mechanism", "uncertainty", "item",
-                        "timing", "driver_path", "thesis_points", "conditions"})
+                        "timing", "driver_path", "thesis_points", "conditions",
+                        "headline", "explanation"})
 
 
 def normalize_plan(value, key=None):
