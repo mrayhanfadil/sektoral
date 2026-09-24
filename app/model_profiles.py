@@ -270,6 +270,16 @@ def evaluate(inputs: dict) -> GateVerdict:
     )
 
 
+EXTREME_UPSIDE_RATIO = 1.0     # Gate 5: upside > +100% -> Review Required
+EXTREME_DOWNSIDE_RATIO = -0.5  # Gate 5: downside < -50% -> Review Required
+
+
+def is_extreme_upside(upside_ratio) -> bool:
+    """Gate 5 rule on a ratio (tp / price - 1); shared by every valuation branch."""
+    return (isinstance(upside_ratio, (int, float)) and not isinstance(upside_ratio, bool)
+            and (upside_ratio > EXTREME_UPSIDE_RATIO or upside_ratio < EXTREME_DOWNSIDE_RATIO))
+
+
 def _eval_gate5_override(inputs: dict) -> Optional[str]:
     upside = inputs.get("upside_pct", inputs.get("upside"))
     if upside is not None:

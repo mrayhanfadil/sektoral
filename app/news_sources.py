@@ -112,7 +112,7 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
     tavily = sorted((c for c in candidates if c["origin"] == "tavily"),
                     key=lambda r: str(r["timestamp"]), reverse=True)
 
-    chosen, by_url, seen_events = [], {}, set()
+    chosen, by_url, seen_events, merged = [], {}, set(), []
 
     def add(row):
         key = _url_key(row["source"])
@@ -121,7 +121,10 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
             existing["origins"] = list(dict.fromkeys(existing["origins"] + row["origins"]))
             if row.get("tavily_query") and row["tavily_query"] not in str(existing.get("tavily_query") or ""):
                 existing["tavily_query"] = "; ".join(filter(None, [existing.get("tavily_query"), row.get("tavily_query")]))
-            _reject(row, f"duplicate URL merged into {existing.get('source')}")
+            merged.append({"title": str(row.get("title") or "")[:160],
+                           "url": str(row.get("source") or ""),
+                           "merged_into": existing.get("source"),
+                           "origin": row.get("origin")})
             return
         if len(chosen) >= limit:
             _reject(row, f"over limit={limit}: kept newest-first balanced quota")
@@ -158,9 +161,10 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
     for index, row in enumerate(chosen):
         row["register_id"] = f"src-{index}"
     stats = {"sectors_candidates": len(sectors), "tavily_candidates": len(tavily),
-             "selected": len(chosen), "rejected": len(rejected), "limit": limit,
+             "selected": len(chosen), "rejected": len(rejected), "merged": len(merged),
+             "limit": limit,
              "as_of": str(as_of)[:10]}
-    return {"articles": chosen, "rejected": rejected, "stats": stats}
+    return {"articles": chosen, "rejected": rejected, "merged": merged, "stats": stats}
 
 
 def combine(ticker, company_name, as_of, sectors_rows, tavily_items, limit=6):
