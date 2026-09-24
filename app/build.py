@@ -5,7 +5,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import forecast, intake, narrative, render, report_contract, valuation
+from . import forecast, intake, narrative, render, report_contract, report_extras, valuation
 
 PDF_OK = True
 try:
@@ -25,6 +25,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
                          assumption_status=assumption_status)
     doc = narrative.build(doc_in, fc, va, g1, method=method,
                           illustrative_scenarios=illustrative_scenarios or analyst_target)
+    report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va))
     doc["forecast_assumptions"] = {
         "news_effects": fc.get("news_assumptions") or [],
         "interim_scenario": fc.get("interim_scenario"),
@@ -64,7 +65,7 @@ def main():
     p.add_argument("--method", default="auto",
                    help="opsi valuasi analis: auto|dcf|ddm|rnav")
     p.add_argument("--as-of", default=date.today().isoformat(),
-                   help="tanggal laporan YYYY-MM-DD (default: hari ini); harga tetap bertanggal sesuai cache")
+                   help="tanggal laporan YYYY-MM-DD (default: hari ini); harga tetap bertanggal sesuai data Sectors")
     p.add_argument("--illustrative-scenarios", action="store_true",
                    help="tambahkan screen historis dan valuasi ilustratif ke draft; bukan target harga")
     a = p.parse_args()

@@ -59,14 +59,14 @@ def test_methodology_miner_dengan_tahun():
                                        mineops)
     teks = " ".join(out)
     assert "38,5 tahun" in teks
-    assert "umur cadangan tidak ada di cache" not in teks
+    assert "umur cadangan tidak ada di data Sectors" not in teks
 
 
-def test_methodology_miner_tanpa_cache():
+def test_methodology_miner_tanpa_data_umur_cadangan():
     out = methodnote.methodology_notes(_miner_intake(), {}, {"notes": []},
                                        None)
     teks = " ".join(out)
-    assert "tidak ada di cache" in teks
+    assert "tidak ada di data Sectors" in teks
 
 
 def test_methodology_bank_dan_fx():

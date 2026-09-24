@@ -24,10 +24,13 @@ The current demo is a local browser workflow: enter an IDX ticker, follow resear
 
 ## Capabilities and Constraints
 
+- A planning analyst agent writes a research question and hypotheses, chooses tool calls after seeing each result, ranks the company against its Sectors peer group, flags anomalies, and marks each hypothesis supported, not supported or unanswered with cited signals. It remembers earlier runs per ticker and reports what changed.
+- Agent Sectors tools read only the local Sectors snapshot; no run spends Sectors API credits. An optional `web_news` tool adds dated Tavily headlines from Indonesian business media as context only.
+
 - Market prices are read from `data/sectors_cache.db`; the report builder can also use dated official issuer facts in `data/issuer_evidence/`.
 - The research agent may select only cache endpoints available for the ticker. The host executes reads and records them in the trace.
 - The LLM is used for agent reasoning, not as a market-data source.
-- Citation validation checks the brief against rows actually read. Insufficient evidence remains visibly partial or missing; it is not silently replaced with web research, memory, analyst assumptions, or another dataset.
+- Citation validation checks the brief against rows actually read. Insufficient evidence remains visibly partial or missing; it is not silently replaced with web research, memory, analyst assumptions, or another dataset. Optional Tavily web news appears only as labelled, dated context; no figure comes from it, and every conclusion must also cite a Sectors signal.
 - The app has no brokerage connection or trade execution.
 - Draft outputs withhold target prices and ratings. Buy, Hold or Sell requires a completed production forecast and valuation gate.
 

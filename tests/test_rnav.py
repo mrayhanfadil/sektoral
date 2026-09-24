@@ -89,7 +89,7 @@ def test_bank_ddm_full_path(tmp_path):
     val_sec = next(b for b in d["bagian"] if b["judul"] == "Skenario nilai")
     assert any("lintasan ROE" in p for p in val_sec["paragraf"])
     blob = json.dumps(d, ensure_ascii=False).lower()
-    assert "tanpa histori coe di cache" in blob  # band jujur absen
+    assert "tanpa histori coe di data sectors" in blob  # band jujur absen
 
 
 def test_rnav_discount_sens(tmp_path):

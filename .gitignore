@@ -17,6 +17,9 @@ data/fx_usdidr.json
 data/fx_usdidr.json.tmp
 data/research_analysis/
 data/news_analysis/
+data/agent_memory/
+data/web_news/
+data/forecast_plans/
 
 # Python
 __pycache__/

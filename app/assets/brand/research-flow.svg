@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 420" role="img" aria-labelledby="flow-title flow-desc" width="100%" height="100%">
   <title id="flow-title">Ilustrasi Alur Riset Sektoral</title>
-  <desc id="flow-desc">Diagram alur kerja riset terverifikasi: Baris cache lokal Sectors, seleksi dan pembacaan oleh agen riset, validasi sitasi deterministik, pembaruan perusahaan, serta cabang penanganan bukti parsial.</desc>
+  <desc id="flow-desc">Diagram alur kerja riset terverifikasi: Baris data Sectors tersimpan, seleksi dan pembacaan oleh agen riset, validasi sitasi deterministik, pembaruan perusahaan, serta cabang penanganan bukti parsial.</desc>
 
   <defs>
     <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
@@ -57,15 +57,15 @@
     <text x="387" y="259.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">BUKTI TIDAK LENGKAP</text>
   </g>
 
-  <!-- ==================== STAGE 1: CACHE LOKAL ==================== -->
+  <!-- ==================== STAGE 1: DATA SECTORS ==================== -->
   <g id="stage-1">
     <rect x="20" y="54" width="126" height="190" rx="4" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1"/>
     <rect x="20" y="54" width="126" height="24" rx="3" fill="#0928B1"/>
-    <text x="83" y="70" text-anchor="middle" font-family="Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#FFFFFF">1. CACHE LOKAL</text>
+    <text x="83" y="70" text-anchor="middle" font-family="Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#FFFFFF">1. DATA SECTORS</text>
 
     <!-- Badge -->
     <rect x="28" y="84" width="110" height="14" rx="2" fill="#B4C7FF"/>
-    <text x="83" y="94.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">data/sectors_cache.db</text>
+    <text x="83" y="94.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Snapshot bertanggal</text>
 
     <!-- Rows -->
     <g transform="translate(28, 104)">
@@ -105,7 +105,7 @@
 
     <!-- Badge -->
     <rect x="180" y="84" width="110" height="14" rx="2" fill="#B4C7FF"/>
-    <text x="235" y="94.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Seleksi &amp; Baca Cache</text>
+    <text x="235" y="94.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Seleksi &amp; Baca Data</text>
 
     <!-- Action Cards -->
     <g transform="translate(180, 104)">
@@ -151,7 +151,7 @@
       <rect x="0" y="0" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
       <path d="M 5 12 L 8 15 L 14 9" fill="none" stroke="#1DCD9F" stroke-width="1.5" stroke-linecap="round"/>
       <text x="18" y="10" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Cek Sitasi 1-ke-1</text>
-      <text x="18" y="19" font-family="Roboto, sans-serif" font-size="6.5" fill="#555555">Klaim vs baris cache</text>
+      <text x="18" y="19" font-family="Roboto, sans-serif" font-size="6.5" fill="#555555">Klaim vs baris data</text>
 
       <!-- Check 2 -->
       <rect x="0" y="28" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
@@ -221,8 +221,8 @@
     <!-- Section Header -->
     <rect x="34" y="284" width="144" height="14" rx="2" fill="#B4C7FF"/>
     <text x="106" y="294.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">CABANG EVALUASI BUKTI</text>
-    <text x="188" y="295" font-family="Roboto, sans-serif" font-size="10.5" font-weight="700" fill="#333333">Penanganan Status Parsial &amp; Kekosongan Bukti Cache</text>
-    <text x="34" y="312" font-family="Roboto, sans-serif" font-size="8.5" fill="#555555">Ketika data cache tidak mencukupi untuk mendukung seksi laporan, sistem secara transparan menandai status parsial tanpa substitusi data buatan.</text>
+    <text x="188" y="295" font-family="Roboto, sans-serif" font-size="10.5" font-weight="700" fill="#333333">Penanganan Status Parsial &amp; Kekosongan Bukti</text>
+    <text x="34" y="312" font-family="Roboto, sans-serif" font-size="8.5" fill="#555555">Ketika data Sectors tidak mencukupi untuk mendukung seksi laporan, sistem secara transparan menandai status parsial tanpa substitusi data buatan.</text>
 
     <!-- 3 Step Cards in Partial Branch -->
     <g transform="translate(34, 322)">
@@ -232,7 +232,7 @@
       <line x1="0" y1="16" x2="174" y2="16" stroke="#D9D9D9" stroke-width="0.75"/>
       <text x="8" y="11.5" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">DETEKSI KEKOSONGAN</text>
       <text x="8" y="28" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Baris data historis / segmen nihil</text>
-      <text x="8" y="40" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Parameter tidak ada di cache lokal</text>
+      <text x="8" y="40" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Parameter tidak ada di data Sectors</text>
       <text x="8" y="52" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Draf klaim tidak memiliki sitasi baris</text>
 
       <!-- Subcard 2: Perilaku Deterministik -->

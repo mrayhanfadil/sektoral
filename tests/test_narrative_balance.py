@@ -19,5 +19,7 @@ def test_segment_evidence_without_prior_period_remains_renderable(tmp_path):
     assert "reparasi dan overhaul" not in html.lower()
     assert "garuda" not in html.lower()
     assert "beban material" not in html.lower()
-    assert "berbalik dari rugi" not in html.lower()
+    # Loss reversal is stated only when the evidence shows it: SSIA's 1H25 was a
+    # net loss of Rp32,3 miliar, so the sentence must carry both figures.
+    assert "laba bersih 1h26 rp262,6 miliar, berbalik dari rugi rp32,3 miliar" in html.lower()
     assert "rp- miliar" not in html.lower()
