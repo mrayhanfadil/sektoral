@@ -486,7 +486,9 @@ def test_ramping_going_concern_publishes_on_forward_ev_ebitda_peer(tmp_path, mon
     assert "Target harga: PER peer x EPS FY26F" not in titles
     target = next(e for e in doc["exhibits"] if e["judul"].startswith("Target harga: EV/EBITDA"))
     assert [r[0] for r in target["data"]["rows"]] == ["Kuartil bawah", "Median (basis)", "Kuartil atas"]
-    assert target["catatan_sumber"].startswith("Sumber: EV/EBITDA FY terakhir tiap peer dari data Sectors")
+    assert target["catatan_sumber"].startswith(
+        "Sumber: EV/EBITDA terakhir tiap peer (12 bulan terakhir bila tersedia, selain itu FY "
+        "terakhir) dari data Sectors")
     rows = next(e for e in doc["exhibits"] if e["judul"] == "Rantai metode valuasi")["data"]["rows"]
     assert rows[0][0] == "1. EV/EBITDA peer (utama)" and rows[0][1] == "Terpilih"
     assert not any("DCF" in r[0] for r in rows)

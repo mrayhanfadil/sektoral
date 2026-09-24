@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import re
 
+from . import commodity
+
 OZ_PER_T = 32150.7466
 G_PER_OZ = 31.1034768
 LB_PER_T = 2204.62262
@@ -151,6 +153,12 @@ def inputs(intake, fc):
         "au_price": _num((mineops.get("au_price") or {}).get("avg12")),
         "cu_price_date": (mineops.get("cu_price") or {}).get("date"),
         "au_price_date": (mineops.get("au_price") or {}).get("date"),
+        "deck_basis": deck_basis(mineops),
+        "deck_source": "; ".join(dict.fromkeys(
+            f"https://finance.yahoo.com/quote/{commodity.SERIES[name][0]}/history/"
+            if (mineops.get(metal) or {}).get("source") == "yahoo"
+            else "sectors_cache /mining/commodities"
+            for metal, name in (("cu_price", "Copper"), ("au_price", "Gold")))),
         "reserve_cu_price": (_num(mlc.get("reserve_cu_price_usd_per_lb")) or 0) * LB_PER_T or None,
         "reserve_au_price": _num(mlc.get("reserve_au_price_usd_per_oz")),
         "discount": _num(lom.get("discount_rate_usd")),
@@ -171,11 +179,32 @@ def inputs(intake, fc):
                 "stockpile_capex_share", "licence_end", "pit_end", "elang_first_ore"):
         if not values.get(key):
             gaps.append(key)
+    for metal in ("cu_price", "au_price"):
+        if (mineops.get(metal) or {}).get("stale"):
+            gaps.append(f"{metal}_stale")
     if not values["elang_capex"]:
         gaps.append("elang_capex")
     if not rates.get("copper_cathode_by_hma_usd_per_tonne"):
         gaps.append("royalty")
     return values, gaps
+
+
+def deck_basis(mineops):
+    """Reader label of the base deck: window and source of each metal."""
+    parts = []
+    for metal, name in (("cu_price", "Cu"), ("au_price", "Au")):
+        stats = mineops.get(metal) or {}
+        if stats.get("avg12") is None:
+            continue
+        window = stats.get("window") or ["?", "?"]
+        text = (f"{name} rata-rata {window[0]} s.d. {window[1]}, {stats.get('source_label')}"
+                f" (data terakhir {stats.get('date')})")
+        replaced = stats.get("replaced")
+        if replaced:
+            text += (f"; seri Sectors berhenti {replaced['date']} "
+                     f"({replaced['age_days']} hari sebelum tanggal laporan) sehingga tidak dipakai")
+        parts.append(text)
+    return "; ".join(parts)
 
 
 def deck(inp, name="base"):
@@ -412,7 +441,7 @@ def sotp_result(intake, res):
          "source": mlc.get("source_url") or release,
          "provenance": ("Cadangan 30 Jun 2026, recovery tersirat 1H26, kapasitas pabrik 85 Mtpa, "
                         "smelter 220 kt x utilisasi Juni 93%, biaya unit 1H26, royalti PP 19/2025; "
-                        "harga rata-rata 12 bulan data Sectors."),
+                        f"dek harga: {inp.get('deck_basis') or 'rata-rata 12 bulan'}."),
          "source_date": actual.get("published_at"), "page": "3-7",
          "nav_idr": base["nav"]["bh"] * fx, "ownership_pct": 100.0},
         {"name": "Elang (pengembangan, pra-FID)", "stage": "development",
@@ -506,9 +535,10 @@ def operating_bridge(intake, res):
         "product_sales_mix": row("Pendapatan 1H26 per produk", "katoda, emas murni, konsentrat",
                                  "US$", "1H26", "reported actual", rel, rel_date, 4),
         "realized_price_netback": row(
-            "Dek harga: rata-rata 12 bulan data Sectors, payable HPM",
+            "Dek harga: rata-rata 12 bulan kalender, payable HPM ("
+            + (inp.get("deck_basis") or "data Sectors") + ")",
             f"Cu US${inp['cu_price']:,.0f}/t; Au US${inp['au_price']:,.0f}/oz", "USD",
-            "LoM", "analyst price deck", "sectors_cache /mining/commodities",
+            "LoM", "analyst price deck", inp.get("deck_source") or "sectors_cache /mining/commodities",
             rel_date, None),
         "revenue": row("Pendapatan bersih 1H26", (actual.get("metrics") or {}).get("revenue"),
                        "USD", "1H26", "reported actual", rel, rel_date, 3),

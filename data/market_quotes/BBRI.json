@@ -1,50 +1,50 @@
 {
-  "ticker": "BBCA",
+  "ticker": "BBRI",
   "currency": "IDR",
-  "price": 6225,
+  "price": 3140,
   "date": "2026-09-24",
-  "source_title": "Yahoo Finance BBCA.JK daily close",
-  "source_url": "https://finance.yahoo.com/quote/BBCA.JK/history/",
+  "source_title": "Yahoo Finance BBRI.JK daily close",
+  "source_url": "https://finance.yahoo.com/quote/BBRI.JK/history/",
   "closes": [
     {
       "date": "2026-09-11",
-      "price": 6325
+      "price": 3270
     },
     {
       "date": "2026-09-14",
-      "price": 6500
+      "price": 3400
     },
     {
       "date": "2026-09-15",
-      "price": 6400
+      "price": 3320
     },
     {
       "date": "2026-09-16",
-      "price": 6325
+      "price": 3330
     },
     {
       "date": "2026-09-17",
-      "price": 6350
+      "price": 3330
     },
     {
       "date": "2026-09-18",
-      "price": 6300
+      "price": 3310
     },
     {
       "date": "2026-09-21",
-      "price": 6225
+      "price": 3300
     },
     {
       "date": "2026-09-22",
-      "price": 6200
+      "price": 3180
     },
     {
       "date": "2026-09-23",
-      "price": 6300
+      "price": 3190
     },
     {
       "date": "2026-09-24",
-      "price": 6225
+      "price": 3140
     }
   ]
 }

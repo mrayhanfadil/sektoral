@@ -137,6 +137,6 @@
     "stockpile_phase_sustaining_share": 0.5,
     "stockpile_phase_sustaining_basis": "Sesudah penambangan pit berhenti, capex pemeliharaan diasumsikan separuh laju 1H26 (tanpa armada tambang).",
     "concentrate_export": "Logam di atas kapasitas smelter/PMR dijual sebagai konsentrat dengan bea keluar 7,5%; mengasumsikan izin ekspor diperpanjang. Sensitivitas tanpa ekspor tersedia.",
-    "price_deck": "Harga rata-rata 12 bulan data Sectors, datar sepanjang umur tambang; harga cadangan JORC emiten (Cu US$4,00/lb, Au US$2.500/oz) sebagai sensitivitas."
+    "price_deck": "Harga rata-rata 12 bulan kalender terakhir (data Sectors bila titik terakhirnya paling lama 45 hari sebelum tanggal laporan, selain itu seri Yahoo Finance bertanggal), datar sepanjang umur tambang; harga cadangan JORC emiten (Cu US$4,00/lb, Au US$2.500/oz) sebagai sensitivitas."
   }
 }

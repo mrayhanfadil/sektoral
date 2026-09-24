@@ -42,7 +42,7 @@ Ini bukan cacat tampilan; angka-angkanya keluar dari model sebagaimana dirancang
 3. **BBRI — Buy +76,9%** dengan porsi terminal 72,7% dari nilai DDM; silang cek PER FY Rp3.130 dan P/BV-ROE Rp4.510. Pendapatan FY26F Rp215,8 triliun adalah 2 x pendapatan interim 1H26, sedangkan pendapatan tahunan Sectors 2025 Rp181,3 triliun memakai definisi lain; pertumbuhan tersirat +19% itu artefak definisi, bukan asumsi. Neraca interim BBRI dan JPFA hanya terisi jumlah saham.
 4. **POWR — Buy +90,8%.** Gordon menyiratkan exit 8,0x terhadap sejarah 3,7–7,2x (selisih 36,6% diungkapkan); P/BV silang cek Rp960. Peer "Electric Utilities" berisi BREN, CDIA dan ARKO dengan P/E di atas 60x sehingga PER relatif tidak dapat dipakai.
 5. **AMMN — dua pendapatan 2H26:** jadwal LoM Rp3.202 juta dolar (panduan produksi) berbanding skenario interim 2.667,6. Dua "P/E kini" juga berbeda: 38,6x di tabel peer (TTM Sectors) dan 84,6x di band historis (laba tahunan terbit).
-6. **SIDO — draft karena rilis interim tidak tervalidasi.** Penyebabnya disengaja: paket `data/issuer_evidence/SIDO.json` berstatus `blocked` karena laporannya berasal dari cermin Indo Premier dan tanggal terbitnya belum diverifikasi dari sumber primer (IDX). Angkanya sendiri cocok dengan jumlah kuartal Yahoo dan pemberitaan (lihat "Validasi eksternal").
+6. **SIDO — draft karena rilis interim tidak tervalidasi.** Penyebabnya disengaja: paket `data/issuer_evidence/SIDO.json` berstatus `blocked` karena laporannya berasal dari cermin Indo Premier dan tanggal terbitnya belum diverifikasi dari sumber primer (IDX). Angkanya cocok dengan jumlah kuartal Yahoo dan pemberitaan; paket kini dibuka dengan tanggal terbit batas atas 3 Agustus 2026 (lihat "Perbaikan sesudah validasi").
 7. **Kualitas grup peer Sectors** menjadi masalah berulang (GMFI, POWR, JPFA dengan RLCO/AYAM, SSIA dengan RONY). Pilihan: menyaring peer dengan multiple di luar rentang sebelum median, bukan hanya menandai n.m.
 
 ## Verifikasi
@@ -93,8 +93,8 @@ Setiap temuan di atas diuji ulang dengan sumber di luar pipeline: harga penutupa
 ### Target di luar konsensus yang perlu ditinjau
 
 - **BBRI Buy Rp5.625** lebih tinggi dari target tertinggi 22 analis (Rp4.900; rata-rata Rp3.692–4.250). Payout justru konservatif: BBRI membagikan sekitar 92% laba FY2025 (DPS Rp346), sedangkan model memakai 83,2% dan DPS FY26F Rp342 berada di bawah DPS aktual tahun lalu. Kelebihan nilai berasal dari CoE 10,9% dan g 3,5% (porsi terminal 72,7%), bukan dari payout.
-- **POWR Buy Rp1.870** sekitar dua kali target yang dipublikasikan (sekitar Rp804–872, satu analis). Jembatan EV ke ekuitas memakai kas Sectors akhir 2025 (Rp5.176 miliar), padahal neraca resmi 30 Juni 2026 mencatat kas US$124 juta (sekitar Rp2,2 triliun) dan utang US$344,6 juta; memakai neraca interim menurunkan nilai sekitar Rp210 per saham. Tabel neraca interim POWR juga menulis pinjaman "-", celah ekstraksi yang sama dengan BBRI dan JPFA.
-- **INET Sell Rp250** berlawanan dengan dua analis Buy (rata-rata Rp585). Kelipatan peer dari snapshot Yahoo berbeda jauh dari data Yahoo terkini (LINK 14,4x vs 5,4x, DATA 16,9x vs 11,2x, SUPR 45,0x vs 33,2x); median terkini sekitar 8,7x, bukan 13,8x, yang justru menurunkan nilai ke sekitar Rp205. Basis EBITDA FY26F (margin 10,5% sesudah konsolidasi) dan kualitas grup peer lebih menentukan daripada angka median.
+- **POWR Buy Rp1.870** sekitar dua kali target yang dipublikasikan (sekitar Rp804–872, satu analis). ~~Jembatan memakai kas yang terlalu besar~~: dugaan ini salah. Kas Sectors Rp5.176 miliar adalah kas plus investasi jangka pendek; neraca resmi 30 Juni 2026 mencatat kas US$124,0 juta dan investasi US$174,2 juta, total US$298 juta, hampir sama dengan akhir 2025 (US$309 juta). Yang benar-benar hilang dari jembatan adalah dividen Mei 2026 (US$45,2 juta). Tabel neraca interim POWR memang menulis pinjaman "-" karena paket bukti tidak memuat utang wesel US$343,6 juta.
+- **INET Sell Rp250** berlawanan dengan dua analis Buy (rata-rata Rp585). Kelipatan peer memakai EBITDA FY2025, sedangkan target menerapkannya ke EBITDA forward. ~~LINK FY2025 (Rp795 miliar) tidak konsisten dengan TTM Rp2,35 triliun~~: angka TTM itu dari ringkasan `info` Yahoo; jumlah empat kuartal laporan LINK hanya Rp645 miliar, jadi dugaan ini salah. Basis EBITDA FY26F (margin 10,5% sesudah konsolidasi) dan kualitas grup peer lebih menentukan daripada angka median.
 - **SSIA Sell Rp1.235** berlawanan dengan konsensus Buy (Rp2.080–2.579; RHB Rp2.200). SOTP menilai lahan industri pada biaya perolehan, sehingga secara konstruksi di bawah nilai pasar; ditambah harga Rp1.600 dari hari turun tajam.
 - **GMFI Buy Rp111** berada di antara dua target yang ditemukan (Rp98 dan Rp150, masing-masing satu analis), jadi tidak janggal terhadap konsensus; risikonya tetap upside yang berada tepat di bawah ambang Review Required.
 
@@ -104,6 +104,7 @@ Setiap temuan di atas diuji ulang dengan sumber di luar pipeline: harga penutupa
 - Pertanyaan SIDO sudah terjawab: paket bukti sengaja diblokir karena sumbernya cermin broker.
 - Celah neraca interim juga terjadi pada POWR, tidak hanya BBRI dan JPFA.
 - Dek tembaga AMMN yang basi tidak tertangkap pada review awal.
+- Dua dugaan pada validasi eksternal sendiri ternyata salah dan dicoret di atas: kas POWR tidak berlebih (termasuk investasi jangka pendek), dan EBITDA LINK tidak tidak-konsisten (angka pembandingnya dari ringkasan Yahoo, bukan laporan kuartal).
 
 ### Sumber
 
@@ -114,5 +115,66 @@ Setiap temuan di atas diuji ulang dengan sumber di luar pipeline: harga penutupa
 - Konsensus: [AMMN (Investortrust)](https://investortrust.id/market/117045/kinerja-amman-ammn-melejit-analis-pasang-target-harga-hingga-level-ini), [AMMN (KabarBursa)](https://www.kabarbursa.com/market-hari-ini/penjualan-dan-laba-meroket-di-semester-i-2026-begini-proyeksi-dan-target-saham-ammn), [BBRI (Investing.com)](https://www.investing.com/equities/bank-rakyat-in-consensus-estimates), [JPFA (TradingView)](https://id.tradingview.com/symbols/IDX-JPFA/forecast-price-target/), [JPFA (Sumbarbisnis)](https://sumbarbisnis.com/saham-jpfa-diprediksi-pulih-indo-premier-rekomendasikan-beli/), [POWR (TradingView)](https://id.tradingview.com/symbols/IDX-POWR/forecast/), [INET (Investing.com)](https://www.investing.com/equities/sinergi-inti-andalan-prima-tbk-pt-consensus-estimates), [SSIA (Infonasional)](https://www.infonasional.com/rhb-sekuritas-target-saham-ssia), [GMFI (TradingView)](https://www.tradingview.com/symbols/IDX-GMFI/forecast/)
 - Interim: [INET 1H26 (Kompas)](https://money.kompas.com/read/2026/09/14/142058826/inet-bukukan-pendapatan-neto-rp-926-miliar-laba-bersih-rp-34-miliar), [SIDO 1H26 (IDX Channel)](https://www.idxchannel.com/market-news/penjualan-jamu-dan-suplemen-lesu-laba-sidomuncul-sido-turun-44-persen), [SIDO (Warta Ekonomi)](https://wartaekonomi.co.id/read633627/penjualan-sido-turun-20-jadi-rp147-triliun-tolak-angin-jadi-andalan-pemulihan)
 
-Konsensus dan pemberitaan dipakai sebagai pembanding, bukan kebenaran: perbedaan dengan konsensus adalah sinyal untuk memeriksa, dan hanya kesalahan data yang terbukti (JPFA, AMMN, jembatan POWR) yang dinyatakan sebagai cacat.
+Konsensus dan pemberitaan dipakai sebagai pembanding, bukan kebenaran: perbedaan dengan konsensus adalah sinyal untuk memeriksa, dan hanya kesalahan data yang terbukti (JPFA, AMMN) yang dinyatakan sebagai cacat.
+
+## Perbaikan sesudah validasi (run `out/e2e-2026-09-25/all9-validated`)
+
+| Emiten | Status | Rating | Target | Harga 24 Sep | Potensi | Sebelumnya |
+|---|---|---|---|---|---|---|
+| AMMN | assumption-led | Sell | Rp3.750 | Rp4.730 | −20,7% | Sell Rp3.140 |
+| BBCA | draft | – | – | Rp6.225 | – | draft |
+| BBRI | assumption-led | Buy | Rp6.225 | Rp3.140 | +98,2% | Buy Rp5.625 |
+| GMFI | assumption-led | Buy | Rp111 | Rp56 | +98,2% | Buy Rp111 |
+| INET | assumption-led | Sell | Rp242 | Rp316 | −23,4% | Sell Rp250 |
+| JPFA | assumption-led | Buy | Rp3.280 | Rp2.180 | +50,5% | Sell Rp1.275 |
+| POWR | assumption-led | Buy | Rp1.445 | Rp955 | +51,3% | Buy Rp1.870 |
+| SIDO | assumption-led | Buy | Rp448 | Rp350 | +28,0% | draft |
+| SSIA | assumption-led | Sell | Rp1.235 | Rp1.750 | −29,4% | Sell Rp1.235 |
+
+Pemeriksa otomatis (cacat run pertama ditambah cek baru di bawah) bersih untuk kesembilan laporan; 585 tes lolos.
+
+**Yang diperbaiki di pipeline**
+
+1. **D&A yang tidak wajar ditolak.** Sectors menurunkan D&A sebagai EBITDA − EBIT; untuk JPFA, SIDO, SSIA, INET dan GMFI itu menyiratkan umur aset tetap 63 sampai lebih dari 2.000 tahun. D&A yang menyiratkan umur di atas 40 tahun kini tidak dipakai; DCF memakai penyusutan resmi 1H26, lalu penyusutan tahunan audit, dan tanpa keduanya DCF dinyatakan tidak memadai. Paket JPFA memuat laba usaha dan penyusutan audit FY2024–FY2025 (EBITDA FY2025 Rp7.449 miliar, bukan Rp6.525 miliar); paket POWR dan SIDO memuat penyusutan 1H26 resmi. JPFA: selisih Gordon vs exit turun dari 49,8% ke 4,1% dan target masuk rentang konsensus.
+2. **Dek komoditas dengan cek kesegaran.** Seri Sectors dipakai bila titik terakhirnya paling lama 45 hari sebelum tanggal laporan; bila tidak, seri harian Yahoo (COMEX `HG=F`, `GC=F`) yang disimpan di basis data aplikasi (`python -m app.commodity`), berlabel. Tanpa seri segar, SOTP/LoM tidak memadai. "Rata-rata 12 bulan" kini 12 bulan kalender (seri tembaga Sectors dua kali sebulan, sehingga 12 titik terakhir dulu hanya enam bulan). Dek tembaga AMMN US$13.002/t (Okt 2025–Sep 2026), bukan US$11.122/t.
+3. **Dividen sesudah tanggal neraca dikurangkan.** DCF menjembatani dari neraca akhir tahun fiskal; dividen dengan ex-date sesudah tanggal itu dan sebelum tanggal laporan kini dikurangkan dari ekuitas dan tampil sebagai baris sendiri (JPFA Rp140/saham, POWR Rp49,53, SIDO Rp15).
+4. **Payout = DPS 12 bulan terakhir / EPS tahun buku terakhir.** `payout_ratio` Sectors membagi dividen dengan laba 12 bulan yang sudah memuat laba 1H26. BBRI kini 92,0% (Rp346 / Rp376), sesuai payout FY2025 yang diumumkan.
+5. **EV/EBITDA peer dari 12 bulan terakhir.** Snapshot Yahoo memakai empat kuartal terakhir dan neraca kuartal terakhir bila tersedia, selain itu tahun buku terakhir; periodenya tertulis di catatan sumber.
+6. **Harga penutupan terbaru.** `python -m app.market_quote --as-of <tanggal> <ticker>...` menulis paket harga Yahoo dengan sepuluh penutupan terakhir; run memakai penutupan terakhir pada atau sebelum tanggal laporan (kesembilan laporan kini 24 September). Kurs Yahoo tidak lagi mengambil batang hari berjalan (Rp17.893, 24 September).
+7. **Tingkat diskonto tersirat harga.** Sesuai keputusan untuk mempertahankan ERP 4%, setiap DDM dan DCF kini menampilkan CoE/WACC yang membuat nilai model sama dengan harga: BBRI CoE 18,1%, POWR WACC 12,9% (CoE 15,3%), JPFA WACC 11,7%, GMFI 12,5%, SIDO 13,0%. Label "Beta (Bloomberg)" dan "ERP (Damodaran)" di tabel CoE bank diganti "kebijakan analis", karena beta 1,1 dan ERP 4% bukan data vendor.
+8. **SIDO dibuka.** Tanggal terbit memakai batas atas terverifikasi (pemberitaan 3 Agustus 2026 dengan angka yang sama); dasar tanggal dan tautan pembandingnya tercatat di paket.
+
+**Belum diperbaiki**
+
+- **SSIA:** lahan industri tetap pada biaya perolehan. Menilainya butuh sisa landbank bersih dan ASP dari dokumen emiten (public expose di IDX tidak dapat diunduh); rilis 1H26 hanya memberi ASP tersirat Rp1,66 juta/m² (64,7 ha, Rp1.075,9 miliar).
+- **BBRI dan POWR** tetap jauh di atas konsensus karena kebijakan CoE; kini diungkapkan dengan tingkat tersirat harga.
+- **BBCA** tetap draft: skenario forecast belum tervalidasi (6 blocker), sama dengan run sebelumnya.
+
+## Benchmark AMMN: BRI Danareksa, 29 Juni 2026 (`spec/20260629-AMMN.pdf`)
+
+| | BRI Danareksa | Sektoral (24 Sep) |
+|---|---|---|
+| Rating / target | Buy / Rp6.000 | Sell / Rp3.750 |
+| Harga pada tanggal laporan | Rp3.340 | Rp4.730 |
+| Metode | SOTP: DCF Batu Hijau + EV/cadangan Elang, diskon 15% | SOTP/LoM per aset sampai 2050, tanpa terminal |
+| Tingkat diskonto | WACC 12,7% (rf 6,8%, ERP 6,7%, beta 1,2) | 10% USD |
+| Tembaga 2026–30 | katoda US$5,9–6,0/lb | US$13.002/t (US$5,90/lb) |
+| Emas | US$4.256–4.384/oz | US$4.455/oz |
+| FY26F pendapatan / EBITDA | US$4,00 / 2,02 miliar (tabel); US$4,7 / 2,56 miliar (teks) | US$4,72 / 2,54 miliar |
+
+Rekonsiliasi (US$ juta; Rp/saham pada Rp17.803/USD dan 72,41 miliar saham):
+
+| Komponen | BRI Danareksa | Sektoral | Beda (Rp/saham) |
+|---|---|---|---|
+| Batu Hijau sesudah utang bersih | 6.355 | 11.023 | −1.150 |
+| Elang | 22.663 | 4.215 | +4.540 |
+| Diskon 15% | −4.353 | – | −1.070 |
+| Total | 24.666 (Rp6.093) | 15.238 (Rp3.750) | ≈ +2.320 |
+
+- **Dek harga kini sejalan.** Dek lama US$11.122/t 15% di bawah dek broker; dek baru selisih kurang dari 1%.
+- **Selisih target hampir seluruhnya Elang** (78% SOTP broker). Broker memakai EV/cadangan US$2.560/t Cu dan US$1.260/oz Au, tingkat multiple produsen, untuk proyek pra-FID yang butuh capex sekitar US$2 miliar. Diskonnya ganda: 30% atas cadangan (17,78 miliar lbs menjadi 5,65 Mt; 26,44 menjadi 18,51 Moz), lalu EV dikali 0,6 tanpa label.
+- **Batu Hijau kami lebih tinggi**, bukan lebih konservatif. DCF broker memasukkan FCF 2025A (−US$1.540 juta) yang sudah tercermin di utang yang dikurangkan, memakai terminal 0% perpetual untuk tambang yang pit-nya selesai sekitar 2032, dan NPV US$11.440 juta tidak dapat direproduksi dari baris exhibit. WACC 12,7% memadukan rf rupiah dengan arus kas USD, yang dilarang §4.2.
+- **Inkonsistensi broker:** pertumbuhan FY26F +117% (US$4,0 miliar) di tabel dan +153% (US$4,7 miliar) di teks; SOTP Rp519.872 miliar sedangkan target dari Rp441.891 miliar sesudah diskon 15% yang hanya tampil di exhibit DCF; saham 72.412 juta di cover dan 72,52 miliar di valuasi.
+- **Yang ditunjukkan benchmark tentang model kami:** faktor risiko Elang 50% menentukan rating (0% memberi Rp4.780); cadangan Elang sesudah 2050 (sekitar separuh dari 2.526 Mt) tidak dinilai, bernilai sekitar Rp250/saham sesudah risiko; dan skenario laba FY27F di Key Financials (EBITDA US$2,7 miliar) masih berbeda dari jadwal LoM (US$3,9 miliar per tahun 2027–2032), sedangkan broker FY28F US$3,3 miliar.
+
 

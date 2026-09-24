@@ -17,7 +17,7 @@ from agents.analyst import signals as S
 from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
-from . import cache, fmt, idx_history, method_chain
+from . import cache, commodity, fmt, idx_history, method_chain, mineops
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
 # "USD" rather than "US$": the report keeps "$" out of rupiah-only drafts (spec §5.3).
@@ -236,7 +236,28 @@ def _slug(text):
     return re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")
 
 
-def _series(name):
+def _series_sourced(name, as_of=None):
+    """Monthly Sectors points, or the dated Yahoo series when Sectors is stale
+    at the Report Date (same rule as the LoM deck); (points, source note)."""
+    points = [p for p in _sectors_series(name)
+              if not as_of or p[0].isoformat() <= str(as_of)[:10]]
+    label = f"Sectors, mining/commodities/{name}/price (data bulanan)"
+    if as_of and points:
+        age = (date.fromisoformat(str(as_of)[:10]) - points[-1][0]).days
+        series = commodity.load(name) if age > mineops.DECK_MAX_AGE_DAYS else None
+        yahoo = [(date.fromisoformat(r["date"]), r["price"]) for r in (series or {}).get("rows", [])
+                 if r["date"] <= str(as_of)[:10]]
+        if yahoo and yahoo[-1][0] > points[-1][0]:
+            return yahoo, (f"{series['source']}; seri Sectors berhenti "
+                           f"{points[-1][0].isoformat()} sehingga tidak dipakai")
+    return points, label
+
+
+def _series(name, as_of=None):
+    return _series_sourced(name, as_of)[0]
+
+
+def _sectors_series(name):
     rows = []
     for _key, payload in cache.payloads(f"/mining/commodities/{name}/price/"):
         if isinstance(payload, list):
@@ -274,7 +295,7 @@ def _commodities(intake):
             names.append(name)
         if (stats or {}).get("au_cont_koz"):
             names.append("Gold")
-    return [n for n in dict.fromkeys(names) if _series(n)]
+    return [n for n in dict.fromkeys(names) if _series(n, intake.get("as_of"))]
 
 
 def industry_page(intake):
@@ -282,7 +303,8 @@ def industry_page(intake):
     if intake.get("model_profile") == "finite_life_mining":
         names = _commodities(intake)
         if names:
-            series = {n: _series(n) for n in names}
+            sourced = {n: _series_sourced(n, intake.get("as_of")) for n in names}
+            series = {n: sourced[n][0] for n in names}
             last_years = sorted({d.year for pts in series.values() for d, _ in pts})[-3:]
             rows = [["Titik data terakhir"] + [series[n][-1][0].isoformat() for n in names],
                     ["Harga terakhir"] + [fmt._id(series[n][-1][1], 0) for n in names]]
@@ -294,9 +316,9 @@ def industry_page(intake):
             cols = ["Metrik"] + [f"{COMMODITY_UNITS[n][0]} ({COMMODITY_UNITS[n][1]})" for n in names]
             exhibits.append(_exhibit(
                 "Harga komoditas utama emiten", cols, rows,
-                "Sumber: Sectors, mining/commodities/{nama}/price (data bulanan). Harga emas "
-                "dibaca sebagai USD/oz sesuai besaran datanya; titik data terakhir tiap seri "
-                "dapat berbeda."))
+                "Sumber: " + "; ".join(f"{COMMODITY_UNITS[n][0]}: {sourced[n][1]}" for n in names)
+                + ". Harga emas dibaca sebagai USD/oz sesuai besaran datanya; titik data terakhir "
+                "tiap seri dapat berbeda."))
             for name in names:
                 label, unit = COMMODITY_UNITS[name]
                 day, price = series[name][-1]
@@ -1087,7 +1109,7 @@ def mining_catalysts(doc, intake):
                      "Volume semester kedua menentukan EBITDA forecast dan target harga.",
                      "Negatif bila semester kedua di bawah laju yang disiratkan panduan"])
     for name in _commodities(intake):
-        points = _series(name)
+        points = _series(name, intake.get("as_of"))
         change = _change_12m(points)
         if change is None:
             continue
@@ -1540,7 +1562,7 @@ def fallback_risks(intake):
                           "sumber": "data keuangan Sectors"})
     if intake.get("model_profile") == "finite_life_mining":
         for name in reversed(_commodities(intake)):
-            change = _change_12m(_series(name))
+            change = _change_12m(_series(name, intake.get("as_of")))
             label = COMMODITY_UNITS.get(name, (name,))[0].lower()
             if change is not None:
                 risks.insert(0, {"kategori": "Komoditas", "judul": f"Harga {label}",
