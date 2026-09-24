@@ -55,6 +55,7 @@ SCALE_BAND = gate_thresholds.SCALE_BAND
 EXTREME_UPSIDE = 0.50
 PEER_PE_BAND = (0.0, 50.0)
 PEER_PB_BAND = (0.0, 10.0)
+PEER_EV_BAND = (0.0, 50.0)   # same validity band as PER: outliers leave the median
 MIN_PEERS = 3
 
 
@@ -105,15 +106,52 @@ def peer_pbvs(peers) -> list[float]:
 
 
 def peer_ev_ebitdas(peers) -> list[float]:
-    """EV/EBITDA peer valid; cache Sectors saat ini tidak membawa EV."""
+    """EV/EBITDA peer valid (0 < EV/EBITDA <= 50), terurut. EV dibangun
+    intake._peer_ev: market cap tabel peer Sectors + utang - kas laporan peer
+    (Sectors bila di-cache, selain itu snapshot Yahoo Finance)."""
+    lo, hi = PEER_EV_BAND
     return sorted(p.get("ev_ebitda") for p in peers or []
-                  if _finite(p.get("ev_ebitda")) and p["ev_ebitda"] > 0)
+                  if _finite(p.get("ev_ebitda")) and lo < p["ev_ebitda"] <= hi)
 
 
 def peer_ev_sales(peers) -> list[float]:
-    """EV/Sales peer valid; cache Sectors saat ini tidak membawa EV."""
+    """EV/Sales peer valid; intake belum mengisi ev_sales dari EV peer Sectors."""
     return sorted(p.get("ev_sales") for p in peers or []
                   if _finite(p.get("ev_sales")) and p["ev_sales"] > 0)
+
+
+PEER_EV_SOURCE_NAMES = {"sectors": "data Sectors", "yahoo": "Yahoo Finance"}
+
+
+def peer_ev_sources(peers) -> str:
+    """Where the peer EVs in the median come from: Sectors, Yahoo Finance, or both.
+
+    Rows without a recorded source kind are named as such, never as Sectors.
+    """
+    lo, hi = PEER_EV_BAND
+    kinds = {p.get("ev_source_kind") for p in peers or []
+             if _finite(p.get("ev_ebitda")) and lo < p["ev_ebitda"] <= hi}
+    parts = [PEER_EV_SOURCE_NAMES[k] for k in ("sectors", "yahoo") if k in kinds]
+    if kinds - set(PEER_EV_SOURCE_NAMES):
+        parts.append("sumber tidak tercatat")
+    return " dan ".join(parts) if parts else "tanpa peer"
+
+
+def peer_ev_ebitda_gap(peers):
+    """Reason when fewer than three peer EV/EBITDA points exist, else None."""
+    n_valid = len(peer_ev_ebitdas(peers))
+    if n_valid >= MIN_PEERS:
+        return None
+    rows = list(peers or [])
+    uncached = sum(1 for p in rows if p.get("ev_status") == "report_not_cached")
+    why = (f"; laporan Sectors atau snapshot Yahoo {uncached}/{len(rows)} peer belum tersedia"
+           if uncached else "")
+    return (f"peer EV/EBITDA belum tersedia di cache Sectors ({n_valid} < {MIN_PEERS}{why}); "
+            "belum dimodelkan")
+
+
+def _bridge_label(net_debt_source) -> str:
+    return f"bridge net debt dari {net_debt_source}" if net_debt_source else ""
 
 
 def _median(xs):
@@ -186,13 +224,13 @@ def _peer_multiple_candidate(key, multiples, per_share_base, per_share_down_base
         detail={"median": median, "q1": q1, "peer_count": len(multiples)})
 
 
-def ev_ebitda_peer(peers, ebitda_fwd, shares, market_cap, net_debt=0.0) -> dict:
-    """Forward EV/EBITDA peer x EBITDA; bridge ke ekuitas via net debt."""
+def ev_ebitda_peer(peers, ebitda_fwd, shares, market_cap, net_debt=0.0,
+                   net_debt_source=None) -> dict:
+    """EV/EBITDA peer FY terakhir x EBITDA forward; bridge ke ekuitas via net debt."""
+    gap = peer_ev_ebitda_gap(peers)
+    if gap:
+        return candidate("ev_ebitda_peer", reasons=[gap])
     mults = peer_ev_ebitdas(peers)
-    if len(mults) < MIN_PEERS:
-        return candidate("ev_ebitda_peer", reasons=[
-            f"peer EV/EBITDA belum tersedia di cache Sectors ({len(mults)} < {MIN_PEERS}); "
-            "belum dimodelkan"])
     if not (_finite(ebitda_fwd) and ebitda_fwd > 0):
         return candidate("ev_ebitda_peer", reasons=["EBITDA forward <= 0; EV/EBITDA tidak bermakna"])
     q1, median, _q3 = pe_quartiles(sorted(mults))
@@ -204,12 +242,16 @@ def ev_ebitda_peer(peers, ebitda_fwd, shares, market_cap, net_debt=0.0) -> dict:
     return candidate(
         "ev_ebitda_peer", per_share=ps, per_share_down=down,
         reasons=scale_reasons(ps, shares, market_cap) if _finite(ps) else [],
-        labels=["EV/EBITDA peer forward; bridge net debt dari neraca resmi"],
+        labels=[f"EV/EBITDA peer dari {peer_ev_sources(peers)} (market cap tabel peer Sectors "
+                "+ utang - kas, EBITDA FY terakhir laporan peer) diterapkan ke EBITDA forward; "
+                "peer dianggap sebanding", _bridge_label(net_debt_source)],
         detail={"median_ev_ebitda": median, "q1_ev_ebitda": q1,
-                "peer_count": len(mults), "ebitda_fwd": ebitda_fwd, "net_debt": nd})
+                "peer_count": len(mults), "ebitda_fwd": ebitda_fwd, "net_debt": nd,
+                "net_debt_source": net_debt_source, "peer_source": peer_ev_sources(peers)})
 
 
-def ev_sales_peer(peers, revenue_fwd, shares, market_cap, net_debt=0.0) -> dict:
+def ev_sales_peer(peers, revenue_fwd, shares, market_cap, net_debt=0.0,
+                  net_debt_source=None) -> dict:
     mults = peer_ev_sales(peers)
     if len(mults) < MIN_PEERS:
         return candidate("ev_sales_peer", reasons=[
@@ -225,8 +267,9 @@ def ev_sales_peer(peers, revenue_fwd, shares, market_cap, net_debt=0.0) -> dict:
     return candidate(
         "ev_sales_peer", per_share=ps, per_share_down=down,
         reasons=scale_reasons(ps, shares, market_cap) if _finite(ps) else [],
-        labels=["EV/Sales peer; untuk rugi operasi kronis"],
-        detail={"median_ev_sales": median, "q1_ev_sales": q1, "peer_count": len(mults)})
+        labels=["EV/Sales peer; untuk rugi operasi kronis", _bridge_label(net_debt_source)],
+        detail={"median_ev_sales": median, "q1_ev_sales": q1, "peer_count": len(mults),
+                "net_debt_source": net_debt_source})
 
 
 def pbv_relative(peers, bvps_fwd, shares, market_cap) -> dict:
@@ -327,6 +370,9 @@ def chain_for(verdict, profile: str) -> tuple:
     primary = str(get("primary") or "")
     failed = set(get("gates_failed") or [])
     unassessed = set(get("gates_unassessed") or [])
+    # Gate 3 ramping asset. Structural Gate 0 primaries (bank DDM, holding
+    # SOTP, reserve NAV) never carry the flag and route above.
+    ramping = primary == "Relative Valuation" and bool(get("ramping"))
     prof = (profile or "").strip().lower()
 
     def _assessed(gate_id: str) -> bool:
@@ -347,9 +393,9 @@ def chain_for(verdict, profile: str) -> tuple:
     # and miners have no earnings-scenario or EV/EBITDA-peer candidate.
     if primary == "NAV / Reserve-based" or prof == "finite_life_mining":
         return ("sotp_lom", "rnav_lom", "ev_ebitda_fy")
-    # History <4y or ramping (thin_data or 1a assessed)
-    if primary == "DCF (shortened horizon)" or _assessed("1a_filing_history"):
-        # ramping vs thin: both use forward EV/EBITDA peer first
+    # History <4y (thin_data or 1a assessed) or a Gate 3 ramping asset: both
+    # value forward EBITDA against mature peers first.
+    if primary == "DCF (shortened horizon)" or _assessed("1a_filing_history") or ramping:
         return ("ev_ebitda_peer", "pe_fy_scenario")
     # Chronic operating losses -> Relative Valuation via EV/Sales (assessed only)
     if primary == "Relative Valuation" and _assessed("1b_profitability"):
@@ -446,7 +492,9 @@ _READER_REASONS = (
     ("latest official interim actual", "hasil interim resmi belum tervalidasi"),
     ("earnings scenario", "skenario laba FY belum tervalidasi"),
     ("peer PER", "peer PER valid kurang dari tiga"),
+    ("peer EV/EBITDA set", "peer EV/EBITDA valid kurang dari tiga"),
     ("peer EV/EBITDA", "peer EV/EBITDA belum tersedia di cache"),
+    ("FY EBITDA scenario", "EBITDA FY skenario belum tersedia atau tidak positif"),
     ("peer EV/Sales", "peer EV/Sales belum tersedia di cache"),
     ("peer P/BV", "peer P/BV valid kurang dari tiga"),
     ("peer holding_sotp", "SOTP holding belum tersedia"),

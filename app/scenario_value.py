@@ -459,3 +459,65 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0):
               "per_share_down": grid.get((0.01, 0.025)),
               "year": rows[0]["year"]}
     return detail, []
+
+
+def ev_ebitda_peer(intake, fc, peers):
+    """Forward EV/EBITDA peer on the scenario FY EBITDA (§4.1a: history < 4y
+    or ramping asset, where an explicit cash-flow horizon is not yet credible).
+
+    EV = median peer EV/EBITDA (each peer's latest FY from its own Sectors
+    report) x FY EBITDA from the validated earnings scenario (official 1H
+    actual + the agent's FY EBITDA margin), then cash less debt and
+    minorities from one balance sheet, over official shares. Lower and upper
+    quartiles are the sensitivity. One forward year: no out-year rows.
+    """
+    from . import method_chain
+    scenario = fc.get("earnings_scenario") or {}
+    if not scenario:
+        return None, ["skenario laba FY (aktual 1H resmi + asumsi H2) belum tervalidasi"]
+    reasons = []
+    ebitda = _num((scenario.get("full_year") or {}).get("ebitda"))
+    if ebitda is None:
+        reasons.append("margin EBITDA FY skenario belum tersedia dari agen")
+    elif ebitda <= 0:
+        reasons.append("EBITDA FY skenario tidak positif; EV/EBITDA tidak bermakna")
+    gap = method_chain.peer_ev_ebitda_gap(peers)
+    if gap:
+        reasons.append(gap)
+    link = bridge(intake)
+    fx, shares, when = link.get("fx"), link.get("shares"), link.get("valuation_date")
+    cash, debt, nci = link.get("cash"), link.get("debt"), link.get("nci")
+    if not fx or not shares or not when:
+        reasons.append("jumlah saham resmi, kurs atau tanggal neraca tidak tersedia")
+    if cash is None or debt is None:
+        reasons.append("jembatan kas dan utang dari satu neraca belum tersedia")
+    if reasons:
+        return None, reasons
+    mults = method_chain.peer_ev_ebitdas(peers)
+    q1, med, q3 = method_chain.pe_quartiles(mults)
+    ebitda_idr = ebitda * fx
+    nci = nci or 0.0
+
+    def per_share(multiple):
+        return (multiple * ebitda_idr + cash - debt - nci) / shares
+
+    ev = med * ebitda_idr
+    equity = ev + cash - debt - nci
+    lo, hi = method_chain.PEER_EV_BAND
+    used = [p for p in peers or []
+            if _num(p.get("ev_ebitda")) is not None and lo < p["ev_ebitda"] <= hi]
+    detail = {"basis": "scenario", "year": scenario["year"], "ebitda": ebitda,
+              "ebitda_idr": ebitda_idr, "fx": fx if fx != 1.0 else None,
+              "median_ev_ebitda": med, "q1_ev_ebitda": q1, "q3_ev_ebitda": q3,
+              "peer_count": len(mults), "peer_source": method_chain.peer_ev_sources(peers),
+              "peers": [{"symbol": str(p.get("symbol") or "?").replace(".JK", ""),
+                         "ev_ebitda": p["ev_ebitda"], "ev_year": p.get("ev_year"),
+                         "source_kind": p.get("ev_source_kind")}
+                        for p in sorted(used, key=lambda p: p["ev_ebitda"])],
+              "ev": ev, "cash": cash, "debt": debt, "nci": nci, "equity": equity,
+              "shares": shares, "shares_basis": link.get("shares_basis"),
+              "cash_basis": link.get("cash_basis"), "debt_basis": link.get("debt_basis"),
+              "nci_basis": link.get("nci_basis"), "valuation_date": when.isoformat(),
+              "per_share": equity / shares, "per_share_down": per_share(q1),
+              "per_share_up": per_share(q3), "grid": {}}
+    return detail, []

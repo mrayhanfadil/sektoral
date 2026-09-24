@@ -287,3 +287,291 @@ def test_pbv_book_gate_requires_asset_heavy_issuer_and_three_pb_peers():
 def test_going_concern_chain_ends_with_book_value_fallback():
     order = MC.chain_for(_verdict("FCFF/WACC DCF"), "going_concern_fcff")
     assert order[-1] == "pbv_book" and order.index("pe_fy_scenario") < order.index("pbv_book")
+
+
+# ------------------------------------------- Gate 3 ramping -> forward EV/EBITDA
+
+_HEALTHY = {"filing_history_years": 6, "ebit_positive_count": 3, "d_de_ratio": 0.2,
+            "net_debt_to_ebitda": 0.5, "icr": 8.0, "equity_positive": True, "nci_pct": 2.0,
+            "life_cycle_stage": "mature"}
+
+
+def test_gate3_ramping_verdict_routes_to_forward_ev_ebitda_chain():
+    v = MP.evaluate(dict(_HEALTHY, domain="going_concern_fcff", has_steady_state_3y=False))
+    assert v.primary == "Relative Valuation" and v.ramping is True
+    assert any(r.startswith("3 newly commissioned") for r in v.reasons)
+    # Same order as the thin-history branch (spec §4.1a), dataclass or stored dict.
+    assert MC.chain_for(v, "going_concern_fcff") == ("ev_ebitda_peer", "pe_fy_scenario")
+    assert MC.chain_for(v.to_dict(), "going_concern_fcff") == ("ev_ebitda_peer", "pe_fy_scenario")
+    steady = MP.evaluate(dict(_HEALTHY, domain="going_concern_fcff", has_steady_state_3y=True))
+    assert steady.ramping is False
+    assert MC.chain_for(steady, "going_concern_fcff")[0] == "fcff_dcf"
+
+
+def test_gate1b_chronic_losses_keep_ev_sales_not_the_ramping_chain():
+    v = MP.evaluate(dict(_HEALTHY, domain="going_concern_fcff", ebit_positive_count=1,
+                         has_steady_state_3y=True))
+    assert v.primary == "Relative Valuation" and v.ramping is False
+    assert MC.chain_for(v, "going_concern_fcff") == ("ev_sales_peer", "ps_peer")
+
+
+def test_structural_primaries_ignore_the_ramping_gate():
+    holding = MP.evaluate(dict(_HEALTHY, domain="holding_dissimilar", segments_count=3,
+                               has_steady_state_3y=False))
+    assert (holding.primary, holding.ramping) == ("SOTP", False)
+    assert MC.chain_for(holding, "going_concern_fcff")[0] == "holding_sotp"
+    miner = MP.evaluate(dict(_HEALTHY, domain="finite_life_mining", has_steady_state_3y=False))
+    assert (miner.primary, miner.ramping) == ("NAV / Reserve-based", False)
+    assert MC.chain_for(miner, "finite_life_mining")[0] == "sotp_lom"
+    bank = MP.evaluate(dict(_HEALTHY, domain="financial_ddm", has_steady_state_3y=False))
+    assert (bank.primary, bank.ramping) == ("DDM / Excess Return", False)
+    assert MC.chain_for(bank, "financial_ddm")[0] == "ddm"
+    # The flag alone never moves a non-Relative primary.
+    assert MC.chain_for({"primary": "SOTP", "ramping": True}, "going_concern_fcff")[0] == "holding_sotp"
+
+
+def test_gate4_stage_still_overrides_a_ramping_primary():
+    v = MP.evaluate(dict(_HEALTHY, domain="going_concern_fcff", has_steady_state_3y=False,
+                         life_cycle_stage="decline"))
+    assert v.primary == "P/BV"
+    assert MC.chain_for(v, "going_concern_fcff")[0] == "pbv_relative"
+
+
+def _peer_report(year_rows):
+    return {"financials": {"historical_financials": year_rows}}
+
+
+def test_peer_ev_uses_sectors_market_cap_debt_cash_and_latest_fy_only(monkeypatch):
+    from app import cache, intake as I
+    reports = {
+        "OK": _peer_report([{"year": 2024, "total_debt": 1.0, "cash_and_equivalents": 1.0,
+                             "ebitda": 1.0},
+                            {"year": 2025, "total_debt": 300.0, "cash_and_equivalents": 100.0,
+                             "ebitda": 120.0}]),
+        # Latest year lacks debt: no fallback to an older year.
+        "GAP": _peer_report([{"year": 2024, "total_debt": 5.0, "cash_and_equivalents": 1.0,
+                              "ebitda": 10.0},
+                             {"year": 2025, "total_debt": None, "cash_and_equivalents": 1.0,
+                              "ebitda": 10.0}]),
+        "LOSS": _peer_report([{"year": 2025, "total_debt": 10.0, "cash_only": 5.0,
+                               "ebitda": -3.0}]),
+    }
+    monkeypatch.setattr(cache, "company_report", lambda t: reports.get(t))
+    ok = I._peer_ev("OK.JK", 1000.0)
+    assert ok["ev"] == 1000.0 + 300.0 - 100.0 and ok["ev_year"] == 2025
+    assert ok["ev_ebitda"] == 1200.0 / 120.0 and ok["ev_status"] == "ok"
+    assert ok["ev_source"].startswith("Sectors:") and "/company/report/OK/" in ok["ev_source"]
+    gap = I._peer_ev("GAP.JK", 1000.0)
+    assert gap["ev_status"] == "balance_incomplete" and "ev_ebitda" not in gap
+    loss = I._peer_ev("LOSS.JK", 1000.0)
+    assert loss["ev_status"] == "not_meaningful" and loss["ev_ebitda"] is None
+    assert I._peer_ev("NONE.JK", 1000.0) == {"ev_status": "report_not_cached"}
+    assert I._peer_ev("OK.JK", None) == {"ev_status": "market_cap_missing"}
+
+
+def test_unreadable_peer_report_keeps_the_peer_row(monkeypatch):
+    from app import cache, intake as I
+
+    def broken(_ticker):
+        raise ValueError("bad payload")
+    monkeypatch.setattr(cache, "company_report", broken)
+    rep = {"peers": [{"peers_data": {"companies": [
+        {"symbol": "AAA.JK", "pe_ttm": 10.0, "pb_mrq": 1.5, "market_cap": 100.0,
+         "total_revenue": 50.0, "group": ["peer"]}]}}]}
+    peers, median_pe, _ = I._peers(rep, "TGT")
+    assert [p["symbol"] for p in peers] == ["AAA.JK"] and median_pe == 10.0
+    assert peers[0]["ev_status"] == "report_unreadable"
+
+
+def test_ev_ebitda_peer_labels_sectors_peers_and_the_real_bridge_source():
+    peers = [{"ev_ebitda": v, "ev_status": "ok", "ev_source_kind": "sectors"}
+             for v in (6.0, 8.0, 10.0)]
+    c = MC.ev_ebitda_peer(peers, ebitda_fwd=100.0, shares=10.0, market_cap=700.0,
+                          net_debt=50.0, net_debt_source="data Sectors FY2025")
+    assert c["status"] == "sufficient"
+    assert c["per_share"] == (8.0 * 100.0 - 50.0) / 10.0
+    assert any("peer dari data Sectors" in label for label in c["labels"])
+    assert "bridge net debt dari data Sectors FY2025" in c["labels"]
+    assert not any("neraca resmi" in label for label in c["labels"])
+    assert c["detail"]["peer_source"] == "data Sectors"
+    official = MC.ev_ebitda_peer(peers, 100.0, 10.0, 700.0, 50.0, net_debt_source="neraca resmi")
+    assert "bridge net debt dari neraca resmi" in official["labels"]
+
+
+def test_ev_ebitda_peer_names_uncached_peer_reports():
+    peers = [{"ev_status": "report_not_cached"}] * 8 + [{"ev_status": "ok", "ev_ebitda": 9.0}]
+    c = MC.ev_ebitda_peer(peers, 100.0, 10.0, 700.0)
+    assert c["status"] == "insufficient"
+    assert "(1 < 3; laporan Sectors atau snapshot Yahoo 8/9 peer belum tersedia)" in c["reasons"][0]
+    assert MC.reader_reason(c["reasons"][0]) == "peer EV/EBITDA belum tersedia di cache"
+
+
+_RAMPING_STAGE = {"stage_classification": {
+    "life_cycle_stage": "mature", "has_steady_state_3y": False,
+    "commodity_price_driven": False, "dissimilar_segments": 1,
+    "rationale": "Pendapatan melonjak dari basis kecil setelah aset baru beroperasi; "
+                 "belum ada tiga tahun kondisi stabil.",
+    "source_ids": ["official"]}}
+
+
+def test_inet_and_gmfi_ramping_stage_moves_the_chain_off_dcf(tmp_path, monkeypatch):
+    from app import forecast, intake, peer_fundamentals, valuation
+    monkeypatch.setattr(peer_fundamentals, "STORE_DIR", tmp_path / "none")
+    for ticker in ("INET", "GMFI"):
+        doc_in, _ = intake.load(ticker, as_of="2026-09-24")
+        fc = forecast.build(doc_in)
+        steady = valuation.build(doc_in, fc)
+        assert steady["method_chain"]["order"][0] == "fcff_dcf"
+        va = valuation.build(doc_in, fc, assumption_plan=_RAMPING_STAGE)
+        assert va["gate_verdict"]["primary"] == "Relative Valuation"
+        assert va["gate_verdict"]["ramping"] is True
+        chain = va["method_chain"]
+        assert chain["order"] == ["ev_ebitda_peer", "pe_fy_scenario"]
+        assert chain["verdict_order"] == ["ev_ebitda_peer", "pe_fy_scenario"]
+        first = chain["trace"][0]
+        assert first["key"] == "ev_ebitda_peer" and first["status"] == "insufficient"
+        # No peer of either issuer has a cached Sectors company report, and
+        # without a Yahoo snapshot store the multiple stays unavailable.
+        peers = doc_in["peers"]
+        assert peers and all(p["ev_status"] == "report_not_cached" for p in peers)
+        assert f"{len(peers)}/{len(peers)} peer belum tersedia" in first["reasons"][0]
+
+
+def test_ramping_going_concern_publishes_on_forward_ev_ebitda_peer(tmp_path, monkeypatch):
+    """JPFA under a ramping stage with Sectors peer EV cached (synthetic here):
+    the forward EV/EBITDA peer values the agent's FY EBITDA scenario behind
+    its own gate and sets the target; DCF and PER stay out of the chain."""
+    import itertools
+    from app import build, intake as I
+    multiples = itertools.cycle([6.0, 7.0, 8.0, 9.0, 10.0])
+    monkeypatch.setattr(I, "_peer_ev", lambda symbol, mcap: {
+        "ev_ebitda": next(multiples), "ev_status": "ok", "ev_year": 2025,
+        "ev_source_kind": "sectors"})
+    doc_in, _ = I.load("JPFA", as_of="2026-09-24")
+    actual = doc_in["latest_official_actual"]
+    metrics = actual["metrics"]
+    plan = {"news_effects": [], "earnings_scenario": {
+        "h2_revenue_to_h1": 1.05,
+        "h2_net_margin_pct": metrics["net_profit"] / metrics["revenue"] * 100,
+        "fy_ebitda_margin_pct": 10.0, "fy_capex_to_revenue_pct": 4.0,
+        "rationale": "H2 mengikuti run-rate 1H dengan kenaikan musiman ringan.",
+        "source_ids": ["official"], "source_url": actual["source_url"],
+        "published_at": actual["published_at"],
+        "thesis_points": ["Kapasitas baru menaikkan volume H2.",
+                          "Margin EBITDA menuju tingkat peer matang."],
+        "catalysts_risks": [],
+        "key_risks": [
+            {"category": "Komoditas", "headline": "Harga jagung dan bungkil kedelai",
+             "explanation": "Bahan baku pakan setara 60% beban pokok; kenaikan harga jagung "
+                            "10% menekan margin kotor sekitar 2pp tanpa kenaikan harga jual.",
+             "source_ids": ["official"]},
+            {"category": "Operasi", "headline": "Ramp-up kapasitas baru",
+             "explanation": "Utilisasi pabrik baru di bawah 70% menahan margin EBITDA di "
+                            "bawah tingkat peer matang yang dipakai multiple.",
+             "source_ids": ["official"]},
+            {"category": "Pendanaan", "headline": "Utang bank jangka pendek",
+             "explanation": "Utang jangka pendek Rp5.000 miliar jatuh tempo dalam 12 bulan; "
+                            "kenaikan bunga 100bp menambah beban bunga sekitar Rp50 miliar.",
+             "source_ids": ["official"]}]},
+        **_RAMPING_STAGE}
+    doc = build.build("JPFA", tmp_path, as_of="2026-09-24", assumption_plan=plan,
+                      assumption_status="validated")
+    chain = doc["log_gate"]["release"]["method_chain"]
+    assert chain == {"selected": "ev_ebitda_peer", "route": "primary"}
+    assert doc["meta"]["status"] == "distributable_assumption_led"
+    assert doc["harness"]["status"] == "distributable_assumption_led"
+    assert doc["meta"]["tp"] and doc["meta"]["rating"] in {"Buy", "Hold", "Sell"}
+    assert doc["method"].startswith("FY26F EV/EBITDA median peer x EBITDA skenario analis")
+    titles = [e["judul"] for e in doc["exhibits"]]
+    assert "Target harga: EV/EBITDA peer x EBITDA FY26F" in titles
+    assert "Target harga: PER peer x EPS FY26F" not in titles
+    target = next(e for e in doc["exhibits"] if e["judul"].startswith("Target harga: EV/EBITDA"))
+    assert [r[0] for r in target["data"]["rows"]] == ["Kuartil bawah", "Median (basis)", "Kuartil atas"]
+    assert target["catatan_sumber"].startswith("Sumber: EV/EBITDA FY terakhir tiap peer dari data Sectors")
+    rows = next(e for e in doc["exhibits"] if e["judul"] == "Rantai metode valuasi")["data"]["rows"]
+    assert rows[0][0] == "1. EV/EBITDA peer (utama)" and rows[0][1] == "Terpilih"
+    assert not any("DCF" in r[0] for r in rows)
+    cover = doc["cover"]["paragraf"][2]
+    assert cover["judul"] == "Target harga berbasis EV/EBITDA peer"
+    assert "EV/EBITDA peer forward" in cover["isi"] and "PER median" not in cover["isi"]
+    page = next(p for p in doc["bagian"] if p["judul"] == "Target harga berbasis EV/EBITDA peer")
+    assert page["exhibit"][1]["judul"] == "Target harga: EV/EBITDA peer x EBITDA FY26F"
+
+
+# ------------------------------------------- Yahoo Finance peer fallback
+
+class _Frame:
+    """Minimal stand-in for the pandas frames yfinance returns."""
+    def __init__(self, rows, columns):
+        self.index, self.columns, self._rows = list(rows), list(columns), rows
+        self.empty = not rows
+
+    class _Loc:
+        def __init__(self, frame):
+            self.frame = frame
+
+        def __getitem__(self, key):
+            row, column = key
+            return self.frame._rows[row][self.frame.columns.index(column)]
+    loc = property(_Loc)
+
+
+class _FakeTicker:
+    def __init__(self, symbol):
+        self.symbol = symbol
+        cols = ["2025-12-31", "2024-12-31"]
+        self.balance_sheet = _Frame({"Total Debt": [None, 300.0],
+                                     "Cash And Cash Equivalents": [50.0, 100.0]}, cols)
+        self.income_stmt = _Frame({"EBITDA": [130.0, 120.0], "Total Revenue": [900.0, 800.0]},
+                                  cols)
+        self.info = {"financialCurrency": "IDR", "marketCap": 5000.0}
+
+
+def test_yahoo_snapshot_takes_the_latest_year_with_debt_cash_and_ebitda_together(tmp_path):
+    from app import peer_fundamentals as PF
+    data = PF.fetch("MORA", ticker_factory=_FakeTicker)
+    # FY2025 lacks debt, so FY2024 is used for every field; no mixing of years.
+    assert data["fiscal_year"] == 2024 and data["period_end"] == "2024-12-31"
+    assert (data["total_debt"], data["cash_and_equivalents"], data["ebitda"]) == (300.0, 100.0, 120.0)
+    assert data["source"] == "Yahoo Finance MORA.JK annual statements FY2024"
+    assert data["symbol"] == "MORA" and data["currency"] == "IDR"
+    result = PF.refresh(["MORA", "BAD"], store_dir=tmp_path, pause=0,
+                        fetcher=lambda s: PF.fetch(s, _FakeTicker) if s == "MORA" else 1 / 0)
+    assert list(result["stored"]) == ["MORA"] and "BAD" in result["failed"]
+    assert PF.load("MORA.JK", store_dir=tmp_path)["ebitda"] == 120.0
+    # A snapshot that does not carry Yahoo provenance is never read.
+    (tmp_path / "XXX.json").write_text('{"source": "Sectors", "total_debt": 1, '
+                                       '"cash_and_equivalents": 1, "ebitda": 1, "fiscal_year": 2025}')
+    assert PF.load("XXX", store_dir=tmp_path) is None
+
+
+def test_peer_ev_falls_back_to_a_yahoo_snapshot_and_says_so(tmp_path, monkeypatch):
+    from app import cache, intake as I, peer_fundamentals as PF
+    monkeypatch.setattr(cache, "company_report", lambda t: None)
+    monkeypatch.setattr(PF, "STORE_DIR", tmp_path)
+    PF.refresh(["MORA"], store_dir=tmp_path, pause=0,
+               fetcher=lambda s: PF.fetch(s, _FakeTicker))
+    row = I._peer_ev("MORA.JK", 1000.0)
+    assert row["ev_source_kind"] == "yahoo" and row["ev_status"] == "ok"
+    assert row["ev"] == 1000.0 + 300.0 - 100.0 and row["ev_ebitda"] == 1200.0 / 120.0
+    assert row["ev_year"] == 2024
+    assert "Yahoo Finance MORA.JK" in row["ev_source"] and not row["ev_source"].startswith("Sectors")
+    assert I._peer_ev("NONE.JK", 1000.0) == {"ev_status": "report_not_cached"}
+    usd = dict(PF.load("MORA", store_dir=tmp_path), currency="USD", symbol="USDX")
+    (tmp_path / "USDX.json").write_text(__import__("json").dumps(usd))
+    assert I._peer_ev("USDX", 1000.0)["ev_status"] == "currency_mismatch"
+
+
+def test_peer_ev_source_wording_never_calls_yahoo_data_sectors():
+    sectors = {"ev_ebitda": 6.0, "ev_source_kind": "sectors"}
+    yahoo = {"ev_ebitda": 8.0, "ev_source_kind": "yahoo"}
+    unknown = {"ev_ebitda": 9.0}
+    assert MC.peer_ev_sources([sectors, sectors]) == "data Sectors"
+    assert MC.peer_ev_sources([yahoo]) == "Yahoo Finance"
+    assert MC.peer_ev_sources([sectors, yahoo]) == "data Sectors dan Yahoo Finance"
+    assert MC.peer_ev_sources([unknown]) == "sumber tidak tercatat"
+    assert MC.peer_ev_sources([{"ev_status": "report_not_cached"}]) == "tanpa peer"
+    c = MC.ev_ebitda_peer([yahoo, yahoo, yahoo], 100.0, 10.0, 700.0)
+    assert c["detail"]["peer_source"] == "Yahoo Finance"
+    assert any("peer dari Yahoo Finance" in label for label in c["labels"])
+    assert not any("dari data Sectors" in label for label in c["labels"])
