@@ -93,6 +93,31 @@ def normalize_plan(value, key=None):
     return value
 
 
+def normalize_doc_prose(doc):
+    """House style over every prose field of a built report (cover, section
+    paragraphs, cards, risks, chart narratives). Narrative sentences built
+    from issuer packs never passed normalize_plan; table cells and source
+    lines are provenance and stay as supplied."""
+    cover = doc.get("cover") or {}
+    if isinstance(cover.get("headline"), str):
+        cover["headline"] = normalize_prose(cover["headline"])
+    cover["bullets"] = [normalize_prose(b) for b in cover.get("bullets") or []]
+    for para in cover.get("paragraf") or []:
+        if isinstance(para, dict):
+            para["isi"] = normalize_prose(para.get("isi"))
+            para["judul"] = normalize_prose(para.get("judul"))
+    for page in doc.get("bagian") or []:
+        page["paragraf"] = [normalize_prose(p) for p in page.get("paragraf") or []]
+        for card in page.get("cards") or []:
+            card["text"] = normalize_prose(card.get("text"))
+    for risk in doc.get("risks") or []:
+        risk["isi"] = normalize_prose(risk.get("isi"))
+    for exhibit in doc.get("exhibits") or []:
+        if isinstance(exhibit.get("narasi"), str):
+            exhibit["narasi"] = normalize_prose(exhibit["narasi"])
+    return doc
+
+
 def contains_banned(text):
     """True bila teks memuat salah satu untai BANNED (huruf diabaikan)."""
     if not isinstance(text, str):
