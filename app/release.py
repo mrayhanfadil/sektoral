@@ -254,6 +254,9 @@ def _check_driver_forecast(forecast: object, intake: object,
             blockers.append("sourced operating and cash-flow forecast is incomplete")
     if forecast.get("production_ready") is not True:
         blockers.append("forecast is not verified as production-ready")
+    for reason in forecast.get("production_blockers") or []:
+        if isinstance(reason, str) and reason.strip():
+            blockers.append(f"forecast: {reason}")
 
     g2 = forecast.get("g2")
     if isinstance(g2, Mapping):
