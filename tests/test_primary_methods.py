@@ -215,3 +215,57 @@ def test_lom_gate_needs_sourced_analyst_assumptions():
                             "broker_source_url": None}})
     gate = release.assess_sotp_lom_scenario(stripped, fc, {"detail": {}}, "validated")
     assert any("dated, traceable source" in b for b in gate["blockers"])
+
+
+def _ev_peers(*mults):
+    return [{"symbol": f"P{i}.JK", "ev_ebitda": m, "ev_status": "ok", "ev_year": 2025,
+             "ev_source_kind": "sectors"} for i, m in enumerate(mults)]
+
+
+def test_scenario_ev_ebitda_peer_bridges_the_median_multiple_to_equity():
+    detail, reasons = SV.ev_ebitda_peer(_going_concern(shares=10.0), _fc(ebitda=0.25, capex=0.1),
+                                        _ev_peers(6.0, 8.0, 10.0))
+    assert reasons == [] and detail["basis"] == "scenario"
+    assert detail["peer_source"] == "data Sectors"
+    # FY26 EBITDA 25 x median 8 = EV 200; FY25 year-end bridge cash 10, debt 70.
+    assert detail["ebitda"] == 25.0 and detail["ev"] == 200.0
+    assert (detail["cash"], detail["debt"], detail["nci"]) == (10.0, 70.0, 0.0)
+    assert detail["equity"] == 140.0 and detail["per_share"] == 14.0
+    assert detail["per_share_down"] == (7.0 * 25.0 + 10.0 - 70.0) / 10.0
+    assert detail["per_share_up"] > detail["per_share"] > detail["per_share_down"]
+    assert detail["valuation_date"] == "2025-12-31" and detail["grid"] == {}
+    assert [p["symbol"] for p in detail["peers"]] == ["P0", "P1", "P2"]
+
+
+def test_scenario_ev_ebitda_peer_names_each_missing_input():
+    _, reasons = SV.ev_ebitda_peer(_going_concern(shares=10.0), _fc(), _ev_peers(6.0, 8.0, 10.0))
+    assert reasons == ["margin EBITDA FY skenario belum tersedia dari agen"]
+    _, reasons = SV.ev_ebitda_peer(_going_concern(shares=10.0), _fc(ebitda=0.25, capex=0.1),
+                                   [{"ev_status": "report_not_cached"}] * 4)
+    assert reasons == ["peer EV/EBITDA belum tersedia di cache Sectors "
+                       "(0 < 3; laporan Sectors atau snapshot Yahoo 4/4 peer belum tersedia); "
+                       "belum dimodelkan"]
+    assert SV.ev_ebitda_peer(_going_concern(), {}, _ev_peers(6.0, 8.0, 10.0))[0] is None
+
+
+def test_ev_ebitda_release_gate_needs_ebitda_three_peers_and_a_bridge():
+    detail, _ = SV.ev_ebitda_peer(_going_concern(shares=10.0), _fc(ebitda=0.25, capex=0.1),
+                                  _ev_peers(6.0, 8.0, 10.0))
+    gate = release.assess_ev_ebitda_scenario(_going_concern(shares=10.0), _fc(ebitda=0.25, capex=0.1),
+                                             {"detail": detail}, "validated")
+    # Only the earnings-led evidence (official actual, fresh close) is missing here.
+    assert not any(b.startswith(("peer PER", "FY earnings", "peer EV/EBITDA", "FY EBITDA",
+                                 "enterprise-to-equity", "equity value")) for b in gate["blockers"])
+    assert not any("out-year" in b for b in gate["blockers"])   # one forward year suffices
+    bad = release.assess_ev_ebitda_scenario(
+        {"model_profile": "financial_ddm"}, {}, {"detail": {"ebitda": -1.0, "peer_count": 2,
+                                                            "q1_ev_ebitda": 9.0, "median_ev_ebitda": 8.0,
+                                                            "q3_ev_ebitda": 10.0, "shares": 10.0,
+                                                            "equity": -5.0}}, "validated")
+    for text in ("going-concern method", "FY EBITDA scenario is missing or not positive",
+                 "peer EV/EBITDA set has fewer than three", "sensitivity is not ordered",
+                 "bridge is missing cash", "bridge is missing debt", "equity value is not positive"):
+        assert any(text in b for b in bad["blockers"]), text
+    assert release.SCENARIO_ASSESSORS["ev_ebitda_peer"] is release.assess_ev_ebitda_scenario
+    assert MC.reader_reason("peer EV/EBITDA set has fewer than three valid peers") == \
+        "peer EV/EBITDA valid kurang dari tiga"
