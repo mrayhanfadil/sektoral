@@ -294,10 +294,12 @@ def render_landing(items=None) -> str:
     """Render the Indonesian landing page; ``items`` are gallery summaries."""
     items = list(items or [])
     published = [i for i in items if i["published"]]
-    # Feature the chain that shows the most: a fallback that was selected plus a cross-check.
+    # Feature a report whose primary method set the target, with the most
+    # cross-checks beside it.
     def richness(item):
         decisions = [step["decision"] for step in item["chain"]]
-        return ("Silang cek" in decisions, "Dilewati" in decisions, len(decisions))
+        primary = bool(decisions) and decisions[0] == "Terpilih"
+        return (primary, decisions.count("Silang cek"), len(decisions))
     featured = max((i for i in published if i["files"].get("pdf") and i["chain"]),
                    key=richness, default=None)
     coverage = "".join(gallery_page.card(i) for i in items[:6])
