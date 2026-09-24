@@ -133,6 +133,9 @@ _READER_REASONS = (
     ("EV/EBITDA sensitivity", "sensitivitas multiple tidak monoton"),
     ("assumption-led method", "metode multiple hanya untuk profil tambang"),
     ("financial DDM", "hasil DDM belum tersedia"),
+    ("mining forecast is not", "forecast fisik tambang masih screening"),
+    ("operating bridge missing", "jembatan operasi fisik ke keuangan belum ada"),
+    ("forecast gate failed", "forecast belum lolos rekonsiliasi G2.9"),
 )
 
 

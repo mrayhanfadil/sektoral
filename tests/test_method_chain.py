@@ -128,16 +128,37 @@ def test_data_gates_still_block_a_sufficient_fallback():
     assert va["tp"] is None and va["rating"] == "DRAFT NON-DISTRIBUTABLE"
 
 
-def test_ammn_skips_incomplete_sotp_to_rnav_but_stays_draft():
+def test_ammn_screening_forecast_blocks_asset_methods_and_stays_draft():
     doc_in, _ = intake.load("AMMN")
     fc = forecast.build(doc_in)
     va = valuation.build(doc_in, fc)
     trace = {t["key"]: t for t in va["method_chain"]["trace"]}
     assert trace["sotp_lom"]["decision"] == "skipped"
-    assert trace["rnav_lom"]["decision"] == "selected"
+    # RNAV values the screening forecast margin, so it cannot be the basis
+    # and must not block the assumption-led multiple route behind it.
+    assert trace["rnav_lom"]["decision"] == "skipped"
+    assert any("physical-driver" in r for r in trace["rnav_lom"]["reasons"])
     assert trace["rnav_lom"]["per_share_down"] < trace["rnav_lom"]["per_share"]
+    assert trace["ev_ebitda_fy"]["decision"] == "skipped"
     # Mining never falls back to a perpetual-growth DCF.
     assert "fcff_dcf" not in trace
     assert va["release"]["status"] == "draft_non_distributable"
     assert va["tp"] is None
     assert not any(b.startswith("SOTP incomplete") for b in va["release"]["blockers"])
+
+
+def test_mining_reaches_assumption_led_route_when_its_gate_passes(monkeypatch):
+    doc_in, _ = intake.load("AMMN")
+    fc = forecast.build(doc_in)
+    passed = lambda intake_, fc_, target, status, underlying: {
+        "status": "distributable_assumption_led", "method": "FY26F EV/EBITDA 8x",
+        "blockers": [], "underlying_sotp": underlying, "limitations": ["8x asumsi"]}
+    target = {"values": [{"multiple": m, "per_share_idr": v} for m, v in
+                         ((6.0, 4200.0), (8.0, 5000.0), (10.0, 5800.0))]}
+    monkeypatch.setattr(release, "assess_assumption_led", passed)
+    monkeypatch.setattr(valuation, "scenario_ev_ebitda_crosscheck", lambda *a: target)
+    va = valuation.build(doc_in, fc, assumption_status="validated")
+    assert va["method_chain"]["selected"] == "ev_ebitda_fy"
+    assert va["method_chain"]["route"] == "fallback"
+    assert va["release"]["status"] == "distributable_assumption_led"
+    assert va["tp"] == 5000 and va["scenario_target"] is target
