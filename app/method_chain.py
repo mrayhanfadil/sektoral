@@ -55,6 +55,7 @@ SCALE_BAND = gate_thresholds.SCALE_BAND
 EXTREME_UPSIDE = 0.50
 PEER_PE_BAND = (0.0, 50.0)
 PEER_PB_BAND = (0.0, 10.0)
+PEER_EV_BAND = (0.0, 50.0)   # same validity band as PER: outliers leave the median
 MIN_PEERS = 3
 
 
@@ -105,10 +106,12 @@ def peer_pbvs(peers) -> list[float]:
 
 
 def peer_ev_ebitdas(peers) -> list[float]:
-    """EV/EBITDA peer valid. EV dibangun intake._peer_ev dari data Sectors
-    saja (market cap tabel peer + utang - kas laporan peer yang di-cache)."""
+    """EV/EBITDA peer valid (0 < EV/EBITDA <= 50), terurut. EV dibangun
+    intake._peer_ev: market cap tabel peer Sectors + utang - kas laporan peer
+    (Sectors bila di-cache, selain itu snapshot Yahoo Finance)."""
+    lo, hi = PEER_EV_BAND
     return sorted(p.get("ev_ebitda") for p in peers or []
-                  if _finite(p.get("ev_ebitda")) and p["ev_ebitda"] > 0)
+                  if _finite(p.get("ev_ebitda")) and lo < p["ev_ebitda"] <= hi)
 
 
 def peer_ev_sales(peers) -> list[float]:
@@ -117,14 +120,32 @@ def peer_ev_sales(peers) -> list[float]:
                   if _finite(p.get("ev_sales")) and p["ev_sales"] > 0)
 
 
+PEER_EV_SOURCE_NAMES = {"sectors": "data Sectors", "yahoo": "Yahoo Finance"}
+
+
+def peer_ev_sources(peers) -> str:
+    """Where the peer EVs in the median come from: Sectors, Yahoo Finance, or both.
+
+    Rows without a recorded source kind are named as such, never as Sectors.
+    """
+    lo, hi = PEER_EV_BAND
+    kinds = {p.get("ev_source_kind") for p in peers or []
+             if _finite(p.get("ev_ebitda")) and lo < p["ev_ebitda"] <= hi}
+    parts = [PEER_EV_SOURCE_NAMES[k] for k in ("sectors", "yahoo") if k in kinds]
+    if kinds - set(PEER_EV_SOURCE_NAMES):
+        parts.append("sumber tidak tercatat")
+    return " dan ".join(parts) if parts else "tanpa peer"
+
+
 def peer_ev_ebitda_gap(peers):
-    """Reason when fewer than three Sectors peer EV/EBITDA points exist, else None."""
+    """Reason when fewer than three peer EV/EBITDA points exist, else None."""
     n_valid = len(peer_ev_ebitdas(peers))
     if n_valid >= MIN_PEERS:
         return None
     rows = list(peers or [])
     uncached = sum(1 for p in rows if p.get("ev_status") == "report_not_cached")
-    why = f"; laporan Sectors {uncached}/{len(rows)} peer belum di-cache" if uncached else ""
+    why = (f"; laporan Sectors atau snapshot Yahoo {uncached}/{len(rows)} peer belum tersedia"
+           if uncached else "")
     return (f"peer EV/EBITDA belum tersedia di cache Sectors ({n_valid} < {MIN_PEERS}{why}); "
             "belum dimodelkan")
 
@@ -221,12 +242,12 @@ def ev_ebitda_peer(peers, ebitda_fwd, shares, market_cap, net_debt=0.0,
     return candidate(
         "ev_ebitda_peer", per_share=ps, per_share_down=down,
         reasons=scale_reasons(ps, shares, market_cap) if _finite(ps) else [],
-        labels=["EV/EBITDA peer dari data Sectors (market cap tabel peer + utang - kas, "
-                "EBITDA FY terakhir laporan peer) diterapkan ke EBITDA forward; "
+        labels=[f"EV/EBITDA peer dari {peer_ev_sources(peers)} (market cap tabel peer Sectors "
+                "+ utang - kas, EBITDA FY terakhir laporan peer) diterapkan ke EBITDA forward; "
                 "peer dianggap sebanding", _bridge_label(net_debt_source)],
         detail={"median_ev_ebitda": median, "q1_ev_ebitda": q1,
                 "peer_count": len(mults), "ebitda_fwd": ebitda_fwd, "net_debt": nd,
-                "net_debt_source": net_debt_source, "peer_source": "Sectors"})
+                "net_debt_source": net_debt_source, "peer_source": peer_ev_sources(peers)})
 
 
 def ev_sales_peer(peers, revenue_fwd, shares, market_cap, net_debt=0.0,

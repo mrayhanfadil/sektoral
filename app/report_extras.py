@@ -572,11 +572,12 @@ def peer_page(intake, valuation_inputs=None):
                    if isinstance(p.get("ev_ebitda"), (int, float))]
         paragraphs.append(
             "Multiple peer di bawah ini hanya cross-check: EV/EBITDA peer dibangun dari "
-            f"laporan Sectors tiap peer dan tersedia untuk {len(peer_ev)} peer; ia dipakai di "
-            "rantai metode, bukan di tabel ini." if peer_ev else
+            f"laporan tiap peer ({method_chain.peer_ev_sources(intake.get('peers'))}) dan "
+            f"tersedia untuk {len(peer_ev)} peer; ia dipakai di rantai metode, bukan di tabel "
+            "ini." if peer_ev else
             "Multiple peer di bawah ini hanya cross-check: tabel peer Sectors tidak memuat "
-            "EBITDA dan utang bersih, dan laporan Sectors tiap peer belum di-cache, sehingga "
-            "EV/EBITDA peer belum dapat diverifikasi.")
+            "EBITDA dan utang bersih, dan laporan tiap peer (Sectors atau snapshot Yahoo "
+            "Finance) belum tersedia, sehingga EV/EBITDA peer belum dapat diverifikasi.")
     # 1-year own-history P/E and P/BV bands (mean, median, current, percentile).
     band = own_history_bands(intake)
     if band:

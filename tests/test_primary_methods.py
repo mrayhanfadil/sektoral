@@ -155,14 +155,15 @@ def test_agent_dcf_drivers_are_soft_for_going_concerns_only():
 
 
 def _ev_peers(*mults):
-    return [{"symbol": f"P{i}.JK", "ev_ebitda": m, "ev_status": "ok", "ev_year": 2025}
-            for i, m in enumerate(mults)]
+    return [{"symbol": f"P{i}.JK", "ev_ebitda": m, "ev_status": "ok", "ev_year": 2025,
+             "ev_source_kind": "sectors"} for i, m in enumerate(mults)]
 
 
 def test_scenario_ev_ebitda_peer_bridges_the_median_multiple_to_equity():
     detail, reasons = SV.ev_ebitda_peer(_going_concern(shares=10.0), _fc(ebitda=0.25, capex=0.1),
                                         _ev_peers(6.0, 8.0, 10.0))
-    assert reasons == [] and detail["basis"] == "scenario" and detail["peer_source"] == "Sectors"
+    assert reasons == [] and detail["basis"] == "scenario"
+    assert detail["peer_source"] == "data Sectors"
     # FY26 EBITDA 25 x median 8 = EV 200; FY25 year-end bridge cash 10, debt 70.
     assert detail["ebitda"] == 25.0 and detail["ev"] == 200.0
     assert (detail["cash"], detail["debt"], detail["nci"]) == (10.0, 70.0, 0.0)
@@ -179,7 +180,8 @@ def test_scenario_ev_ebitda_peer_names_each_missing_input():
     _, reasons = SV.ev_ebitda_peer(_going_concern(shares=10.0), _fc(ebitda=0.25, capex=0.1),
                                    [{"ev_status": "report_not_cached"}] * 4)
     assert reasons == ["peer EV/EBITDA belum tersedia di cache Sectors "
-                       "(0 < 3; laporan Sectors 4/4 peer belum di-cache); belum dimodelkan"]
+                       "(0 < 3; laporan Sectors atau snapshot Yahoo 4/4 peer belum tersedia); "
+                       "belum dimodelkan"]
     assert SV.ev_ebitda_peer(_going_concern(), {}, _ev_peers(6.0, 8.0, 10.0))[0] is None
 
 

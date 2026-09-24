@@ -732,9 +732,9 @@ def assess_ev_ebitda_scenario(intake, forecast, valuation, assumption_status):
         "blockers": blockers,
         "limitations": ["EBITDA FY adalah skenario analis (aktual 1H resmi + margin EBITDA "
                         "asumsi agen), bukan forecast driver terekonsiliasi",
-                        "EV/EBITDA peer FY terakhir dari data Sectors (market cap tabel peer + "
-                        "utang - kas laporan peer) diterapkan ke EBITDA forward; peer dianggap "
-                        "sebanding",
+                        f"EV/EBITDA peer FY terakhir dari {detail.get('peer_source') or 'sumber peer'} "
+                        "(market cap tabel peer Sectors + utang - kas laporan peer) diterapkan "
+                        "ke EBITDA forward; peer dianggap sebanding",
                         "kas, utang dan minoritas dari satu neraca; arus kas dan neraca "
                         "setelahnya belum dimodelkan"],
     }

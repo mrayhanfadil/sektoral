@@ -503,13 +503,16 @@ def ev_ebitda_peer(intake, fc, peers):
 
     ev = med * ebitda_idr
     equity = ev + cash - debt - nci
-    used = [p for p in peers or [] if _num(p.get("ev_ebitda")) is not None and p["ev_ebitda"] > 0]
+    lo, hi = method_chain.PEER_EV_BAND
+    used = [p for p in peers or []
+            if _num(p.get("ev_ebitda")) is not None and lo < p["ev_ebitda"] <= hi]
     detail = {"basis": "scenario", "year": scenario["year"], "ebitda": ebitda,
               "ebitda_idr": ebitda_idr, "fx": fx if fx != 1.0 else None,
               "median_ev_ebitda": med, "q1_ev_ebitda": q1, "q3_ev_ebitda": q3,
-              "peer_count": len(mults), "peer_source": "Sectors",
+              "peer_count": len(mults), "peer_source": method_chain.peer_ev_sources(peers),
               "peers": [{"symbol": str(p.get("symbol") or "?").replace(".JK", ""),
-                         "ev_ebitda": p["ev_ebitda"], "ev_year": p.get("ev_year")}
+                         "ev_ebitda": p["ev_ebitda"], "ev_year": p.get("ev_year"),
+                         "source_kind": p.get("ev_source_kind")}
                         for p in sorted(used, key=lambda p: p["ev_ebitda"])],
               "ev": ev, "cash": cash, "debt": debt, "nci": nci, "equity": equity,
               "shares": shares, "shares_basis": link.get("shares_basis"),
