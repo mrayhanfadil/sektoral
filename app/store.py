@@ -39,12 +39,23 @@ def path(db=None) -> Path:
     return target / "sectoral.db" if target.is_dir() or target.suffix != ".db" else target
 
 
+_READY: set[Path] = set()
+
+
 def _connect(db=None) -> sqlite3.Connection:
     file = path(db)
     file.parent.mkdir(parents=True, exist_ok=True)
+    # timeout = busy wait: parallel batch processes queue on the write lock.
     conn = sqlite3.connect(file, timeout=30)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute(_SCHEMA)
+    if file not in _READY:
+        try:
+            # WAL persists in the file; switching it needs a moment of exclusive
+            # access, so a concurrent first connection may lose the race.
+            conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.OperationalError:
+            pass
+        conn.execute(_SCHEMA)
+        _READY.add(file)
     return conn
 
 

@@ -72,6 +72,9 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         doc["meta"].pop("rating", None)
         doc["meta"].pop("tp", None)
         doc["meta"].pop("upside_persen", None)
+    # With the release status final, drop screening values that would read as
+    # a withheld or second target.
+    report_extras.drop_screening_values(doc)
     # Cover rating status (Inisiasi/Dipertahankan/Naik/Turun), set after the
     # harness so it reflects the final release. A draft publishes no rating,
     # so it never claims one is maintained; history is shown as context only.

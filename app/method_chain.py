@@ -512,6 +512,8 @@ _READER_REASONS = (
     ("terminal FCFF is not positive", "FCFF terminal tidak positif"),
     ("enterprise-to-equity bridge", "jembatan EV ke ekuitas belum lengkap"),
     ("equity value is not positive", "nilai ekuitas tidak positif"),
+    ("fixed assets below half of total assets",
+     "aset tetap kurang dari separuh total aset; P/BV bukan metode untuk emiten aset berat"),
     ("belum tersedia", "belum dimodelkan"),
     ("tidak dapat dinilai", "tidak dapat dinilai"),
 )

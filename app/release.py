@@ -938,6 +938,6 @@ def assess_assumption_led(intake, forecast, valuation, assumption_status,
         "method": "FY26F EV/EBITDA 8x",
         "blockers": blockers,
         "underlying_sotp": underlying_release,
-        "limitations": ["8x is an analyst assumption, not a verified peer multiple",
-                        "asset-level LoM/SOTP and later cash/debt movements are not modeled"],
+        "limitations": ["multiple 8x adalah asumsi analis, bukan multiple peer tervalidasi",
+                        "LoM/SOTP per aset serta pergerakan kas dan utang sesudahnya belum dimodelkan"],
     }

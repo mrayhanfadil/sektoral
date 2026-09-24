@@ -79,15 +79,18 @@ def test_bridge_minority_row(tmp_path):
     assert "tp" not in d["meta"]
 
 
-def test_bank_ddm_full_path(tmp_path):
+def test_draft_does_not_print_the_withheld_screening_value(tmp_path):
     from app import build as B
     d = B.build("BBCA", tmp_path)
+    assert d["meta"]["status"] == "draft_non_distributable" and "tp" not in d["meta"]
     titles = [e["judul"] for e in d["exhibits"]]
-    assert "Komponen Cost of Equity" in titles
-    assert "Sensitivitas DDM (CoE x g)" in titles
-    assert "Sensitivitas Inverse CoE (CoE x ROE)" in titles
-    val_sec = next(b for b in d["bagian"] if b["judul"] == "Skenario nilai")
-    assert any("lintasan ROE" in p for p in val_sec["paragraf"])
+    assert "Sensitivitas DDM (CoE x g)" not in titles
+    assert "Sensitivitas Inverse CoE (CoE x ROE)" not in titles
+    assert "DDM Gordon memberi Rp" not in json.dumps(d["bagian"], ensure_ascii=False)
+    assert "Komponen Cost of Equity" in titles  # inputs stay; values do not
+    assert [e["n"] for e in d["exhibits"]] == list(range(1, len(d["exhibits"]) + 1))
+    blob = json.dumps(d, ensure_ascii=False).lower()
+    assert "tanpa histori coe di data sectors" in blob  # band jujur absen
     blob = json.dumps(d, ensure_ascii=False).lower()
     assert "tanpa histori coe di data sectors" in blob  # band jujur absen
 

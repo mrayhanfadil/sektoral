@@ -10,6 +10,8 @@ def _id(x, dec=1):
     except (ValueError, TypeError):
         return "n.a."
     s = f"{val:,.{dec}f}"
+    if s.startswith("-") and not any(c in "123456789" for c in s):
+        s = s[1:]  # a value that rounds to zero is 0, not -0
     return s.replace(",", "_").replace(".", ",").replace("_", ".")
 
 
@@ -61,13 +63,20 @@ def pct(v, dec=1):
     return _id(val * 100, dec) + "%"
 
 
-def mult(v, dec=1):
+# Above this a P/E or P/B says only that the base (earnings, equity) is tiny.
+MULT_CAP = 100
+
+
+def mult(v, dec=1, cap=None):
+    """``cap``: values above it read "n.m." (not meaningful), e.g. a 9.141,7x P/E."""
     if v is None:
         return "n.a."
     try:
         val = float(v)
     except (ValueError, TypeError):
         return "n.a."
+    if cap is not None and val > cap:
+        return "n.m."
     return _id(val, dec) + "x"
 
 
