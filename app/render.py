@@ -52,7 +52,7 @@ GRID = "#E0E0E0"
 # Categorical chart series, in order.
 SERIES = ["#0928B1", "#B4C7FF", "#3ED628", "#1DCD9F", "#0047AB", "#7596FF"]
 ISSUER_COLOR = SERIES[0]
-INDEX_COLOR = SERIES[3]
+INDEX_COLOR = SERIES[1]  # Figma: relative-vs-IHSG line in light blue
 
 # Use the canonical wordmark from sectors-hackathon/assets/brand/sectoral-logo.svg.
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg"
@@ -60,18 +60,21 @@ LOGO_SVG = LOGO_PATH.read_text(encoding="utf-8")
 REPORT_WORDMARK = _b64_brand_asset("report-wordmark.png")
 REPORT_DIVIDER = _b64_brand_asset("report-divider.svg")
 REPORT_MORSE = _b64_brand_asset("report-morse.svg")
+REPORT_SEPARATOR = _b64_brand_asset("report-separator.svg")
 
-PAGE_NUM = ("@page{size:A4;margin:12mm 12mm 14mm;"
+PAGE_NUM = ("@page{size:A4;margin:12mm 8.5mm 14mm;"
             "@bottom-left{content:'See important disclosure at the back of this report';"
-            "box-sizing:border-box;width:160mm;height:3mm;padding-left:97mm;"
+            "box-sizing:border-box;width:163mm;height:3mm;padding-left:107mm;"
             "background-image:url('data:image/svg+xml;base64," + REPORT_MORSE + "');"
-            "background-size:95mm 1.55mm;background-position:left center;"
+            "background-size:103.7mm 1.7mm;background-position:left center;"
             "background-repeat:no-repeat;white-space:nowrap;"
-            "font-family:'Roboto',sans-serif;font-size:7.5pt;line-height:3mm;"
+            "font-family:'Roboto',sans-serif;font-size:7.7pt;line-height:3mm;"
+            "text-rendering:geometricPrecision;word-spacing:.05em;"
             "color:" + PRIMARY + "}"
             "@bottom-right{content:'Page ' counter(page) ' of ' counter(pages);font-weight:900;"
             "box-sizing:border-box;width:26mm;height:3mm;text-align:right;white-space:nowrap;"
-            "font-family:'Roboto',sans-serif;font-size:7.5pt;line-height:3mm;"
+            "font-family:'Roboto',sans-serif;font-size:7.7pt;line-height:3mm;"
+            "text-rendering:geometricPrecision;word-spacing:.05em;"
             "color:" + PRIMARY + "}}")
 
 FONT_FACES = (
@@ -86,89 +89,107 @@ FONT_FACES = (
 
 CSS = (FONT_FACES + PAGE_NUM +
        "body{font-family:'Roboto',sans-serif;color:" + INK + ";background:" + PAPER +
-       ";font-size:8.1pt;line-height:1.42;margin:0}"
+       ";font-size:7.7pt;line-height:1.2;margin:0;"
+       # Hinted glyph advances at the Figma 7.7pt body size shrink word gaps
+       # below pdftotext's threshold, so copied text merges words
+       # (tests/test_pdf_copy_text). Unhinted metrics keep the spaces.
+       "text-rendering:geometricPrecision}"
+       "p{margin:0 0 3.4mm;text-align:justify}"
        ".topbar{display:flex;justify-content:space-between;align-items:center;"
        "border-bottom:2px solid "
        + PRIMARY + ";padding-bottom:3px;font-size:8.1pt;color:" + PRIMARY + ";font-weight:600}"
        ".brandmark{vertical-align:-4px;margin-right:3px}"
        ".wordmark{display:flex;align-items:center}.wordmark svg{display:block;width:84px;height:18px}"
-       ".report-header{display:grid;grid-template-columns:minmax(0,1fr) 30mm;"
+       ".report-header{display:grid;grid-template-columns:minmax(0,1fr) 32.4mm;"
        "grid-template-rows:auto 0.5mm;column-gap:5mm;row-gap:0.4mm;"
-       "align-items:center;padding:3mm 3mm 2.5mm;margin:0 0 2mm}"
+       "align-items:center;padding:0 0 1.7mm;margin:0 0 1.7mm}"
        ".report-heading{grid-column:1;grid-row:1;min-width:0}"
        # Header line 1: stock code + rating action (Roboto Black, blue);
        # line 2: report type + date (Roboto Regular, black).
-       ".report-title{font-size:10pt;line-height:1.15;color:" + PRIMARY + ";"
+       ".report-title{font-size:9.6pt;line-height:1.17;color:" + PRIMARY + ";"
        "font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
-       ".report-subtitle{font-size:8pt;line-height:1.2;color:" + INK + ";margin-top:0.5mm}"
-       ".report-wordmark{grid-column:2;grid-row:1;display:block;width:30mm;height:5.35mm;"
+       ".report-subtitle{font-size:7.7pt;line-height:1.17;color:" + INK + ";margin-top:0.35mm}"
+       ".report-wordmark{grid-column:2;grid-row:1;display:block;width:32.4mm;height:5.75mm;"
        "object-fit:contain}"
        ".report-divider{grid-column:1/-1;grid-row:2;display:block;width:100%;"
        "height:0.5mm;object-fit:fill}"
        ".status{font-size:10.5pt;color:" + PRIMARY + ";font-weight:700;margin:5px 0 2px}"
        # Rating block: Roboto Black Italic on the highlight fill.
-       ".rating-block{background:" + HIGHLIGHT + ";padding:4mm 4mm 3.5mm;margin:0 0 3mm}"
-       ".rating-label{font-size:32pt;color:" + PRIMARY + ";font-weight:900;font-style:italic;"
-       "line-height:0.95;text-transform:uppercase;letter-spacing:-0.01em}"
-       ".rating-detail{font-size:10pt;color:" + PRIMARY + ";font-weight:900;font-style:italic;"
-       "margin-top:1.2mm}"
-       ".rating-method{font-size:7pt;color:" + INK + ";margin-top:2mm;padding-top:1.5mm;"
-       "border-top:1px solid #FFFFFF;line-height:1.3}"
-       ".basic-head{font-size:10pt;font-weight:700;color:" + INK + ";margin:3.5mm 0 1mm}"
+       ".rating-block{background:" + HIGHLIGHT + ";border-radius:3.4mm;padding:3.4mm;"
+       "display:flex;flex-direction:column;align-items:center;gap:3.4mm;margin:0}"
+       ".rating-head{text-align:center}"
+       ".rating-label{font-size:30.7pt;color:" + PRIMARY + ";font-weight:900;font-style:italic;"
+       "line-height:1.17;text-transform:uppercase}"
+       ".rating-detail{font-size:9.6pt;color:" + PRIMARY + ";font-weight:900;font-style:italic;"
+       "line-height:1.17}"
+       ".rating-method{font-size:6.2pt;color:" + PRIMARY + ";margin-top:1.2mm;line-height:1.3}"
+       ".rating-sep{display:block;width:92%;height:1px}"
+       ".rating-row{display:flex;width:100%;gap:2mm;align-items:center;font-weight:700;"
+       "color:" + PRIMARY + ";font-size:7.7pt;line-height:1.17}"
+       ".rating-row span{flex:1 1 auto;min-width:0}.rating-row b{font-weight:700;white-space:nowrap}"
+       ".rating-row b.na{font-style:italic}"
+       ".rating-sub{font-size:9.6pt;font-weight:900;color:" + PRIMARY + ";text-align:center;"
+       "text-transform:uppercase;line-height:1.17}"
+       # Left-column exhibit (Figma "Information").
+       ".info{padding:1.7mm 3.4mm;display:flex;flex-direction:column;gap:1.7mm}"
+       ".info-title{font-size:7.7pt;line-height:1.2;color:" + INK + "}"
+       ".info-src{font-size:5.8pt;font-style:italic;text-align:center;line-height:1.2}"
        ".draft-banner{background:#fff3e8;border:1px solid #bb4d00;color:#803400;"
        "font-weight:700;padding:5px 8px;margin:5px 0;font-size:8.5pt}"
-       ".cover{display:flex;gap:12px;margin-top:3px}"
-       ".left{width:31%;font-size:8pt}"
-       ".right{width:68%}"
+       ".cover{display:flex;align-items:flex-start;margin-top:1.7mm}"
+       ".left{width:35%;padding:1.7mm 3.4mm 3.4mm 0;box-sizing:border-box;display:flex;"
+       "flex-direction:column;gap:3.4mm}"
+       ".right{width:65%;padding:1.7mm 0 3.4mm 3.4mm;box-sizing:border-box}"
        ".kv{display:flex;justify-content:space-between;align-items:baseline;padding:2.2px 0;"
        "border-bottom:1px solid " + HIGHLIGHT + "}"
        ".kv span{padding-right:4px}.kv b{font-weight:500;color:" + INK + ";white-space:nowrap}"
        ".panel{background:" + PAPER + ";padding:0}"
        # Company name (Roboto Black) and thesis line (Roboto Black Italic).
-       "h1.emit{font-size:20pt;line-height:1.08;margin:0 0 2mm;color:" + INK + ";font-weight:900}"
-       ".headline{font-size:14pt;line-height:1.12;font-weight:900;font-style:italic;color:" + INK +
-       ";margin:0 0 3mm}"
+       "h1.emit{font-size:19.2pt;line-height:1.17;margin:0 0 3.4mm;color:" + INK + ";font-weight:900}"
+       ".headline{font-size:9.6pt;line-height:1.17;font-weight:700;font-style:italic;color:" + INK +
+       ";margin:0 0 3.4mm}"
        # Highlight callout for the three executive-summary bullets.
-       ".highlight{background:" + HIGHLIGHT + ";padding:2.5mm 3.5mm;margin:0 0 3mm}"
-       ".bullets{margin:0 0 0 12px;padding:0;font-size:8pt}"
-       ".bullets li{margin-bottom:1.6mm;font-weight:500}.bullets li:last-child{margin-bottom:0}"
+       ".highlight{background:" + HIGHLIGHT + ";border-left:1.5pt solid " + PRIMARY + ";"
+       "padding:1.7mm;margin:0 0 3.4mm}"
+       ".bullets{margin:0 0 0 4mm;padding:0;font-size:7.7pt;line-height:1.17}"
+       ".bullets li{margin:0}"
        # Numbered section heads on inner pages (Roboto Black, black).
-       "h2.sec{font-size:18pt;line-height:1.1;color:" + INK + ";font-weight:900;margin:3mm 0 3mm}"
-       "h2.sec .num{color:" + PRIMARY + "}"
-       "h3.sub{font-size:10pt;color:" + INK + ";font-weight:700;margin:2.5mm 0 1mm}"
+       "h2.sec{font-size:19.2pt;line-height:1.17;color:" + INK + ";font-weight:900;margin:0 0 3.4mm}"
+       "h2.sec .num{color:" + INK + "}"
+       "h3.sub{font-size:9.6pt;line-height:1.17;color:" + INK + ";font-weight:700;margin:0 0 1.7mm}"
        # Thesis cards: claim on the left, the metric that backs it on the right.
-       ".cards{display:flex;flex-direction:column;gap:2.5mm;margin:2mm 0}"
-       ".card{display:flex;gap:4mm;align-items:center;background:" + HIGHLIGHT + ";"
-       "padding:3mm 4mm;break-inside:avoid-page;page-break-inside:avoid}"
+       ".cards{display:flex;flex-direction:column;margin:0 0 3.4mm}"
+       ".card{display:flex;gap:1.7mm;align-items:center;padding:3.4mm;"
+       "break-inside:avoid-page;page-break-inside:avoid}"
+       ".card:nth-child(odd){background:" + HIGHLIGHT + "}"
        ".card-body{flex:1 1 auto;min-width:0}"
-       ".card-title{font-weight:900;font-size:10pt;margin-bottom:1mm;color:" + INK + "}"
-       ".card-text{font-size:8pt;line-height:1.4}"
-       ".card-metric{flex:0 0 32mm;text-align:right}"
-       ".card-value{font-size:20pt;font-weight:900;color:" + PRIMARY + ";line-height:1}"
-       ".card-label{font-size:7pt;color:" + INK + ";margin-top:1mm;line-height:1.25}"
-       ".exhibit{margin:7px 0 8px}"
+       ".card-title{font-weight:700;font-size:9.6pt;line-height:1.17;margin-bottom:3.2mm;color:" + INK + "}"
+       ".card-text{font-size:7.7pt;line-height:1.17}"
+       ".card-metric{flex:0 0 44mm;text-align:right;color:" + INK + "}"
+       ".card-label{font-size:7.7pt;line-height:1.17}"
+       ".card-value{font-size:17.3pt;font-weight:700;line-height:1.17}"
+       ".exhibit{margin:0 0 3.4mm}"
        ".exhibit.keep{break-inside:avoid-page;page-break-inside:avoid}"
        # Table styling follows sectors-hackathon's .fin-table: a solid header
        # band, horizontal hairlines only (no vertical grid), spec zebra fill
        # and a ruled total line. The old full grid made every figure read as a
        # spreadsheet cell instead of a column.
-       ".exhibit-table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.2pt;"
-       "margin:0;font-family:'Roboto',sans-serif;border:1px solid " + RULE + "}"
-       ".exhibit-table th,.exhibit-table td{border:0;padding:3.4px 6px;"
-       "vertical-align:top;line-height:1.35;overflow-wrap:break-word;word-break:normal}"
-       ".exhibit-table tbody td{border-top:1px solid " + RULE + "}"
+       ".exhibit-table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:7.7pt;"
+       "margin:0;font-family:'Roboto',sans-serif;border:0}"
+       ".exhibit-table th,.exhibit-table td{border:0;padding:1.7mm;"
+       "vertical-align:middle;line-height:1.2;overflow-wrap:break-word;word-break:normal}"
        ".exhibit-table tbody.block:first-of-type tr:first-child td{border-top:0}"
        ".exhibit-table thead{display:table-header-group}"
        ".exhibit-table tbody{display:table-row-group}"
        ".exhibit-table tbody.block{break-inside:avoid-page;page-break-inside:avoid}"
        ".exhibit-table tr{break-inside:avoid-page;page-break-inside:avoid}"
        ".exhibit-table thead th{background:" + PRIMARY + ";color:#fff;font-weight:900;"
-       "letter-spacing:.02em;white-space:nowrap;padding:4px 6px;vertical-align:bottom}"
+       "white-space:nowrap;padding:1.7mm}"
        ".exhibit-table .cell-text{text-align:left}"
-       ".exhibit-table .cell-num{text-align:right;font-variant-numeric:tabular-nums}"
+       ".exhibit-table .cell-num{text-align:center;font-variant-numeric:tabular-nums}"
        ".exhibit-table .cell-date{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}"
        ".exhibit-table .cell-num.short{white-space:nowrap}"
-       ".exhibit-table tbody tr:nth-child(even) td{background:" + EVEN_ROW + "}"
+       ".exhibit-table tbody tr:nth-child(even) td{background:" + HIGHLIGHT + "}"
        ".exhibit-table tbody tr.section-row th{background:" + EVEN_ROW + ";color:" + PRIMARY + ";"
        "text-align:left;font-weight:700;letter-spacing:.04em;"
        "border-top:1px solid " + PRIMARY + ";"
@@ -177,15 +198,12 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table tbody tr.total-row td{background:" + PAPER + ";font-weight:700;"
        "border-top:1px solid " + PRIMARY + "}"
        # Exhibit label carries the same brand tick as the section heads.
-       ".exhibit-table caption{text-align:left;font-weight:900;font-size:8pt;"
-       "color:" + PRIMARY + ";margin-bottom:3px;font-family:'Roboto',sans-serif}"
-       ".exhibit-table caption::before{content:'';display:block;width:26pt;"
-       "border-top:1.5px solid " + PRIMARY + ";margin-bottom:2.5px}"
-       ".src{font-size:6pt;color:" + INK + ";margin:2px 0 6px;line-height:1.3}"
+       ".exhibit-table caption{text-align:left;font-weight:700;font-size:9.6pt;line-height:1.17;"
+       "color:" + INK + ";margin-bottom:1.7mm;font-family:'Roboto',sans-serif}"
+       ".src{font-size:5.8pt;color:" + INK + ";margin:1.7mm 0 0;line-height:1.4;font-style:italic;"
+       "text-align:left;overflow-wrap:anywhere}"
        ".metric-chart{display:block;width:100%;height:180px}"
-       ".chart-caption{font-weight:900;font-size:8pt;color:" + PRIMARY + ";margin-bottom:2mm}"
-       ".chart-caption::before{content:'';display:block;width:26pt;"
-       "border-top:1.5px solid " + PRIMARY + ";margin-bottom:2.5px}"
+       ".chart-caption{font-weight:700;font-size:9.6pt;line-height:1.17;color:" + INK + ";margin-bottom:1.7mm}"
        ".research-card{border:1px solid " + RULE + ";"
        "padding:7px 9px;margin:9px 0;break-inside:avoid-page;page-break-inside:avoid}"
        ".research-card h3{color:" + PRIMARY + ";font-size:9pt;margin:0 0 4px}"
@@ -194,7 +212,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        "margin-top:6px;overflow-wrap:anywhere}"
        ".page{page-break-before:always}"
        ".analyst{font-size:8pt;margin-top:3mm;line-height:1.35}"
-       ".section{margin-top:6mm}.section>.report-header{display:none}"
+       ".section{margin-top:3.4mm}.section>.report-header{display:none}"
        "h2.sec{break-after:avoid-page;page-break-after:avoid}"
        ".small{font-size:7.5pt;color:" + MUT + "}"
        ".grid-2{display:flex;gap:12px;width:100%;margin:4px 0;box-sizing:border-box}"
@@ -281,12 +299,25 @@ def _axis_scale(values, steps):
     return base, base + 3 * step
 
 
-def _price_chart(ticker, as_of):
-    """Close on the left axis, performance vs IHSG on the right.
+def _month_ticks(first, last):
+    """First-of-month ticks; every month for short windows, quarterly for long."""
+    months = []
+    year, month = first.year, first.month
+    while (year, month) <= (last.year, last.month):
+        day = date(year, month, 1)
+        if first <= day <= last:
+            months.append(day)
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    step = 1 if len(months) <= 8 else 3
+    return months[::step]
 
-    Adapted from sectors-hackathon's svg_price_vs_jci. The two scales are
-    deliberate: the relative line is read against its own zero line (above it
-    the issuer beat the index), a reading a shared rebased scale flattens.
+
+def _price_chart(ticker, as_of, number=None, source=None):
+    """Figma cover Exhibit 1: close (left axis, Rp) and performance relative to
+    IHSG (right axis, %), dashed grid, black baseline, square legend.
+
+    The relative line is read against its own zero: above it the issuer beat
+    the index, a reading a shared rebased scale would flatten.
     """
     series = _comparison_series(ticker, as_of)
     if series is None:
@@ -297,7 +328,8 @@ def _price_chart(ticker, as_of):
     relative = [a - b for a, b in zip(issuer, ihsg)]
     p_lo, p_hi = _axis_scale(closes, PRICE_STEPS)
     r_lo, r_hi = _axis_scale(relative, REL_STEPS)
-    x0, x1, y0, y1 = 30, 212, 15, 101
+    # Figma frame 2611:333 (360 x 320): plot 48..292 x 24..223.
+    x0, x1, y0, y1 = 48, 292, 24, 223
     days = (dates[-1] - dates[0]).days or 1
 
     def x_of(day):
@@ -310,68 +342,62 @@ def _price_chart(ticker, as_of):
         return " ".join(f"{x_of(day):.1f},{y_of(value, lo, hi):.1f}"
                         for day, value in zip(dates, values))
 
-    def line(values, lo, hi, color, dash=""):
-        dashed = f" stroke-dasharray='{dash}'" if dash else ""
-        return (f"<polyline points='{points(values, lo, hi)}' fill='none' stroke='{color}' "
-                f"stroke-width='2' stroke-linecap='round' stroke-linejoin='round'{dashed}/>"
-                f"<circle cx='{x_of(dates[-1]):.1f}' cy='{y_of(values[-1], lo, hi):.1f}' "
-                f"r='2.4' fill='{color}'/>")
-
-    # Four gridlines, price labelled left and relative performance right.
-    # Design chart rules: no axis lines or frame, dashed light-gray grid,
-    # black baseline, black tick labels.
-    grid = []
+    label = "font-size='12' font-weight='700'"
+    parts = []
     for i in range(4):
         y = y0 + i * (y1 - y0) / 3
         price_tick = p_hi - i * (p_hi - p_lo) / 3
         rel_tick = r_hi - i * (r_hi - r_lo) / 3
-        grid.append(
-            f"<line x1='{x0}' x2='{x1}' y1='{y:.1f}' y2='{y:.1f}' "
-            f"stroke='{GRID}' stroke-width='0.6' stroke-dasharray='3 3'/>"
-            f"<text x='{x0 - 3}' y='{y + 2.5:.1f}' text-anchor='end' font-size='7' "
-            f"fill='{INK}'>{fmt.rp(price_tick)}</text>"
-            f"<text x='{x1 + 3}' y='{y + 2.5:.1f}' font-size='7' "
-            f"fill='{INK}'>{rel_tick:+.0f}%</text>")
-    # Parity: above this line the issuer outperformed the index.
+        if i < 3:
+            parts.append(f"<line x1='{x0}' x2='{x1}' y1='{y:.1f}' y2='{y:.1f}' "
+                         f"stroke='{GRID}' stroke-width='1' stroke-dasharray='3 3'/>")
+        parts.append(f"<text x='10' y='{y + 4:.1f}' {label} fill='{INK}'>"
+                     f"{fmt.rp(price_tick)}</text>"
+                     f"<text x='302' y='{y + 4:.1f}' {label} fill='{INK}'>{rel_tick:+.0f}%</text>")
+    parts.append(f"<polygon points='{x0},{y1} {points(closes, p_lo, p_hi)} {x_of(dates[-1]):.1f},{y1}' "
+                 f"fill='{ISSUER_COLOR}' fill-opacity='0.12'/>")
     if r_lo <= 0 <= r_hi:
         zero_y = y_of(0, r_lo, r_hi)
-        grid.append(f"<line x1='{x0}' x2='{x1}' y1='{zero_y:.1f}' y2='{zero_y:.1f}' "
-                    f"stroke='#000000' stroke-width='1.2'/>")
+        parts.append(f"<line x1='{x0}' x2='{x1}' y1='{zero_y:.1f}' y2='{zero_y:.1f}' "
+                     f"stroke='#000000' stroke-width='1.2'/>")
+    parts.append(f"<polyline points='{points(relative, r_lo, r_hi)}' fill='none' "
+                 f"stroke='{INDEX_COLOR}' stroke-width='2' stroke-linejoin='round'/>")
+    parts.append(f"<polyline points='{points(closes, p_lo, p_hi)}' fill='none' "
+                 f"stroke='{ISSUER_COLOR}' stroke-width='2' stroke-linejoin='round'/>")
+    parts.append(f"<line x1='{x0}' x2='{x1}' y1='{y1}' y2='{y1}' stroke='#000000' stroke-width='1'/>")
+    last_y = y_of(closes[-1], p_lo, p_hi)
+    parts.append(f"<text x='{x0 + 10}' y='{min(y1 - 6, last_y + 16):.1f}' {label} fill='{LIME}'>"
+                 f"Terakhir {fmt.rp(closes[-1])}</text>")
+    # A tick hugging the left edge would sit on the lowest price label.
+    ticks = [day for day in _month_ticks(dates[0], dates[-1]) if x_of(day) - x0 >= 16]
+    for index, day in enumerate(ticks):
+        parts.append(f"<text x='{x_of(day):.1f}' y='{238 + 16 * (index % 2)}' text-anchor='middle' "
+                     f"{label} fill='{INK}'>{day:%b-%y}</text>")
+    parts.append(f"<rect x='19' y='288' width='14' height='14' fill='{ISSUER_COLOR}'/>"
+                 f"<text x='43' y='300' {label} fill='{INK}'>Harga (Rp, kiri)</text>"
+                 f"<rect x='150' y='288' width='14' height='14' fill='{INDEX_COLOR}'/>"
+                 f"<text x='172' y='300' {label} fill='{INK}'>Relatif vs IHSG (%, kanan)</text>")
 
-    area = (f"<polygon points='{x0},{y1} {points(closes, p_lo, p_hi)} {x1},{y1}' "
-            f"fill='{ISSUER_COLOR}' fill-opacity='0.12'/>")
-
+    span_months = max(1, round(days / 30.4))
+    title = (f"{'Exhibit ' + str(number) + '. ' if number else ''}{html.escape(ticker)} "
+             f"relative to IHSG ({span_months}M, {dates[0]:%b-%y} - {dates[-1]:%b-%y})")
+    safe_ticker = html.escape(ticker)
     issuer_return = issuer[-1] - 100
     ihsg_return = ihsg[-1] - 100
-    spread = issuer_return - ihsg_return
 
     def pct(value):
         return f"{value:+.1f}".replace(".", ",")
-
-    safe_ticker = html.escape(ticker)
     return (
-        "<svg class='price-chart' viewBox='0 0 240 152' width='240' height='152' "
+        f"<div class='info-title'>{title}</div>"
+        "<svg class='price-chart' viewBox='0 0 360 320' width='360' height='320' "
         "style='display:block;width:100%;height:auto' role='img' aria-labelledby='price-chart-title'>"
         f"<title id='price-chart-title'>Harga penutupan {safe_ticker} dan kinerja "
         f"relatif terhadap IHSG, {dates[0].isoformat()} sampai {dates[-1].isoformat()}</title>"
-        f"{''.join(grid)}{area}"
-        f"{line(relative, r_lo, r_hi, INDEX_COLOR, '4 3')}"
-        f"{line(closes, p_lo, p_hi, ISSUER_COLOR)}"
-        f"<text x='{x0}' y='112' font-size='7.5' fill='{INK}'>{dates[0]:%b-%y}</text>"
-        f"<text x='{x1}' y='112' text-anchor='end' font-size='7.5' fill='{INK}'>{dates[-1]:%b-%y}</text>"
-        f"<rect x='{x0}' y='120' width='8' height='8' fill='{ISSUER_COLOR}'/>"
-        f"<text x='{x0 + 16}' y='127' font-size='7.5' fill='{INK}'>{safe_ticker} "
-        f"{pct(issuer_return)}% - harga Rp, sumbu kiri</text>"
-        f"<rect x='{x0}' y='132' width='8' height='8' fill='{INDEX_COLOR}'/>"
-        f"<text x='{x0 + 16}' y='139' font-size='7.5' fill='{INK}'>Relatif vs IHSG "
-        f"{pct(spread)} pp - sumbu kanan</text>"
-        f"<text x='{x0}' y='149' font-size='7' fill='{MUT}'>IHSG {pct(ihsg_return)}%. "
-        f"Selisih {pct(spread)} poin persentase</text>"
-        "</svg>"
-        f"<p class='src'>Sumber: Sectors; {len(dates)} tanggal sama "
-        f"({dates[0].isoformat()} - {dates[-1].isoformat()}). "
-        "Sumbu kiri harga penutupan (Rp); sumbu kanan kinerja relatif terhadap "
-        "IHSG dalam poin persentase, awal = 0; tidak termasuk dividen.</p>")
+        + "".join(parts) + "</svg>"
+        f"<div class='info-src'>{html.escape(source or 'Source: Sectors, Sektoral Estimates')}; "
+        f"{safe_ticker} {pct(issuer_return)}%, IHSG {pct(ihsg_return)}%. "
+        f"Selisih {pct(issuer_return - ihsg_return)} poin persentase; "
+        f"{len(dates)} tanggal sama, tidak termasuk dividen</div>")
 
 
 def _column_widths(cols):
@@ -833,50 +859,53 @@ def render(doc):
         rating_status = rating_status or "Inisiasi"
     else:
         rating_status = "Skenario informasional"
+    sep = (f"<img class='rating-sep' src='data:image/svg+xml;base64,{REPORT_SEPARATOR}' alt=''>")
+
+    def row(label, value, na=False):
+        return (f"<div class='rating-row'><span>{html.escape(label)}</span>"
+                f"<b class='{'na' if na else ''}'>{html.escape(value)}</b></div>")
+
+    dp = cov.get("data_pasar") or {}
+    released = bool(m.get("rating")) and m.get("tp") is not None
+    prev_tp = m.get("tp_sebelumnya")
+    both = lambda rp, usd: f"{rp} / {usd}" if usd else rp
     h.append("<div class='cover'><div class='left'>")
-    h.append("<div class='rating-block'>"
+    h.append("<div class='rating-block'><div class='rating-head'>"
              f"<div class='rating-label'>{html.escape(str(rating_word))}</div>"
              f"<div class='rating-detail'>({html.escape(str(rating_status))})</div>"
              "<div class='rating-method'>"
              + ("Rating ditahan hingga pemeriksaan selesai.<br>" if draft else "")
-             + f"Valuasi: {html.escape(doc.get('method', 'DCF'))}</div>"
-             "</div>")
-    h.append("<div class='basic-head'>Data pasar</div><div class='panel'>")
+             + f"Valuasi: {html.escape(doc.get('method', 'DCF'))}</div></div>" + sep)
     price_label = (f"Harga Terakhir (Rp; {m['harga_tanggal']})"
                    if m.get("harga_tanggal") and m.get("harga_tanggal") != m["tanggal"]
                    else "Harga Terakhir (Rp)")
-    harga_val = fmt.rp(m["harga"]) if m.get("harga") is not None else "n.a."
-    h.append(_kv(price_label, harga_val))
-    h.append(_kv("Target Harga (Rp)",
-                 fmt.rp(m["tp"]) if m.get("rating") and m.get("tp") is not None else "-"))
-    h.append(_kv("TP Sebelumnya (Rp)", str(m.get("tp_sebelumnya") or "n.a.")))
-    h.append(_kv("Upside/Downside", f"{m['upside_persen']:+.1f}%".replace(".", ",")
-                 if m.get("rating") and m.get("upside_persen") is not None else "-"))
-    dp = cov.get("data_pasar") or {}
-    saham_val = fmt._id(dp["saham"] / 1e6, 0) if dp.get("saham") is not None else "n.a."
-    mcap_val = fmt._id(dp["market_cap"] / 1e9, 0) if dp.get("market_cap") is not None else "n.a."
-    h.append(_kv("Jumlah Saham (juta)", saham_val))
-    h.append(_kv("Kap. Pasar (Rp miliar)", mcap_val))
-    h.append(_kv("Rata-rata T/O Harian (Rp miliar)", str(dp.get("adtv", "-"))))
-    h.append(_kv("Free Float (%)", str(
-        dp.get("public_ownership", dp.get("free_float", "-")))))
-    h.append("</div>")
-    holders = (doc.get("holders") or [])[:3]
+    h.append(row(price_label, fmt.rp(m["harga"]) if m.get("harga") is not None else "NA",
+                 m.get("harga") is None))
+    h.append(row("Target Harga (Rp)", fmt.rp(m["tp"]) if released else "NA", not released))
+    h.append(row("TP Sebelumnya (Rp)", str(prev_tp) if prev_tp else "NA", not prev_tp))
+    h.append(row("Upside/Downside (%)", f"{m['upside_persen']:+.2f}%".replace(".", ",")
+                 if released and m.get("upside_persen") is not None else "NA", not released))
+    h.append(row("Jumlah Saham (juta)",
+                 fmt._id(dp["saham"] / 1e6, 1) if dp.get("saham") is not None else "NA"))
+    mcap = fmt._id(dp["market_cap"] / 1e9, 1) if dp.get("market_cap") is not None else "NA"
+    h.append(row("Kap. Pasar (Rp miliar / US$ juta)" if dp.get("market_cap_usd")
+                 else "Kap. Pasar (Rp miliar)", both(mcap, dp.get("market_cap_usd"))))
+    h.append(row("Rata-rata T/O Harian 3M (Rp miliar / US$ juta)" if dp.get("adtv_usd")
+                 else "Rata-rata T/O Harian 3M (Rp miliar)",
+                 both(str(dp.get("adtv", "NA")), dp.get("adtv_usd"))))
+    h.append(row("Free Float (%)", str(dp.get("public_ownership", dp.get("free_float", "NA")))))
+    holders = (doc.get("holders") or [])[:4]
     if holders:
-        h.append("<div class='basic-head'>Pemegang saham utama</div><div class='panel'>")
+        h.append(sep + "<div class='rating-sub'>Pemegang Saham Utama (%)</div>")
         for holder in holders:
-            h.append(_kv(str(holder[0])[:26], str(holder[1])))
-        h.append("</div>")
-    f1 = doc.get("fy26") or {}
-    if f1:
-        h.append("<div class='basic-head'>FY26F (Rp miliar)</div><div class='panel'>")
-        for k in ("Pendapatan", "EBITDA", "Laba bersih"):
-            if k in f1:
-                v = f1[k]
-                h.append(_kv(k, "n.a." if v is None else str(v)))
-        h.append("</div>")
-    h.append(f"<div class='basic-head'>{html.escape(m['ticker'])} vs IHSG</div>")
-    h.append(_price_chart(m["ticker"], m["tanggal"]))
+            h.append(row(str(holder[0])[:34], str(holder[1])))
+    h.append("</div>")
+    chart = next((e for e in doc["exhibits"] if e.get("tipe") == "price_chart"), None)
+    h.append("<div class='info'>")
+    h.append(_price_chart(m["ticker"], m["tanggal"],
+                          number=chart["n"] if chart else None,
+                          source=(chart or {}).get("catatan_sumber")))
+    h.append(sep + "</div>")
     h.append("<div class='analyst'><b>Tim Riset Sektoral</b><br>Equity Analyst</div>")
     h.append("</div><div class='right'>")
     h.append(f"<h1 class='emit'>{html.escape(m['emiten'])} ({html.escape(m['ticker'])} IJ)</h1>")
@@ -887,9 +916,16 @@ def render(doc):
     h.append("</ul></div>")
     for p in cov["paragraf"]:
         h.append(f"<h3 class='sub'>{html.escape(p['judul'])}</h3><p>{html.escape(p['isi'])}</p>")
-    by_n = {e["n"]: e for e in doc["exhibits"]}
     # Key Financials sits under the narrative in the main column (design 5.4.2).
-    h.append(_table(by_n[1]))
+    # Without a "Key Financials" exhibit, the first non-chart exhibit that no
+    # section places is the cover table (renumber puts it right after the chart).
+    placed = {id(e) for b in doc["bagian"] for e in b.get("exhibit", [])}
+    cover_tables = [e for e in doc["exhibits"]
+                    if e.get("tipe") != "price_chart" and id(e) not in placed]
+    key_fin = next((e for e in cover_tables if e.get("judul") == "Key Financials"),
+                   cover_tables[0] if cover_tables else None)
+    if key_fin:
+        h.append(_table(key_fin))
     h.append("</div></div>")
 
     for number, b in enumerate(doc["bagian"], start=1):

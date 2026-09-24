@@ -437,8 +437,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
 
         F = fc.get("rows") or []
         f_labels = [r["label"] for r in F] if F else [f"FY{(int(history[-1]['year']) + 1 + i)%100:02d}F" for i in range(5)]
-        # Spec §2: forecast tanpa input bersumber tampil belum dimodelkan, bukan angka screening.
-        f_dashes = ["belum dimodelkan"] * len(f_labels)
+        # Spec §2: forecast tanpa input bersumber tampil belum dimodelkan (NA), bukan angka
+        # screening. "NA" fits the narrow Figma cover columns; the note spells it out.
+        f_dashes = ["NA"] * len(f_labels)
         total_cols_dash = ["-"] * (len(history) + len(f_labels))
         key_rows = [
             [f"Pendapatan ({unit})"] + values("revenue") + f_dashes,
@@ -461,22 +462,24 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                     f"angka {history[0]['year']}-{history[-1]['year']} ditampilkan dalam {unit}. "
                     "EPS/BVPS historis memakai laba/ekuitas pemilik induk dan jumlah "
                     f"saham per {balance.get('period_end', 'periode interim')} sebagai basis pro forma; "
-                    f"{f_labels[0]}-{f_labels[-1]} belum diterbitkan.")
+                    f"{f_labels[0]}-{f_labels[-1]} belum diterbitkan (NA: belum dimodelkan).")
     else:
         cached = intake.get("annuals") or []
         history = cached[-2:]
         F = fc.get("rows") or []
         f_labels = [r["label"] for r in F] if F else [
             f"FY{(int(history[-1]['year']) + 1 + i) % 100:02d}F" for i in range(5)]
-        f_dashes = ["belum dimodelkan"] * len(f_labels)
+        f_dashes = ["NA"] * len(f_labels)
         key_rows = [[f"Pendapatan ({unit})"] +
                     [money(row.get("revenue")) for row in history] + f_dashes,
+                    # Sectors reports an unfiled EBITDA as 0; show it as missing.
                     [f"EBITDA ({unit})"] +
-                    [money(row.get("ebitda")) for row in history] + f_dashes,
+                    [money(row.get("ebitda") or None) for row in history] + f_dashes,
                     [f"Laba bersih ({unit})"] +
                     [money(row.get("earnings")) for row in history] + f_dashes]
         key_note = ("Sumber: Sectors, company/report. Kolom forecast dan "
-                    "multiple belum tersedia karena model belum lolos validasi.")
+                    "multiple belum tersedia karena model belum lolos validasi "
+                    "(NA: belum dimodelkan).")
     years = [str(row["year"]) for row in history]
     add("Key Financials", ["Tahun buku 31 Des"] + years +
         f_labels, key_rows, key_note)
@@ -531,9 +534,11 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
         chart_metrics = [
             {"label": "Pendapatan", "prior": prior_metrics.get("revenue"),
              "current": metrics.get("revenue")},
-            {"label": "EBITDA", "prior": prior_metrics.get("ebitda"),
-             "current": metrics.get("ebitda")},
         ]
+        # An unreported EBITDA would plot as two zero bars; leave it off.
+        if metrics.get("ebitda") is not None and prior_metrics.get("ebitda") is not None:
+            chart_metrics.append({"label": "EBITDA", "prior": prior_metrics.get("ebitda"),
+                                  "current": metrics.get("ebitda")})
         if prior_metrics.get("net_profit", 0) >= 0:
             chart_metrics.append({"label": "Laba bersih",
                                   "prior": prior_metrics.get("net_profit"),

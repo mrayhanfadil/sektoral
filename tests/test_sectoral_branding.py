@@ -2,7 +2,9 @@
 
 Spec under test (Sectoral Design System):
 - Primary deep blue #0928B1, paper white #FFFFFF, text #000000,
-  grid/rules #E0E0E0, table even-row fill #B4C7FF, highlight #E1E9FF.
+  grid/rules #E0E0E0, highlight #E1E9FF. The Figma report templates
+  (Others, nodes 2592-2 / 2627-897) fill even table rows with the highlight
+  #E1E9FF; #B4C7FF stays the second chart series.
 - Roboto only, on screen and in print (Regular to Black Italic).
 - Charts use the six-color series
   #0928B1 / #B4C7FF / #3ED628 / #1DCD9F / #0047AB / #7596FF,
@@ -79,7 +81,7 @@ def test_table_header_and_even_row_rules_use_spec_tokens():
     assert ".exhibit-table thead th{background:" + render.PRIMARY in css
     assert "nth-child(even)" in css
     assert (".exhibit-table tbody tr:nth-child(even) td{background:"
-            + render.EVEN_ROW in css)
+            + render.HIGHLIGHT in css)
 
 
 # ------------------------------------------------------------------- font

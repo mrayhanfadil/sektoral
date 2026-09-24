@@ -308,7 +308,8 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
     risk = next(e for e in doc["exhibits"] if e["judul"].startswith("Katalis"))
     assert risk["data"]["rows"][0][0] == "Harga jagung"
     assert doc["cover"]["bullets"][1].startswith("Volume pakan")
-    key_fin = doc["exhibits"][0]
+    assert doc["exhibits"][0]["tipe"] == "price_chart"
+    key_fin = doc["exhibits"][1]
     assert key_fin["judul"] == "Key Financials"
     fy27 = key_fin["data"]["cols"].index("FY27F")
     assert all(row[fy27] != "-" for row in key_fin["data"]["rows"]
