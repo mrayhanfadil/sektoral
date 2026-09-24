@@ -332,6 +332,11 @@ def evaluate(inputs: dict) -> GateVerdict:
     )
 
 
+def is_extreme_upside(upside_ratio) -> bool:
+    """Gate 5 rule on a ratio (tp / price - 1); one source in gate_thresholds."""
+    return gate_thresholds.is_extreme_ratio(upside_ratio)
+
+
 def _eval_gate5_override(inputs: dict) -> Optional[str]:
     upside = inputs.get("upside_pct", inputs.get("upside"))
     if gate_thresholds.is_extreme_pct(upside):

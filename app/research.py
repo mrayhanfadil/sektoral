@@ -7,7 +7,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import build, evidence as evidence_mod, intake, news_fetch, news_sources, research_context, run_manifest, tavily, ui
+from . import build, intake, news_fetch, news_sources, research_context, tavily, ui
 from .progress import emit
 
 _TRACE_CSS = (
@@ -300,7 +300,11 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     if web_search.get("status") not in ("failed", "unavailable"):
         tavily_relevant = sum(1 for row in combined_news
                               if isinstance(row, dict) and "tavily" in (row.get("origins") or []))
-        if tavily_relevant:
+        if web_search.get("partial_failures"):
+            # Some queries (e.g. profile catalyst hints) failed: the run is not
+            # fully researched even when other queries returned articles.
+            web_search["status"] = "partial_failure"
+        elif tavily_relevant:
             web_search["status"] = "searched"
         else:
             web_search["status"] = "no_relevant_results"
@@ -330,6 +334,7 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                                         "search": web_search},
                          analyst_target=analyst_target,
                          method_override=method_override,
+                         spec_sha=assumption_result.get("spec_sha256"),
                          assumption_status=next(
                              (assumption_result[key] for key in
                               ("earnings_status", "interim_status")
@@ -351,29 +356,10 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
         "validation_status": validation_status,
     }
     emit("report", "Company update tersusun", report["meta"].get("status"))
-    try:
-        evidence_register = evidence_mod.build(
-            t, report_as_of, forecast_intake, register, combined_full,
-            assumption_result.get("plan"))
-    except Exception as e:
-        print(f"{t}: evidence_register gagal: {e}", flush=True)
-        evidence_register = {"ticker": t, "as_of": report_as_of, "rows": [],
-                             "violations": [], "counts": {}, "error": str(e)}
-    try:
-        manifest = run_manifest.build_manifest(
-            ticker=t, as_of=report_as_of, intake=forecast_intake,
-            forecast=report.get("forecast_assumptions") or {},
-            valuation={"method": report.get("method"),
-                       "tp": report["meta"].get("tp"),
-                       "release": report.get("log_gate", {}).get("release")},
-            news_evidence={"rows": combined_news, "full": combined_full,
-                           "search": web_search},
-            assumption_plan=assumption_result.get("plan"),
-            release=report.get("log_gate", {}).get("release"),
-            spec_sha=assumption_result.get("spec_sha256"))
-    except Exception as e:
-        print(f"{t}: run_manifest gagal: {e}", flush=True)
-        manifest = {"ticker": t, "as_of": report_as_of, "error": str(e)}
+    # build.build already assembled both from the same register and plan;
+    # reuse them so the trace and <T>-manifest.json cannot disagree.
+    evidence_register = report.get("evidence_register") or {}
+    manifest = report.get("run_manifest") or {"ticker": t, "as_of": report_as_of}
     audit = {
         "ticker": t,
         "analyst": intel,
@@ -381,6 +367,7 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
         "forecast_assumptions": assumption_result,
         "news_sources": {"search": web_search, "articles": combined_news,
                          "rejected": register.get("rejected"),
+                         "merged": register.get("merged"),
                          "stats": register.get("stats")},
         "evidence_register": evidence_register,
         "run_manifest": manifest,
