@@ -109,7 +109,7 @@ def method_chain_exhibit(va):
                x.get("why") or "cross-check wajib framework")
         rows.append([f"x. {x['short']} (cross-check)",
                      _DECISION.get(x["decision"], x["decision"]), value, why])
-    source = ("Source: Sektoral Estimates; urutan metode dikunci dari verdict Gates 0-5 "
+    source = ("Source: Sektoral Estimates; urutan metode dikunci dari verdict Method Gates 0-5 "
               "sebelum nilai dihitung; metode berikutnya hanya dipakai bila metode "
               "sebelumnya tidak memadai, bukan karena hasilnya tidak disukai")
     override = chain.get("override")
@@ -122,7 +122,7 @@ def method_chain_exhibit(va):
 
 
 def holding_sotp_exhibit(va):
-    """Framework Gate 2 cross-check: listed stakes at market, rest at book,
+    """Framework Method Gate 2 cross-check: listed stakes at market, rest at book,
     holding discount as sensitivity. Per-share values are held on drafts."""
     chain = (va or {}).get("method_chain") or {}
     sotp = next((x for x in chain.get("cross_checks") or [] if x["key"] == "holding_sotp"),
@@ -162,7 +162,7 @@ def holding_sotp_exhibit(va):
         "ekuitas induk: neraca interim emiten. Segmen tanpa harga pasar dinilai pada nilai buku "
         "(lahan industri tercatat pada biaya perolehan, sehingga nilai ini konservatif). Diskon "
         "holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. "
-        + ("Metode utama (Gate 0: grup dengan lini usaha berbeda); target memakai diskon 0%."
+        + ("Metode utama (Method Gate 0: grup dengan lini usaha berbeda); target memakai diskon 0%."
            if primary else "Cross-check, bukan dasar target harga."))
 
 

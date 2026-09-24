@@ -1,7 +1,7 @@
 """Primary DDM and FCFF DCF on the validated analyst scenario (spec §4.3, Opsi A/B).
 
 The screening forecast (historical CAGR, capex = D&A, flat debt) cannot pass
-G2.9, so the profile's primary method was always skipped even when the agents
+S2.9, so the profile's primary method was always skipped even when the agents
 had produced a validated FY path. These functions value that path directly:
 
 * the FY anchor year = official 1H actual + the agent's H2 assumption, and

@@ -1,6 +1,6 @@
 """Tool: run_all — sequential orchestrator (§0: 4 tahap berurutan).
 
-Order: G1 → G2 → G3 → narrative → schema.
+Order: S1 → S2 → S3 → narrative → schema.
 A failed gate stops later production stages: rating/TP withheld,
 status forced to draft_non_distributable with named blockers.
 Never downgrade critical failure to caveat. Non-critical limits go
@@ -11,9 +11,9 @@ so harness and engine cannot disagree: production requires BOTH to pass.
 """
 from __future__ import annotations
 
-from .g1 import check_g1
-from .g2 import check_g2
-from .g3 import check_g3
+from .s1 import check_s1
+from .s2 import check_s2
+from .s3 import check_s3
 from .narrative_tool import check_narrative
 from .schema import check_output_schema
 from .profiles import normalize
@@ -47,11 +47,11 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
     profile = normalize(intake.get("model_profile") or (doc.get("meta") or {}).get("model_profile")
                         if isinstance(doc, dict) else intake.get("model_profile"))
 
-    r1 = check_g1(intake)
+    r1 = check_s1(intake)
     # Gate sequence: don't run later production checks as passing when early gate fails,
     # but still collect their blockers for a complete trace.
-    r2 = check_g2(intake, forecast)
-    r3 = check_g3(intake, forecast, valuation)
+    r2 = check_s2(intake, forecast)
+    r3 = check_s3(intake, forecast, valuation)
     rn = check_narrative(doc) if doc is not None else \
         {"tool": "check_narrative", "status": "dilabeli", "checks": [], "blockers": []}
     rs = check_output_schema(doc) if doc is not None else \
@@ -89,7 +89,7 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
                        if isinstance(valuation, dict) else None)
     # The selected method carries its own evidence gate, re-assessed here from
     # the same inputs (not trusted blindly). Its release then replaces the
-    # screening-forecast gate (G2.9); a Gate 5 extreme stop stays a blocker.
+    # screening-forecast gate (S2.9); a Method Gate 5 extreme stop stays a blocker.
     own_gate = (
         isinstance(assumption_release, dict) and (
             (profile == "finite_life_mining" and
@@ -108,21 +108,21 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
         own_gate and
         assumption_release.get("status") == "distributable_assumption_led" and
         not (assumption_release.get("blockers") or []))
-    g2_blockers = list(r2["blockers"])
+    s2_blockers = list(r2["blockers"])
     if own_gate:
-        g2_blockers = [b for b in g2_blockers if not b.startswith("G2.9:")]
+        s2_blockers = [b for b in s2_blockers if not b.startswith("S2.9:")]
         # The incomplete SOTP/screening assessment remains attached as audit context.
         engine_status = assumption_release["status"]
         engine_blockers = list(assumption_release.get("blockers") or [])
 
-    blockers = ([f"G1.{b}" for b in r1["blockers"]] + [f"G2.{b}" for b in g2_blockers] +
-                [f"G3.{b}" for b in r3["blockers"]] + [f"N.{b}" for b in rn["blockers"]] +
+    blockers = ([f"S1.{b}" for b in r1["blockers"]] + [f"S2.{b}" for b in s2_blockers] +
+                [f"S3.{b}" for b in r3["blockers"]] + [f"N.{b}" for b in rn["blockers"]] +
                 [f"S.{b}" for b in rs["blockers"]] +
                 [f"release.{b}" for b in engine_blockers])
 
     # Production requires every gate + engine release to pass.
-    g2_pass = not g2_blockers
-    all_pass = (r1["status"] == "lolos" and g2_pass and
+    s2_pass = not s2_blockers
+    all_pass = (r1["status"] == "lolos" and s2_pass and
                 r3["status"] == "lolos" and engine_status in ("distributable",
                                                              "distributable_assumption_led"))
     # Narrative/schema failures block production rendering but don't fake numbers.
@@ -136,9 +136,9 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
     else:
         status = "draft_non_distributable"
 
-    log_gate = {"G1": {c["check"]: c["status"] for c in r1["checks"]},
-                "G2": {c["check"]: c["status"] for c in r2["checks"]},
-                "G3": {c["check"]: c["status"] for c in r3["checks"]},
+    log_gate = {"S1": {c["check"]: c["status"] for c in r1["checks"]},
+                "S2": {c["check"]: c["status"] for c in r2["checks"]},
+                "S3": {c["check"]: c["status"] for c in r3["checks"]},
                 "narrative": {c["check"]: c["status"] for c in rn["checks"]},
                 "schema": {c["check"]: c["status"] for c in rs["checks"]},
                 "release": {"status": status, "engine_status": engine_status,
@@ -154,5 +154,5 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
                             "blockers": blockers}}
     return {"tool": "run_all", "profile": profile, "status": status,
             "blockers": blockers, "log_gate": log_gate,
-            "gates": {"g1": r1, "g2": r2, "g3": r3, "narrative": rn,
+            "gates": {"s1": r1, "s2": r2, "s3": r3, "narrative": rn,
                       "schema": rs, "engine_status": engine_status}}

@@ -1,7 +1,7 @@
 """LLM function-calling specs for the harness tools.
 
 Import this to expose Instruksi-Report-v3 gates as tool calls to the
-LLM agent. The agent must call check_g1→check_g2→check_g3→check_narrative
+LLM agent. The agent must call check_s1→check_s2→check_s3→check_narrative
 in order and stop production rating/TP on any critical blocker.
 Deterministic python in app.harness is the implementation; these dicts
 are the JSON schemas for function calling.
@@ -9,19 +9,19 @@ are the JSON schemas for function calling.
 from __future__ import annotations
 
 TOOLS = [
-    {"name": "check_g1",
-     "description": "Gate 1 intake validation (§2): periode terbaru, satuan, mata uang, rekonsiliasi kas, non-recurring. Fail-closed.",
+    {"name": "check_s1",
+     "description": "Stage Check S1 intake validation (§2): periode terbaru, satuan, mata uang, rekonsiliasi kas, non-recurring. Fail-closed.",
      "input_schema": {"type": "object",
                       "properties": {"intake": {"type": "object"}},
                       "required": ["intake"]}},
-    {"name": "check_g2",
-     "description": "Gate 2 forecast checks (§3.2 G2.1-G2.9) per MODEL_PROFILE. Screening proxy alone fails G2.9.",
+    {"name": "check_s2",
+     "description": "Stage Check S2 forecast checks (§3.2 S2.1-S2.9) per MODEL_PROFILE. Screening proxy alone fails S2.9.",
      "input_schema": {"type": "object",
                       "properties": {"intake": {"type": "object"},
                                      "forecast": {"type": "object"}},
                       "required": ["intake", "forecast"]}},
-    {"name": "check_g3",
-     "description": "Gate 3 valuation checks (§4.6 G3.1-G3.7 + §4.4 divergence/extreme) per MODEL_PROFILE.",
+    {"name": "check_s3",
+     "description": "Stage Check S3 valuation checks (§4.6 S3.1-S3.7 + §4.4 divergence/extreme) per MODEL_PROFILE.",
      "input_schema": {"type": "object",
                       "properties": {"intake": {"type": "object"},
                                      "forecast": {"type": "object"},
@@ -44,7 +44,7 @@ TOOLS = [
                       "properties": {"doc": {"type": "object"}},
                       "required": ["doc"]}},
     {"name": "run_all",
-     "description": "Sequential orchestrator G1→G2→G3→narrative→schema + engine release gate. Returns status distributable/draft_non_distributable + named blockers.",
+     "description": "Sequential orchestrator S1→S2→S3→narrative→schema + engine release gate. Returns status distributable/draft_non_distributable + named blockers.",
      "input_schema": {"type": "object",
                       "properties": {"intake": {"type": "object"},
                                      "forecast": {"type": "object"},

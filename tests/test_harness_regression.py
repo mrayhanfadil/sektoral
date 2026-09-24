@@ -22,7 +22,7 @@ def test_bare_dollar_flagged_but_usd_allowed():
                   "paragraf": [], "data_pasar": {}, "forecast_vs_guidance": [],
                   "key_financials": []},
         "bagian": [], "tabel_asumsi": [],
-        "log_gate": {"G1": {}, "G2": {}, "G3": {},
+        "log_gate": {"S1": {}, "S2": {}, "S3": {},
                      "release": {"status": "draft_non_distributable", "blockers": []}},
         "catatan_metodologi": [],
     }
@@ -58,7 +58,7 @@ def test_exhibit_numbering_uses_canonical_list_after_json_roundtrip():
                     "exhibit": [copy.deepcopy(ex)]}],
         "exhibits": [ex],
         "tabel_asumsi": [],
-        "log_gate": {"G1": {}, "G2": {}, "G3": {},
+        "log_gate": {"S1": {}, "S2": {}, "S3": {},
                      "release": {"status": "draft_non_distributable", "blockers": []}},
         "catatan_metodologi": [],
     }

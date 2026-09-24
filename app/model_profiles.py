@@ -42,8 +42,8 @@ class GateVerdict:
     # Gates that could not be judged (missing inputs). They stay in
     # gates_failed for the release trace, but must not drive method choice.
     gates_unassessed: list[str] = field(default_factory=list)
-    # Gate 3 found a ramping asset (no 3y steady state) on a non-structural
-    # primary. Gate 1b chronic losses set the same "Relative Valuation"
+    # Method Gate 3 found a ramping asset (no 3y steady state) on a non-structural
+    # primary. Method Gate 1b chronic losses set the same "Relative Valuation"
     # primary but lead to EV/Sales; this flag keeps the two chains apart.
     ramping: bool = False
 
@@ -108,7 +108,7 @@ def _secondary_for(primary: str, gates_failed: list[str], nci_pct: float) -> Opt
 
 
 def evaluate(inputs: dict) -> GateVerdict:
-    """Run Gates 0-5 and return GateVerdict(primary, secondary, thin_data, rating_override, reasons)."""
+    """Run Method Gates 0-5 and return GateVerdict(primary, secondary, thin_data, rating_override, reasons)."""
     gates_passed: list[str] = []
     gates_failed: list[str] = []
     gates_unassessed: list[str] = []
@@ -144,7 +144,7 @@ def evaluate(inputs: dict) -> GateVerdict:
             gates_failed=["0_business_model"],
         )
 
-    # Gate 0
+    # Method Gate 0
     financial = {"bank", "insurance", "multifinance", "securities", "financial", "financial_ddm"}
     finite_reserves = {"mining", "finite_life_mining", "oil_gas", "plantation", "reit"}
     holding_dissimilar = {"holding_dissimilar", "conglomerate"}
@@ -155,9 +155,9 @@ def evaluate(inputs: dict) -> GateVerdict:
         primary = "DDM / Excess Return"
         reasons.append("0 financial institution: debt is raw material, EV undefined, FCF convention inapplicable → DDM primary")
         gates_passed.append("0_business_model")
-        # Financials skip Gates 1-4, evaluate Gate 5 only
-        _eval_gate5(inputs, gates_passed, gates_failed, reasons, None)
-        ro = _eval_gate5_override(inputs)
+        # Financials skip Method Gates 1-4, evaluate Method Gate 5 only
+        _eval_method_gate5(inputs, gates_passed, gates_failed, reasons, None)
+        ro = _eval_method_gate5_override(inputs)
         secondary = _secondary_for(primary, gates_failed, inputs.get("nci_pct", 0.0))
         return GateVerdict(
             primary=primary,
@@ -186,12 +186,12 @@ def evaluate(inputs: dict) -> GateVerdict:
     else:
         gates_passed.append("0_business_model")
 
-    # Gate 0 is the structural business-model call (holding SOTP, reserve
-    # NAV, bank DDM). Gates 3-4 describe how each line is valued and never
+    # Method Gate 0 is the structural business-model call (holding SOTP, reserve
+    # NAV, bank DDM). Method Gates 3-4 describe how each line is valued and never
     # replace it; data-eligibility gates (1) and NCI > 40% (2) still can.
     structural = primary in ("SOTP", "NAV / Reserve-based")
 
-    # Gate 1: Data eligibility (missing stays None -> tidak dapat dinilai)
+    # Method Gate 1: Data eligibility (missing stays None -> tidak dapat dinilai)
     filing_history_years = inputs.get("filing_history_years")
     ebit_positive_count = inputs.get("ebit_positive_count")
     d_de_ratio = inputs.get("d_de_ratio")
@@ -255,7 +255,7 @@ def evaluate(inputs: dict) -> GateVerdict:
         reasons.append("1d negative shareholders' equity → EV-based multiples only (no P/E, no P/BV)")
         primary = "Relative Valuation"
 
-    # Gate 2: Ownership Structure
+    # Method Gate 2: Ownership Structure
     _nci_raw = inputs.get("nci_pct")
     if _nci_raw is None:
         gates_failed.append("2_nci")
@@ -284,7 +284,7 @@ def evaluate(inputs: dict) -> GateVerdict:
                 reasons.append(f"2 NCI {nci_pct:.1f}% > 40% → SOTP becomes primary, consolidated DCF is rough reference only")
                 primary = "SOTP"
 
-    # Gate 3: Cyclicality / Operating Stage (extractive commodity only triggers NAV).
+    # Method Gate 3: Cyclicality / Operating Stage (extractive commodity only triggers NAV).
     # Generic poultry/input price sensitivity (going_concern) keeps DCF; only
     # finite-reserve extractive tags (coal, nickel, CPO, oil, gold, copper)
     # or mining profile trigger reserve-based NAV.
@@ -315,7 +315,7 @@ def evaluate(inputs: dict) -> GateVerdict:
         gates_unassessed.append("3_cyclicality")
     elif not has_steady_state_3y and structural:
         gates_passed.append("3_cyclicality")
-        reasons.append(f"3 no 3y steady state noted; Gate 0 {primary} primary retained (structural)")
+        reasons.append(f"3 no 3y steady state noted; Method Gate 0 {primary} primary retained (structural)")
     elif not has_steady_state_3y:
         gates_passed.append("3_cyclicality")
         primary = "Relative Valuation"
@@ -324,7 +324,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     else:
         gates_passed.append("3_cyclicality")
 
-    # Gate 4: Life Cycle Stage
+    # Method Gate 4: Life Cycle Stage
     _lc_raw = inputs.get("life_cycle_stage")
     if _lc_raw is None:
         gates_failed.append("4_life_cycle")
@@ -336,7 +336,7 @@ def evaluate(inputs: dict) -> GateVerdict:
         gates_passed.append("4_life_cycle")
         if structural and life_cycle_stage in ("decline", "pre_revenue",
                                                "high_growth_pre_profit", "high_growth"):
-            reasons.append(f"4 {life_cycle_stage}; Gate 0 {primary} primary retained (structural)")
+            reasons.append(f"4 {life_cycle_stage}; Method Gate 0 {primary} primary retained (structural)")
         elif life_cycle_stage == "decline":
             primary = "P/BV"
             reasons.append("4 decline / turnaround → P/BV (or NAV if asset base is substantial), DCF too speculative")
@@ -347,8 +347,8 @@ def evaluate(inputs: dict) -> GateVerdict:
     # Determine secondary
     secondary = _secondary_for(primary, gates_failed, nci_pct)
 
-    # Gate 5: Output Sanity
-    rating_override = _eval_gate5(inputs, gates_passed, gates_failed, reasons, rating_override)
+    # Method Gate 5: Output Sanity
+    rating_override = _eval_method_gate5(inputs, gates_passed, gates_failed, reasons, rating_override)
 
     return GateVerdict(
         primary=primary,
@@ -364,17 +364,17 @@ def evaluate(inputs: dict) -> GateVerdict:
 
 
 def is_extreme_upside(upside_ratio) -> bool:
-    """Gate 5 rule on a ratio (tp / price - 1); one source in gate_thresholds."""
+    """Method Gate 5 rule on a ratio (tp / price - 1); one source in gate_thresholds."""
     return gate_thresholds.is_extreme_ratio(upside_ratio)
 
 
-def _eval_gate5_override(inputs: dict) -> Optional[str]:
+def _eval_method_gate5_override(inputs: dict) -> Optional[str]:
     if gate_thresholds.is_extreme_pct(gate_thresholds.gate_upside_pct(inputs)):
         return "Review Required"
     return None
 
 
-def _eval_gate5(inputs: dict, gates_passed: list[str], gates_failed: list[str], reasons: list[str], rating_override: Optional[str]) -> Optional[str]:
+def _eval_method_gate5(inputs: dict, gates_passed: list[str], gates_failed: list[str], reasons: list[str], rating_override: Optional[str]) -> Optional[str]:
     upside = inputs.get("upside_pct", inputs.get("upside"))
     tv_share = inputs.get("terminal_value_pct_of_ev", inputs.get("tv_share"))
     implied_exit = inputs.get("implied_exit_ev_ebitda")

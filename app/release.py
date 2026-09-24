@@ -258,13 +258,13 @@ def _check_driver_forecast(forecast: object, intake: object,
         if isinstance(reason, str) and reason.strip():
             blockers.append(f"forecast: {reason}")
 
-    g2 = forecast.get("g2")
-    if isinstance(g2, Mapping):
-        if g2.get("G2.9_driver_forecast") == "gagal" or g2.get("G2.9_operating_bridge") == "gagal":
-            blockers.append("forecast gate failed: G2.9 driver forecast is not reconciled")
-        for k, v in g2.items():
+    s2 = forecast.get("s2")
+    if isinstance(s2, Mapping):
+        if s2.get("S2.9_driver_forecast") == "gagal" or s2.get("S2.9_operating_bridge") == "gagal":
+            blockers.append("forecast gate failed: S2.9 driver forecast is not reconciled")
+        for k, v in s2.items():
             if k != "catatan" and (v == "gagal" or (isinstance(v, tuple) and v[0].startswith("gagal"))):
-                if "G2.9" not in k:
+                if "S2.9" not in k:
                     blockers.append(f"forecast gate check failed: {k}")
 
     driver_evidence = forecast.get("driver_evidence")
@@ -406,9 +406,9 @@ def common_blockers(profile, intake, forecast):
                 forecast.get("production_ready") is not True):
             blockers.append(
                 "mining forecast is not a verified physical-driver production forecast")
-        g2 = (forecast or {}).get("g2") if isinstance(forecast, Mapping) else None
-        if isinstance(g2, Mapping) and g2.get("G2.9_operating_bridge") == "gagal":
-            blockers.append("forecast gate failed: G2.9 physical-to-financial operating bridge is not reconciled")
+        s2 = (forecast or {}).get("s2") if isinstance(forecast, Mapping) else None
+        if isinstance(s2, Mapping) and s2.get("S2.9_operating_bridge") == "gagal":
+            blockers.append("forecast gate failed: S2.9 physical-to-financial operating bridge is not reconciled")
     elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
         blockers.extend(_official_actual_blockers(intake))
         blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile))
@@ -549,7 +549,7 @@ def assess_earnings_led(intake, forecast, valuation, assumption_status):
 def assess_pbv_roe_fy(intake, forecast, valuation, assumption_status):
     """Justified P/BV release for a bank on the validated earnings scenario.
 
-    Framework Gate 0: banks are valued on equity (DDM / excess return). Same
+    Framework Method Gate 0: banks are valued on equity (DDM / excess return). Same
     evidence as :func:`assess_earnings_led` (official 1H actual, validated
     scenario, fresh close, official shares) without the peer PER set, plus
     the excess-return inputs: positive equity, CoE above g, ROE above g.
@@ -663,7 +663,7 @@ def assess_fcff_scenario(intake, forecast, valuation, assumption_status):
 
 
 def assess_holding_sotp(intake, forecast, valuation, assumption_status):
-    """Holding SOTP as the primary for a group with dissimilar lines (Gate 0).
+    """Holding SOTP as the primary for a group with dissimilar lines (Method Gate 0).
 
     The value needs no forecast: official parent equity, listed stakes from
     the issuer pack at market capitalisation, the rest at book. The report

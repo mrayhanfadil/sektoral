@@ -41,7 +41,7 @@ def test_summaries_hold_drafts_and_read_the_method_chain(tmp_path):
     assert [s["decision"] for s in first["chain"]] == ["Dilewati", "Terpilih", "Silang cek"]
     assert first["chain"][0]["step"] == "DCF FCFF"
     assert held["rating"] is None and held["tp"] is None
-    assert held["held_reason"].startswith("Gate 5")
+    assert held["held_reason"].startswith("Method Gate 5")
 
 
 def test_artifacts_are_confined_to_the_reports_folder(tmp_path):

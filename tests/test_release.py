@@ -283,7 +283,7 @@ def test_driver_forecast_future_source_date_is_blocked():
     assert "driver forecast ebitda: source_date is after report as-of date" in result["blockers"]
 
 
-def test_driver_forecast_failed_g2_is_blocked():
+def test_driver_forecast_failed_s2_is_blocked():
     intake = {"as_of": "2026-09-22", "latest_official_actual": {
         "period": "1H26", "period_end": "2026-06-30",
         "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
@@ -292,12 +292,12 @@ def test_driver_forecast_failed_g2_is_blocked():
         "forecast_basis": "driver_forecast",
         "production_ready": True,
         "driver_evidence": _driver_evidence(),
-        "g2": {"G2.9_driver_forecast": "gagal"},
+        "s2": {"S2.9_driver_forecast": "gagal"},
     }
 
     result = assess_release("going_concern_fcff", intake, forecast, None)
     assert result["status"] == "draft_non_distributable"
-    assert "forecast gate failed: G2.9 driver forecast is not reconciled" in result["blockers"]
+    assert "forecast gate failed: S2.9 driver forecast is not reconciled" in result["blockers"]
 
 
 def test_unknown_profile_fails_closed():

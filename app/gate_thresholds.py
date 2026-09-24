@@ -1,11 +1,11 @@
-"""Single source of truth for Gate 5 output-sanity thresholds.
+"""Single source of truth for Method Gate 5 output-sanity thresholds.
 
-Framework (Gates 0-5, A. M. Armand):
+Framework (Method Gates 0-5, A. M. Armand):
 - Review Required when upside > +100% or downside < -50%.
 - Terminal value > 80% of EV: flagged with implied exit check, not blocking.
 - Implied exit EV/EBITDA outside peer/history range: flag, require cross-check.
 
-Used by app.method_chain, app.model_profiles, app.harness.g3,
+Used by app.method_chain, app.model_profiles, app.harness.s3,
 app.valuation and spec §4.4/§4.6. Tests assert they agree.
 """
 from __future__ import annotations

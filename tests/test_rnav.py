@@ -45,11 +45,11 @@ def test_forecast_g28_hanya_tambang():
     fam, _ = intake.load("AMMN")
     f = forecast.build(fam)
     assert f["bridge"] is not None
-    assert f["g2"]["G2.8_bridge"][0] == "dilabeli"
+    assert f["s2"]["S2.8_bridge"][0] == "dilabeli"
     fbb, _ = intake.load("BBCA")
     fb = forecast.build(fbb)
     assert fb["bridge"] is None
-    assert "G2.8_bridge" not in fb["g2"]
+    assert "S2.8_bridge" not in fb["s2"]
 
 
 def test_method_select_ddm_bbca(tmp_path):

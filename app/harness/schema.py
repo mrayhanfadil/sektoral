@@ -51,9 +51,9 @@ def check_output_schema(doc: dict | None) -> dict:
     v("S.tabel_asumsi", isinstance(doc.get("tabel_asumsi"), list), "tabel_asumsi list wajib")
 
     lg = doc.get("log_gate")
-    # Legacy draft log_gate has {G1,G2,G3,release} with release.blocker_count;
+    # Legacy draft log_gate has {S1,S2,S3,release} with release.blocker_count;
     # spec §7 wants release.blockers list. Accept both for draft, strict for production.
-    if isinstance(lg, dict) and all(k in lg for k in ("G1", "G2", "G3", "release")):
+    if isinstance(lg, dict) and all(k in lg for k in ("S1", "S2", "S3", "release")):
         rel = lg.get("release") or {}
         if is_prod:
             v("S.log_gate", isinstance(rel, dict) and isinstance(rel.get("blockers"), list),
@@ -61,9 +61,9 @@ def check_output_schema(doc: dict | None) -> dict:
         else:
             v("S.log_gate", isinstance(rel, dict) and
               (isinstance(rel.get("blockers"), list) or isinstance(rel.get("blocker_count"), int)),
-              "log_gate {G1,G2,G3,release} wajib (QA internal, tak dirender)")
+              "log_gate {S1,S2,S3,release} wajib (QA internal, tak dirender)")
     else:
-        v("S.log_gate", False, "log_gate {G1,G2,G3,release} wajib (QA internal, tak dirender)")
+        v("S.log_gate", False, "log_gate {S1,S2,S3,release} wajib (QA internal, tak dirender)")
 
     cm = doc.get("catatan_metodologi")
     v("S.metodologi", isinstance(cm, list) and len(cm) <= 6,

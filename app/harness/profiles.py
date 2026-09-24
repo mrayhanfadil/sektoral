@@ -8,18 +8,18 @@ from __future__ import annotations
 
 PROFILES = ("going_concern_fcff", "financial_ddm", "finite_life_mining")
 
-# Which G2 checks apply per profile. G2.9 always applies (profile-specific chain).
-G2_APPLICABILITY = {
-    "going_concern_fcff": ("G2.1", "G2.2", "G2.3", "G2.4", "G2.5", "G2.6", "G2.7", "G2.9"),
-    "financial_ddm": ("G2.1", "G2.4", "G2.5", "G2.6", "G2.7", "G2.8", "G2.9"),
-    "finite_life_mining": ("G2.1", "G2.2", "G2.3", "G2.4", "G2.5", "G2.6", "G2.7", "G2.9"),
+# Which S2 checks apply per profile. S2.9 always applies (profile-specific chain).
+S2_APPLICABILITY = {
+    "going_concern_fcff": ("S2.1", "S2.2", "S2.3", "S2.4", "S2.5", "S2.6", "S2.7", "S2.9"),
+    "financial_ddm": ("S2.1", "S2.4", "S2.5", "S2.6", "S2.7", "S2.8", "S2.9"),
+    "finite_life_mining": ("S2.1", "S2.2", "S2.3", "S2.4", "S2.5", "S2.6", "S2.7", "S2.9"),
 }
 
-# Which G3 checks apply per profile.
-G3_APPLICABILITY = {
-    "going_concern_fcff": ("G3.1", "G3.2", "G3.3", "G3.4", "G3.5", "G3.6", "G3.7"),
-    "financial_ddm": ("G3.1", "G3.2", "G3.3", "G3.4", "G3.5", "G3.6", "G3.7"),
-    "finite_life_mining": ("G3.2", "G3.3", "G3.4", "G3.5", "G3.6", "G3.7"),
+# Which S3 checks apply per profile.
+S3_APPLICABILITY = {
+    "going_concern_fcff": ("S3.1", "S3.2", "S3.3", "S3.4", "S3.5", "S3.6", "S3.7"),
+    "financial_ddm": ("S3.1", "S3.2", "S3.3", "S3.4", "S3.5", "S3.6", "S3.7"),
+    "finite_life_mining": ("S3.2", "S3.3", "S3.4", "S3.5", "S3.6", "S3.7"),
 }
 
 PRIMARY_METHOD = {
@@ -75,12 +75,12 @@ def normalize(profile: str | None) -> str:
     return p if p in PROFILES else "unsupported"
 
 
-def g2_for(profile: str) -> tuple[str, ...]:
-    return G2_APPLICABILITY.get(normalize(profile), ())
+def s2_for(profile: str) -> tuple[str, ...]:
+    return S2_APPLICABILITY.get(normalize(profile), ())
 
 
-def g3_for(profile: str) -> tuple[str, ...]:
-    return G3_APPLICABILITY.get(normalize(profile), ())
+def s3_for(profile: str) -> tuple[str, ...]:
+    return S3_APPLICABILITY.get(normalize(profile), ())
 
 
 def describe(profile: str) -> dict:
@@ -88,8 +88,8 @@ def describe(profile: str) -> dict:
     return {
         "profile": p,
         "primary_method": PRIMARY_METHOD.get(p, "unsupported"),
-        "g2": list(g2_for(p)),
-        "g3": list(g3_for(p)),
+        "s2": list(s2_for(p)),
+        "s3": list(s3_for(p)),
         "required_release": list(REQUIRED_RELEASE.get(p, ())),
         "forbidden": list(FORBIDDEN.get(p, ())),
         "cover_metrics": list(COVER_METRICS.get(p, ())),
