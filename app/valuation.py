@@ -1,3 +1,4 @@
+from . import cache
 from . import ddm
 from . import fmt
 from . import gate_thresholds
@@ -159,6 +160,45 @@ def _earnings_candidate(intake, fc, assumption_status):
         reasons=gate["blockers"], labels=gate["limitations"], detail=detail)
     candidate["label"] = (f"{label_year} PER median peer x EPS skenario analis")
     candidate["gate"] = gate
+    return candidate
+
+
+def _holding_sotp_candidate(intake):
+    """Holding SOTP inputs: stakes from the issuer pack (IDX register), each
+    listed subsidiary's market cap and book equity from the Sectors peer
+    table of the parent (or the subsidiary's own cached report)."""
+    evidence = intake.get("official_evidence") or {}
+    balance = evidence.get("balance_sheet") or {}
+    fx = ((intake.get("fx_spot") or {}).get("rate")
+          if evidence.get("reporting_currency") == "USD" else 1.0) or None
+    parent_report = cache.company_report(intake["ticker"]) or {}
+    table = {str(c.get("symbol") or "").replace(".JK", ""): c
+             for g in parent_report.get("peers") or []
+             for c in (g.get("peers_data") or {}).get("companies") or [] if isinstance(c, dict)}
+    listed = []
+    for sub in evidence.get("listed_subsidiaries") or []:
+        ticker = str(sub.get("ticker") or "").upper()
+        row = table.get(ticker) or {}
+        own = cache.company_report(ticker) or {}
+        market_cap = (row.get("market_cap") or
+                      ((own.get("overview") or {}).get("market_cap")))
+        book = row.get("total_equity")
+        if book is None:
+            history = ((own.get("financials") or {}).get("historical_financials") or [])
+            book = (history[-1] if history else {}).get("total_equity")
+        held, total = sub.get("shares_held"), sub.get("shares_total")
+        listed.append({"ticker": ticker, "name": sub.get("name") or ticker,
+                       "segment": sub.get("segment") or "-",
+                       "stake": held / total if held and total else None,
+                       "market_cap": market_cap, "book_equity": book,
+                       "book_year": row.get("year"), "stake_source": sub.get("source"),
+                       "market_source": (f"tabel peer Sectors {intake['ticker']}" if row
+                                         else f"Sectors company/report {ticker}")})
+    equity = balance.get("equity_attributable")
+    shares = (balance.get("shares_outstanding") or balance.get("shares_issued")
+              or intake.get("shares"))
+    candidate = method_chain.holding_sotp(listed, equity * fx if equity and fx else None, shares)
+    candidate["detail"]["balance_period"] = balance.get("period_end")
     return candidate
 
 
@@ -547,10 +587,11 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # P/S peer: no EV data in cache; mark belum tersedia (same provenance rule).
         candidates["ps_peer"] = method_chain.unavailable(
             "ps_peer", "peer P/S belum tersedia di cache Sectors; belum dimodelkan")
+    holding = None
+    if "holding_sotp" in prelim_order or (nci_pct_val is not None and 15.0 < nci_pct_val <= 40.0):
+        holding = _holding_sotp_candidate(intake)
     if "holding_sotp" in prelim_order:
-        candidates["holding_sotp"] = method_chain.unavailable(
-            "holding_sotp",
-            "Holding SOTP memerlukan evidence pack per anak usaha; belum tersedia")
+        candidates["holding_sotp"] = holding
     if "property_nav" in prelim_order:
         candidates["property_nav"] = method_chain.unavailable(
             "property_nav",
@@ -605,6 +646,17 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # Also count selected itself if it is relative/SOTP.
         if selected in x_keys:
             has_x = True
+        # Gate 2 (NCI 15-40%): the holding SOTP runs beside the chain as the
+        # mandatory cross-check; it never becomes the target method.
+        if holding and "holding_sotp" not in chain["order"]:
+            price_now = intake.get("price")
+            up = (holding["per_share"] / price_now - 1
+                  if holding.get("per_share") and price_now else None)
+            chain["cross_checks"] = [{**holding, "rank": "x", "role": "cross_check",
+                                      "decision": ("cross_check" if holding["status"] == "sufficient"
+                                                   else "not_available"),
+                                      "upside": up}]
+            has_x = has_x or holding["status"] == "sufficient"
         chain["cross_check_present"] = bool(has_x)
         if not has_x:
             has_peer_data = bool(intake.get("peers"))

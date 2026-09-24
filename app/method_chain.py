@@ -243,6 +243,46 @@ def pbv_relative(peers, bvps_fwd, shares, market_cap) -> dict:
         detail={"median_pbv": median, "q1_pbv": q1, "peer_count": len(pbvs)})
 
 
+HOLDING_DISCOUNTS = (0.0, 0.2, 0.3)
+
+
+def holding_sotp(listed, parent_equity, shares) -> dict:
+    """Holding SOTP (framework Gate 2): listed subsidiaries at market value
+    times the stake held, the rest of the group at book.
+
+    listed: [{"ticker", "segment", "stake", "market_cap", "book_equity",
+    "market_source"}] with stake as a fraction. The remainder is parent
+    equity less the stake's share of each listed subsidiary's book equity,
+    so no asset is counted twice. Holding discounts are judgement and are
+    shown as sensitivity only (base 0%, downside the deepest discount).
+    """
+    reasons = []
+    if not listed:
+        reasons.append("Holding SOTP memerlukan anak usaha tercatat dengan kepemilikan bersumber")
+    if not (_finite(parent_equity) and parent_equity > 0):
+        reasons.append("ekuitas pemilik induk belum tersedia")
+    if not (_finite(shares) and shares > 0):
+        reasons.append("official share count is missing")
+    components = []
+    for row in listed or []:
+        if not all(_finite(row.get(k)) and row[k] > 0 for k in ("stake", "market_cap", "book_equity")):
+            reasons.append(f"nilai pasar/buku {row.get('ticker', '?')} belum tersedia")
+            continue
+        components.append({**row, "market_value": row["stake"] * row["market_cap"],
+                           "book_share": row["stake"] * row["book_equity"]})
+    if reasons:
+        return candidate("holding_sotp", reasons=reasons)
+    remainder = parent_equity - sum(c["book_share"] for c in components)
+    total = sum(c["market_value"] for c in components) + remainder
+    per_share = total / shares
+    discounts = [{"discount": d, "per_share": per_share * (1 - d)} for d in HOLDING_DISCOUNTS]
+    return candidate("holding_sotp", per_share=per_share,
+                     per_share_down=discounts[-1]["per_share"],
+                     detail={"components": components, "remainder_book": remainder,
+                             "parent_equity": parent_equity, "total": total,
+                             "shares": shares, "discounts": discounts})
+
+
 def unavailable(key, reason="belum tersedia; belum dimodelkan") -> dict:
     """SOTP/NAV tanpa evidence pack: muncul di rantai sebagai belum tersedia."""
     return candidate(key, reasons=[reason])
