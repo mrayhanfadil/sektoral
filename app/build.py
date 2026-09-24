@@ -48,15 +48,20 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
                            "search": doc_in.get("news_search") or {}},
             assumption_plan=fc.get("assumption_plan"),
             release=va.get("release"))
-    except Exception:
-        doc["run_manifest"] = {"ticker": str(ticker).upper()}
+    except Exception as e:
+        print(f"  run_manifest gagal: {e}", flush=True)
+        doc["run_manifest"] = {"ticker": str(ticker).upper(), "error": str(e)}
     try:
         doc["evidence_register"] = evidence_mod.build(
             ticker, doc["meta"].get("tanggal") or as_of, doc_in,
             doc_in.get("news") or [], doc_in.get("news_full") or [],
             fc.get("assumption_plan"))
-    except Exception:
-        doc["evidence_register"] = {"ticker": str(ticker).upper(), "rows": []}
+    except Exception as e:
+        print(f"  evidence_register gagal: {e}", flush=True)
+        doc["evidence_register"] = {"ticker": str(ticker).upper(), "rows": [],
+                                    "violations": [], "error": str(e)}
+    for violation in doc["evidence_register"].get("violations") or []:
+        print(f"  PERINGATAN look-ahead: {violation}", flush=True)
     # Harness: single source of truth for Instruksi-Report-v3 compliance.
     # Engine + LLM call the same tools; critical blockers force draft.
     try:

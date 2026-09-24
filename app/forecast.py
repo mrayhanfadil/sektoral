@@ -250,6 +250,9 @@ def build(intake, n_years=5, assumption_plan=None):
                 if not isinstance(row, dict):
                     missing.append(series)
                     continue
+                if row.get("origin") == "official_actual_base":
+                    missing.append(f"{series}:base-actual-only")
+                    continue
                 src = str(row.get("source") or "")
                 has_https = "https://" in src.lower()
                 has_cache = "sectors_cache" in src.lower() or "sectors cache" in src.lower()
