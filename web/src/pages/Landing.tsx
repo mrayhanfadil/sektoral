@@ -180,7 +180,7 @@ export default function Landing() {
           Model bahasa menyusun rencana, asumsi, dan narasi. Setiap angka dihitung dari data terstruktur, dan setiap
           keputusan terbit atau tahan diambil oleh pemeriksaan berbasis kode.
         </Intro>
-        <ol className="m-0 grid list-none gap-x-10 gap-y-8 p-0 md:grid-cols-3">
+        <ol className="m-0 grid gap-x-10 gap-y-8 pl-5 md:grid-cols-3 marker:font-black marker:text-brand-ink">
           {[
             ["Baca bukti bertanggal", "bg-brand",
               "Agen analis memilih data Sectors: peer, kinerja kuartalan, harga vs IHSG, arus asing, valuasi. Rilis resmi emiten dan harga penutupan IDX melengkapi, dan berita bertanggal dibaca utuh sebagai konteks."],
@@ -188,12 +188,8 @@ export default function Landing() {
               "Agen asumsi memakai aktual 1H resmi untuk skenario semester kedua, tahun lanjutan, tesis, katalis, dan risiko utama. Setiap asumsi wajib mengutip sumber; yang tidak lolos validasi ditolak."],
             ["Pilih metode, lalu periksa", "bg-green",
               "Gerbang framework menentukan rantai metode sebelum nilai dihitung. Harness memeriksa sumber, periode, dan kewajaran hasil; bila ada yang gagal, rating ditahan dan alasannya dicatat."],
-          ].map(([title, bar, body], i) => (
-            <li key={title} className="border-t border-rule pt-5">
-              <div className="mb-4 flex items-center gap-3">
-                <span aria-hidden className={`h-[7px] w-10 rounded-full ${bar}`} />
-                <span className="text-sm font-bold text-ink-soft tabular-nums">Langkah {i + 1}</span>
-              </div>
+          ].map(([title, , body]) => (
+            <li key={title} className="border-t border-rule pt-5 pl-1">
               <h3 className="mb-2.5 text-[19px]">{title}</h3>
               <p className="text-[15px] text-ink-soft">{body}</p>
             </li>
@@ -201,7 +197,9 @@ export default function Landing() {
         </ol>
         <figure className="mt-12 rounded-xl border border-rule bg-surface p-5">
           <ResearchFlow />
-          <figcaption className="mt-2.5 text-center text-[13px] text-ink-soft">Alur riset dari bukti bertanggal hingga company update.</figcaption>
+          <figcaption className="mt-2.5 text-center text-[13px] text-ink-soft">
+            Alur riset dari bukti bertanggal hingga company update.<span className="md:hidden"> Geser diagram untuk melihat kelima tahap.</span>
+          </figcaption>
         </figure>
       </Section>
 
@@ -212,9 +210,8 @@ export default function Landing() {
         </Intro>
         <ol aria-label="Method Gates 0 sampai 5" className="m-0 grid list-none grid-cols-1 overflow-hidden rounded-xl border border-rule bg-surface p-0 sm:grid-cols-3 xl:grid-cols-6">
           {GATES.map(([title, body], i) => (
-            <li key={title} className={`relative border-rule px-4 pt-4 pb-5 max-sm:border-b max-sm:last:border-b-0 sm:max-xl:[&:nth-child(-n+3)]:border-b sm:[&:not(:nth-child(3n))]:border-r xl:border-r xl:last:border-r-0 ${i === 5 ? "bg-warn-bg/60" : ""}`}>
+            <li key={title} aria-label={`Method Gate ${i}: ${title}`} className={`relative border-rule px-4 pt-4 pb-5 max-sm:border-b max-sm:last:border-b-0 sm:max-xl:[&:nth-child(-n+3)]:border-b sm:[&:not(:nth-child(3n))]:border-r xl:border-r xl:last:border-r-0 ${i === 5 ? "bg-warn-bg/60" : ""}`}>
               <span className={`block text-[40px] leading-none font-black tabular-nums tracking-[-.04em] ${i === 5 ? "text-warn-ink" : "text-brand-ink"}`}>{i}</span>
-              <span className="mt-1 block text-[12.5px] font-bold text-ink-faint">Method Gate {i}</span>
               <strong className="mt-3 mb-1 block text-[15px]">{title}</strong>
               <span className="block text-[13px] leading-snug text-ink-soft">{body}</span>
             </li>

@@ -6,12 +6,22 @@ const ORIGIN: Record<string, [string, string]> = {
   agent_adaptive: ["pill-live", "keputusan baru agent"],
 };
 
-function Card({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
+/** Section anchors, shared with the trace page's index so labels match headings. */
+export const INTEL_SECTIONS: [string, string][] = [
+  ["rencana", "Rencana & hipotesis agent"], ["posisi-peer", "Posisi terhadap peer"],
+  ["sinyal", "Sinyal yang perlu dicek"], ["temuan-agent", "Temuan agent analis"],
+  ["berita-web", "Konteks berita web"], ["perubahan", "Sejak riset terakhir"],
+  ["keputusan-tool", "Keputusan tool agent"],
+];
+const TITLE = Object.fromEntries(INTEL_SECTIONS);
+
+/** A ruled section on the shared panel surface, not a card of its own. */
+function Card({ id, children }: { id: string; children: React.ReactNode }) {
   return (
-    <div className="card" id={id}>
-      <h3 className="mb-3 text-[17px]">{title}</h3>
+    <section id={id} aria-labelledby={`${id}-title`} className="mt-7 scroll-mt-24 border-t border-rule pt-6">
+      <h3 id={`${id}-title`} className="mb-3 text-[17px]">{TITLE[id]}</h3>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -29,24 +39,34 @@ function Citations({ ids, signals }: { ids: string[]; signals: Record<string, Si
   );
 }
 
-export function IntelHeadline({ intel }: { intel: Intel }) {
-  const synthesis = intel.synthesis;
+/** The analyst agent's result on one surface: headline, then ruled sections. */
+export function IntelPanel({ intel }: { intel: Intel }) {
   return (
     <div className="card">
-      <p className="text-sm font-bold text-brand-ink">Intelijen pasar {intel.name ?? intel.ticker}</p>
-      <h2 className="mt-2 mb-3.5 max-w-[70ch] text-[22px] leading-snug font-black">{synthesis.headline}</h2>
+      <IntelHeadline intel={intel} />
+      <IntelSections intel={intel} />
+    </div>
+  );
+}
+
+function IntelHeadline({ intel }: { intel: Intel }) {
+  const synthesis = intel.synthesis;
+  return (
+    <header>
+      <h2 className="mb-3.5 max-w-[70ch] text-[22px] leading-snug font-black">{synthesis.headline}</h2>
       <div className="flex flex-wrap gap-2">
+        <span className="pill">{intel.name ?? intel.ticker}</span>
         {intel.peers.group && <span className="pill pill-live">Grup: {intel.peers.group}</span>}
         {intel.market_date && <span className="pill">Data pasar {intel.market_date}</span>}
         <span className={`pill ${synthesis.source === "agent" ? "pill-ok" : "pill-warn"}`}>
           {synthesis.source === "agent" ? "Kesimpulan agent tervalidasi" : "Ringkasan aturan host"}
         </span>
       </div>
-    </div>
+    </header>
   );
 }
 
-export function IntelSections({ intel }: { intel: Intel }) {
+function IntelSections({ intel }: { intel: Intel }) {
   const signals = Object.fromEntries(intel.signals.filter((s) => s.id).map((s) => [s.id as string, s]));
   const verdicts = Object.fromEntries(intel.synthesis.hypotheses.filter((h) => h.index != null).map((h) => [h.index as number, h]));
   const peers = intel.signals.filter((s) => s.kind === "peer");
@@ -57,7 +77,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
 
   return (
     <>
-      <Card title="Rencana & hipotesis agent">
+      <Card id="rencana">
         <p className="mb-3.5 max-w-[880px] font-bold">{intel.plan.question}</p>
         <ol className="m-0 grid max-w-[880px] gap-4 pl-5">
           {intel.plan.hypotheses.map((h, i) => {
@@ -77,7 +97,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
       </Card>
 
       {peers.length > 0 && (
-        <Card title="Posisi terhadap peer">
+        <Card id="posisi-peer">
           {intel.peers.basis && <p className="text-[13.5px] text-ink-soft">Basis: {intel.peers.basis}</p>}
           <div className="relative overflow-x-auto">
             <table className="w-full border-collapse text-sm [&_td]:border-b [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_th]:border-b [&_th]:border-rule-soft">
@@ -114,21 +134,30 @@ export function IntelSections({ intel }: { intel: Intel }) {
       )}
 
       {flagged.length > 0 && (
-        <Card title="Sinyal yang perlu dicek">
-          <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3 p-0">
-            {flagged.map((s) => (
-              <li key={s.id} className="grid content-start gap-1.5 rounded-[10px] border border-rule px-3.5 py-3">
-                <div className="flex justify-between gap-2.5 text-sm"><strong>{s.label}</strong><span className="tabular-nums whitespace-nowrap">{s.display}</span></div>
-                <span className="pill pill-warn justify-self-start">{s.flag}</span>
-                {(s.period || s.note) && <p className="text-[13.5px] text-ink-soft">{[s.period, s.note].filter(Boolean).join(" · ")}</p>}
-              </li>
-            ))}
-          </ul>
+        <Card id="sinyal">
+          <div className="relative overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-sm [&_td]:border-b [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top [&_th]:border-b [&_th]:border-rule-soft">
+              <thead><tr>
+                <th scope="col" className={th}>Sinyal</th><th scope="col" className={th}>Nilai</th>
+                <th scope="col" className={th}>Tanda</th><th scope="col" className={th}>Periode dan catatan</th>
+              </tr></thead>
+              <tbody>
+                {flagged.map((s) => (
+                  <tr key={s.id}>
+                    <th scope="row" className="px-2 py-2.5 text-left align-top font-bold">{s.label}</th>
+                    <td className="tabular-nums whitespace-nowrap">{s.display}</td>
+                    <td><span className="pill pill-warn">{s.flag}</span></td>
+                    <td className="text-[13.5px] text-ink-soft">{[s.period, s.note].filter(Boolean).join("; ") || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 
       {intel.synthesis.findings.length > 0 && (
-        <Card title="Temuan">
+        <Card id="temuan-agent">
           <div className="grid items-start gap-x-8 gap-y-6 [grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr))]">
             {intel.synthesis.findings.map((f, i) => (
               <article key={i} className="grid content-start gap-2 border-t border-rule pt-4">
@@ -143,7 +172,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
       )}
 
       {intel.web_news.items.length > 0 && (
-        <Card title="Konteks berita web">
+        <Card id="berita-web">
           <p className="text-[13.5px] text-ink-soft">
             Berita {intel.web_news.window ?? ""}. Hanya konteks naratif, bukan data Sectors; tidak ada angka sinyal yang berasal dari sini.
           </p>
@@ -158,8 +187,8 @@ export function IntelSections({ intel }: { intel: Intel }) {
         </Card>
       )}
 
-      <div className="grid items-start gap-6 min-[881px]:grid-cols-[1fr_1.2fr] [&>*]:min-w-0">
-        <Card title="Sejak riset terakhir">
+      <div className="grid items-start gap-x-10 min-[881px]:grid-cols-[1fr_1.2fr] [&>*]:min-w-0">
+        <Card id="perubahan">
           {changes.first_run ? (
             <p className="text-ink-soft">Riset pertama untuk emiten ini. Hasilnya disimpan sebagai memori untuk dibandingkan pada riset berikutnya.</p>
           ) : (
@@ -183,7 +212,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
             </>
           )}
         </Card>
-        <Card title="Keputusan tool agent">
+        <Card id="keputusan-tool">
           <ol className="m-0 grid gap-3 pl-5">
             {intel.steps.map((s, i) => {
               const [cls, label] = ORIGIN[s.origin ?? ""] ?? ["", "dilengkapi host"];

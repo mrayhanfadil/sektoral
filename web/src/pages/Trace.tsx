@@ -1,25 +1,77 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, reportFiles, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
-import { IntelHeadline, IntelSections } from "../components/Intel";
+import { INTEL_SECTIONS, IntelPanel } from "../components/Intel";
 import { Notice, useLoad } from "../components/State";
 
-// The trace runs to many screens; this index is its table of contents.
-const SECTIONS: [string, string][] = [
-  ["agen-analis", "Agent analis"], ["ringkasan", "Ringkasan agent riset"], ["endpoint", "Endpoint yang dibaca"],
-  ["temuan", "Temuan"], ["berita", "Berita untuk asumsi"], ["asumsi", "Asumsi forecast"], ["deep-dive", "Deep-dive berita"],
+// The trace runs to many screens; this index is its table of contents. Labels
+// are the headings themselves, and only sections the trace has are listed.
+const RESEARCH_SECTIONS: [string, string][] = [
+  ["ringkasan", "Ringkasan agent riset"], ["endpoint", "Endpoint data Sectors yang dibaca"],
+  ["temuan", "Temuan dan hubungan sebab-akibat"], ["berita", "Berita untuk asumsi forecast"],
+  ["asumsi", "Asumsi forecast oleh agent"], ["deep-dive", "Deep-dive berita"],
+  ["kurang", "Bukti yang masih kurang"],
 ];
 
 function Block({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="grid scroll-mt-20 gap-3">
-      <h2 id={`${id}-title`} className="mt-4 text-xl">{title}</h2>
+    <section id={id} aria-labelledby={`${id}-title`} className="grid scroll-mt-24 gap-3 border-t border-rule pt-6 first:border-t-0 first:pt-0">
+      <h2 id={`${id}-title`} className="text-xl">{title}</h2>
       {children}
     </section>
   );
 }
 
-const box = "rounded-xl border border-rule bg-surface px-5 py-[18px]";
+/** Sections present on the page, and the one currently being read. */
+function useSectionIndex(ready: boolean) {
+  const [present, setPresent] = useState<[string, string][]>([]);
+  const [current, setCurrent] = useState<string | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const all = [...INTEL_SECTIONS, ...RESEARCH_SECTIONS].filter(([id]) => document.getElementById(id));
+    setPresent(all);
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible[0]) setCurrent(visible[0].target.id);
+    }, { rootMargin: "-96px 0px -60% 0px" });
+    all.forEach(([id]) => observer.observe(document.getElementById(id)!));
+    return () => observer.disconnect();
+  }, [ready]);
+  return { present, current };
+}
+
+function SectionIndex({ present, current }: { present: [string, string][]; current: string | null }) {
+  const link = (id: string) => `no-underline ${current === id ? "text-ink font-bold" : "text-ink-soft hover:text-ink"}`;
+  return (
+    <>
+      <nav aria-label="Bagian jejak riset" className="sticky top-24 max-lg:hidden">
+        <p className="mb-2 text-[13px] font-bold text-ink-faint">Di halaman ini</p>
+        <ul className="m-0 grid list-none gap-0.5 border-l border-rule p-0">
+          {present.map(([id, label]) => (
+            <li key={id}>
+              <a href={`#${id}`} aria-current={current === id ? "location" : undefined}
+                className={`-ml-px block border-l-2 py-1 pl-3 text-[13.5px] ${current === id ? "border-brand-ink" : "border-transparent hover:border-rule-strong"} ${link(id)}`}>
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <nav aria-label="Bagian jejak riset" className="sticky top-16 z-40 -mx-4 border-b border-rule bg-canvas/95 px-4 backdrop-blur-md lg:hidden">
+        <ul className="m-0 flex list-none gap-5 overflow-x-auto p-0 py-3 whitespace-nowrap">
+          {present.map(([id, label]) => (
+            <li key={id}>
+              <a href={`#${id}`} aria-current={current === id ? "location" : undefined} className={`text-[13.5px] ${link(id)}`}>{label}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </>
+  );
+}
+
+const box = "rounded-lg bg-canvas px-4 py-3.5";
 
 /** The agent records news without a measurable transmission as driver "none", change 0. */
 const isNoEffect = (e: { driver: string | null; change: string | null }) =>
@@ -32,16 +84,10 @@ function statusLabel(report: TraceView["report"]) {
 
 function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: string; pdfUrl?: string }) {
   const { report, research, news, forecast } = trace;
+  const index = useSectionIndex(true);
   return (
-    <div className="grid items-start gap-10 lg:grid-cols-[180px_1fr]">
-    <nav aria-label="Bagian jejak riset" className="sticky top-24 max-lg:hidden">
-      <p className="mb-2 text-[13px] font-bold text-ink-faint">Di halaman ini</p>
-      <ul className="m-0 grid list-none gap-0.5 border-l border-rule p-0">
-        {SECTIONS.map(([id, label]) => (
-          <li key={id}><a href={`#${id}`} className="-ml-px block border-l-2 border-transparent py-1 pl-3 text-[13.5px] text-ink-soft no-underline hover:border-brand-ink hover:text-ink">{label}</a></li>
-        ))}
-      </ul>
-    </nav>
+    <div className="grid items-start gap-x-10 gap-y-4 lg:grid-cols-[200px_1fr] [&>*]:min-w-0">
+    <SectionIndex {...index} />
     <div className="grid gap-6 [&>*]:min-w-0">
       <header className="card border-t-4 border-t-brand">
         <h1 className="mb-2.5 text-[28px] font-black">Jejak riset {trace.ticker}</h1>
@@ -57,16 +103,14 @@ function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: 
         </div>
       </header>
 
-      {trace.analyst ? (
-        <div id="agen-analis" className="grid scroll-mt-20 gap-6 [&>*]:min-w-0">
-          <IntelHeadline intel={trace.analyst} />
-          <IntelSections intel={trace.analyst} />
+      {trace.analyst ? <IntelPanel intel={trace.analyst} /> : (
+        <div className="card">
+          <h2 className="mb-2 text-xl">Agent analis</h2>
+          <p className="text-ink-soft">{trace.analyst_problems.join("; ") || "Agent analis tidak dijalankan untuk riset ini."}</p>
         </div>
-      ) : (
-        <Block id="agen-analis" title="Agent analis">
-          <div className={`${box} text-ink-soft`}>{trace.analyst_problems.join("; ") || "Agent analis tidak dijalankan untuk riset ini."}</div>
-        </Block>
       )}
+
+      <div className="card grid gap-7">
 
       <Block id="ringkasan" title="Ringkasan agent riset">
         <div className={box}>{research.summary || "Belum ada briefing tervalidasi."}</div>
@@ -188,6 +232,7 @@ function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: 
           <ul className={`${box} m-0 pl-9`}>{research.limitations.map((l) => <li key={l}>{l}</li>)}</ul>
         </Block>
       )}
+      </div>
       <p className="text-[13px] text-ink-soft">Materi informasi dan analisis; bukan rekomendasi investasi.</p>
     </div>
     </div>
