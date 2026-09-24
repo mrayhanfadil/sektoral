@@ -311,6 +311,10 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
     assert doc["exhibits"][0]["tipe"] == "price_chart"
     key_fin = doc["exhibits"][1]
     assert key_fin["judul"] == "Key Financials"
+    labels = [row[0] for row in key_fin["data"]["rows"]]
+    assert labels.count("EPS (Rp)") == 1 and labels.count("PER (x)") == 1
+    assert not any(all(cell in ("-", "NA") for cell in row[1:])
+                   for row in key_fin["data"]["rows"])
     fy27 = key_fin["data"]["cols"].index("FY27F")
     assert all(row[fy27] != "-" for row in key_fin["data"]["rows"]
                if row[0].startswith(("Pendapatan", "Laba bersih", "EPS", "PER")))
