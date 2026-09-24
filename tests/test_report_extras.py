@@ -124,3 +124,22 @@ def test_published_report_without_risks_is_blocked():
     assert any(b.startswith("N.risiko") for b in check_narrative(doc)["blockers"])
     doc["meta"]["status"] = "draft_non_distributable"
     assert not any(b.startswith("N.risiko") for b in check_narrative(doc)["blockers"])
+
+
+def test_peer_median_and_average_use_the_valuation_band():
+    rows = [{"is_self": False, "metrics": {"pe": pe, "pb": pb}} for pe, pb in
+            ((6.8, 1.5), (646.0, 40.5), (131.9, 8.5), (9.2, 0.7), (3.2, 0.5), (-4.0, 17.9))]
+    rows.append({"is_self": True, "metrics": {"pe": 5.1, "pb": 1.3}})
+    stats = X._peer_stats(rows)
+    assert stats["pe"] == (6.8, (6.8 + 9.2 + 3.2) / 3)
+    assert stats["pb"][0] == 1.1  # 0.5, 0.7, 1.5, 8.5 inside 0-10x
+
+
+def test_band_and_statements_use_indonesian_format_and_hide_zero_ebitda(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    html_out = render.render(doc)
+    cells = re.findall(r"<td class='[^']*'>([^<]*)</td>", html_out)
+    assert not [c for c in cells if re.search(r"\d\.\dx", c)]
+    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi historis")
+    ebitda = next(r for r in income["data"]["rows"] if r[0] == "EBITDA")
+    assert "0" not in ebitda[1:]
