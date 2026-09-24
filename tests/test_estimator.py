@@ -444,9 +444,9 @@ def test_chat_sends_supported_completion_token_field(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", open_request)
     monkeypatch.setenv("MINIMAX_API_KEY", "not-a-real-secret")
     result = run._chat([{"role": "user", "content": "return json"}])
-    assert captured["body"]["max_completion_tokens"] == 131072
+    assert captured["body"]["max_completion_tokens"] == run.LLM_GENERATION_BUDGET
     assert "max_tokens" not in captured["body"]
-    assert captured["body"]["thinking"] == {"type": "disabled"}
+    assert captured["body"]["thinking"] == {"type": "adaptive"}
     assert result["finish_reason"] == "stop"
 
 

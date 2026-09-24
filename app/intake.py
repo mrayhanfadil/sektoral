@@ -7,6 +7,7 @@ from . import mineops
 from . import market_quote
 from . import model_profiles
 from . import issuer_evidence
+from . import analyst_scenario
 from . import news as news_context
 from . import news_fetch
 from . import research_context
@@ -19,6 +20,105 @@ def _num(x, default=None):
         return float(x)
     except (TypeError, ValueError):
         return default
+
+
+def _sotp_bridge_inputs(evidence, as_of):
+    """Translate source-backed corporate bridge items, leaving gaps explicit."""
+    if not isinstance(evidence, dict):
+        return None
+    balance = evidence.get("balance_sheet") or {}
+    debt_evidence = evidence.get("debt_and_contract_evidence") or {}
+    debt = debt_evidence.get("debt_usd_thousand") or {}
+    other_financial = debt_evidence.get("other_financial_liabilities_usd_thousand") or {}
+    fx_quote = evidence.get("valuation_fx_reference") or {}
+    currency = str(evidence.get("reporting_currency") or "").upper()
+    if currency == "USD":
+        try:
+            rate = float(fx_quote["rate"])
+            fx_date = date.fromisoformat(str(fx_quote["date"]))
+            report_date = date.fromisoformat(str(as_of)[:10])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if rate <= 0 or fx_date > report_date or not fx_quote.get("source_url"):
+            return None
+        fx = rate
+        fx_source = (f"; {fx_quote.get('source_title')} {fx_quote['date']}: "
+                     f"{fx_quote['source_url']}")
+        fx_source_date = fx_quote["date"]
+    elif currency == "IDR":
+        fx, fx_source, fx_source_date = 1.0, "", None
+    else:
+        return None
+
+    statement_title = debt_evidence.get("source_title") or balance.get("source_title")
+    statement_url = debt_evidence.get("source_url") or balance.get("source_url")
+    statement_date = (evidence.get("latest_actual") or {}).get("published_at")
+    period_end = debt_evidence.get("period_end") or balance.get("period_end")
+    if not statement_title or not statement_url or not statement_date or not period_end:
+        return None
+
+    cash_usd_thousand = debt_evidence.get("cash_and_equivalents_usd_thousand")
+    if cash_usd_thousand is None:
+        cash_usd_thousand = ((evidence.get("latest_actual") or {})
+                             .get("financial_statements_usd_thousand", {})
+                             .get("cash_flow", {}).get("closing_cash"))
+    if cash_usd_thousand is None and balance.get("cash") is not None:
+        cash_usd_thousand = balance["cash"] / 1000
+    bank_debt_usd_thousand = None
+    if debt.get("short_term_bank_loans") is not None and debt.get("long_term_loans_net") is not None:
+        bank_debt_usd_thousand = (debt["short_term_bank_loans"] + debt["long_term_loans_net"])
+    other_financial_usd_thousand = other_financial.get("total")
+    debt_usd_thousand = (
+        bank_debt_usd_thousand + other_financial_usd_thousand
+        if bank_debt_usd_thousand is not None and other_financial_usd_thousand is not None
+        else None)
+    minority_usd_thousand = debt_evidence.get("non_controlling_interest_usd_thousand")
+    if minority_usd_thousand is None:
+        minority = balance.get("non_controlling_interest")
+        minority_usd_thousand = minority / 1000 if minority is not None else None
+    shares = debt_evidence.get("shares_outstanding") or balance.get("shares_outstanding")
+
+    def translated(value):
+        if not isinstance(value, (int, float)):
+            return None
+        return value * 1000 * fx if currency == "USD" else value
+
+    statement_ref = f"{statement_title}: {statement_url}"
+    translated_source = statement_ref + fx_source
+    converted_date = fx_source_date or statement_date
+
+    def amount(value, page, basis):
+        return {"value": translated(value), "source": translated_source,
+                "source_date": converted_date, "page": page, "unit": "raw IDR",
+                "financial_source_date": statement_date,
+                "balance_period_end": period_end,
+                "fx_date": fx_source_date, "fx_rate": fx if currency == "USD" else None,
+                "basis": basis}
+
+    shares_row = {"value": shares, "source": statement_ref,
+                  "source_date": statement_date,
+                  "page": debt_evidence.get("shares_source_page"),
+                  "unit": "shares", "balance_period_end": period_end,
+                  "basis": "reported shares outstanding, excluding treasury shares"}
+    contract_advance = ((evidence.get("customer_delivery_commitment") or {})
+                        .get("prepayment_advance_usd_thousand", {})
+                        .get("balance_2026_06_30"))
+    return {
+        "cash_idr": amount(cash_usd_thousand, debt_evidence.get("cash_source_page"),
+                            "Cash and cash equivalents; translated at dated FX."),
+        "debt_idr": amount(
+            debt_usd_thousand,
+            "2, 89, 98",
+            "Bank loans net of fees plus present-value lease and finance liabilities. "
+            "Customer prepayment is excluded pending operating-delivery reconciliation."),
+        "minority_interest_idr": amount(
+            minority_usd_thousand, debt_evidence.get("minority_source_page"),
+            "Reported non-controlling interest; translated at dated FX."),
+        "corporate_overhead_idr": None,
+        "shares": shares_row,
+        "discount_pct": None,
+        "customer_advance_excluded_usd_thousand": contract_advance,
+    }
 
 
 def load(ticker, as_of=None):
@@ -58,6 +158,7 @@ def load(ticker, as_of=None):
         notes.append(f"harga memakai {quote['source_title']} ({price_date}); "
                      f"{quote['source_url']}.")
     official_evidence = issuer_evidence.load(t, report_date) if report_date else None
+    analyst_scenario_inputs = analyst_scenario.load(t, report_date) if report_date else None
     fx_spot = fx.load_cached_rate()
     if fx_spot:
         fx_age = (date.fromisoformat(str(report_date)[:10]) -
@@ -259,6 +360,7 @@ def load(ticker, as_of=None):
         "quarterly_actuals": quarterly_rows,
         "latest_quarterly_actual": latest_quarter,
         "official_evidence": official_evidence,
+        "analyst_scenario": analyst_scenario_inputs,
         "latest_official_actual": ((official_evidence or {}).get("latest_actual")),
         # Report inputs intentionally come only from sectors_cache. These
         # release-gate inputs remain absent until the cache itself contains
@@ -280,7 +382,8 @@ def load(ticker, as_of=None):
             if official_evidence and profile == "finite_life_mining" else None),
         "operating_bridge": None,
         "sotp_assets": None,
-        "sotp_bridge": None,
+        "sotp_bridge": (_sotp_bridge_inputs(official_evidence, report_date)
+                        if profile == "finite_life_mining" else None),
     }
     return intake, {"G1": g1, "catatan": notes, "fetched_at": time.time()}
 

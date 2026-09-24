@@ -1,0 +1,118 @@
+{
+  "ticker": "AMMN",
+  "as_of": "2026-09-24",
+  "basis": "Asumsi analis untuk skenario FY26; bukan panduan penjualan emiten.",
+  "top_down_projection": {
+    "status": "user_supplied_analyst_scenario_not_source_verified",
+    "source_title": "AMMN(2).pdf figures quoted by the user; source PDF/workbook is not present in the repository",
+    "fy2026_revenue_usd": 5027000000,
+    "fy2026_ebitda_usd": 2765000000,
+    "fy2026_net_income_usd": 1233000000,
+    "fy2026_capex_usd": 390000000,
+    "target_price_idr": 4200,
+    "valuation_multiple_ev_ebitda": 8,
+    "h2_revenue_usd": 2974590000,
+    "h2_revenue_derivation": "FY26 top-down revenue US$5.027bn less reported H1 net sales US$2.052410bn; rounds to US$2.975bn. User-described H1 EBITDA/NP and FY26 metrics imply H2 EBITDA about US$1.637bn and H2 net income about US$729m using rounded H1 release values.",
+    "h2_ebitda_usd_approx": 1637000000,
+    "h2_net_income_usd_approx": 729000000,
+    "h2_capex_usd_approx": 259968000,
+    "use_limit": "Comparison hurdle for the product-level scenario bridge only; unsupported figures do not qualify as company guidance or a validated forecast."
+  },
+  "product_sales": [
+    {
+      "product_key": "concentrate",
+      "h2_sales_to_h1": 0,
+      "basis": "Cabang sensitivitas konservatif menetapkan nol penjualan ekspor konsentrat eksternal H2 karena belum ada volume ekspor yang bisa diverifikasi; ini bukan fakta aktual, forecast emiten, atau klaim bahwa penjualan total nol. Status izin juga memiliki laporan media yang saling bertentangan pada 6-7 Mei dan belum terkonfirmasi secara resmi setelah Juni; kanal domestik/izin baru juga belum terverifikasi.",
+      "conditional_case_h2_sales_to_h1": 1.0,
+      "conditional_case_basis": "Kasus bersyarat saja: penjualan konsentrat H2 sebesar volume H1 (120.079 dmt) hanya jika izin/kanal penjualan dan kontrak yang berlaku dapat dibuktikan.",
+      "permit_evidence": {
+        "source_title": "AMMAN Q1 2026 Performance Release",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NTE3MSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--bdebd31a4a6b6ef9db77af5a59feac0491699741/Siaran%20Pers%20-%20Laporan%20Kinerja%20AMMAN%20Q1%202026%20vF.pdf?disposition=inline&locale=id",
+        "page": 3,
+        "reported_expiry": "2026-04-30",
+        "review_cutoff": "2026-09-24",
+        "company_public_presentation_confirmation": {
+          "source_title": "AMMAN Paparan Publik Tahun 2026",
+          "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk4NCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--efda2a2fcf91d23331d10bbd76dd9aa95de1099e/PAPARAN%20PUBLIK%20TAHUN%202026.pdf?disposition=inline&locale=id",
+          "page": 16,
+          "fact": "Perusahaan menyatakan sejak 2025 tidak lagi diperbolehkan menjual konsentrat dan hanya dapat menjual produk logam jadi; izin ekspor konsentrat sementara yang diterima 31 Oktober 2025 berlaku sampai 30 April 2026.",
+          "limitation": "Paparan diterbitkan sebelum tanggal berakhirnya izin dan tidak mengonfirmasi ada atau tidaknya izin pengganti setelah 30 April 2026."
+        },
+        "interim_financial_statement_confirmation": {
+          "source_title": "AMMAN H1 2026 Financial Statements",
+          "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+          "page": 123,
+          "fact": "Interim financial statements confirm the export permit granted on 5 November 2025 was valid until 30 April 2026.",
+          "status": "confirms expiry of the cited permit; does not establish whether a subsequent permit was or was not issued"
+        },
+        "reported_company_and_authority_statements": [
+          {
+            "date": "2026-05-06",
+            "speaker": "Assistant II, West Nusa Tenggara Regional Secretariat, Lalu Mohammad Faozal",
+            "source_title": "AMNT Ajukan Perpanjangan Ekspor Konsentrat ke ESDM",
+            "source_url": "https://www.detik.com/bali/bisnis/d-8477778/amnt-ajukan-perpanjangan-ekspor-konsentrat-ke-esdm",
+            "fact": "Detik melaporkan Faozal mengatakan AMNT mengajukan tambahan waktu enam bulan untuk ekspor konsentrat.",
+            "source_classification": "Media report quoting a provincial official; no application document, registration number, or direct issuer confirmation is provided in the article.",
+            "limitation": "The report was directly contradicted the next day by an AMMAN spokesperson who said the company had not applied; it is not proof an application was filed or approved."
+          },
+          {
+            "date": "2026-05-07",
+            "speaker": "AMMAN Vice President Corporate Communications",
+            "source_title": "AMNT Sebut Belum Ajukan Perpanjangan Izin Ekspor Konsentrat",
+            "source_url": "https://www.detik.com/bali/bisnis/d-8479474/amnt-sebut-belum-ajukan-perpanjangan-izin-ekspor-konsentrat",
+            "fact": "Dalam jawaban kepada media, juru bicara AMMAN menyatakan perusahaan belum mengajukan perpanjangan izin ekspor konsentrat dan sedang fokus menyelesaikan smelter.",
+            "source_classification": "Media report quoting a named issuer spokesperson; not an issuer filing or export-permit register.",
+            "limitation": "Directly conflicts with a 6 May media report quoting an NTB provincial official as saying AMNT had applied; this issuer statement confirms the company position as of 7 May only and does not establish permit status or export sales after that date."
+          },
+          {
+            "date": "2026-06-06",
+            "speaker": "Head of the West Nusa Tenggara Energy and Mineral Resources Office",
+            "source_title": "AMNT Dipastikan Tak Ajukan Perpanjangan Relaksasi Ekspor Konsentrat",
+            "source_url": "https://ntb.idntimes.com/news/ntb/amnt-dipastikan-tak-ajukan-perpanjangan-relaksasi-ekspor-konsentrat-00-ldn3d-b7qt8x",
+            "fact": "Pejabat ESDM NTB menyatakan berdasarkan koordinasi terbaru dengan AMNT, perusahaan saat itu belum berencana meminta perpanjangan; ia juga menyebut operasi smelter telah berjalan.",
+            "source_classification": "Media report quoting a named provincial government official summarizing coordination with AMNT; not a formal permit-status notice.",
+            "limitation": "The statement is time-bounded to 6 June and is not proof that no permit, domestic sale, or other sales route existed or arose later."
+          }
+        ],
+        "h1_2026_company_sales_window": {
+          "source_title": "AMMAN H1 2026 Earnings Presentation",
+          "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+          "page": 19,
+          "fact": "AMMAN described January-April concentrate direct sales as using the available export permit and said it expected to deliver FY production guidance in H2.",
+          "limitation": "The presentation does not provide H2 concentrate sales guidance or confirm zero post-April sales."
+        },
+        "status": "AMMAN's March 2026 public presentation states concentrate sales were restricted to a temporary permit through 30 April 2026; H1 interim financial statements confirm expiry of that permit. Public reporting conflicts on 6-7 May: an NTB official was reported saying AMNT applied, while the AMMAN spokesperson said it had not; the NTB ESDM head on 6 June later said AMNT was not then planning to apply. No application record, replacement permit, or official post-June status was located in sources reviewed through 24 September 2026. Treat post-expiry H2 concentrate export volume as unknown; zero is only a conservative sensitivity branch, not established actual or guidance."
+      }
+    }
+  ],
+  "market_references": [
+    {
+      "product_key": "copper",
+      "price": 14797.0,
+      "unit": "USD/tonne",
+      "date": "2026-09-22",
+      "source_title": "LME copper cash settlement, reported by Westmetall",
+      "source_url": "https://www.westmetall.com/en/markdaten.php/leistungen/en/en/westmetall.html?action=table&field=LME_Cu_cash"
+    },
+    {
+      "product_key": "gold",
+      "price": 4324.25,
+      "unit": "USD/oz",
+      "date": "2026-09-21",
+      "source_title": "LBMA gold price, reported by Servicio Geológico Mexicano",
+      "source_url": "https://www.sgm.gob.mx/EconomiaMinera/PreciosAcumulados"
+    }
+  ],
+  "external_estimates": [
+    {
+      "name": "BRI Danareksa Sekuritas",
+      "as_of": "2026-06-29",
+      "revenue_usd_mn": 4001,
+      "ebitda_usd_mn": 2024,
+      "net_profit_usd_mn": 909,
+      "source_title": "AMMN Equity Research, 29 June 2026",
+      "source_url": "https://link.brights.id/brids/storage/45782/20260629-AMMN.pdf"
+    }
+  ],
+  "forecast_rationale": "Per 24 September 2026, Q2 actual dapat diturunkan sebagai H1 dikurangi Q1 sampai tingkat US$ ribu untuk laba rugi dan arus kas. Volume penjualan ekspor konsentrat H2 tidak diketahui: izin sementara berakhir 30 April; Detik 6 Mei mengutip pejabat NTB mengatakan AMNT mengajukan tambahan waktu enam bulan, tetapi pada 7 Mei juru bicara AMMAN secara langsung menyatakan belum mengajukan; Kepala ESDM NTB pada 6 Juni menyampaikan AMNT belum berencana mengajukan. Presentasi resmi H1 menyebut direct sales Januari-April memakai izin yang tersedia. Belum ada dokumen permohonan, izin pengganti, kanal penjualan domestik, atau status resmi setelah Juni dalam sumber yang ditelaah. Karena itu nol penjualan ekspor di base product bridge hanya cabang sensitivitas konservatif, bukan fakta aktual/guidance; kasus 120.079 dmt juga bersyarat pada izin/kanal dan kontrak. AMMAN mengungkap kontrak Glencore untuk pengiriman cathode sampai setidaknya Desember 2027 dan saldo prepayment US$388m pada Juni 2026, tetapi volume delivery dan formula harga tidak dipublikasikan. Output FY26 tersisa menurut guidance: 553 kdmt konsentrat, 274 Mlbs Cu dalam konsentrat, 429 koz emas dalam konsentrat, 81 kt katoda, dan 228 koz emas murni. Untuk logam olahan, sell-through Q2 diturunkan dari produksi/penjualan Q2 dan diterapkan sebagai asumsi H2; harga realized H1 dipakai sebagai proxy, bukan forward price. Revenue H2 top-down US$2.975bn masih memiliki gap sekitar US$974m terhadap product bridge tanpa penjualan konsentrat. Selisih produksi-penjualan konsentrat H1 sebesar 227.228 dmt belum direkonsiliasi antara umpan smelter, stockpile, dan timing penjualan. Actual Q2 kini memberi beban keuangan US$129m dan pajak US$100m, namun belum ada jadwal bunga, pajak, atau pelunasan utang H2 yang direkonsiliasi; rencana pembayaran utang Q3 US$350m masih outlook. EBITDA margin H2 55%, net margin 24,5%, dan capex 2,0x H1 tetap asumsi analis. Belanja modal akrual US$100m pada Juni bukan budget proyek tersisa; jadwal capex, modal kerja, dan FCFF H2/LoM belum dijembatani."
+}

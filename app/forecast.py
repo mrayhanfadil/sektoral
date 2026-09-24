@@ -11,6 +11,10 @@ def _mean(xs):
 def _interim_scenario(intake, plan):
     scenario = (plan or {}).get("interim_scenario")
     actual = intake.get("latest_official_actual") or {}
+    scenario_profile = intake.get("analyst_scenario") or {}
+    if isinstance(scenario, dict) and scenario_profile.get("forecast_rationale"):
+        scenario = {**scenario,
+                    "rationale": scenario_profile["forecast_rationale"]}
     if not isinstance(scenario, dict) or not actual:
         return None
     metrics = actual.get("metrics") or {}
@@ -85,7 +89,14 @@ def build(intake, n_years=5, assumption_plan=None):
     for i in range(1, len(gs)):
         if gs[i] >= gs[i - 1]:
             gs[i] = round(gs[i - 1] - 0.5, 1)
-    effects = (assumption_plan or {}).get("news_effects") or []
+    normalized_plan = dict(assumption_plan or {})
+    if isinstance(normalized_plan.get("interim_scenario"), dict):
+        interim_plan = dict(normalized_plan["interim_scenario"])
+        scenario_profile = intake.get("analyst_scenario") or {}
+        if scenario_profile.get("forecast_rationale"):
+            interim_plan["rationale"] = scenario_profile["forecast_rationale"]
+        normalized_plan["interim_scenario"] = interim_plan
+    effects = normalized_plan.get("news_effects") or []
     for event in effects:
         if event.get("driver") != "revenue_growth_pp":
             continue
@@ -218,7 +229,7 @@ def build(intake, n_years=5, assumption_plan=None):
         g2["catatan"].append(
             "G2.9: angka CAGR dan capex=D&A hanyalah screen; forecast driver, "
             "modal kerja, serta jadwal utang belum direkonsiliasi.")
-    interim_scenario = _interim_scenario(intake, assumption_plan)
+    interim_scenario = _interim_scenario(intake, normalized_plan)
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
@@ -227,5 +238,6 @@ def build(intake, n_years=5, assumption_plan=None):
             "driver_evidence": intake.get("driver_evidence") or intake.get("drivers"),
             "forecast_basis": "historical_screening_proxy",
             "production_ready": False,
+            "assumption_plan": normalized_plan,
             "base": {"cash": cash0, "debt": debt0, "equity": eq0,
                      "other_liab": oth_liab, "noncash": nc0}}

@@ -612,9 +612,11 @@ def run_cached(intake, refresh=False, store_dir=None):
     """
     try:
         _spec, spec_sha256 = _spec_sections()
-    except (OSError, UnicodeError, ValueError):
+        fingerprint = evidence_fingerprint(_source_payload(intake), spec_sha256)
+    except (OSError, UnicodeError, ValueError, KeyError):
+        # No spec or an intake without ticker/as-of: nothing stable to key a
+        # stored plan on, so run the agent without storage.
         return run_live(intake)
-    fingerprint = evidence_fingerprint(_source_payload(intake), spec_sha256)
     folder = Path(store_dir or PLAN_STORE)
     path = folder / f"{intake['ticker']}-{fingerprint}.json"
     if not refresh:
