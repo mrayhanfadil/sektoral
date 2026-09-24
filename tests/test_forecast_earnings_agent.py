@@ -172,3 +172,14 @@ def test_stage_rationale_is_trimmed_to_whole_sentences():
     trimmed = agent._trim_sentences(text, 600)
     assert len(trimmed) <= 600 and trimmed.endswith(".")
     assert agent._trim_sentences("Pendek.", 600) == "Pendek."
+
+
+def test_thesis_titles_are_kept_when_aligned_and_dropped_otherwise():
+    points = _scenario()["thesis_points"]
+    good = _scenario(thesis_titles=["Volume H2 dari kapasitas baru", "Harga bahan baku stabil."])
+    assert agent._salvage_titles(good) == []
+    assert good["thesis_titles"][1] == "Harga bahan baku stabil"
+    short = _scenario(thesis_titles=["Terlalu"])
+    assert agent._salvage_titles(short) and "thesis_titles" not in short
+    assert agent._validate_earnings(short, _source()) == []
+    assert len(points) == 2

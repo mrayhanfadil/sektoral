@@ -18,8 +18,8 @@ DRIVERS = {"revenue_growth_pp", "ebitda_margin_pp", "wacc_bps", "coe_bps", "none
 SPEC_PATH = Path(__file__).resolve().parents[2] / "spec" / "Instruksi-Report-v3.md"
 PLAN_STORE = Path(__file__).resolve().parents[2] / "data" / "forecast_plans"
 # Bump when a subagent's required output changes, so cached plans without the
-# new fields are not reused (2: earnings key_risks).
-PLAN_SCHEMA = 2
+# new fields are not reused (2: earnings key_risks; 3: thesis_titles).
+PLAN_SCHEMA = 3
 
 
 def _spec_sections():
@@ -496,6 +496,22 @@ def _salvage_key_risks(scenario, allowed):
     return []
 
 
+def _salvage_titles(scenario):
+    """Card titles are presentation only: keep them when they line up with the
+    thesis points and fit 12-60 characters, otherwise drop them (the report
+    falls back to the opening clause of each point)."""
+    titles, points = scenario.get("thesis_titles"), scenario.get("thesis_points")
+    if titles is None:
+        return []
+    ok = (isinstance(titles, list) and isinstance(points, list) and len(titles) == len(points)
+          and all(isinstance(t, str) and 12 <= len(t.strip()) <= 60 for t in titles))
+    if ok:
+        scenario["thesis_titles"] = [t.strip().rstrip(".") for t in titles]
+        return []
+    scenario.pop("thesis_titles", None)
+    return ["dropped thesis_titles: must match thesis_points, 12-60 characters each"]
+
+
 def _validate_key_risks(risks, allowed):
     """Spec §5.4 'Risiko utama': 3-5 issuer risks, each named, categorised,
     quantified from the evidence and cited."""
@@ -669,6 +685,9 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "source_ids. Price/index moves, broker calls and sentiment are not "
             "reasons. For Tavily articles rely on fetched full_text, not the headline. "
             "Separate reported facts from your judgment in the rationale. Also "
+            "return thesis_titles: one short Indonesian title per thesis point, same "
+            "order, 12-60 characters, a noun phrase without a final period (e.g. "
+            "\"Pemulihan harga livebird menopang ASP\"). And "
             "return thesis_points: 2-3 Indonesian sentences (40-280 characters "
             "and at most 30 words each), each a forward-looking claim tied to a measurable earnings "
             "driver (claim -> number -> earnings implication). And "
@@ -701,6 +720,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "h2_revenue_to_h1": "number", "h2_net_margin_pct": "number",
                        "rationale": "Indonesian text", "source_ids": ["official"],
                        "thesis_points": ["Indonesian sentence"],
+                       "thesis_titles": ["short title"],
                        "catalysts_risks": [{"item": "text", "timing": "text",
                                             "driver_path": "text",
                                             "direction": "Negatif",
@@ -826,7 +846,8 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                 else:
                     scenario = {key: scenario[key] for key in (
                         "h2_revenue_to_h1", "h2_net_margin_pct", "rationale",
-                        "source_ids", "thesis_points", "catalysts_risks", "key_risks")
+                        "source_ids", "thesis_points", "thesis_titles", "catalysts_risks",
+                        "key_risks")
                                 if key in scenario}
                     # Provenance is bound to the official release, not the model.
                     scenario["source_url"] = source["official"]["source_url"]
@@ -835,6 +856,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     allowed_ids = {"official"} | {f"news:{item['index']}" for item in source["news"]} | {
                         f"guidance:{gi}" for gi, _ in enumerate(source["official"].get("guidance") or [])}
                     salvaged = _salvage_key_risks(scenario, allowed_ids)
+                    salvaged += _salvage_titles(scenario)
                     problems = _validate_earnings(scenario, source)
                     if salvaged and not problems:
                         scenario["salvage_notes"] = salvaged

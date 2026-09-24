@@ -3247,7 +3247,7 @@ def _shares_source(evidence):
     return ((evidence or {}).get("balance_sheet") or {}).get("shares_source")
 
 
-def _thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr):
+def _thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr, titles=None):
     """Design 'Tesis investasi': each forward claim beside the model figure it
     moves (revenue growth, net margin, upside), all from sourced numbers."""
     annual = [a for a in intake.get("annuals") or [] if a.get("revenue")]
@@ -3264,7 +3264,8 @@ def _thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr):
     cards = []
     for i, point in enumerate(thesis):
         metric, metric_label = metrics[i] if i < len(metrics) else (None, None)
-        cards.append({"title": _card_title(point), "text": point,
+        title = (titles[i] if titles and i < len(titles) else _card_title(point))
+        cards.append({"title": title, "text": point,
                       "metric": metric, "metric_label": metric_label})
     return {"halaman": 0, "judul": "Tesis investasi", "layout": "cards",
             "paragraf": ["Pandangan kami tentang driver laba ke depan; angka di kanan "
@@ -3576,7 +3577,9 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
             "catatan_sumber": (
                 "Sumber: asumsi analis tahunan dari rilis resmi dan berita bertanggal; "
                 "bukan panduan emiten. Target harga tetap memakai " + label + ".")})
-    doc["bagian"].append(_thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr))
+    titles = [t for t in a.get("thesis_titles") or [] if isinstance(t, str)]
+    doc["bagian"].append(_thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr,
+                                            titles if len(titles) == len(thesis) else None))
     doc["bagian"].append({"halaman": 0, "judul": (f"Target harga berbasis ROE {label}" if pbv else
                                                    "Target harga berbasis nilai buku" if book
                                                    else f"Target harga berbasis laba {label}"),
