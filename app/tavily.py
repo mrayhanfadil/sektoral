@@ -1,8 +1,9 @@
-"""Dated web news context from Tavily, used only as narrative context.
+"""Dated web news discovery from Tavily.
 
-Nothing from here becomes a number in a signal, forecast or valuation; those
-come from Sectors data. Keys are read from ``TAVILY_API_KEYS`` (comma
-separated) or ``TAVILY_API_KEY`` / ``TAVILY_API_KEY_1`` … in the environment or
+Articles may support labeled analyst forecast assumptions after source checks;
+they do not become issuer actuals or guidance. Keys are read from
+``TAVILY_API_KEYS`` (comma separated) or ``TAVILY_API_KEY`` /
+``TAVILY_API_KEY_1`` … in the environment or
 the repo ``.env``, and requests rotate across them round-robin. A key that is
 rejected or out of quota is skipped for the rest of the process. Results are
 saved under ``data/web_news/`` so repeating a run does not spend credits.
