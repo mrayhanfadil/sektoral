@@ -114,7 +114,7 @@ def fcff_exhibit(intake, fc, val):
               "(Rp miliar)"] + [""] * n_pad + [fmt.miliar(ev_x)])
     R.append(["Nilai per saham exit (Rp)"] + [""] * n_pad + [fmt.rp(ps_x)])
     R.append(["Nilai skenario gabungan per saham Gordon+exit (Rp)"] + [""] * n_pad +
-              [fmt.rp(val["tp"])])
+              [fmt.rp(val.get("dcf_blend", val["tp"]))])
     return _exhibit("Proyeksi FCFF, Nilai Terminal, dan Jembatan Nilai Skenario",
                     cols, R,
                     "Source: Company, Sektoral Estimates; Delta NWC = plug "

@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from . import cache as cache_mod
 from . import ddm
 from . import fmt
+from . import method_chain
 from . import methodnote
 from . import rnav
 from . import scrub
@@ -316,6 +317,34 @@ def _research_citation_labels(citations):
 
 def _draft_value(value):
     return "-" if value is None else fmt.miliar(value)
+
+
+def _method_chain_text(va):
+    """Satu kalimat rantai metode (§4.1a) untuk tabel pemeriksaan draft."""
+    chain = va.get("method_chain") or {}
+    trace = chain.get("trace") or []
+    if not trace:
+        return None
+    parts = [f"{t['short']} dilewati ({method_chain.reader_reason(t['reasons'][0])})"
+             for t in trace if t["decision"] == "skipped"]
+    sel = next((t for t in trace if t["decision"] in ("selected", "stop_extreme")), None)
+    if sel:
+        parts.append(f"dasar nilai {sel['short']}" +
+                     (" tetapi hasilnya ekstrem sehingga rantai berhenti"
+                      if sel["decision"] == "stop_extreme" else ""))
+    else:
+        parts.append("belum ada metode yang memadai")
+    return "; ".join(parts) + "."
+
+
+def _chain_cover_label(va, default):
+    """Label cover draft: metode fallback terpilih bila metode utama dilewati."""
+    chain = va.get("method_chain") or {}
+    if chain.get("route") != "fallback":
+        return default
+    trace = {t["key"]: t for t in chain["trace"]}
+    return (f"{trace[chain['selected']]['short']} (fallback dari "
+            f"{chain['trace'][0]['short']}; belum lengkap)")
 
 
 def _build_general_draft(intake, fc, va, g1, method="auto",
@@ -2063,6 +2092,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             ["Forecast fisik", "Perlu jadwal produksi, pemrosesan dan penjualan, harga, biaya, pajak dan capex per tahun."],
             ["SOTP", "Kas, utang finansial, NCI dan saham sudah bersumber; NAV aset LoM, overhead PV, serta rekonsiliasi uang muka pelanggan ke delivery/arus kas belum tersedia."],
             ["Keputusan rilis", "Rating dan target harga ditahan sampai forecast dan SOTP dapat direkonsiliasi."]]
+        chain_text = _method_chain_text(va)
+        if chain_text:
+            release_rows.insert(-1, ["Rantai metode", chain_text])
         sotp = va.get("sotp") or {}
         bridge = intake.get("sotp_bridge") or {}
         if sotp and bridge:
@@ -2096,6 +2128,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             ["Forecast operasi", "Perlu driver volume, harga/mix, margin, capex, modal kerja, pajak dan utang."],
             ["Valuasi", "Perlu FCFF yang direkonsiliasi dan sensitivitas terminal yang konsisten."],
             ["Keputusan rilis", "Rating dan target harga ditahan sampai seluruh pemeriksaan lolos."]]
+        chain_text = _method_chain_text(va)
+        if chain_text:
+            release_rows.insert(-1, ["Rantai metode", chain_text])
     add("Pemeriksaan sebelum rating dan target harga",
         ["Pemeriksaan", "Bukti yang diperlukan"], release_rows,
         "Sumber: pemeriksaan rilis model Sektoral; rating dan target harga hanya "
@@ -2498,12 +2533,13 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
     elif method == "rnav":
         method_label = "RNAV LoM (Rp)"
     elif _is_bank:
-        method_label = "DDM (dividen, Rp)"
+        method_label = _chain_cover_label(va, "DDM (dividen, Rp)")
     elif mining:
         method_label = ("SOTP/LoM menunggu; DCF screen internal"
-                        if illustrative_pages else "SOTP/LoM (belum lengkap)")
+                        if illustrative_pages else
+                        _chain_cover_label(va, "SOTP/LoM (belum lengkap)"))
     else:
-        method_label = "DCF FCFF (belum lengkap)"
+        method_label = _chain_cover_label(va, "DCF FCFF (belum lengkap)")
 
     catatan = [
         "DRAFT NON-DISTRIBUTABLE: rating dan target harga belum disajikan.",
@@ -3336,7 +3372,11 @@ def _build_draft(intake, fc, va, g1, method="auto",
             "; ".join(news_sources) + "." + deepdive_note)
 
     blocker_groups = {}
-    for item in blockers:
+    chain = va.get("method_chain") or {}
+    shown = list(blockers) + [
+        t["reasons"][0] for t in chain.get("trace") or []
+        if t["key"] == "sotp_lom" and t["decision"] == "skipped" and t["reasons"]]
+    for item in shown:
         if item.startswith("latest interim actuals"):
             latest_date = ((intake.get("latest_quarterly_actual") or {}).get("date")
                            or "belum tersedia")
@@ -3351,11 +3391,15 @@ def _build_draft(intake, fc, va, g1, method="auto",
         elif item.startswith("mining forecast"):
             blocker_groups["Forecast fisik tambang"] = (
                 "Forecast fisik-ke-keuangan belum dihitung dan direkonsiliasi; CAGR hanya screening.")
+        elif item.startswith("method chain") or item.startswith("extreme "):
+            blocker_groups["Rantai metode valuasi"] = _method_chain_text(va) or "Belum terpenuhi."
         elif item.startswith("SOTP"):
             blocker_groups["Valuasi SOTP/LoM"] = (
             "NAV per aset dan/atau jembatan ekuitas belum lengkap; skenario nilai belum dapat disajikan.")
         else:
             blocker_groups[item] = "Belum terpenuhi."
+    if chain.get("trace"):
+        blocker_groups.setdefault("Rantai metode valuasi", _method_chain_text(va))
     blocker_no = add(
         "Kelengkapan sebelum rilis", ["Pemeriksaan", "Yang masih diperlukan"],
         [[label, detail] for label, detail in blocker_groups.items()],
@@ -3471,7 +3515,7 @@ def _build_draft(intake, fc, va, g1, method="auto",
         "method": ("DDM (dividen, Rp)" if method == "ddm" else
                    "DCF (FCFF, Rp)" if method == "dcf" else
                    "RNAV LoM (Rp)" if method == "rnav" else
-                   "SOTP/LoM (belum lengkap)"),
+                   _chain_cover_label(va, "SOTP/LoM (belum lengkap)")),
         "method_select": method, "holders": [],
         "catatan_metodologi": (
             [f"metode valuasi dipilih analis: {'DDM (dividen, Rp)' if method == 'ddm' else 'DCF (FCFF, Rp)' if method == 'dcf' else 'RNAV LoM (Rp)'}."] if method != "auto" else []

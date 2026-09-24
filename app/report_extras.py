@@ -17,7 +17,7 @@ from agents.analyst import signals as S
 from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
-from . import cache, fmt
+from . import cache, fmt, method_chain
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
 # "USD" rather than "US$": the report keeps "$" out of rupiah-only drafts (spec §5.3).
@@ -58,6 +58,53 @@ def _exhibit(title, columns, rows, source):
 def _page(title, paragraphs, exhibits):
     return {"halaman": 0, "judul": title, "layout": "stack",
             "paragraf": [p for p in paragraphs if p], "exhibit": exhibits}
+
+
+# ------------------------------------------------------------ method chain
+
+_DECISION = {"selected": "Terpilih", "stop_extreme": "Terpilih, ekstrem (rantai berhenti)",
+             "skipped": "Dilewati", "cross_check": "Silang cek", "not_needed": "Tidak dijalankan"}
+
+
+def method_chain_exhibit(va):
+    """Rantai metode §4.1a: urutan, keputusan, dan alasan tiap metode.
+
+    Nilai per saham hanya tampil bila rilis lolos; draft menahan angka.
+    """
+    chain = (va or {}).get("method_chain") or {}
+    trace = chain.get("trace") or []
+    if not trace:
+        return None
+    released = ((va.get("release") or {}).get("status") or "").startswith("distributable")
+    rows = []
+    for t in trace:
+        value = (f"Rp{fmt.rp(round(t['per_share'] / 10) * 10)}"
+                 if released and t.get("per_share") and t["decision"] in
+                 ("selected", "cross_check") else "ditahan" if t.get("per_share") else "-")
+        why = (method_chain.reader_reason(t["reasons"][0]) if t.get("reasons")
+               else "; ".join(t.get("labels") or []) or "input lengkap")
+        rows.append([f"{t['rank']}. {t['short']}" + (" (utama)" if t["role"] == "primary" else ""),
+                     _DECISION.get(t["decision"], t["decision"]), value, why])
+    return _exhibit("Rantai metode valuasi",
+                    ["Metode", "Keputusan", "Nilai/saham", "Alasan"], rows,
+                    "Source: Sektoral Estimates; urutan metode dikunci per profil sebelum "
+                    "nilai dihitung; metode berikutnya hanya dipakai bila metode "
+                    "sebelumnya tidak memadai, bukan karena hasilnya tidak disukai")
+
+
+def attach_method_chain(doc, va):
+    exhibit = method_chain_exhibit(va)
+    if not exhibit:
+        return
+    page = next((p for p in doc["bagian"] if str(p.get("judul", "")).startswith(
+        ("Valuasi", "Skenario nilai", "Target harga"))), None)
+    if page is None:
+        doc["bagian"].append(_page(
+            "Valuasi: rantai metode",
+            ["Metode utama dan fallback dinilai berurutan; tabel mencatat metode yang "
+             "dipakai dan alasan metode lain dilewati."], [exhibit]))
+    else:
+        page["exhibit"].append(exhibit)
 
 
 # ------------------------------------------------------------ cover data
@@ -571,7 +618,7 @@ def trim_key_financials(doc, actual_years=2, forecast_years=3):
     doc["cover"]["key_financials"] = cover["data"]["rows"]
 
 
-def enrich(doc, intake, valuation_inputs=None):
+def enrich(doc, intake, valuation_inputs=None, va=None):
     cover_market_data(doc, intake)
     trim_key_financials(doc)
     mining_catalysts(doc, intake)
@@ -607,6 +654,8 @@ def enrich(doc, intake, valuation_inputs=None):
     for page in new_pages:
         if page and page["judul"] not in titles:
             pages.append(page)
+    if va:
+        attach_method_chain(doc, va)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"])) if p["exhibit"] or p["paragraf"]]
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2

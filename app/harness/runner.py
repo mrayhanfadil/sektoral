@@ -43,7 +43,13 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
         sotp_like = valuation.get("sotp") if isinstance(valuation, dict) else None
         if profile == "financial_ddm" and isinstance(valuation, dict) and valuation.get("ddm"):
             sotp_like = valuation.get("ddm")
-        er = _release.assess_release(profile, intake, forecast, sotp_like)
+        chain = valuation.get("method_chain") if isinstance(valuation, dict) else None
+        if isinstance(chain, dict) and chain.get("order"):
+            # Method chain (§4.1a): common data gates + selected-method sanity;
+            # skipped methods' gaps stay in the chain trace.
+            er = _release.assess_chain(profile, intake, forecast, chain)
+        else:
+            er = _release.assess_release(profile, intake, forecast, sotp_like)
         engine_status = er.get("status")
         engine_blockers = list(er.get("blockers") or [])
     except Exception as e:  # fail closed
@@ -99,7 +105,11 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
                 "narrative": {c["check"]: c["status"] for c in rn["checks"]},
                 "schema": {c["check"]: c["status"] for c in rs["checks"]},
                 "release": {"status": status, "engine_status": engine_status,
-                            "route": "analyst_target" if assumption_led else "primary_method",
+                            "route": "analyst_target" if assumption_led else
+                            ((valuation.get("method_chain") or {}).get("route") or "primary_method")
+                            if isinstance(valuation, dict) else "primary_method",
+                            "method_key": (valuation.get("method_chain") or {}).get("selected")
+                            if isinstance(valuation, dict) else None,
                             "limitations": (assumption_release.get("limitations") or [])
                             if assumption_led else [],
                             "underlying_sotp": assumption_release.get("underlying_sotp")

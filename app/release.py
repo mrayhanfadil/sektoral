@@ -387,23 +387,11 @@ def _check_sotp(result: object, intake: object) -> list[str]:
     return blockers
 
 
-def assess_release(profile, intake, forecast, sotp_result):
-    """Assess whether a model may be published as a production report.
+def common_blockers(profile, intake, forecast):
+    """Data/forecast blockers shared by every valuation method of a profile.
 
-    Args:
-        profile: Explicit model profile string. Only ``finite_life_mining``
-            activates the three mining-specific checks below.
-        intake: For mining, contains ``latest_interim_actuals`` with an interim
-            period, reported-actual status, source/date/page, and numeric
-            revenue/EBITDA/net-profit/capex metrics, each with a unit.
-        forecast: For mining, contains ``operating_bridge`` keyed by every
-            stage in :data:`OPERATING_BRIDGE_STAGES`; each stage is a sourced
-            evidence row. Use a sourced ``not_applicable`` row for stages that
-            do not apply to the issuer.
-        sotp_result: For mining, complete result from ``calculate_sotp``.
-
-    Returns ``{"status": ..., "blockers": [...]}``. Non-mining profiles do
-    not inherit any of these mining-only requirements.
+    Method-specific completeness (SOTP bridge, DDM result) is checked
+    separately so the method chain can fall back without losing these.
     """
     blockers = []
     normalized_profile = profile.strip().lower() if isinstance(profile, str) else ""
@@ -421,7 +409,6 @@ def assess_release(profile, intake, forecast, sotp_result):
         g2 = (forecast or {}).get("g2") if isinstance(forecast, Mapping) else None
         if isinstance(g2, Mapping) and g2.get("G2.9_operating_bridge") == "gagal":
             blockers.append("forecast gate failed: G2.9 physical-to-financial operating bridge is not reconciled")
-        blockers.extend(_check_sotp(sotp_result, intake))
     elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
         actual = intake.get("latest_official_actual") if isinstance(intake, Mapping) else None
         if not isinstance(actual, Mapping):
@@ -442,17 +429,62 @@ def assess_release(profile, intake, forecast, sotp_result):
                         ("revenue", "net_profit"))):
                 blockers.append("latest official interim revenue/net profit are missing")
         blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile))
-        if normalized_profile == "financial_ddm":
-            has_ddm = (
-                isinstance(sotp_result, Mapping)
-                and (
-                    sotp_result.get("status") in {"complete", "draft"}
-                    or "tp_gordon" in sotp_result
-                    or sotp_result.get("method") == "ddm"
-                )
-            ) or sotp_result == "draft"
-            if not has_ddm:
-                blockers.append("financial DDM/residual-income primary valuation is not implemented")
+    return blockers
+
+
+def _check_ddm_present(result):
+    has_ddm = (
+        isinstance(result, Mapping)
+        and (
+            result.get("status") in {"complete", "draft"}
+            or "tp_gordon" in result
+            or result.get("method") == "ddm"
+        )
+    ) or result == "draft"
+    return [] if has_ddm else [
+        "financial DDM/residual-income primary valuation is not implemented"]
+
+
+def assess_chain(profile, intake, forecast, chain):
+    """Release for the method selected by :mod:`app.method_chain`.
+
+    Common data blockers always apply; the skipped methods' own gaps stay in
+    the chain trace instead of blocking the selected fallback.
+    """
+    from . import method_chain
+    blockers = common_blockers(profile, intake, forecast)
+    chain_blocker = method_chain.summary_blocker(chain or {})
+    if chain_blocker:
+        blockers.append(chain_blocker)
+    return {"status": "draft_non_distributable" if blockers else "distributable",
+            "blockers": blockers, "route": (chain or {}).get("route"),
+            "method_key": (chain or {}).get("selected")}
+
+
+def assess_release(profile, intake, forecast, sotp_result):
+    """Assess whether a model may be published as a production report.
+
+    Args:
+        profile: Explicit model profile string. Only ``finite_life_mining``
+            activates the three mining-specific checks below.
+        intake: For mining, contains ``latest_interim_actuals`` with an interim
+            period, reported-actual status, source/date/page, and numeric
+            revenue/EBITDA/net-profit/capex metrics, each with a unit.
+        forecast: For mining, contains ``operating_bridge`` keyed by every
+            stage in :data:`OPERATING_BRIDGE_STAGES`; each stage is a sourced
+            evidence row. Use a sourced ``not_applicable`` row for stages that
+            do not apply to the issuer.
+        sotp_result: For mining, complete result from ``calculate_sotp``.
+
+    Returns ``{"status": ..., "blockers": [...]}``. Non-mining profiles do
+    not inherit any of these mining-only requirements.
+    """
+    normalized_profile = profile.strip().lower() if isinstance(profile, str) else ""
+    blockers = common_blockers(profile, intake, forecast)
+    if normalized_profile == "finite_life_mining":
+        blockers.extend(_check_sotp(sotp_result, intake))
+    elif normalized_profile == "financial_ddm":
+        blockers.extend(_check_ddm_present(sotp_result))
     thin_data = False
     if isinstance(sotp_result, Mapping):
         gv = sotp_result.get("gate_verdict")

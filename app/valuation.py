@@ -1,5 +1,6 @@
 from . import ddm
 from . import fmt
+from . import method_chain
 from . import model_profiles
 from . import rnav
 from . import release
@@ -97,6 +98,32 @@ def _ddm_grid(nets, payout_used, dps_hist, shares, re, g, roae, bvps):
             except Exception:
                 out[(round(dw, 3), gg)] = None
     return out
+
+
+def _rnav_candidate(intake, fc, lom, wacc):
+    """RNAV LoM anuitas sebagai fallback tambang; downside = diskonto +1pp."""
+    reasons = []
+    if not lom:
+        return method_chain.candidate(
+            "rnav_lom", reasons=["overlay cadangan/produksi/harga tidak tersedia"])
+    for stream in lom.get("streams") or []:
+        if not (isinstance(stream.get("life"), (int, float)) and stream["life"] > 0):
+            reasons.append(f"umur cadangan {stream.get('nama', '?')} tidak terhitung")
+        if stream.get("nav_usd") is None:
+            reasons.append(f"NAV {stream.get('nama', '?')} tidak terhitung")
+    down = None
+    if not reasons:
+        lom_down = rnav.build(intake["mineops"], fc["rows"][0]["margin"], wacc + 0.01,
+                             fc["base"]["cash"] / 1e9, fc["base"]["debt"] / 1e9,
+                             fc["rows"][0]["revenue"] / 1e9)
+        down = lom_down["rnav_rpbn"] * 1e9 / intake["shares"]
+    ps = lom.get("rnav_ps")
+    reasons += method_chain.scale_reasons(ps, intake["shares"], intake["market_cap"])
+    return method_chain.candidate(
+        "rnav_lom", per_share=ps, per_share_down=down, reasons=reasons,
+        labels=[lom.get("margin_basis"), "produksi flat sampai cadangan habis; "
+                "diskon RNAV 0% adalah judgment tanpa basis pembanding"],
+        detail={"discount": wacc})
 
 
 def build(intake, fc, analyst_target=False, assumption_status=None):
@@ -280,130 +307,179 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         "peer_exit_low": peer_exit_low,
         "peer_exit_high": peer_exit_high,
     }
+
+    # --- Rantai metode (§4.1a): kandidat dihitung, urutan dikunci per profile.
+    shares, mcap, price = intake["shares"], intake["market_cap"], intake["price"]
+    candidates = {}
+    if profile == "going_concern_fcff":
+        reasons = method_chain.scale_reasons(ps_g * 0.5 + ps_x * 0.5, shares, mcap)
+        if method_gap > 0.30:
+            reasons.append(f"divergensi Gordon vs exit {method_gap*100:.0f}% > 30%")
+        candidates["fcff_dcf"] = method_chain.candidate(
+            "fcff_dcf", per_share=(ps_g + ps_x) / 2, per_share_down=tp_down,
+            reasons=reasons,
+            labels=([f"porsi terminal {pv_tv/ev_g*100:.0f}% > 75% dari EV"]
+                    if pv_tv / ev_g > 0.75 else []))
+    if is_miner:
+        candidates["sotp_lom"] = method_chain.candidate(
+            "sotp_lom", per_share=sotp_result.get("target_price_idr"),
+            reasons=release._check_sotp(sotp_result, intake),
+            labels=["sensitivitas SOTP dilabeli"])
+        candidates["rnav_lom"] = _rnav_candidate(intake, fc, lom, wacc)
+        scenario_target = scenario_ev_ebitda_crosscheck(intake, fc)
+        assumption_release = release.assess_assumption_led(
+            intake, fc, scenario_target or {}, assumption_status,
+            {"status": "draft_non_distributable", "blockers": []})
+        values = (scenario_target or {}).get("values") or []
+        candidates["ev_ebitda_fy"] = method_chain.candidate(
+            "ev_ebitda_fy",
+            per_share=values[1]["per_share_idr"] if len(values) > 1 else None,
+            per_share_down=values[0]["per_share_idr"] if values else None,
+            reasons=assumption_release["blockers"],
+            labels=assumption_release.get("limitations") or [])
+    else:
+        scenario_target = None
+    if is_bank:
+        ddm_reasons = release._check_ddm_present(ddm_result)
+        ddm_down, ddm_grid, pbv_down = None, {}, None
+        if isinstance(ddm_result, dict):
+            try:
+                ddm_grid = _ddm_grid(nets, ddm_result.get("payout_used"),
+                                     intake.get("dps_hist") or [], shares, re, g, roae, bvps)
+                ddm_down = ddm_grid.get((0.01, 0.025))
+            except Exception:
+                ddm_grid = {}
+        candidates["ddm"] = method_chain.candidate(
+            "ddm", per_share=(ddm_result or {}).get("tp_gordon"), per_share_down=ddm_down,
+            reasons=ddm_reasons + method_chain.scale_reasons(
+                (ddm_result or {}).get("tp_gordon"), shares, mcap) +
+            ([] if ddm_down is not None or ddm_reasons else ["grid sensitivitas DDM gagal"]))
+        pbv_reasons = []
+        if not isinstance(ddm_result, dict):
+            pbv_reasons.append("hasil DDM/Inverse CoE tidak tersedia")
+        if not fc["rows"][0].get("equity"):
+            pbv_reasons.append("ROE forward tidak terhitung (ekuitas forecast kosong)")
+        if not bvps or bvps <= 0:
+            pbv_reasons.append("BVPS <= 0 atau tidak tersedia")
+        tp_inv = (ddm_result or {}).get("tp_inverse")
+        if not pbv_reasons and re + 0.01 > g:
+            pbv_down = (roae - g) / (re + 0.01 - g) * bvps
+        candidates["pbv_roe"] = method_chain.candidate(
+            "pbv_roe", per_share=tp_inv, per_share_down=pbv_down,
+            reasons=pbv_reasons + method_chain.scale_reasons(tp_inv, shares, mcap),
+            detail={"fair_pbv": (ddm_result or {}).get("fair_pbv"), "roae": roae, "bvps": bvps})
+    if profile in ("going_concern_fcff", "financial_ddm"):
+        candidates["relative_pe"] = method_chain.relative_pe(
+            intake.get("peers"), fc["rows"][0].get("eps"), shares, mcap)
+
+    chain = method_chain.run(profile, candidates, price)
+    selected = chain["selected"]
+    sel = next((t for t in chain["trace"] if t["key"] == selected), None)
+
+    # Gate 5 dinilai ulang pada metode terpilih, bukan DCF bila DCF di-skip.
+    if sel and sel["upside"] is not None:
+        gate_inputs["upside_pct"] = sel["upside"] * 100.0
+    if selected != "fcff_dcf":
+        gate_inputs.pop("terminal_value_pct_of_ev", None)
+        gate_inputs.pop("implied_exit_ev_ebitda", None)
     verdict = model_profiles.evaluate(gate_inputs)
 
-    if pv_tv / ev_g > 0.75:
-        notes.append(f"peringatan terminal: porsi terminal {pv_tv/ev_g*100:.0f}% > 75% dari EV")
-    if "5_exit_multiple_out_of_range" in verdict.gates_failed:
-        notes.append("implied exit EV/EBITDA di luar rentang peer; periksa cross-check valuasi relatif")
+    if selected == "ev_ebitda_fy":
+        release_result = dict(assumption_release)
+        release_result["underlying_sotp"] = release.assess_release(
+            profile, intake, fc, sotp_result)
+        release_result["route"], release_result["method_key"] = chain["route"], selected
+        extreme_blocker = method_chain.summary_blocker(chain)
+        if extreme_blocker and release_result["status"] != "draft_non_distributable":
+            release_result.update(status="draft_non_distributable",
+                                  blockers=release_result["blockers"] + [extreme_blocker])
+    elif profile == "unsupported":
+        release_result = release.assess_release(profile, intake, fc, None)
+    else:
+        release_result = release.assess_chain(profile, intake, fc, chain)
+    release_result["method_chain"] = {"selected": selected, "route": chain["route"]}
+    is_draft = release_result["status"] not in {
+        "distributable", "distributable_assumption_led"}
+
+    if selected:
+        method = method if selected in ("fcff_dcf", "ddm") else sel["label"]
+        if chain["route"] == "fallback":
+            skipped = [t for t in chain["trace"] if t["decision"] == "skipped"]
+            method += " [fallback: " + ", ".join(
+                f"{t['short']} tidak memadai" for t in skipped) + "]"
+            notes.append("rantai metode: " + "; ".join(
+                f"{t['short']} dilewati ({method_chain.reader_reason(t['reasons'][0])})"
+                for t in skipped)
+                + f"; dasar nilai {sel['label']}.")
+        notes.extend(sel["labels"])
+    elif is_miner:
+        method = method_chain.LABELS["sotp_lom"]
+
+    dcf_grid, dcf_down = grid, tp_down
+    tp_down, grid = None, {}
+    if selected == "fcff_dcf":
+        grid, tp_down = dcf_grid, dcf_down
+    elif selected == "ddm":
+        grid = ddm_grid
+    if sel and not is_draft:
+        tp = round(sel["per_share"] / 10) * 10
+        upside = tp / price - 1
+        if tp_down is None and sel["per_share_down"] is not None:
+            tp_down = round(sel["per_share_down"] / 10) * 10
+        rating = (rating_mod.classify(upside) if selected == "ev_ebitda_fy"
+                  else verdict.rating_override or rating_mod.classify(upside))
+        if selected == "ev_ebitda_fy":
+            tp_down, grid = None, {}
+            notes.append("8x EV/EBITDA FY26F adalah asumsi analis; LoM/SOTP belum lengkap.")
+    else:
+        rating = "DRAFT NON-DISTRIBUTABLE"
+        if profile != "going_concern_fcff" or selected != "fcff_dcf":
+            tp, upside, tp_down, grid = None, None, None, {}
+
+    if tp is not None and f_last["net"] > 0:
+        impl["per"] = tp / (f_last["net"] / shares)
+    if selected not in (None, "fcff_dcf") and tp is not None:
+        impl["ev_ebitda"] = ((tp * shares + net_debt) / f_last["ebitda"]
+                             if f_last["ebitda"] > 0 and not is_bank else None)
+    if is_bank:
+        impl.update(ev_ebitda=None,
+                    pbv=(ddm_result or {}).get("fair_pbv"),
+                    tp_inverse=(ddm_result or {}).get("tp_inverse"))
+
+    if selected != "fcff_dcf":
+        g3 = {
+            "G3.1_method": "lolos" if selected else "gagal",
+            "G3.2_skala": "lolos" if tp is not None else "dilabeli",
+            "G3.3_implied": "dilabeli",
+            "G3.4_downside": ("lolos" if (tp is not None and tp_down is not None and tp_down < tp)
+                              else "dilabeli" if tp is None or selected in ("sotp_lom", "ev_ebitda_fy")
+                              else "gagal"),
+            "G3.5_keyfin": "lolos" if (f_last.get("net") and shares) else "gagal",
+            "G3.6_peer": "dilabeli" if not intake["peers"] else "lolos",
+            "G3.7_band": "dilabeli",
+            "G3.8_method_divergence": "dilabeli",
+            "G3.9_extreme_thesis": "gagal" if chain["extreme"] else "lolos",
+            "G3.10_method_chain": (chain["route"] or "none") + ":" + (selected or "-"),
+        }
+        if is_miner:
+            g3["G3.2_sotp"] = ("lolos" if sotp_result["status"] == "complete" else
+                               "dilabeli" if selected else "gagal")
+            g3["G3.5_release"] = release_result["status"]
+    else:
+        g3["G3.10_method_chain"] = f"{chain['route']}:{selected}"
 
     valuation_asset = sotp_result if is_miner else (ddm_result if is_bank else None)
     if isinstance(valuation_asset, dict):
         valuation_asset["gate_verdict"] = verdict.to_dict()
-
-    release_result = release.assess_release(profile, intake, fc, valuation_asset)
-    if release_result["status"] == "distributable":
-        critical = [key for key, result in g3.items()
-                    if key in {"G3.2_skala", "G3.4_downside",
-                               "G3.8_method_divergence", "G3.9_extreme_thesis"}
-                    and isinstance(result, tuple) and result[0].startswith("gagal")]
-        if verdict.rating_override == "Review Required":
-            critical.append("G3.9_extreme_thesis")
-        if critical:
-            release_result = {"status": "draft_non_distributable",
-                              "blockers": [f"valuation check failed: {key}" for key in critical]}
-    scenario_target = None
-    if is_miner and analyst_target:
-        scenario_target = scenario_ev_ebitda_crosscheck(intake, fc)
-        release_result = release.assess_assumption_led(
-            intake, fc, scenario_target or {}, assumption_status, release_result)
-    is_draft = release_result["status"] not in {
-        "distributable", "distributable_assumption_led"}
-
-    # Mining's primary method is finite-life SOTP, never the legacy Gordon /
-    # exit blend. A screening forecast or incomplete SOTP cannot publish a TP.
-    # Banks' primary method is DDM (CoE), never FCFF; a screening forecast or
-    # incomplete DDM bridge cannot publish a TP.
-    if is_bank:
-        if release_result["status"] == "distributable" and isinstance(ddm_result, dict) \
-                and ddm_result.get("tp_gordon"):
-            tp = round(ddm_result["tp_gordon"] / 10) * 10
-            upside = tp / intake["price"] - 1
-            if abs(upside) > 0.50:
-                release_result = {"status": "draft_non_distributable",
-                                  "blockers": ["extreme DDM target needs a sourced fundamental thesis"]}
-                tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
-                tp_down, grid = None, {}
-            else:
-                rating = verdict.rating_override or rating_mod.classify(upside)
-                try:
-                    down = _ddm_grid(nets, ddm_result.get("payout_used"),
-                                     intake.get("dps_hist") or [], intake["shares"],
-                                     re, g, roae, bvps)
-                    tp_down = down.get((0.01, 0.025))
-                    grid = down
-                except Exception:
-                    tp_down, grid = None, {}
-                if tp_down is None or not (tp_down < tp):
-                    # Downside must be lower than base; otherwise hold the TP.
-                    release_result = {"status": "draft_non_distributable",
-                                      "blockers": ["DDM sensitivity downside is not below base TP"]}
-                    tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
-                    tp_down, grid = None, {}
-            g3 = {
-                "G3.1_method": "dilabeli",
-                "G3.2_skala": "lolos" if tp is not None else "gagal",
-                "G3.3_implied": "dilabeli",
-                "G3.4_downside": "lolos" if (tp_down is not None and tp is not None and tp_down < tp) else "gagal",
-                "G3.5_keyfin": "lolos" if (f_last.get("net") and intake.get("shares")) else "gagal",
-                "G3.6_peer": "dilabeli" if not intake["peers"] else "lolos",
-                "G3.7_band": "dilabeli",
-                "G3.8_method_divergence": "dilabeli",
-                "G3.9_extreme_thesis": ("lolos" if (upside is not None and abs(upside) <= 0.50) else "gagal"),
-            }
-            impl = {"per": tp / (f_last["net"] / intake["shares"]) if (tp and f_last["net"] > 0) else None,
-                    "ev_ebitda": None,
-                    "pbv": (ddm_result.get("fair_pbv") if isinstance(ddm_result, dict) else None),
-                    "tp_inverse": (ddm_result.get("tp_inverse") if isinstance(ddm_result, dict) else None)}
-        elif is_draft:
-            tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
-            tp_down, grid = None, {}
-        else:
-            tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
-            tp_down, grid = None, {}
-    elif is_miner:
-        method = ("FY26F EV/EBITDA 8x (asumsi analis)"
-                  if release_result["status"] == "distributable_assumption_led"
-                  else "SOTP/LoM (asset-based, no perpetual terminal)")
-        if release_result["status"] == "distributable_assumption_led":
-            base = scenario_target["values"][1]
-            tp = round(base["per_share_idr"] / 10) * 10
-            upside = tp / intake["price"] - 1
-            rating = rating_mod.classify(upside)
-            tp_down, grid = None, {}
-            notes.append("8x EV/EBITDA FY26F adalah asumsi analis; LoM/SOTP belum lengkap.")
-        elif is_draft:
-            tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
-            tp_down, grid = None, {}
-        else:
-            tp = round(sotp_result["target_price_idr"] / 10) * 10
-            upside = tp / intake["price"] - 1
-            if abs(upside) > 0.50:
-                release_result = {"status": "draft_non_distributable",
-                                  "blockers": ["extreme SOTP target needs a sourced fundamental thesis"]}
-                tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
-            else:
-                rating = verdict.rating_override or rating_mod.classify(upside)
-            tp_down, grid = None, {}
-        g3 = {
-            "G3.1_method": "lolos" if not is_draft else "gagal",
-            "G3.2_sotp": "lolos" if sotp_result["status"] == "complete" else "gagal",
-            "G3.3_scenario_value": "lolos" if tp is not None else "gagal",
-            "G3.4_sensitivity": "dilabeli",
-            "G3.5_release": release_result["status"],
-        }
-    elif profile == "unsupported":
-        tp, upside, rating, tp_down, grid = None, None, \
-            "DRAFT NON-DISTRIBUTABLE", None, {}
-        g3 = {"G3.release": "draft_non_distributable"}
-    elif is_draft:
-        rating = "DRAFT NON-DISTRIBUTABLE"
-    else:
-        rating = verdict.rating_override or rating_mod.classify(upside)
+    if pv_tv / ev_g > 0.75 and selected == "fcff_dcf":
+        notes.append(f"peringatan terminal: porsi terminal {pv_tv/ev_g*100:.0f}% > 75% dari EV")
+    if "5_exit_multiple_out_of_range" in verdict.gates_failed:
+        notes.append("implied exit EV/EBITDA di luar rentang peer; periksa cross-check valuasi relatif")
 
     return {"method": method, "model_profile": profile,
             "release": release_result, "sotp": sotp_result,
-            "scenario_target": scenario_target,
+            "scenario_target": (scenario_target if analyst_target or
+                                selected == "ev_ebitda_fy" else None),
             "ddm": ddm_result, "gate_verdict": verdict.to_dict(),
             "wacc": wacc, "wacc_inputs": {"rf": rf, "erp": erp,
             "beta": beta, "re": re, "rd_after_tax": rd, "g": g, "exit_mult": exit_mult,
@@ -411,6 +487,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
             "news_coe_bps": news_coe_bps},
             "pv_explicit": pv_exp, "pv_terminal": pv_tv, "tv_share": pv_tv / ev_g,
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
-            "ps_exit": ps_x, "tp": tp, "tp_down": tp_down, "tp_grid": grid,
+            "ps_exit": ps_x, "dcf_blend": round((ps_g + ps_x) / 2 / 10) * 10, "tp": tp, "tp_down": tp_down, "tp_grid": grid,
             "upside": upside, "rating": rating,
-            "implied": impl, "lom": lom, "g3": g3, "notes": notes}
+            "implied": impl, "lom": lom, "g3": g3, "notes": notes,
+            "method_chain": chain}
