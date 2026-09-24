@@ -270,7 +270,7 @@ def test_mining_profile_never_gets_earnings_scenario():
     assert forecast.build(doc_in, assumption_plan=plan)["earnings_scenario"] is None
 
 
-def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
+def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path, monkeypatch):
     from app import build
     doc_in, _ = intake.load("JPFA", as_of="2026-09-24")
     actual = doc_in["latest_official_actual"]
@@ -339,6 +339,25 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
     body = " ".join(p for page in doc["bagian"] for p in page["paragraf"])
     assert "Pisahkan driver" not in " ".join(doc["cover"]["bullets"])
     assert "belum cukup untuk menerbitkan" not in body
+    target = next(e for e in doc["exhibits"] if e["judul"].startswith("Target harga: PER"))
+    assert "saham dari neraca interim resmi" in target["catatan_sumber"]
+    # A pack that takes its share count from elsewhere names that source.
+    from app import issuer_evidence
+    original = issuer_evidence.load
+
+    def relabelled(ticker, as_of):
+        evidence = original(ticker, as_of)
+        evidence["balance_sheet"]["shares_source"] = "Yahoo Finance (diambil 2026-09-24)"
+        return evidence
+    monkeypatch.setattr(issuer_evidence, "load", relabelled)
+    other = build.build("JPFA", tmp_path / "relabelled", as_of="2026-09-24",
+                        assumption_plan=plan, assumption_status="validated")
+    target = next(e for e in other["exhibits"] if e["judul"].startswith("Target harga: PER"))
+    assert "saham dari Yahoo Finance (diambil 2026-09-24)" in target["catatan_sumber"]
+    assert "neraca interim resmi" not in target["catatan_sumber"]
+    key_note = next(e for e in other["exhibits"] if e["judul"] == "Key Financials")["catatan_sumber"]
+    assert "dari Yahoo Finance (diambil 2026-09-24)" in key_note
+    monkeypatch.setattr(issuer_evidence, "load", original)
     # Without the validated agent scenario the same issuer stays draft.
     draft = build.build("JPFA", tmp_path, as_of="2026-09-24")
     assert draft["meta"]["status"] == "draft_non_distributable"
@@ -445,3 +464,14 @@ def test_cover_bullet_is_one_complete_sentence():
     out = _bullet(long)
     assert out.endswith("commercial farming.") and len(out.split()) <= 30
     assert _bullet("Laba naik. Kalimat kedua.") == "Laba naik."
+
+
+def test_issuer_without_sectors_peers_borrows_the_table_that_lists_it():
+    # BBCA has no Sectors peer table; BBRI's Sectors table lists it.
+    doc_in, _ = intake.load("BBCA", as_of="2026-09-24")
+    assert doc_in["peer_basis"] == "tabel peer Sectors milik BBRI yang memuat BBCA"
+    symbols = [p["symbol"] for p in doc_in["peers"]]
+    assert "BBRI.JK" in symbols and "BBCA.JK" not in symbols
+    assert len([p for p in doc_in["peers"] if 0 < p["pe"] <= 50]) >= 3
+    own, _ = intake.load("JPFA", as_of="2026-09-24")
+    assert own["peer_basis"] is None

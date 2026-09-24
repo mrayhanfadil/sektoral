@@ -461,7 +461,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
         key_note = (f"Sumber: {evidence.get('annual_source_title') or actual.get('source_title')}; "
                     f"angka {history[0]['year']}-{history[-1]['year']} ditampilkan dalam {unit}. "
                     "EPS/BVPS historis memakai laba/ekuitas pemilik induk dan jumlah "
-                    f"saham per {balance.get('period_end', 'periode interim')} sebagai basis pro forma; "
+                    f"saham per {balance.get('period_end', 'periode interim')}"
+                    + (f" ({_shares_source(evidence)})" if _shares_source(evidence) else "")
+                    + " sebagai basis pro forma; "
                     f"{f_labels[0]}-{f_labels[-1]} belum diterbitkan (NA: belum dimodelkan).")
     else:
         cached = intake.get("annuals") or []
@@ -3231,6 +3233,12 @@ def _card_title(text, cap=7):
     return " ".join(words[:cap]) + ("..." if len(words) > cap else "")
 
 
+def _shares_source(evidence):
+    """Where the share count came from: a pack may take it from a source other
+    than the filed balance sheet and says so in ``balance_sheet.shares_source``."""
+    return ((evidence or {}).get("balance_sheet") or {}).get("shares_source")
+
+
 def _thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr):
     """Design 'Tesis investasi': each forward claim beside the model figure it
     moves (revenue growth, net margin, upside), all from sourced numbers."""
@@ -3393,8 +3401,12 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         "data": {"cols": ["PER peer", "Kelipatan", "Nilai per saham", "Terhadap harga"],
                  "rows": rows},
         "catatan_sumber": (
-            f"Sumber: PER TTM data Sectors untuk peer dengan PER 0-50x ({peer_names}); "
-            "saham dari neraca interim resmi"
+            f"Sumber: PER TTM data Sectors"
+            + (f" ({intake['peer_basis']})" if intake.get("peer_basis") else "")
+            + f" untuk peer dengan PER 0-50x ({peer_names}); "
+            + (f"saham dari {_shares_source(intake.get('official_evidence'))}"
+               if _shares_source(intake.get("official_evidence"))
+               else "saham dari neraca interim resmi")
             + (f"; kurs Rp{fmt.rp(d['fx'])}/USD" if d.get("fx") else "")
             + f"; harga penutupan {intake['price_date']}.")}
     exhibits = [bridge, sensitivity]
@@ -3468,7 +3480,10 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         key_fin["catatan_sumber"] = (
             (key_fin.get("catatan_sumber") or "") +
             f" {label} dan tahun sesudahnya: skenario laba analis; EBITDA tidak dimodelkan. "
-            f"EPS memakai saham neraca {actual.get('period_end', '-')} (pro forma untuk tahun "
+            f"EPS memakai saham {actual.get('period_end', '-')}"
+            + (f" dari {_shares_source(intake.get('official_evidence'))}"
+               if _shares_source(intake.get("official_evidence")) else " dari neraca")
+            + " (pro forma untuk tahun "
             f"historis); PER memakai harga {intake['price_date']}.")
 
     doc["catatan_metodologi"] = [

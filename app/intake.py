@@ -1,4 +1,5 @@
 """TAHAP 1: intake data pasar dari cache dan fakta emiten dari rilis resmi lokal."""
+import re
 import time
 from datetime import date
 from . import cache
@@ -357,7 +358,8 @@ def load(ticker, as_of=None):
     official_shares = official_balance.get("shares_outstanding")
     if isinstance(official_shares, (int, float)) and official_shares > 0:
         shares = official_shares
-        notes.append("jumlah saham beredar memakai laporan interim resmi; "
+        notes.append(f"jumlah saham beredar memakai "
+                     f"{official_balance.get('shares_source') or 'laporan interim resmi'}; "
                      "saham treasuri tidak masuk denominator.")
     market_cap = price * shares
 
@@ -429,6 +431,12 @@ def load(ticker, as_of=None):
     latest_quarter = quarterly_rows[-1] if quarterly_rows else None
 
     peers, peer_median_pe, peer_median_pb = _peers(rep, t)
+    peer_basis = None
+    if not peers:
+        borrowed, lender = _borrowed_peer_report(t)
+        if borrowed:
+            peers, peer_median_pe, peer_median_pb = _peers(borrowed, t)
+            peer_basis = f"tabel peer Sectors milik {lender} yang memuat {t}"
     payout = _num(div.get("payout_ratio"))
     if payout is None or not (0 <= payout <= 1.5):
         payout, payout_basis = 0.25, "asumsi analis 25% (tanpa payout historis di data Sectors)"
@@ -470,7 +478,7 @@ def load(ticker, as_of=None):
         "filings": (filings.get("results") or []) if isinstance(filings, dict) else [],
         "corp_actions": corp_list,
         "foreign_flow": (flow.get("data") or []) if isinstance(flow, dict) else [],
-        "peers": peers, "peer_median_pe": peer_median_pe,
+        "peers": peers, "peer_median_pe": peer_median_pe, "peer_basis": peer_basis,
         "peer_median_pb": peer_median_pb,
         "forward_pe_cache": _num(val.get("forward_pe")),
         "mineops": mineops.load(t),
@@ -505,6 +513,25 @@ def load(ticker, as_of=None):
             official_evidence, payout, payout_basis, dps_hist, report_date, profile),
     }
     return intake, {"G1": g1, "catatan": notes, "fetched_at": time.time()}
+
+
+def _borrowed_peer_report(t):
+    """Sectors has no peer table for ``t``: use another cached issuer's Sectors
+    table that lists ``t`` (the analyst agent's rule), with ``t`` as self."""
+    for endpoint in sorted(cache.endpoints()):
+        match = re.fullmatch(r"/company/report/([A-Z0-9.-]{1,10})/", endpoint)
+        other = match.group(1) if match else None
+        if not other or other == t:
+            continue
+        report = cache.company_report(other) or {}
+        companies = [c for g in report.get("peers") or []
+                     for c in (g.get("peers_data") or {}).get("companies") or []
+                     if isinstance(c, dict)]
+        if any(str(c.get("symbol") or "").replace(".JK", "") == t for c in companies):
+            relabelled = [{**c, "group": ["self"] if str(c.get("symbol") or "").replace(
+                ".JK", "") == t else ["peer"]} for c in companies]
+            return {"peers": [{"peers_data": {"companies": relabelled}}]}, other
+    return None, None
 
 
 def _peers(rep, t):

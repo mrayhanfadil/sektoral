@@ -28,6 +28,8 @@
   },
   "balance_sheet": {
     "period_end": "2026-06-30",
+    "shares_outstanding": 4705249440,
+    "shares_source": "Daftar pemegang saham, profil emiten IDX (idx.co.id, diakses 2026-09-24)",
     "source_pages": [2],
     "cash": 1093000000000,
     "total_assets": 13026800000000,
