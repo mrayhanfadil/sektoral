@@ -414,7 +414,8 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
 
         F = fc.get("rows") or []
         f_labels = [r["label"] for r in F] if F else [f"FY{(int(history[-1]['year']) + 1 + i)%100:02d}F" for i in range(5)]
-        f_dashes = ["-"] * len(f_labels)
+        # Spec §2: forecast tanpa input bersumber tampil belum dimodelkan, bukan angka screening.
+        f_dashes = ["belum dimodelkan"] * len(f_labels)
         total_cols_dash = ["-"] * (len(history) + len(f_labels))
         key_rows = [
             [f"Pendapatan ({unit})"] + values("revenue") + f_dashes,
@@ -444,7 +445,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
         F = fc.get("rows") or []
         f_labels = [r["label"] for r in F] if F else [
             f"FY{(int(history[-1]['year']) + 1 + i) % 100:02d}F" for i in range(5)]
-        f_dashes = ["-"] * len(f_labels)
+        f_dashes = ["belum dimodelkan"] * len(f_labels)
         key_rows = [[f"Pendapatan ({unit})"] +
                     [money(row.get("revenue")) for row in history] + f_dashes,
                     [f"EBITDA ({unit})"] +
@@ -3747,8 +3748,11 @@ def _build_draft(intake, fc, va, g1, method="auto",
 
 def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
     method = (method or "auto").lower()
-    if method not in ("auto", "dcf", "ddm", "rnav"):
-        raise ValueError(f"method tak dikenal: {method} (auto|dcf|ddm|rnav)")
+    # Override analis (gate-driven keys) diterima untuk display; validasi DCF/DDM/RNAV lama dipertahankan.
+    from . import method_chain as _mc
+    allowed = {"auto", "dcf", "ddm", "rnav"} | set(_mc.LABELS.keys())
+    if method not in allowed:
+        raise ValueError(f"method tak dikenal: {method} (auto atau method key rantai)")
     if method == "ddm" and intake.get("payout") is None:
         raise ValueError("method ddm ditolak: tanpa payout di data Sectors")
     if method == "rnav" and not intake.get("mineops"):

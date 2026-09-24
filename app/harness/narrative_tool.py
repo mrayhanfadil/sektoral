@@ -239,6 +239,43 @@ def check_narrative(doc: dict | None) -> dict:
     else:
         v("N.tp_draft", True, "TP hanya saat production-ready", False)
 
+    # Phase 2: Key Financials 2A+3F, tie-out charts/statements, belum dimodelkan.
+    try:
+        kf = next((e for e in _exhibits(doc) if (e.get("judul") or "") == "Key Financials"), None)
+        if kf:
+            cols = ((kf.get("data") or {}).get("cols") or [])
+            # Expect 1 label + 5 periods (2A+3F) after trim.
+            v("N.keyfin_periode", len(cols) >= 6,
+              f"Key Financials {len(cols)-1} periode (2A+3F)" if len(cols) >= 6
+              else f"Key Financials hanya {len(cols)-1} periode", False,
+              None if len(cols) >= 6 else "peringatan")
+            # Forecast gaps must be belum dimodelkan/- , never empty or screening numbers without provenance.
+            rows = ((kf.get("data") or {}).get("rows") or [])
+            empty = sum(1 for r in rows for c in (r[1:] if isinstance(r, list) else [])
+                        if isinstance(c, str) and c.strip() == "")
+            v("N.keyfin_belum", empty == 0,
+              "forecast gaps belum dimodelkan/-" if empty == 0
+              else f"{empty} sel kosong; pakai belum dimodelkan", True)
+        else:
+            v("N.keyfin_periode", True, "tanpa Key Financials; dilabeli", False, "dilabeli")
+            v("N.keyfin_belum", True, "tanpa Key Financials; dilabeli", False, "dilabeli")
+        # Combo chart tie-out: labels overlap Key Financials periods when both present.
+        combo = next((e for e in _exhibits(doc)
+                      if (e.get("tipe") or "") == "combo_chart"), None)
+        if combo and kf:
+            ccols = ((combo.get("data") or {}).get("cols") or [])
+            kcols = ((kf.get("data") or {}).get("cols") or [])[1:]
+            overlap = len(set(map(str, ccols)) & set(map(str, kcols)))
+            v("N.tieout", overlap >= 2,
+              f"tie-out Key Financials/combo {overlap} periode" if overlap >= 2
+              else "tie-out Key Financials/combo <2 periode", False,
+              None if overlap >= 2 else "peringatan")
+        else:
+            v("N.tieout", True, "tie-out dilabeli (combo/Key Financials belum lengkap)", False,
+              "dilabeli")
+    except Exception as e:
+        v("N.tieout", True, f"tie-out check gagal: {e}", False, "dilabeli")
+
     blockers = [f"{c['check']}: {c['message']}" for c in checks if c.get("blocker")]
     return {"tool": "check_narrative", "status": "lolos" if not blockers else "gagal",
             "checks": checks, "blockers": blockers}

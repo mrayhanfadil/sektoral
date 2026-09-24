@@ -413,6 +413,57 @@ def _table(ex):
             f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
 
 
+def _combo_chart(ex):
+    """2x2 combo: bars actual solid, forecast lighter + line growth/margin.
+
+    data: {"cols": [...], "series": [{"label":..., "bars":[...], "line":[...],
+            "is_forecast":[bool...]}]}
+    """
+    data = ex.get("data") or {}
+    series = data.get("series") or []
+    cols = data.get("cols") or []
+    parts = [f"<div class='exhibit keep'><h3 class='sub'>Exhibit {ex['n']}. "
+             f"{html.escape(ex['judul'])}</h3>",
+             "<svg class='metric-chart' viewBox='0 0 780 260' role='img' "
+             f"aria-label='{html.escape(ex['judul'])}'>",
+             "<line x1='35' x2='750' y1='200' y2='200' stroke='#747474' stroke-width='1'/>"]
+    # Simple 2x2 grid: up to 4 series, each mini-chart.
+    for idx, s in enumerate(series[:4]):
+        ox, oy = (idx % 2) * 380, (idx // 2) * 120
+        parts.append(f"<text x='{45 + ox}' y='{20 + oy}' font-size='12' fill='{INK}'>"
+                     f"{html.escape(s.get('label') or '')}</text>")
+        bars = s.get("bars") or []
+        peak = max([abs(v or 0) for v in bars] + [1])
+        n = max(len(bars), 1)
+        bw = min(40, 300 / max(n, 1) - 8)
+        for i, v in enumerate(bars):
+            x = 45 + ox + i * (bw + 8)
+            h = max(1.5, 60 * abs(v or 0) / peak)
+            y = 95 + oy - h if (v or 0) >= 0 else 95 + oy
+            is_fc = (s.get("is_forecast") or [False] * len(bars))[i] if i < len(s.get("is_forecast") or []) else False
+            color = "#B9C6E8" if is_fc else PRIMARY
+            parts.append(f"<rect x='{x:.1f}' y='{y:.1f}' width='{bw:.1f}' height='{h:.1f}' fill='{color}'/>")
+        # line for growth/margin
+        line = s.get("line") or []
+        if line:
+            pts = []
+            for i, v in enumerate(line):
+                if v is None:
+                    continue
+                x = 45 + ox + i * (bw + 8) + bw / 2
+                # normalize line to 0-40 range around 95+oy
+                y = 95 + oy - max(-20, min(20, (v or 0)))
+                pts.append(f"{x:.1f},{y:.1f}")
+            if len(pts) >= 2:
+                parts.append(f"<polyline points='{' '.join(pts)}' fill='none' stroke='#1DCD9F' stroke-width='2'/>")
+    parts.append("</svg>")
+    # Legend: actual solid, forecast lighter
+    parts.append("<div class='small'>Actual solid; forecast lighter. "
+                 "EBITDA hanya bila dimodelkan.</div>")
+    parts.append(f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
+    return "".join(parts)
+
+
 def _bar_chart(ex):
     data = ex["data"]
     rows = data["rows"]
@@ -450,7 +501,12 @@ def _bar_chart(ex):
 
 
 def _exhibit(ex):
-    return _bar_chart(ex) if ex.get("tipe") == "bar_chart" else _table(ex)
+    t = ex.get("tipe")
+    if t == "bar_chart":
+        return _bar_chart(ex)
+    if t == "combo_chart":
+        return _combo_chart(ex)
+    return _table(ex)
 
 
 def _kv(k, v):

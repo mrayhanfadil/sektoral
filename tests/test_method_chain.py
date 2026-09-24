@@ -37,12 +37,23 @@ def test_insufficient_primary_falls_back_in_fixed_order():
 
 
 def test_extreme_result_stops_chain_instead_of_shopping_for_a_nicer_method():
-    chain = MC.run("going_concern_fcff", {"fcff_dcf": _ok("fcff_dcf", 1800),
+    # Gate 5: upside > +100% stops chain (framework thresholds, shared constant).
+    chain = MC.run("going_concern_fcff", {"fcff_dcf": _ok("fcff_dcf", 2200),
                                           "relative_pe": _ok("relative_pe", 1050)}, PRICE)
     assert chain["selected"] == "fcff_dcf" and chain["extreme"] is True
     assert chain["trace"][0]["decision"] == "stop_extreme"
     assert chain["trace"][1]["decision"] == "cross_check"
     assert "extreme fcff_dcf" in MC.summary_blocker(chain)
+    # +80% is no longer extreme (needs sourced thesis only above +100%/-50%).
+    calm = MC.run("going_concern_fcff", {"fcff_dcf": _ok("fcff_dcf", 1800),
+                                         "relative_pe": _ok("relative_pe", 1050)}, PRICE)
+    assert calm["extreme"] is False
+    assert calm["trace"][0]["decision"] == "selected"
+    # Downside beyond -50% is extreme.
+    down = MC.run("going_concern_fcff", {"fcff_dcf": _ok("fcff_dcf", 400),
+                                         "relative_pe": _ok("relative_pe", 1050)}, PRICE)
+    assert down["extreme"] is True
+    assert down["trace"][0]["decision"] == "stop_extreme"
 
 
 def test_no_sufficient_method_names_every_gap():
