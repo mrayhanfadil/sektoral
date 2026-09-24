@@ -70,7 +70,8 @@ def _page(title, paragraphs, exhibits):
 # ------------------------------------------------------------ method chain
 
 _DECISION = {"selected": "Terpilih", "stop_extreme": "Terpilih, ekstrem (rantai berhenti)",
-             "skipped": "Dilewati", "cross_check": "Silang cek", "not_needed": "Tidak dijalankan"}
+             "skipped": "Dilewati", "cross_check": "Silang cek", "not_needed": "Tidak dijalankan",
+             "not_available": "Belum tersedia"}
 
 
 def method_chain_exhibit(va):
@@ -101,6 +102,13 @@ def method_chain_exhibit(va):
             role_tag = " (override analis)"
         rows.append([f"{t['rank']}. {t['short']}" + role_tag,
                      _DECISION.get(t["decision"], t["decision"]), value, why])
+    for x in chain.get("cross_checks") or []:
+        value = ("-" if not x.get("per_share") else
+                 f"Rp{fmt.rp(fmt.tick(x['per_share']))}" if released else "ditahan")
+        why = (method_chain.reader_reason(x["reasons"][0]) if x.get("reasons") else
+               "Gate 2: kepentingan non-pengendali 15-40% dari ekuitas mewajibkan cross-check SOTP")
+        rows.append([f"x. {x['short']} (cross-check)",
+                     _DECISION.get(x["decision"], x["decision"]), value, why])
     source = ("Source: Sektoral Estimates; urutan metode dikunci dari verdict Gates 0-5 "
               "sebelum nilai dihitung; metode berikutnya hanya dipakai bila metode "
               "sebelumnya tidak memadai, bukan karena hasilnya tidak disukai")
@@ -113,19 +121,64 @@ def method_chain_exhibit(va):
                     ["Metode", "Keputusan", "Nilai/saham", "Alasan"], rows, source)
 
 
+def holding_sotp_exhibit(va):
+    """Framework Gate 2 cross-check: listed stakes at market, rest at book,
+    holding discount as sensitivity. Per-share values are held on drafts."""
+    chain = (va or {}).get("method_chain") or {}
+    sotp = next((x for x in chain.get("cross_checks") or [] if x["key"] == "holding_sotp"),
+                None) or next((t for t in chain.get("trace") or []
+                               if t["key"] == "holding_sotp" and t["status"] == "sufficient"), None)
+    if not sotp or sotp["status"] != "sufficient":
+        return None
+    released = ((va.get("release") or {}).get("status") or "").startswith("distributable")
+    d = sotp["detail"]
+    bn = lambda v: fmt._id(v / 1e9, 1)
+    rows = []
+    for c in d["components"]:
+        rows.append([f"{c['name']} ({c['ticker']}), {c['segment']}: {fmt.pct(c['stake'])} x "
+                     f"kapitalisasi Rp{bn(c['market_cap'])} miliar", "nilai pasar",
+                     bn(c["market_value"])])
+    rows.append([f"Ekuitas pemilik induk per {d.get('balance_period') or '-'}", "nilai buku",
+                 bn(d["parent_equity"])])
+    for c in d["components"]:
+        rows.append([f"Dikurangi porsi {c['ticker']} atas ekuitas buku {c['ticker']} "
+                     f"(FY{c.get('book_year') or '-'})", "nilai buku", f"({bn(c['book_share'])})"])
+    rows.append(["Segmen lain (lahan industri, hotel, utilitas, sewa) pada nilai buku",
+                 "nilai buku", bn(d["remainder_book"])])
+    rows.append(["Total nilai SOTP", "", bn(d["total"])])
+    for item in d["discounts"]:
+        rows.append([f"Nilai per saham, diskon holding {fmt.pct(item['discount'])}",
+                     "sensitivitas" if item["discount"] else "basis",
+                     f"Rp{fmt.rp(fmt.tick(item['per_share']))}" if released else "ditahan"])
+    stake_sources = "; ".join(sorted({c["stake_source"] for c in d["components"]
+                                      if c.get("stake_source")}))
+    return _exhibit(
+        "Cross-check SOTP holding: anak usaha tercatat pada nilai pasar",
+        ["Komponen", "Basis", "Rp miliar"], rows,
+        f"Source: Company, Sektoral Estimates; kepemilikan: {stake_sources}; kapitalisasi dan "
+        f"ekuitas anak usaha: {', '.join(sorted({c['market_source'] for c in d['components']}))}; "
+        "ekuitas induk: neraca interim emiten. Segmen tanpa harga pasar dinilai pada nilai buku "
+        "(lahan industri tercatat pada biaya perolehan, sehingga nilai ini konservatif). Diskon "
+        "holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. Cross-check, bukan "
+        "dasar target harga.")
+
+
 def attach_method_chain(doc, va):
     exhibit = method_chain_exhibit(va)
     if not exhibit:
         return
+    sotp = holding_sotp_exhibit(va)
     page = next((p for prefix in ("Target harga", "Valuasi", "Skenario nilai")
                  for p in doc["bagian"] if str(p.get("judul", "")).startswith(prefix)), None)
     if page is None:
         doc["bagian"].append(_page(
             "Valuasi: rantai metode",
             ["Metode utama dan fallback dinilai berurutan; tabel mencatat metode yang "
-             "dipakai dan alasan metode lain dilewati."], [exhibit]))
+             "dipakai dan alasan metode lain dilewati."], [exhibit] + ([sotp] if sotp else [])))
     else:
         page["exhibit"].append(exhibit)
+        if sotp:
+            page["exhibit"].append(sotp)
 
 
 # ------------------------------------------------------------ cover data

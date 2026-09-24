@@ -207,3 +207,29 @@ def test_gate5_exit_range_is_own_ev_ebitda_history_not_peer_pe():
     va = valuation.build(doc_in, forecast.build(doc_in))
     gate = va["gate_inputs"]
     assert (gate["peer_exit_low"], gate["peer_exit_high"]) == (min(values), max(values))
+
+
+def test_holding_sotp_values_listed_stakes_at_market_and_the_rest_at_book():
+    listed = [{"ticker": "SUB", "segment": "Konstruksi", "stake": 0.6, "market_cap": 1000.0,
+               "book_equity": 800.0}]
+    c = MC.holding_sotp(listed, parent_equity=5000.0, shares=10.0)
+    d = c["detail"]
+    assert c["status"] == "sufficient"
+    assert d["remainder_book"] == 5000.0 - 0.6 * 800.0
+    assert d["total"] == 0.6 * 1000.0 + d["remainder_book"]
+    assert [x["discount"] for x in d["discounts"]] == [0.0, 0.2, 0.3]
+    assert c["per_share_down"] < c["per_share"]
+    assert MC.holding_sotp([], 5000.0, 10.0)["status"] == "insufficient"
+
+
+def test_ssia_nci_band_runs_holding_sotp_as_cross_check_not_target(tmp_path):
+    from app import build as B
+    doc = B.build("SSIA", tmp_path, as_of="2026-09-24")
+    chain = doc["exhibits"]
+    sotp = next(e for e in chain if e["judul"].startswith("Cross-check SOTP holding"))
+    labels = [r[0] for r in sotp["data"]["rows"]]
+    assert labels[0].startswith("PT Nusa Raya Cipta Tbk (NRCA)")
+    assert "Total nilai SOTP" in labels
+    table = next(e for e in chain if e["judul"] == "Rantai metode valuasi")
+    assert any(r[0].startswith("x. ") and "Gate 2" in r[3] for r in table["data"]["rows"])
+    assert doc["meta"].get("method") != "Holding SOTP"
