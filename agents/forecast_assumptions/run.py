@@ -628,7 +628,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "Role: STAGE CLASSIFIER. Return {\"stage_classification\": object}. "
             "Classify operating stage from sourced evidence: life_cycle_stage "
             "(pre_revenue | high_growth_pre_profit | mature | decline), "
-            "has_steady_state_3y (boolean), commodity_price_driven (boolean), "
+            "has_steady_state_3y (boolean), commodity_price_driven (boolean, true ONLY for extractive finite-reserve: coal/nickel/CPO/oil/gold/copper; poultry/food input sensitivity is false), "
             "dissimilar_segments (int 1-10), rationale (Bahasa Indonesia 40-600 karakter), "
             "source_ids ([\"official\", \"news:0\", ...]). Default konservatif mature/true/false/1; "
             "non-default wajib mengutip official atau artikel bertanggal. "

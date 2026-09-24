@@ -264,16 +264,31 @@ def evaluate(inputs: dict) -> GateVerdict:
                 reasons.append(f"2 NCI {nci_pct:.1f}% > 40% → SOTP becomes primary, consolidated DCF is rough reference only")
                 primary = "SOTP"
 
-    # Gate 3: Cyclicality / Operating Stage
+    # Gate 3: Cyclicality / Operating Stage (extractive commodity only triggers NAV).
+    # Generic poultry/input price sensitivity (going_concern) keeps DCF; only
+    # finite-reserve extractive tags (coal, nickel, CPO, oil, gold, copper)
+    # or mining profile trigger reserve-based NAV.
     revenue_drivers = inputs.get("revenue_drivers")
     has_steady_state_3y = inputs.get("has_steady_state_3y")
     if revenue_drivers is None:
         revenue_drivers = []
-    commodity_tags = {"commodity_coal", "commodity_nickel", "commodity_cpo", "commodity_oil", "commodity_gold", "commodity_copper", "commodity"}
-    if any(tag in commodity_tags or "commodity" in str(tag) for tag in revenue_drivers):
+    _extractive = {"commodity_coal", "commodity_nickel", "commodity_cpo",
+                   "commodity_oil", "commodity_gold", "commodity_copper",
+                   "coal", "nickel", "cpo", "oil_gas", "gold", "copper"}
+    _prof = str(inputs.get("model_profile") or inputs.get("domain") or "").lower()
+    _is_extractive = any(str(tag).lower() in _extractive or
+                         any(x in str(tag).lower() for x in
+                             ("coal", "nickel", "cpo", "oil", "gold", "copper"))
+                         for tag in revenue_drivers)
+    # Generic "commodity" alone (e.g. poultry price sensitivity) does not trigger NAV.
+    if _is_extractive or (_prof in ("finite_life_mining", "mining", "oil_gas", "plantation", "reit")
+                          and any("commodity" in str(tag).lower() for tag in revenue_drivers)):
         gates_passed.append("3_cyclicality")
         primary = "NAV / Reserve-based"
         reasons.append("3 commodity-driven revenue → NAV/reserve-based primary + DCF as long-run price deck comparison")
+    elif any("commodity" in str(tag).lower() for tag in revenue_drivers):
+        gates_passed.append("3_cyclicality")
+        reasons.append("3 commodity price sensitivity noted (non-extractive); DCF primary retained")
     elif has_steady_state_3y is None:
         gates_failed.append("3_cyclicality")
         reasons.append("3 tahap operasi tidak dapat dinilai (klasifikasi steady-state belum tervalidasi)")
