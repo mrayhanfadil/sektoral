@@ -157,6 +157,13 @@ def cover_market_data(doc, intake):
     adtv = _adtv_3m(intake["ticker"])
     if adtv:
         data["adtv"] = fmt._id(adtv / 1e9, 1)
+    # Design cover shows Rp and US$ side by side (Rpbn / US$mn) with dated FX.
+    fx = (intake.get("fx_spot") or {}).get("rate")
+    if isinstance(fx, (int, float)) and fx > 0:
+        if data.get("market_cap"):
+            data["market_cap_usd"] = fmt._id(data["market_cap"] / fx / 1e6, 1)
+        if adtv:
+            data["adtv_usd"] = fmt._id(adtv / fx / 1e6, 1)
     holders = _holders(intake)
     public = next((pct for name, pct in holders if name.lower() in ("public", "publik", "masyarakat")), None)
     if public is not None:
@@ -704,10 +711,13 @@ def _rank(title):
 
 
 def renumber(doc):
-    """Exhibit 1 stays the cover table; the rest follow page order."""
-    cover = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"),
-                 doc["exhibits"][0] if doc["exhibits"] else None)
-    ordered = [cover] if cover else []
+    """Cover exhibits first (price vs IHSG, then Key Financials); the rest
+    follow page order."""
+    chart = next((e for e in doc["exhibits"] if e.get("tipe") == "price_chart"), None)
+    others = [e for e in doc["exhibits"] if e is not chart]
+    cover = next((e for e in others if e.get("judul") == "Key Financials"),
+                 others[0] if others else None)
+    ordered = [e for e in (chart, cover) if e is not None]
     for page in doc["bagian"]:
         for exhibit in page.get("exhibit") or []:
             if all(exhibit is not seen for seen in ordered):
@@ -835,7 +845,17 @@ def combo_charts_page(intake, fc=None):
     return _page("Kinerja keuangan dan profitabilitas", paras, [exhibit])
 
 
+def price_chart_exhibit(intake):
+    """Cover Exhibit 1: the issuer against IHSG (drawn by render at print time)."""
+    return {"n": 0, "judul": f"{intake['ticker']} relatif terhadap IHSG",
+            "tipe": "price_chart", "data": {"ticker": intake["ticker"],
+                                            "as_of": intake.get("as_of")},
+            "catatan_sumber": "Source: Sectors, Sektoral Estimates"}
+
+
 def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
+    if not any(e.get("tipe") == "price_chart" for e in doc["exhibits"]):
+        doc["exhibits"].insert(0, price_chart_exhibit(intake))
     cover_market_data(doc, intake)
     trim_key_financials(doc)
     mining_catalysts(doc, intake)

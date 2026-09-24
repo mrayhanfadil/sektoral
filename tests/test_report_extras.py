@@ -18,7 +18,8 @@ def test_pages_follow_spec_order_and_exhibits_are_numbered_in_reading_order(tmp_
         first = next(i for i, t in enumerate(titles) if t.startswith(earlier))
         second = next(i for i, t in enumerate(titles) if t.startswith(later))
         assert first < second, (earlier, later, titles)
-    reading = [1] + [e["n"] for page in doc["bagian"] for e in page["exhibit"]]
+    # The cover holds Exhibit 1 (price vs IHSG) and Exhibit 2 (Key Financials).
+    reading = [1, 2] + [e["n"] for page in doc["bagian"] for e in page["exhibit"]]
     assert reading == list(range(1, len(reading) + 1))
     assert [e["n"] for e in doc["exhibits"]] == reading
 
@@ -37,8 +38,9 @@ def test_industry_peer_ownership_and_financial_pages_come_from_local_data(tmp_pa
 
 def test_cover_shows_two_actual_three_forecast_periods_and_market_data(tmp_path):
     doc = _doc(tmp_path)
-    cols = doc["exhibits"][0]["data"]["cols"]
-    assert doc["exhibits"][0]["judul"] == "Key Financials"
+    assert doc["exhibits"][0]["tipe"] == "price_chart"
+    assert doc["exhibits"][1]["judul"] == "Key Financials"
+    cols = doc["exhibits"][1]["data"]["cols"]
     assert len(cols) == 6 and cols[-1].endswith("F") and not cols[2].endswith("F")
     market = doc["cover"]["data_pasar"]
     assert market["adtv"] != "-" and market["free_float"] != "-"
