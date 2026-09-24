@@ -1,0 +1,3 @@
+# Assumption-led targets are a separate release status
+
+A Target Price and Rating can be published on an Analyst Scenario or a Last Step (for example FY EV/EBITDA for a miner whose LoM/SOTP is incomplete) under the status `distributable_assumption_led`. It sits between `production_ready` and `draft_non_distributable`. Without it, issuers whose primary method cannot yet be completed would never get a target. Calling these results production-ready would misrepresent the forecast. The status requires Latest Interim Actuals, a validated agent scenario, a fresh post-release close, a dated FX quote where needed, an official balance-sheet bridge and a multiple sensitivity. The unmet primary-method blockers are kept in the Audit Trace.
