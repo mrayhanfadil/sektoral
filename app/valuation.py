@@ -321,11 +321,22 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
             labels=([f"porsi terminal {pv_tv/ev_g*100:.0f}% > 75% dari EV"]
                     if pv_tv / ev_g > 0.75 else []))
     if is_miner:
+        # SOTP and RNAV value the physical forecast; while it is a screening
+        # proxy they are insufficient, so the chain can still reach the
+        # assumption-led multiple route that has its own evidence gate.
+        mining_data = release.common_blockers(profile, intake, fc)
         candidates["sotp_lom"] = method_chain.candidate(
             "sotp_lom", per_share=sotp_result.get("target_price_idr"),
-            reasons=release._check_sotp(sotp_result, intake),
+            reasons=release._check_sotp(sotp_result, intake) + mining_data,
             labels=["sensitivitas SOTP dilabeli"])
-        candidates["rnav_lom"] = _rnav_candidate(intake, fc, lom, wacc)
+        rnav_candidate = _rnav_candidate(intake, fc, lom, wacc)
+        if mining_data:
+            rnav_candidate = method_chain.candidate(
+                "rnav_lom", per_share=rnav_candidate["per_share"],
+                per_share_down=rnav_candidate["per_share_down"],
+                reasons=rnav_candidate["reasons"] + mining_data,
+                labels=rnav_candidate["labels"], detail=rnav_candidate["detail"])
+        candidates["rnav_lom"] = rnav_candidate
         scenario_target = scenario_ev_ebitda_crosscheck(intake, fc)
         assumption_release = release.assess_assumption_led(
             intake, fc, scenario_target or {}, assumption_status,
