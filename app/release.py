@@ -698,8 +698,51 @@ def assess_holding_sotp(intake, forecast, valuation, assumption_status):
     }
 
 
+def assess_ev_ebitda_scenario(intake, forecast, valuation, assumption_status):
+    """Forward EV/EBITDA peer on the validated FY scenario (spec §4.1a: history
+    < 4 years or ramping asset).
+
+    Same evidence as the earnings-led route without the peer PER set
+    (official 1H actual, validated scenario, fresh close, official shares),
+    plus the agent's FY EBITDA, at least three ordered Sectors peer EV/EBITDA
+    points, a one-balance-sheet bridge and a positive equity value. One
+    forward year, so no out-year rows are required.
+    """
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share"))]
+    if (intake or {}).get("model_profile") != "going_concern_fcff":
+        blockers.append("forward EV/EBITDA peer on the scenario is a going-concern method")
+    detail = (valuation or {}).get("detail") or {}
+    if not _number(detail.get("ebitda")) or detail["ebitda"] <= 0:
+        blockers.append("FY EBITDA scenario is missing or not positive")
+    if not detail.get("peer_count") or detail["peer_count"] < 3:
+        blockers.append("peer EV/EBITDA set has fewer than three valid peers")
+    q = [detail.get(k) for k in ("q1_ev_ebitda", "median_ev_ebitda", "q3_ev_ebitda")]
+    if all(_number(v) for v in q) and not q[0] <= q[1] <= q[2]:
+        blockers.append("peer EV/EBITDA sensitivity is not ordered")
+    for key in ("cash", "debt", "shares"):
+        if not _number(detail.get(key)):
+            blockers.append(f"enterprise-to-equity bridge is missing {key}")
+    if not _number(detail.get("equity")) or detail["equity"] <= 0:
+        blockers.append("equity value is not positive")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "Forward EV/EBITDA peer (earnings scenario)",
+        "blockers": blockers,
+        "limitations": ["EBITDA FY adalah skenario analis (aktual 1H resmi + margin EBITDA "
+                        "asumsi agen), bukan forecast driver terekonsiliasi",
+                        "EV/EBITDA peer FY terakhir dari data Sectors (market cap tabel peer + "
+                        "utang - kas laporan peer) diterapkan ke EBITDA forward; peer dianggap "
+                        "sebanding",
+                        "kas, utang dan minoritas dari satu neraca; arus kas dan neraca "
+                        "setelahnya belum dimodelkan"],
+    }
+
+
 SCENARIO_ASSESSORS = {"ddm": assess_ddm_scenario, "fcff_dcf": assess_fcff_scenario,
-                      "dcf_reference": assess_fcff_scenario}
+                      "dcf_reference": assess_fcff_scenario,
+                      "ev_ebitda_peer": assess_ev_ebitda_scenario}
 
 
 ASSET_HEAVY_SHARE = 0.5

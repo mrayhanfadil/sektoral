@@ -432,3 +432,63 @@ def test_inet_and_gmfi_ramping_stage_moves_the_chain_off_dcf():
         peers = doc_in["peers"]
         assert peers and all(p["ev_status"] == "report_not_cached" for p in peers)
         assert f"{len(peers)}/{len(peers)} peer belum di-cache" in first["reasons"][0]
+
+
+def test_ramping_going_concern_publishes_on_forward_ev_ebitda_peer(tmp_path, monkeypatch):
+    """JPFA under a ramping stage with Sectors peer EV cached (synthetic here):
+    the forward EV/EBITDA peer values the agent's FY EBITDA scenario behind
+    its own gate and sets the target; DCF and PER stay out of the chain."""
+    import itertools
+    from app import build, intake as I
+    multiples = itertools.cycle([6.0, 7.0, 8.0, 9.0, 10.0])
+    monkeypatch.setattr(I, "_peer_ev", lambda symbol, mcap: {
+        "ev_ebitda": next(multiples), "ev_status": "ok", "ev_year": 2025})
+    doc_in, _ = I.load("JPFA", as_of="2026-09-24")
+    actual = doc_in["latest_official_actual"]
+    metrics = actual["metrics"]
+    plan = {"news_effects": [], "earnings_scenario": {
+        "h2_revenue_to_h1": 1.05,
+        "h2_net_margin_pct": metrics["net_profit"] / metrics["revenue"] * 100,
+        "fy_ebitda_margin_pct": 10.0, "fy_capex_to_revenue_pct": 4.0,
+        "rationale": "H2 mengikuti run-rate 1H dengan kenaikan musiman ringan.",
+        "source_ids": ["official"], "source_url": actual["source_url"],
+        "published_at": actual["published_at"],
+        "thesis_points": ["Kapasitas baru menaikkan volume H2.",
+                          "Margin EBITDA menuju tingkat peer matang."],
+        "catalysts_risks": [],
+        "key_risks": [
+            {"category": "Komoditas", "headline": "Harga jagung dan bungkil kedelai",
+             "explanation": "Bahan baku pakan setara 60% beban pokok; kenaikan harga jagung "
+                            "10% menekan margin kotor sekitar 2pp tanpa kenaikan harga jual.",
+             "source_ids": ["official"]},
+            {"category": "Operasi", "headline": "Ramp-up kapasitas baru",
+             "explanation": "Utilisasi pabrik baru di bawah 70% menahan margin EBITDA di "
+                            "bawah tingkat peer matang yang dipakai multiple.",
+             "source_ids": ["official"]},
+            {"category": "Pendanaan", "headline": "Utang bank jangka pendek",
+             "explanation": "Utang jangka pendek Rp5.000 miliar jatuh tempo dalam 12 bulan; "
+                            "kenaikan bunga 100bp menambah beban bunga sekitar Rp50 miliar.",
+             "source_ids": ["official"]}]},
+        **_RAMPING_STAGE}
+    doc = build.build("JPFA", tmp_path, as_of="2026-09-24", assumption_plan=plan,
+                      assumption_status="validated")
+    chain = doc["log_gate"]["release"]["method_chain"]
+    assert chain == {"selected": "ev_ebitda_peer", "route": "primary"}
+    assert doc["meta"]["status"] == "distributable_assumption_led"
+    assert doc["harness"]["status"] == "distributable_assumption_led"
+    assert doc["meta"]["tp"] and doc["meta"]["rating"] in {"Buy", "Hold", "Sell"}
+    assert doc["method"].startswith("FY26F EV/EBITDA median peer x EBITDA skenario analis")
+    titles = [e["judul"] for e in doc["exhibits"]]
+    assert "Target harga: EV/EBITDA peer x EBITDA FY26F" in titles
+    assert "Target harga: PER peer x EPS FY26F" not in titles
+    target = next(e for e in doc["exhibits"] if e["judul"].startswith("Target harga: EV/EBITDA"))
+    assert [r[0] for r in target["data"]["rows"]] == ["Kuartil bawah", "Median (basis)", "Kuartil atas"]
+    assert target["catatan_sumber"].startswith("Sumber: EV/EBITDA FY terakhir tiap peer dari data Sectors")
+    rows = next(e for e in doc["exhibits"] if e["judul"] == "Rantai metode valuasi")["data"]["rows"]
+    assert rows[0][0] == "1. EV/EBITDA peer (utama)" and rows[0][1] == "Terpilih"
+    assert not any("DCF" in r[0] for r in rows)
+    cover = doc["cover"]["paragraf"][2]
+    assert cover["judul"] == "Target harga berbasis EV/EBITDA peer"
+    assert "EV/EBITDA peer forward" in cover["isi"] and "PER median" not in cover["isi"]
+    page = next(p for p in doc["bagian"] if p["judul"] == "Target harga berbasis EV/EBITDA peer")
+    assert page["exhibit"][1]["judul"] == "Target harga: EV/EBITDA peer x EBITDA FY26F"
