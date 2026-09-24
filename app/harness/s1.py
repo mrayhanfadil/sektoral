@@ -1,4 +1,4 @@
-"""Tool: check_g1 — TAHAP 1 INTAKE & VALIDASI DATA (§2).
+"""Tool: check_s1 — TAHAP 1 INTAKE & VALIDASI DATA (§2).
 
 Deterministic. No LLM. Fails closed: missing critical input blocks
 production, never becomes a caveat.
@@ -29,16 +29,16 @@ def _parse_date(v: Any):
         return None
 
 
-def check_g1(intake: dict | None) -> dict:
-    """Validate Gate 1. Returns {"checks": [...], "blockers": [...], "status": ...}."""
+def check_s1(intake: dict | None) -> dict:
+    """Validate Stage Check S1. Returns {"checks": [...], "blockers": [...], "status": ...}."""
     checks: list[dict] = []
     blockers: list[str] = []
     intake = intake or {}
 
-    # G1.periode — latest official/interim actual must exist with valid dates.
+    # S1.periode — latest official/interim actual must exist with valid dates.
     actual = intake.get("latest_official_actual") or intake.get("latest_interim_actuals")
     if not isinstance(actual, dict):
-        c = _verdict("G1.periode", False, "rilis resmi terbaru belum ada di input", True)
+        c = _verdict("S1.periode", False, "rilis resmi terbaru belum ada di input", True)
     else:
         period = str(actual.get("period") or "")
         pub = _parse_date(actual.get("published_at") or actual.get("source_date"))
@@ -60,14 +60,14 @@ def check_g1(intake: dict | None) -> dict:
         if "actual" not in status_txt and "reported" not in status_txt and not pub:
             problems.append("status bukan aktual")
         if problems:
-            c = _verdict("G1.periode", False, "periode terbaru: " + "; ".join(problems), True)
+            c = _verdict("S1.periode", False, "periode terbaru: " + "; ".join(problems), True)
         else:
-            c = _verdict("G1.periode", True, f"periode terbaru {period} tervalidasi", False)
+            c = _verdict("S1.periode", True, f"periode terbaru {period} tervalidasi", False)
     checks.append(c)
 
-    # G1.satuan — one scale per table; detect absurd Rp miliar vs triliun mix.
+    # S1.satuan — one scale per table; detect absurd Rp miliar vs triliun mix.
     # Heuristic: revenue per share vs price same order of magnitude (from intake.load).
-    g1log = intake.get("_g1 boosts") or {}
+    s1log = intake.get("_s1 boosts") or {}
     rps_price_ok = True
     try:
         price = float(intake.get("price") or 0)
@@ -80,21 +80,21 @@ def check_g1(intake: dict | None) -> dict:
                 rps_price_ok = 0.01 <= ratio <= 100
     except (TypeError, ValueError):
         rps_price_ok = False
-    checks.append(_verdict("G1.satuan", rps_price_ok,
+    checks.append(_verdict("S1.satuan", rps_price_ok,
                            "skala satuan konsisten" if rps_price_ok
                            else "skala satuan tidak konsisten; keluarkan dari laporan bila tak pasti",
                            False, None if rps_price_ok else "gagal-dilabeli"))
 
-    # G1.mata_uang — model built in reporting currency; FX only for per-share/market.
+    # S1.mata_uang — model built in reporting currency; FX only for per-share/market.
     cur = (intake.get("currency") or intake.get("reporting_currency") or "Rp")
     fx = intake.get("fx", 1.0)
     cur_ok = cur in ("Rp", "IDR", "USD", "US$")
-    checks.append(_verdict("G1.mata_uang", cur_ok,
+    checks.append(_verdict("S1.mata_uang", cur_ok,
                            f"mata uang model {cur}" if cur_ok else "mata uang tak dikenal",
                            True))
     _ = fx  # documented: FX=1 for Rp model; USD model converts only at equity bridge
 
-    # G1.kas — cash recon where CF legs exist (tolerance ±1%).
+    # S1.kas — cash recon where CF legs exist (tolerance ±1%).
     recon_ok, legs = True, 0
     for a in (intake.get("annuals") or []):
         if isinstance(a, dict) and all(a.get(k) is not None for k in ("ocf", "fcf", "capex_out")):
@@ -105,16 +105,16 @@ def check_g1(intake: dict | None) -> dict:
             except TypeError:
                 recon_ok = False
     if legs == 0:
-        checks.append(_verdict("G1.kas", True, "kaki arus kas tak lengkap; rekonsiliasi tak diuji", False,
+        checks.append(_verdict("S1.kas", True, "kaki arus kas tak lengkap; rekonsiliasi tak diuji", False,
                                "dilabeli"))
     else:
-        checks.append(_verdict("G1.kas", recon_ok,
+        checks.append(_verdict("S1.kas", recon_ok,
                                "kas awal + perubahan = kas akhir" if recon_ok
                                else "rekonsiliasi kas gagal; tampilkan di lampiran saja", False,
                                None if recon_ok else "gagal-dilabeli"))
 
-    # G1.nonrecurring — must be labeled inti vs dilaporkan; absence = label only.
-    checks.append(_verdict("G1.nonrecurring", True,
+    # S1.nonrecurring — must be labeled inti vs dilaporkan; absence = label only.
+    checks.append(_verdict("S1.nonrecurring", True,
                            "laba dilaporkan = laba inti kecuali item non-recurring dilabeli",
                            False, "dilabeli"))
 
@@ -124,4 +124,4 @@ def check_g1(intake: dict | None) -> dict:
             blockers.append(f"{c['check']}: {c['message']}")
 
     status = "lolos" if not blockers else "gagal"
-    return {"tool": "check_g1", "status": status, "checks": checks, "blockers": blockers}
+    return {"tool": "check_s1", "status": status, "checks": checks, "blockers": blockers}

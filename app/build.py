@@ -20,7 +20,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
           illustrative_scenarios=False, assumption_plan=None,
           analyst_target=False, assumption_status=None, news_evidence=None,
           method_override=None, spec_sha=None):
-    doc_in, g1 = intake.load(ticker, as_of=as_of)
+    doc_in, s1 = intake.load(ticker, as_of=as_of)
     if news_evidence is not None:
         doc_in["news"] = news_evidence["rows"]
         doc_in["news_full"] = news_evidence["full"]
@@ -33,7 +33,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
                          assumption_status=assumption_status,
                          method_override=_override,
                          assumption_plan=assumption_plan or fc.get("assumption_plan"))
-    doc = narrative.build(doc_in, fc, va, g1, method=method,
+    doc = narrative.build(doc_in, fc, va, s1, method=method,
                           illustrative_scenarios=illustrative_scenarios or analyst_target)
     report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va, fc=fc)
     scrub.normalize_doc_prose(doc)
@@ -112,7 +112,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     t = doc["meta"]["ticker"]
     (outdir / f"{t}.json").write_text(json.dumps(doc, indent=1))
     (outdir / f"{t}.html").write_text(render.render(doc))
-    gates = {"G1": g1["G1"], "G2": fc["g2"], "G3": va["g3"]}
+    gates = {"S1": s1["S1"], "S2": fc["s2"], "S3": va["s3"]}
     print(f"{t} {doc['meta'].get('status', 'analysis')} "
           f"({len(doc.get('exhibits') or [])} exhibits)")
     release_result = va.get("release") or {}

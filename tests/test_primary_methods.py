@@ -1,5 +1,5 @@
 """Primary methods on the validated scenario: bank DDM, going-concern FCFF DCF,
-holding SOTP under Gate 0, and the agent's soft DCF drivers."""
+holding SOTP under Method Gate 0, and the agent's soft DCF drivers."""
 import sys
 from pathlib import Path
 
@@ -124,7 +124,7 @@ def test_scenario_dcf_without_ebitda_or_capex_names_the_gap():
     assert detail is None and "margin EBITDA dan capex" in reasons[0]
 
 
-def test_gate0_holding_primary_survives_the_ramping_gate():
+def test_method_gate0_holding_primary_survives_the_ramping_gate():
     verdict = MP.evaluate({"domain": "holding_dissimilar", "segments_count": 3,
                            "has_steady_state_3y": False, "life_cycle_stage": "mature"})
     assert verdict.primary == "SOTP"

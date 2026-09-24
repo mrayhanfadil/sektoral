@@ -38,7 +38,7 @@ def _doc_ok():
                           "catatan_sumber": "Source: Company, Sektoral Estimates"}]},
         ],
         "tabel_asumsi": [],
-        "log_gate": {"G1": {}, "G2": {}, "G3": {},
+        "log_gate": {"S1": {}, "S2": {}, "S3": {},
                      "release": {"status": "draft_non_distributable", "blockers": ["x"]}},
         "catatan_metodologi": ["Model dalam peninjauan."],
     }

@@ -26,7 +26,7 @@ def _spec_sections():
     """Read the live report instruction so the agents cannot use a stale copy."""
     full = SPEC_PATH.read_text(encoding="utf-8")
     markers = (
-        ("### 3.1 Prinsip", "### 3.2 GATE 2"),
+        ("### 3.1 Prinsip", "### 3.2 STAGE CHECK S2"),
         ("### 4.1 Pemilihan metode", "### 4.2 Discount rate"),
         ("### 5.3 Kurasi berita", "### 5.4 Struktur halaman"),
     )
