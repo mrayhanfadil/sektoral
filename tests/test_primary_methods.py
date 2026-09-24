@@ -155,14 +155,14 @@ def test_agent_dcf_drivers_are_soft_for_going_concerns_only():
 
 
 def _ammn_lom():
-    import glob
     import json
-    import os
-    from app import forecast, intake, lom
+    from app import commodity, forecast, intake, lom, store
+    fixtures = ROOT / "tests" / "fixtures"
+    # The test database has no Yahoo copper series; the Sectors one ends 2026-02-15.
+    store.put(commodity.COLLECTION, "Copper",
+              json.loads((fixtures / "commodity_prices.json").read_text())["Copper"])
     doc_in, _ = intake.load("AMMN", as_of="2026-09-24")
-    plans = sorted(glob.glob(str(ROOT / "data" / "forecast_plans" / "AMMN-*.json")),
-                   key=os.path.getmtime)
-    plan = json.load(open(plans[-1]))["plan"] if plans else None
+    plan = json.loads((fixtures / "ammn_interim_plan.json").read_text())
     fc = forecast.build(doc_in, assumption_plan=plan)
     return doc_in, fc, lom.build(doc_in, fc)
 
@@ -181,6 +181,12 @@ def test_lom_stays_inside_official_reserves_and_capacities():
         share = 0.5 if year == 2026 else 1.0
         assert cathode <= inp["smelter_t"] * inp["utilization"] * share + 1e-6
         assert year <= inp["licence_end"]
+        # Without an export permit no concentrate is sold after 2026.
+        if year > 2026:
+            assert sum(r["conc_cu_t"] for r in rows if r["year"] == year) < 1e-6
+    # Elang capex is spent in the two years before Elang's first feed.
+    first = res["base"]["elang_feed_years"][0]
+    assert max(res["base"]["elang_capex"]) == first - 1
     assert 0.8 < inp["recovery_cu"] < 1.0 and 0.6 < inp["recovery_au"] < 1.0
 
 
@@ -198,7 +204,10 @@ def test_lom_value_ties_to_the_sotp_bridge_and_moves_the_right_way():
         grid[(round(rate + 0.02, 3), "base")]
     assert grid[(rate, "reserve")] < grid[(rate, "down20")] < grid[(rate, "base")] < \
         grid[(rate, "up20")]
-    assert res["no_export"] < res["per_share"]
+    # The temporary export permit lapsed on 30 Apr 2026: the base feeds only what
+    # the smelter can take, and a renewed permit is the upside sensitivity.
+    assert res["inputs"]["export_base"] is False
+    assert res["other_export"] > res["per_share"]
     assert res["per_share_down"] < res["per_share"]
     bridge = lom.operating_bridge(doc_in, res)
     assert not release._check_operating_bridge({"operating_bridge": bridge})

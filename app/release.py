@@ -691,8 +691,12 @@ def assess_holding_sotp(intake, forecast, valuation, assumption_status):
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "Holding SOTP (listed stakes at market, rest at book)",
         "blockers": blockers,
-        "limitations": ["segmen tanpa harga pasar dinilai pada nilai buku (lahan industri pada "
-                        "biaya perolehan), sehingga nilainya konservatif",
+        "limitations": [("tanah untuk pengembangan dinilai dengan RNAV landbank; porsi dapat "
+                         "dijual dan laju penjualan adalah asumsi analis, hotel dan utilitas "
+                         "pada nilai buku")
+                        if (detail.get("landbank") or {}) else
+                        "segmen tanpa harga pasar dinilai pada nilai buku (lahan industri pada "
+                        "biaya perolehan)",
                         "diskon holding 20-30% adalah asumsi analis untuk sensitivitas",
                         "DCF konsolidasi atas skenario analis hanya referensi"],
     }
@@ -747,10 +751,12 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
             "dek harga rata-rata 12 bulan kalender terakhir dianggap datar sepanjang umur tambang; "
             "harga cadangan JORC emiten ditampilkan sebagai sensitivitas",
             "capex dan jadwal Elang tidak diungkapkan emiten; capex dari riset broker dan "
-            "faktor risiko 50% adalah asumsi analis",
-            "logam di atas kapasitas smelter dijual sebagai konsentrat dengan asumsi izin "
-            "ekspor diperpanjang",
-            "cadangan Elang sesudah 2050 dan modal kerja tidak dinilai"],
+            "probabilitas pengembangan 50% adalah asumsi analis",
+            "tanpa izin ekspor, umpan pabrik dibatasi kapasitas smelter sehingga jadwal pit, "
+            "stockpile dan Elang lebih lambat dari jadwal emiten; kasus ekspor diperpanjang "
+            "ditampilkan sebagai sensitivitas",
+            "cadangan Elang sesudah 2050 dan modal kerja tidak dinilai (penambangan sampai "
+            "cadangan habis ditampilkan sebagai sensitivitas)"],
     }
 
 

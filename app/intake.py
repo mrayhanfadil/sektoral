@@ -244,7 +244,8 @@ def _official_annual_depreciation(annuals, evidence):
         if da is None or da < 0 or operating is None:
             continue
         before = a.get("ebitda")
-        a.update(da=da, ebit=operating, ebitda=operating + da, da_source="official")
+        a.update(da=da, ebit=operating, ebitda=operating + da, da_source="official",
+                 ebitda_sectors=before)
         notes.append(
             f"D&A dan EBITDA FY{a['year']} memakai {source.get('title') or 'laporan audit emiten'}"
             f" (penyusutan Rp{da / 1e9:,.0f} miliar, laba usaha Rp{operating / 1e9:,.0f} miliar);"
@@ -267,6 +268,31 @@ def _implausible_depreciation(annuals):
     return [f"D&A data Sectors (EBITDA - EBIT) tidak dipakai untuk {', '.join(voided)}: "
             f"umur aset tetap tersirat di atas {MAX_IMPLIED_ASSET_LIFE} tahun, sehingga EBITDA "
             "Sectors kehilangan sebagian besar penyusutan."]
+
+
+def _historical_ev_ebitda(val, annuals):
+    """Own-history EV/EBITDA from Sectors, on the same EBITDA as the annuals.
+
+    Sectors divides by its own EBITDA, so a year whose D&A was rejected as not
+    credible carries an overstated multiple and is dropped; a year whose EBITDA
+    was replaced by audited figures is rescaled to it. The latest (current)
+    point has no annual row to check and is kept as reported.
+    """
+    by_year = {a.get("year"): a for a in annuals}
+    out = []
+    for h in val.get("historical_valuation") or []:
+        if not isinstance(h, dict):
+            continue
+        value = _num(h.get("enterprise_to_ebitda"))
+        if value is None or not 0 < value <= 100:
+            continue
+        a = by_year.get(h.get("year")) or {}
+        if a.get("da_implied_life") or a.get("da_invalid"):
+            continue
+        if a.get("ebitda_sectors") and a.get("ebitda"):
+            value = value * a["ebitda_sectors"] / a["ebitda"]
+        out.append({"year": h.get("year"), "value": value})
+    return out[-5:]
 
 
 def _cache_close_provenance(ticker, price, price_date):
@@ -403,6 +429,9 @@ def load(ticker, as_of=None):
         })
     if len(annuals) < 3:
         raise ValueError(f"only {len(annuals)} usable annuals for {t}, need >= 3")
+    for a in annuals:
+        if a["year"] in da_invalid_years:
+            a["da_invalid"] = True
     notes.extend(_official_annual_depreciation(annuals, official_evidence))
     notes.extend(_implausible_depreciation(annuals))
 
@@ -560,11 +589,7 @@ def load(ticker, as_of=None):
         "peers": peers, "peer_median_pe": peer_median_pe, "peer_basis": peer_basis,
         # Own-history EV/EBITDA (Sectors valuation.historical_valuation) for the
         # Method Gate 5 implied-exit check; the Sectors peer tables carry no EV.
-        "historical_ev_ebitda": [
-            {"year": h.get("year"), "value": _num(h.get("enterprise_to_ebitda"))}
-            for h in (val.get("historical_valuation") or [])
-            if isinstance(h, dict) and _num(h.get("enterprise_to_ebitda")) is not None
-            and 0 < _num(h.get("enterprise_to_ebitda")) <= 100][-5:],
+        "historical_ev_ebitda": _historical_ev_ebitda(val, annuals),
         "peer_median_pb": peer_median_pb,
         "forward_pe_cache": _num(val.get("forward_pe")),
         "mineops": mineops.load(t, report_date),

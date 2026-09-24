@@ -315,6 +315,27 @@ def _validate(plan, source, require_news_coverage=True):
     return problems
 
 
+# Out-year revenue growth this far above the issuer's own three-year record
+# needs a dated article or guidance, not "momentum" (BBRI: 9-10% a year
+# against 3% from 2022 to 2025).
+HISTORY_GROWTH_TOLERANCE_PP = 5.0
+
+
+def _history_growth_pct(annuals):
+    """Highest of the three-year revenue and earnings CAGR, in percent."""
+    rows = sorted((a for a in annuals or [] if isinstance(a, dict) and a.get("year")),
+                  key=lambda a: a["year"])[-4:]
+    if len(rows) < 4:
+        return None
+    rates = []
+    for key in ("revenue", "earnings"):
+        first, last = rows[0].get(key), rows[-1].get(key)
+        if isinstance(first, (int, float)) and isinstance(last, (int, float)) and first > 0 \
+                and last > 0:
+            rates.append(((last / first) ** (1 / 3) - 1) * 100)
+    return max(rates) if rates else None
+
+
 def _validate_outyears(rows, source):
     """Validate four explicit analyst assumption rows after the FY scenario."""
     problems = []
@@ -355,6 +376,17 @@ def _validate_outyears(rows, source):
             problems.append(f"outyear_scenario[{year}] rationale must use Indonesian text")
     if actual_years != expected_years:
         problems.append("outyear_scenario does not cover the next four fiscal years")
+    history = _history_growth_pct(source.get("annuals"))
+    growths = [row.get("revenue_growth_pct") for row in rows if isinstance(row, dict)
+               and isinstance(row.get("revenue_growth_pct"), (int, float))]
+    cited = any(str(item).startswith("news:") for row in rows if isinstance(row, dict)
+                for item in row.get("source_ids") or [])
+    if (history is not None and growths and not cited and
+            sum(growths) / len(growths) > max(history, 0.0) + HISTORY_GROWTH_TOLERANCE_PP):
+        problems.append(
+            f"outyear revenue growth averages {sum(growths) / len(growths):.1f}% against a "
+            f"three-year record of {history:.1f}%; cite a dated article or guidance for the "
+            "faster path, or keep growth within 5pp of the record")
     if not official.get("source_url") or not _dated_on_or_before(
             official.get("published_at"), source["as_of"]):
         problems.append("outyear_scenario official evidence is missing or future-dated")
@@ -863,6 +895,10 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "economically coherent with the FY anchor; show ramp-up, normalization, "
             "asset transition, and finite-life uncertainty where relevant. Do not "
             "simply repeat one flat value every year without a causal explanation. "
+            "Anchor growth to the issuer's own record in annuals: if the average "
+            "revenue_growth_pct runs more than 5pp above the higher of its three-year "
+            "revenue or earnings CAGR, a row must cite a dated article (news:N) that "
+            "supports the faster path; momentum in one half-year is not enough. "
             "Return compact JSON only; rationale must be at most two short sentences."
         )
         if source.get("model_profile") == "going_concern_fcff":

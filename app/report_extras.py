@@ -144,8 +144,14 @@ def holding_sotp_exhibit(va):
     for c in d["components"]:
         rows.append([f"Dikurangi porsi {c['ticker']} atas ekuitas buku {c['ticker']} "
                      f"(FY{c.get('book_year') or '-'})", "nilai buku", f"({bn(c['book_share'])})"])
+    land = d.get("landbank")
     rows.append(["Segmen lain (lahan industri, hotel, utilitas, sewa) pada nilai buku",
                  "nilai buku", bn(d["remainder_book"])])
+    if land:
+        li = land["inputs"]
+        rows.append([f"Revaluasi landbank: RNAV Rp{bn(land['nav'])} miliar dikurangi nilai buku "
+                     f"Rp{bn(li['carrying_idr'])} miliar, porsi {fmt.pct(li['stake'])}",
+                     "RNAV", bn(d["landbank_uplift"])])
     rows.append(["Total nilai SOTP", "", bn(d["total"])])
     for item in d["discounts"]:
         rows.append([f"Nilai per saham, diskon holding {fmt.pct(item['discount'])}",
@@ -159,11 +165,74 @@ def holding_sotp_exhibit(va):
         ["Komponen", "Basis", "Rp miliar"], rows,
         f"Source: Company, Sektoral Estimates; kepemilikan: {stake_sources}; kapitalisasi dan "
         f"ekuitas anak usaha: {', '.join(sorted({c['market_source'] for c in d['components']}))}; "
-        "ekuitas induk: neraca interim emiten. Segmen tanpa harga pasar dinilai pada nilai buku "
-        "(lahan industri tercatat pada biaya perolehan, sehingga nilai ini konservatif). Diskon "
-        "holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. "
+        "ekuitas induk: neraca interim emiten. "
+        + ("Tanah untuk pengembangan dinilai dengan RNAV landbank (tabel terpisah) menggantikan "
+           "nilai bukunya; hotel, utilitas dan sewa tetap pada nilai buku. "
+           if d.get("landbank") else
+           "Segmen tanpa harga pasar dinilai pada nilai buku (lahan industri tercatat pada "
+           "biaya perolehan). ")
+        + "Diskon holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. "
         + ("Metode utama (Method Gate 0: grup dengan lini usaha berbeda); target memakai diskon 0%."
            if primary else "Cross-check, bukan dasar target harga."))
+
+
+def landbank_exhibits(va):
+    """RNAV of the landbank behind the holding SOTP: inputs and a pace x price grid."""
+    chain = (va or {}).get("method_chain") or {}
+    sotp = next((t for t in chain.get("trace") or []
+                 if t["key"] == "holding_sotp" and t["status"] == "sufficient"), None)
+    land = ((sotp or {}).get("detail") or {}).get("landbank")
+    if not land:
+        return []
+    li, ev, lb = land["inputs"], land["inputs"]["evidence"], land["inputs"]["assumptions"]
+    shares = sotp["detail"]["shares"]
+    bn = lambda v: fmt._id(v / 1e9, 0)
+    land_src = ev.get("land_for_development") or {}
+    rows = [
+        ["Tanah untuk pengembangan (bruto)", f"{fmt._id(li['gross_ha'], 0)} ha",
+         f"audit {li['carrying_as_of']}, {land_src.get('page')}"],
+        ["Nilai buku tanah", f"Rp{bn(li['carrying_idr'])} miliar",
+         f"Rp{fmt._id(li['carrying_idr'] / (li['gross_ha'] * 10_000) / 1000, 0)} ribu/m2 bruto"],
+        ["Porsi dapat dijual (asumsi analis)", fmt.pct(li["net_ratio"]),
+         lb.get("net_saleable_basis") or "-"],
+        ["Laju penjualan", f"{fmt._id(li['pace_ha'], 1)} ha/tahun",
+         lb.get("pace_basis") or "-"],
+        ["Harga jual awal", f"Rp{fmt._id(li['asp'] / 1000, 0)} ribu/m2",
+         "marketing sales 1H26 (9,4 ha, Rp195,9 miliar)"],
+        ["Pertumbuhan harga", fmt.pct(li["asp_growth"]), lb.get("growth_basis") or "-"],
+        ["Margin kas", fmt.pct(li["cash_margin"]),
+         f"laba kotor {fmt.pct(li['gross_margin'])} + biaya buku lahan "
+         f"{fmt.pct(li['land_cost_share'])} - beban usaha {fmt.pct(li['opex_ratio'])} - PPh final "
+         f"{fmt.pct(li['final_tax'])} (segmen properti {li['margin_periods']})"],
+        ["Tingkat diskonto", fmt.pct(land["rate"]), lb.get("discount_basis") or "-"],
+        ["RNAV landbank (100%)", f"Rp{bn(land['nav'])} miliar",
+         f"terjual habis dalam {land['years']} tahun"],
+        [f"Tambahan nilai porsi SSIA ({fmt.pct(li['stake'])})",
+         f"Rp{bn(land['uplift_attributable'])} miliar",
+         f"Rp{fmt.rp(round(land['uplift_attributable'] / shares))} per saham"],
+    ]
+    appraisal = ev.get("appraisal") or {}
+    if appraisal.get("fair_value_idr") and appraisal.get("area_m2"):
+        rows.append(["Cross-check penilai independen",
+                     f"Rp{fmt._id(appraisal['fair_value_idr'] / appraisal['area_m2'] / 1000, 0)} "
+                     "ribu/m2 bruto",
+                     f"{fmt._id(appraisal.get('area_ha'), 0)} ha, {appraisal.get('method')}, "
+                     f"{appraisal.get('appraisal_date')} (tanah mentah, sebelum pengembangan)"])
+    growths = sorted({g for (_, g) in land["grid"]})
+    grid_rows = [[f"{fmt._id(p, 0)} ha/tahun" + (" (target 2026)" if p == 135 else "")]
+                 + [f"Rp{fmt.rp(round(land['grid'][(p, g)] / shares))}" for g in growths]
+                 for p in sorted({p for (p, _) in land["grid"]})]
+    return [
+        _exhibit("RNAV landbank Suryacipta: dasar perhitungan", ["Komponen", "Nilai", "Dasar"],
+                 rows, f"Sumber: {land_src.get('source_title')}; "
+                       f"{(ev.get('marketing_asp_idr_per_m2') or {}).get('source_title')}; "
+                       "asumsi analis berlabel di data/analyst_scenarios. RNAV menggantikan nilai "
+                       "buku tanah untuk pengembangan; hanya porsi SSIA atas selisihnya yang masuk SOTP."),
+        _exhibit("Sensitivitas tambahan nilai landbank per saham: laju penjualan x pertumbuhan harga",
+                 ["Laju penjualan"] + [f"Harga +{fmt.pct(g)}/tahun" for g in growths], grid_rows,
+                 "Sumber: estimasi Sektoral; tambahan nilai per saham di atas nilai buku, porsi SSIA. "
+                 f"Basis: {fmt._id(li['pace_ha'], 1)} ha/tahun dan +{fmt.pct(li['asp_growth'])}/tahun."),
+    ]
 
 
 def attach_method_chain(doc, va):
@@ -182,6 +251,7 @@ def attach_method_chain(doc, va):
         page["exhibit"].append(exhibit)
         if sotp:
             page["exhibit"].append(sotp)
+            page["exhibit"].extend(landbank_exhibits(va))
 
 
 # ------------------------------------------------------------ cover data
