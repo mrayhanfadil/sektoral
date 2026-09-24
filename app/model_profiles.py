@@ -42,6 +42,10 @@ class GateVerdict:
     # Gates that could not be judged (missing inputs). They stay in
     # gates_failed for the release trace, but must not drive method choice.
     gates_unassessed: list[str] = field(default_factory=list)
+    # Gate 3 found a ramping asset (no 3y steady state) on a non-structural
+    # primary. Gate 1b chronic losses set the same "Relative Valuation"
+    # primary but lead to EV/Sales; this flag keeps the two chains apart.
+    ramping: bool = False
 
     def __iter__(self):
         yield self.primary
@@ -110,6 +114,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     gates_unassessed: list[str] = []
     reasons: list[str] = []
     thin_data = False
+    ramping = False
     rating_override: Optional[str] = None
 
     domain = inputs.get("domain") or inputs.get("model_profile")
@@ -314,6 +319,7 @@ def evaluate(inputs: dict) -> GateVerdict:
     elif not has_steady_state_3y:
         gates_passed.append("3_cyclicality")
         primary = "Relative Valuation"
+        ramping = True
         reasons.append("3 newly commissioned / ramping asset (<3y steady-state) → forward Relative Valuation primary (EV/EBITDA at target capacity against mature peers)")
     else:
         gates_passed.append("3_cyclicality")
@@ -353,6 +359,7 @@ def evaluate(inputs: dict) -> GateVerdict:
         gates_passed=gates_passed,
         gates_failed=gates_failed,
         gates_unassessed=gates_unassessed,
+        ramping=ramping,
     )
 
 

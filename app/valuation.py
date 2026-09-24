@@ -709,6 +709,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         candidates["pbv_roe_fy"] = _pbv_roe_fy_candidate(intake, fc, assumption_status, re, g)
     # Generic peer/NAV/SOTP placeholders for gate-driven orders (1.4)
     fwd = fc["rows"][0] if fc.get("rows") else {}
+    # net_debt is the forecast base: Sectors total debt less cash, base year.
+    sectors_nd_source = f"data Sectors FY{intake.get('base_year')}"
     if "relative_pe" in prelim_order or profile in ("going_concern_fcff", "financial_ddm"):
         candidates["relative_pe"] = method_chain.relative_pe(
             intake.get("peers"), fwd.get("eps"), shares, mcap)
@@ -723,12 +725,17 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     if "ev_ebitda_peer" in prelim_order:
         _ebitda_fwd = fwd.get("ebitda")
         # Official net debt (converted to IDR) when available; EV and EBITDA are IDR.
-        _nd = net_debt_off_idr if net_debt_off_idr is not None else net_debt
+        if net_debt_off_idr is not None:
+            _nd, _nd_source = net_debt_off_idr, "neraca resmi"
+        else:
+            _nd, _nd_source = net_debt, sectors_nd_source
         candidates["ev_ebitda_peer"] = method_chain.ev_ebitda_peer(
-            intake.get("peers"), _ebitda_fwd, shares, mcap, net_debt=_nd)
+            intake.get("peers"), _ebitda_fwd, shares, mcap, net_debt=_nd,
+            net_debt_source=_nd_source)
     if "ev_sales_peer" in prelim_order:
         candidates["ev_sales_peer"] = method_chain.ev_sales_peer(
-            intake.get("peers"), fwd.get("revenue"), shares, mcap, net_debt=net_debt)
+            intake.get("peers"), fwd.get("revenue"), shares, mcap, net_debt=net_debt,
+            net_debt_source=sectors_nd_source)
     if "ps_peer" in prelim_order:
         # P/S needs no EV: market cap and revenue sit in the Sectors peer rows.
         candidates["ps_peer"] = method_chain.ps_peer(
