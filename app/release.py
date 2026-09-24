@@ -578,6 +578,41 @@ def assess_pbv_roe_fy(intake, forecast, valuation, assumption_status):
     }
 
 
+ASSET_HEAVY_SHARE = 0.5
+
+
+def assess_pbv_book(intake, forecast, valuation, assumption_status):
+    """Relative P/BV on reported book for an asset-heavy going concern.
+
+    Framework: P/BV applies to asset-heavy businesses. Last step of the going
+    concern chain, used when DCF and PER have no valid basis (e.g. too few
+    peers with a PER inside the band). Same evidence gate as the earnings
+    route without the peer PER set, plus asset intensity, positive reported
+    equity and at least three peers with a P/B in band.
+    """
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share"))]
+    detail = (valuation or {}).get("detail") or {}
+    if (intake or {}).get("model_profile") != "going_concern_fcff":
+        blockers.append("relative P/BV on reported book is a going-concern fallback")
+    share = detail.get("fixed_asset_share")
+    if not _number(share) or share < ASSET_HEAVY_SHARE:
+        blockers.append("fixed assets below half of total assets; P/BV is not the asset-heavy method")
+    if not _number(detail.get("equity")) or detail["equity"] <= 0:
+        blockers.append("reported parent equity is missing or not positive")
+    if not detail.get("peer_count") or detail["peer_count"] < 3:
+        blockers.append("peer P/BV set has fewer than three valid peers")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "Relative P/BV on reported book (asset-heavy)",
+        "blockers": blockers,
+        "limitations": ["P/B peer TTM dari data Sectors; peer dianggap sebanding",
+                        "nilai buku terlapor pada neraca interim resmi, tanpa revaluasi aset",
+                        "skenario laba FY adalah konteks tesis, bukan dasar target"],
+    }
+
+
 def assess_release(profile, intake, forecast, sotp_result):
     """Assess whether a model may be published as a production report.
 
