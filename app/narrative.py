@@ -3338,11 +3338,13 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
             doc["cover"]["paragraf"][0]["isi"].rstrip() +
             f" Laba 1H setara {fmt.pct(h1_share)} dari estimasi laba bersih {label} kami.")
     # Struktur paragraph 2: is the story already in the price?
-    own_move, ihsg_move = report_extras.price_vs_ihsg(intake["ticker"])
+    # The market's reaction since the latest results release.
+    own_move, ihsg_move = report_extras.price_vs_ihsg(
+        intake["ticker"], scenario.get("published_at"), intake.get("as_of"))
     priced = ""
     if own_move and ihsg_move and pe_now:
         relative = "di bawah" if pe_now < d["median_pe"] else "di atas"
-        priced = (f" Sejak {own_move[1]} saham {'naik' if own_move[0] >= 0 else 'turun'} "
+        priced = (f" Sejak rilis {own_move[1]} saham {'naik' if own_move[0] >= 0 else 'turun'} "
                   f"{fmt.pct(abs(own_move[0]))} (IHSG {'naik' if ihsg_move[0] >= 0 else 'turun'} "
                   f"{fmt.pct(abs(ihsg_move[0]))}), namun PER {label} {fmt.mult(pe_now, 1)} masih "
                   f"{relative} median peer {fmt.mult(d['median_pe'], 1)}; "

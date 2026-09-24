@@ -17,7 +17,7 @@ from agents.analyst import signals as S
 from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
-from . import cache, fmt, method_chain
+from . import cache, fmt, idx_history, method_chain
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
 # "USD" rather than "US$": the report keeps "$" out of rupiah-only drafts (spec §5.3).
@@ -352,18 +352,25 @@ def _window_change(rows, key, start_day):
     return (points[-1][1] / points[0][1] - 1, points[0][0], points[-1][0]) if len(points) >= 2 else None
 
 
-def price_vs_ihsg(ticker):
-    """(issuer move, IHSG move) over the common window of the cached Sectors
-    daily closes; each is (change, start, end) or None."""
-    daily = (local_data.cache_get(ticker, f"/daily/{ticker}/") or {}).get("data") or []
-    index = cache.first("/index-daily/ihsg/")
-    index_rows = (index.get("data") if isinstance(index, dict) else index) or []
+def price_vs_ihsg(ticker, start=None, as_of=None):
+    """(issuer move, IHSG move) from ``start`` (or the first common date) to
+    the last close; each is (change, start, end) or None. IDX closes when
+    available, else the cached Sectors daily series."""
+    own, index_idx = idx_history.load(ticker, as_of), idx_history.load("IHSG", as_of)
+    if own and index_idx:
+        daily = [{"date": d.isoformat(), "close": c} for d, c in own["points"]]
+        index_rows = [{"date": d.isoformat(), "price": c} for d, c in index_idx["points"]]
+    else:
+        daily = (local_data.cache_get(ticker, f"/daily/{ticker}/") or {}).get("data") or []
+        index = cache.first("/index-daily/ihsg/")
+        index_rows = (index.get("data") if isinstance(index, dict) else index) or []
     # Common window: the later of the two series' first dates.
     firsts = [min((str(r.get("date"))[:10] for r in rows_ if isinstance(r, dict) and r.get("date")),
                   default=None) for rows_ in (daily, index_rows)]
-    start = max(firsts) if all(firsts) else None
-    if not start:
+    first_common = max(firsts) if all(firsts) else None
+    if not first_common:
         return None, None
+    start = max(first_common, str(start)[:10]) if start else first_common
     return _window_change(daily, "close", start), _window_change(index_rows, "price", start)
 
 
@@ -424,8 +431,10 @@ def peer_industry_page(intake):
             f"dengan margin laba bersih {pct(own.get('net_margin'))} (median peer "
             f"{pct(stats['net_margin'][0])}); selisih ini menjelaskan posisi valuasinya terhadap "
             "peer, bukan tren industri yang terukur.")
-    # Sentiment: price vs IHSG on common dates, and net foreign flow.
-    own_move, ihsg_move = price_vs_ihsg(ticker)
+    # Sentiment: price vs IHSG over the past year (IDX), and net foreign flow.
+    as_of = intake.get("as_of")
+    year_ago = (date.fromisoformat(str(as_of)[:10]) - timedelta(days=365)).isoformat() if as_of else None
+    own_move, ihsg_move = price_vs_ihsg(ticker, year_ago, as_of)
     flows = (local_data.cache_get(ticker, f"/foreign-flow/{ticker}/") or {}).get("data") or []
     net_flow = sum(_num(r.get("net_foreign_inflow")) or 0 for r in flows if isinstance(r, dict))
     sentiment = []
@@ -581,20 +590,29 @@ def _band_data(intake):
     date (FY end + PUBLICATION_LAG_DAYS). Returns None when the window is
     under 40 trading days or no base exists.
     """
-    try:
-        daily = (local_data.cache_get(intake["ticker"], f"/daily/{intake['ticker']}/") or {}).get("data") or []
-    except Exception:
-        daily = []
     shares = intake.get("shares") or 0
     annuals = [a for a in intake.get("annuals") or [] if isinstance(a.get("year"), int)]
-    if len(daily) < 40 or len(annuals) < 2 or not shares:
+    if len(annuals) < 2 or not shares:
         return None
-    points = []
-    for row in daily[-250:]:
-        day = _day(row.get("date")) if isinstance(row, dict) else None
-        close = _num(row.get("close")) if isinstance(row, dict) else None
-        if day and close:
-            points.append((day, close))
+    # Struktur slide 5: a 1-year band. IDX closes cover it; the Sectors cache
+    # (about three months) is the fallback.
+    idx = idx_history.load(intake["ticker"], intake.get("as_of"))
+    if idx:
+        end = idx["points"][-1][0]
+        points = [(d, c) for d, c in idx["points"] if (end - d).days <= 365]
+        source = "harga harian IDX (ringkasan perdagangan)"
+    else:
+        try:
+            daily = (local_data.cache_get(intake["ticker"], f"/daily/{intake['ticker']}/") or {}).get("data") or []
+        except Exception:
+            daily = []
+        points = []
+        for row in daily[-250:]:
+            day = _day(row.get("date")) if isinstance(row, dict) else None
+            close = _num(row.get("close")) if isinstance(row, dict) else None
+            if day and close:
+                points.append((day, close))
+        source = f"Sectors daily {intake['ticker']}"
     if len(points) < 40:
         return None
 
@@ -606,7 +624,7 @@ def _band_data(intake):
 
     months = max(1, round((points[-1][0] - points[0][0]).days / 30.4))
     out = {"window": f"{months} bulan", "start": points[0][0], "end": points[-1][0],
-           "multiples": {}}
+           "source": source, "multiples": {}}
     for label, key in (("P/E", "earnings"), ("P/BV", "equity")):
         series = []
         for day, close in points:
@@ -647,8 +665,8 @@ def own_history_bands(intake):
         f"Band historis {data['window']} P/E dan P/BV (bukan target harga)",
         ["Multiple", "Mean", "Median", "Kini (persentil)", "Implisit mean / median"],
         rows,
-        f"Source: Sectors daily {intake['ticker']} {data['start'].isoformat()} sampai "
-        f"{data['end'].isoformat()} (cakupan data harian lokal) dan laba/ekuitas tahunan yang "
+        f"Source: {data['source']} {data['start'].isoformat()} sampai "
+        f"{data['end'].isoformat()} dan laba/ekuitas tahunan Sectors yang "
         f"sudah terbit pada tiap tanggal (akhir tahun buku + {PUBLICATION_LAG_DAYS} hari), saham "
         "kini sebagai basis pro forma. Harga implisit = multiple mean/median x EPS/BVPS terakhir "
         "dengan driver tetap; cross-check reversion, bukan target harga."
@@ -674,7 +692,7 @@ def band_charts(intake):
                      "median": m["median"], "current": m["current"],
                      "percentile": m["percentile"]},
             "catatan_sumber": (
-                f"Source: Sectors daily {intake['ticker']}, Sektoral Estimates; basis "
+                f"Source: {data['source']}; basis "
                 f"{'EPS' if label == 'P/E' else 'BVPS'} FY{m['base_year']}; garis putus-putus = "
                 f"mean {fmt.mult(m['mean'])}, titik-titik = median {fmt.mult(m['median'])}; "
                 f"kini {fmt.mult(m['current'])} di persentil {m['percentile']:.0f}.")})
