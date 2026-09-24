@@ -135,7 +135,7 @@ def load(ticker, as_of=None):
         raise ValueError(f"no outstanding_shares in cache for {t}")
     if share_row["year"] != base["year"]:
         notes.append(f"jumlah saham memakai data terakhir yang tersedia ({share_row['year']}); "
-                     f"data saham tahun dasar {base['year']} tidak ada di cache.")
+                     f"data saham tahun dasar {base['year']} tidak ada di data Sectors.")
     official_balance = (official_evidence or {}).get("balance_sheet") or {}
     official_shares = official_balance.get("shares_outstanding")
     if isinstance(official_shares, (int, float)) and official_shares > 0:
@@ -147,12 +147,12 @@ def load(ticker, as_of=None):
     if da_invalid_years:
         years_str = ", ".join(str(y) for y in sorted(set(da_invalid_years)))
         notes.append(
-            f"D&A tahun {years_str} tidak valid di cache "
+            f"D&A tahun {years_str} tidak valid di data Sectors "
             f"(EBITDA <= EBIT atau EBITDA 0 dengan EBIT positif); status D&A dan arus kas tidak lengkap."
         )
 
     if base.get("cash") is None:
-        notes.append(f"posisi kas tahun dasar {base['year']} tidak tersedia di cache; kas berstatus n.a.")
+        notes.append(f"posisi kas tahun dasar {base['year']} tidak tersedia di data Sectors; kas berstatus n.a.")
 
     # G1: scale sanity - revenue per share vs price must be same order of magnitude
     rps = base["revenue"] / shares
@@ -169,7 +169,7 @@ def load(ticker, as_of=None):
                 recon_ok = False
     g1["G1_kas"] = "lolos" if (recon_n == 0 or recon_ok) else "gagal-dilabeli"
     if recon_n == 0:
-        notes.append("kaki arus kas tidak lengkap di cache; rekonsiliasi kas tidak diuji.")
+        notes.append("kaki arus kas tidak lengkap di data Sectors; rekonsiliasi kas tidak diuji.")
 
     # G1: interim freshness - structured interim not required by spec; label only
     g1["G1_periode"] = "dilabeli"
@@ -178,7 +178,7 @@ def load(ticker, as_of=None):
 
     # G1: non-recurring - not detectable from cache granularity
     g1["G1_nonrecurring"] = "dilabeli"
-    notes.append("tidak ada item non-recurring teridentifikasi dari granularitas cache; "
+    notes.append("tidak ada item non-recurring teridentifikasi dari granularitas data Sectors; "
                  "laba dilaporkan = laba inti.")
 
     # Supporting context (narrative only)
@@ -214,9 +214,9 @@ def load(ticker, as_of=None):
     peers, peer_median_pe, peer_median_pb = _peers(rep, t)
     payout = _num(div.get("payout_ratio"))
     if payout is None or not (0 <= payout <= 1.5):
-        payout, payout_basis = 0.25, "asumsi analis 25% (tanpa payout historis di cache)"
+        payout, payout_basis = 0.25, "asumsi analis 25% (tanpa payout historis di data Sectors)"
     else:
-        payout_basis = "payout ratio historis di cache"
+        payout_basis = "payout ratio historis di data Sectors"
     dps_hist, dps_years = [], []
     hist_div = div.get("historical_dividends") or {}
     if isinstance(hist_div, dict):
@@ -225,8 +225,8 @@ def load(ticker, as_of=None):
             if tot is not None:
                 dps_hist.append(tot)
                 dps_years.append(str(y))
-    dps_basis = (f"DPS historis {dps_years[0]}-{dps_years[-1]} di cache"
-                 if dps_hist else "tanpa DPS historis di cache")
+    dps_basis = (f"DPS historis {dps_years[0]}-{dps_years[-1]} di data Sectors"
+                 if dps_hist else "tanpa DPS historis di data Sectors")
 
     intake = {
         "ticker": t, "name": rep.get("company_name", t),
