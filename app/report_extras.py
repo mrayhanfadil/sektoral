@@ -86,7 +86,7 @@ def method_chain_exhibit(va):
     released = ((va.get("release") or {}).get("status") or "").startswith("distributable")
     rows = []
     for t in trace:
-        value = (f"Rp{fmt.rp(round(t['per_share'] / 10) * 10)}"
+        value = (f"Rp{fmt.rp(fmt.tick(t['per_share']))}"
                  if released and t.get("per_share") and t["decision"] in
                  ("selected", "cross_check")
                  else "ditahan" if (t.get("per_share") and not released
@@ -359,12 +359,12 @@ def peer_page(intake, valuation_inputs=None):
     if inputs.get("eps_idr") and pe_signal.get("median"):
         implied = pe_signal["median"] * inputs["eps_idr"]
         cross.append([f"P/E median peer x EPS {inputs['label']}", fmt.mult(pe_signal["median"]),
-                      f"Rp{fmt.rp(round(implied / 10) * 10)}"])
+                      f"Rp{fmt.rp(fmt.tick(implied))}"])
     pb_signal = ranked.get("peer.pb") or {}
     if inputs.get("bvps_idr") and pb_signal.get("median"):
         implied = pb_signal["median"] * inputs["bvps_idr"]
         cross.append([f"P/B median peer x BVPS {inputs.get('bvps_period', 'terakhir')}",
-                      fmt.mult(pb_signal["median"]), f"Rp{fmt.rp(round(implied / 10) * 10)}"])
+                      fmt.mult(pb_signal["median"]), f"Rp{fmt.rp(fmt.tick(implied))}"])
     if cross:
         if inputs.get("tp"):
             cross.append(["Target harga metode utama", inputs.get("method_label", "-"),
@@ -439,8 +439,8 @@ def own_history_bands(intake):
             implied = ("belum dimodelkan: basis tetap sepanjang jendela, "
                        "band hanya rentang harga")
         else:
-            implied = (f"mean Rp{fmt.rp(round(mean * base_now / 10) * 10)}; "
-                       f"median Rp{fmt.rp(round(med * base_now / 10) * 10)}")
+            implied = (f"mean Rp{fmt.rp(fmt.tick(mean * base_now))}; "
+                       f"median Rp{fmt.rp(fmt.tick(med * base_now))}")
         rows.append([label, f"{mean:.1f}x", f"{med:.1f}x", f"{cur:.1f}x (p{pct:.0f})", implied])
     return _exhibit(
         "Band historis 1 tahun P/E dan P/BV (bukan target harga)",
@@ -553,7 +553,7 @@ def sensitivity_page(inputs):
 
     def target(ebitda, fx_shift):
         equity = ebitda * inputs["multiple"] - inputs["net_debt_usd"] - inputs["minority_usd"]
-        return round(equity / inputs["shares"] * inputs["fx_rate"] * (1 + fx_shift) / 10) * 10
+        return fmt.tick(equity / inputs["shares"] * inputs["fx_rate"] * (1 + fx_shift))
 
     earnings_rows, grid = [], []
     for shock in shocks:

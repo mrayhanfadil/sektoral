@@ -31,7 +31,7 @@ def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
     for dw in (-0.01, 0.0, 0.01):
         for gg in (0.025, 0.035, 0.045):
             c = _core(fc, intake["shares"], wacc + dw, gg, exit_mult, net_debt)
-            out[(round(dw, 3), gg)] = round((c["ps_g"] + c["ps_x"]) / 2 / 10) * 10
+            out[(round(dw, 3), gg)] = fmt.tick((c["ps_g"] + c["ps_x"]) / 2)
     return out
 
 
@@ -96,7 +96,7 @@ def _ddm_grid(nets, payout_used, dps_hist, shares, re, g, roae, bvps):
                     continue
                 r = _ddm.value_bank(nets, [payout_used], dps_hist or [],
                                     shares, coe, gg, roae, bvps)
-                out[(round(dw, 3), gg)] = round(r["tp_gordon"] / 10) * 10
+                out[(round(dw, 3), gg)] = fmt.tick(r["tp_gordon"])
             except Exception:
                 out[(round(dw, 3), gg)] = None
     return out
@@ -221,7 +221,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     pv_exp, pv_tv = core["pv_exp"], core["pv_tv"]
     ev_g, ps_g, ps_x = core["ev_g"], core["ps_g"], core["ps_x"]
     f_last = core["f_last"]
-    tp = round((ps_g + ps_x) / 2 / 10) * 10
+    tp = fmt.tick((ps_g + ps_x) / 2)
     upside = tp / intake["price"] - 1
     # The numeric model output is for scenario analysis; it does not classify
     # the security or imply an action for readers.
@@ -694,10 +694,10 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     elif selected == "ddm":
         grid = ddm_grid
     if sel and not is_draft:
-        tp = round(sel["per_share"] / 10) * 10
+        tp = fmt.tick(sel["per_share"])
         upside = tp / price - 1
         if tp_down is None and sel["per_share_down"] is not None:
-            tp_down = round(sel["per_share_down"] / 10) * 10
+            tp_down = fmt.tick(sel["per_share_down"])
         rating = (rating_mod.classify(upside) if selected in ("ev_ebitda_fy", "pe_fy_scenario")
                   else verdict.rating_override or rating_mod.classify(upside))
         if selected == "ev_ebitda_fy":
@@ -768,7 +768,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "news_coe_bps": news_coe_bps},
             "pv_explicit": pv_exp, "pv_terminal": pv_tv, "tv_share": pv_tv / ev_g,
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
-            "ps_exit": ps_x, "dcf_blend": round((ps_g + ps_x) / 2 / 10) * 10, "tp": tp, "tp_down": tp_down, "tp_grid": grid,
+            "ps_exit": ps_x, "dcf_blend": fmt.tick((ps_g + ps_x) / 2), "tp": tp, "tp_down": tp_down, "tp_grid": grid,
             "upside": upside, "rating": rating,
             "implied": impl, "lom": lom, "g3": g3, "notes": notes,
             "method_chain": chain}
