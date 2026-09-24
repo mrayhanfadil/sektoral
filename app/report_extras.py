@@ -502,8 +502,9 @@ def peer_page(intake, valuation_inputs=None):
     band = own_history_bands(intake)
     if band:
         exhibits.append(band)
+        exhibits.extend(band_charts(intake))
     else:
-        paragraphs.append("Band historis P/E dan P/BV 1 tahun belum dimodelkan: "
+        paragraphs.append("Band historis P/E dan P/BV belum dimodelkan: "
                           "cache membutuhkan harga harian + EPS/BVPS TTM yang sebanding; "
                           "cakupan saat ini tidak cukup.")
     return _page("Perbandingan peer", paragraphs, exhibits)
@@ -512,14 +513,12 @@ def peer_page(intake, valuation_inputs=None):
 PUBLICATION_LAG_DAYS = 90  # annual results assumed public ~3 months after FY end
 
 
-def own_history_bands(intake):
-    """1y own-history P/E and P/BV bands; None bila cache tidak cukup.
+def _band_data(intake):
+    """Own-history P/E and P/BV series over the cached daily window.
 
-    Each close is divided by the annual EPS/BVPS that was already published
-    on that date (FY end + PUBLICATION_LAG_DAYS), so the multiple moves with
-    both price and fundamentals. When one base covers the whole window the
-    series is only a rescaled price band: the row says so instead of showing
-    a reversion "implied price" that would equal the average close.
+    Each close is divided by the annual EPS/BVPS already published on that
+    date (FY end + PUBLICATION_LAG_DAYS). Returns None when the window is
+    under 40 trading days or no base exists.
     """
     try:
         daily = (local_data.cache_get(intake["ticker"], f"/daily/{intake['ticker']}/") or {}).get("data") or []
@@ -527,7 +526,7 @@ def own_history_bands(intake):
         daily = []
     shares = intake.get("shares") or 0
     annuals = [a for a in intake.get("annuals") or [] if isinstance(a.get("year"), int)]
-    if len(daily) < 60 or len(annuals) < 2 or not shares:
+    if len(daily) < 40 or len(annuals) < 2 or not shares:
         return None
     points = []
     for row in daily[-250:]:
@@ -535,42 +534,90 @@ def own_history_bands(intake):
         close = _num(row.get("close")) if isinstance(row, dict) else None
         if day and close:
             points.append((day, close))
-    if len(points) < 60:
+    if len(points) < 40:
         return None
 
     def base_on(day, key):
         known = [a for a in annuals
                  if date(a["year"], 12, 31) + timedelta(days=PUBLICATION_LAG_DAYS) <= day
                  and isinstance(a.get(key), (int, float))]
-        return known[-1][key] / shares if known else None
+        return (known[-1][key] / shares, known[-1]["year"]) if known else (None, None)
 
-    rows = []
+    months = max(1, round((points[-1][0] - points[0][0]).days / 30.4))
+    out = {"window": f"{months} bulan", "start": points[0][0], "end": points[-1][0],
+           "multiples": {}}
     for label, key in (("P/E", "earnings"), ("P/BV", "equity")):
-        series = [(close / base, base) for day, close in points
-                  for base in [base_on(day, key)] if base and base > 0]
-        if len(series) < 60:
-            rows.append([label, "belum dimodelkan", "belum dimodelkan",
-                         "belum dimodelkan", "basis fundamental historis tidak cukup"])
+        series = []
+        for day, close in points:
+            base, year = base_on(day, key)
+            if base and base > 0:
+                series.append((day, close / base, base, year))
+        if len(series) < 40:
             continue
-        mults = sorted(m for m, _ in series)
-        mean, med = sum(mults) / len(mults), statistics.median(mults)
-        cur, base_now = series[-1]
-        pct = sum(1 for m in mults if m <= cur) / len(mults) * 100
-        if len({round(b, 6) for _, b in series}) == 1:
-            implied = ("belum dimodelkan: basis tetap sepanjang jendela, "
-                       "band hanya rentang harga")
-        else:
-            implied = (f"mean Rp{fmt.rp(fmt.tick(mean * base_now))}; "
-                       f"median Rp{fmt.rp(fmt.tick(med * base_now))}")
-        rows.append([label, fmt.mult(mean), fmt.mult(med), f"{fmt.mult(cur)} (p{pct:.0f})", implied])
+        mults = sorted(m for _, m, _, _ in series)
+        cur, base_now = series[-1][1], series[-1][2]
+        out["multiples"][label] = {
+            "series": [(d, m) for d, m, _, _ in series],
+            "mean": sum(mults) / len(mults), "median": statistics.median(mults),
+            "current": cur, "percentile": sum(1 for m in mults if m <= cur) / len(mults) * 100,
+            "base_now": base_now, "base_year": series[-1][3],
+            "constant_base": len({round(b, 6) for _, _, b, _ in series}) == 1}
+    return out if out["multiples"] else None
+
+
+def own_history_bands(intake):
+    """Struktur slide 5 lower half: own-history band table (mean, median,
+    current percentile, implied price at mean and median reversion)."""
+    data = _band_data(intake)
+    if not data:
+        return None
+    rows = []
+    for label in ("P/E", "P/BV"):
+        m = data["multiples"].get(label)
+        if not m:
+            rows.append([label, "NA", "NA", "NA", "basis fundamental historis tidak cukup"])
+            continue
+        implied = (f"Rp{fmt.rp(fmt.tick(m['mean'] * m['base_now']))} / "
+                   f"Rp{fmt.rp(fmt.tick(m['median'] * m['base_now']))}")
+        rows.append([label, fmt.mult(m["mean"]), fmt.mult(m["median"]),
+                     f"{fmt.mult(m['current'])} (p{m['percentile']:.0f})", implied])
+    constant = [label for label, m in data["multiples"].items() if m["constant_base"]]
     return _exhibit(
-        "Band historis 1 tahun P/E dan P/BV (bukan target harga)",
-        ["Multiple", "Mean", "Median", "Kini (persentil)", "Implikasi mean/median"],
+        f"Band historis {data['window']} P/E dan P/BV (bukan target harga)",
+        ["Multiple", "Mean", "Median", "Kini (persentil)", "Implisit mean / median"],
         rows,
-        f"Source: Sectors daily {intake['ticker']} dan laba/ekuitas tahunan yang sudah "
-        f"terbit pada tiap tanggal (akhir tahun buku + {PUBLICATION_LAG_DAYS} hari), saham "
-        f"kini sebagai basis pro forma; per {intake.get('as_of') or '-'}; mean/median "
-        "reversion hanya konteks, bukan target harga.")
+        f"Source: Sectors daily {intake['ticker']} {data['start'].isoformat()} sampai "
+        f"{data['end'].isoformat()} (cakupan data harian lokal) dan laba/ekuitas tahunan yang "
+        f"sudah terbit pada tiap tanggal (akhir tahun buku + {PUBLICATION_LAG_DAYS} hari), saham "
+        "kini sebagai basis pro forma. Harga implisit = multiple mean/median x EPS/BVPS terakhir "
+        "dengan driver tetap; cross-check reversion, bukan target harga."
+        + (f" Basis {', '.join(constant)} tidak berubah sepanjang jendela, sehingga harga "
+           "implisitnya sama dengan rata-rata/median harga penutupan." if constant else ""))
+
+
+def band_charts(intake):
+    """Struktur Exhibits 12-13: P/E and P/BV lines with mean (dashed),
+    median (dotted) and the current level marked."""
+    data = _band_data(intake)
+    if not data:
+        return []
+    charts = []
+    for label in ("P/E", "P/BV"):
+        m = data["multiples"].get(label)
+        if not m:
+            continue
+        charts.append({
+            "n": 0, "judul": f"Band {label} {data['window']} {intake['ticker']}", "tipe": "band_chart",
+            "data": {"label": label, "dates": [d.isoformat() for d, _ in m["series"]],
+                     "values": [round(v, 4) for _, v in m["series"]], "mean": m["mean"],
+                     "median": m["median"], "current": m["current"],
+                     "percentile": m["percentile"]},
+            "catatan_sumber": (
+                f"Source: Sectors daily {intake['ticker']}, Sektoral Estimates; basis "
+                f"{'EPS' if label == 'P/E' else 'BVPS'} FY{m['base_year']}; garis putus-putus = "
+                f"mean {fmt.mult(m['mean'])}, titik-titik = median {fmt.mult(m['median'])}; "
+                f"kini {fmt.mult(m['current'])} di persentil {m['percentile']:.0f}.")})
+    return charts
 
 
 # ------------------------------------------ ownership and market activity

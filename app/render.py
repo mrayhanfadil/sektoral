@@ -175,6 +175,10 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".risk-head{margin-top:1.7mm}"
        ".exhibit{margin:0 0 3.4mm}"
        ".exhibit.keep{break-inside:avoid-page;page-break-inside:avoid}"
+       # Own-history band charts sit two across (struktur Exhibits 12-13).
+       ".band-pair{display:grid;grid-template-columns:1fr 1fr;gap:3.4mm;"
+       "break-inside:avoid-page;page-break-inside:avoid}"
+       ".band-chart{display:block;width:100%;height:auto}"
        # Table styling follows sectors-hackathon's .fin-table: a solid header
        # band, horizontal hairlines only (no vertical grid), spec zebra fill
        # and a ruled total line. The old full grid made every figure read as a
@@ -482,7 +486,8 @@ def _table(ex):
             rendered.append(f"<td class='cell-{kind}{short}'>{html.escape(cell)}</td>")
         groups[-1].append(f"<tr{classes}>" + "".join(rendered) + "</tr>")
     body = "".join(f"<tbody class='block'>{''.join(group)}</tbody>" for group in groups if group)
-    keep = " keep" if len(rows) <= 14 else ""
+    # Statements run to ~15 rows; keep them whole so a header never orphans.
+    keep = " keep" if len(rows) <= 18 else ""
     return (f"<div class='exhibit{keep}'><table class='exhibit-table'>"
             f"<caption>Exhibit {ex['n']}. {html.escape(ex['judul'])}</caption>"
             f"<colgroup>{colgroup}</colgroup><thead><tr>{head}</tr></thead>"
@@ -648,8 +653,76 @@ def _bar_chart(ex):
     return "".join(parts)
 
 
+def _band_chart(ex):
+    """Struktur Exhibits 12-13: own-history multiple with mean (dashed),
+    median (dotted) and the current level marked at the right edge."""
+    data = ex["data"]
+    values = data["values"]
+    days = [date.fromisoformat(d) for d in data["dates"]]
+    lo = min(values + [data["mean"], data["median"]])
+    hi = max(values + [data["mean"], data["median"]])
+    pad = (hi - lo) * 0.15 or hi * 0.05 or 1
+    lo, hi = lo - pad, hi + pad
+    x0, x1, y0, y1 = 40, 340, 16, 150
+    span = (days[-1] - days[0]).days or 1
+    x = lambda d: x0 + (d - days[0]).days / span * (x1 - x0)
+    y = lambda v: y1 - (v - lo) / (hi - lo) * (y1 - y0)
+    label = "font-size='10' font-weight='700'"
+    parts = [f"<div class='exhibit keep band'><div class='chart-caption'>Exhibit {ex['n']}. "
+             f"{html.escape(ex['judul'])}</div>",
+             "<svg class='band-chart' viewBox='0 0 360 190' role='img' "
+             f"aria-label='{html.escape(ex['judul'])}'>"]
+    for i in range(4):
+        v = hi - i * (hi - lo) / 3
+        gy = y(v)
+        parts.append(f"<line x1='{x0}' x2='{x1}' y1='{gy:.1f}' y2='{gy:.1f}' stroke='{GRID}' "
+                     "stroke-dasharray='3 3'/>"
+                     f"<text x='4' y='{gy + 3:.1f}' {label} fill='{INK}'>{html.escape(fmt.mult(v))}</text>")
+    points = " ".join(f"{x(d):.1f},{y(v):.1f}" for d, v in zip(days, values))
+    parts.append(f"<polyline points='{points}' fill='none' stroke='{PRIMARY}' stroke-width='2' "
+                 "stroke-linejoin='round'/>")
+    for key, dash, name in (("mean", "6 4", "Mean"), ("median", "1.5 3", "Median")):
+        gy = y(data[key])
+        parts.append(f"<line x1='{x0}' x2='{x1}' y1='{gy:.1f}' y2='{gy:.1f}' stroke='{INK}' "
+                     f"stroke-width='1.2' stroke-dasharray='{dash}'/>")
+    cx, cy = x(days[-1]), y(data["current"])
+    parts.append(f"<path d='M{cx:.1f},{cy - 5:.1f} L{cx + 5:.1f},{cy:.1f} L{cx:.1f},{cy + 5:.1f} "
+                 f"L{cx - 5:.1f},{cy:.1f} Z' fill='{LIME}' stroke='{INK}' stroke-width='0.8'/>")
+    parts.append(f"<line x1='{x0}' x2='{x1}' y1='{y1}' y2='{y1}' stroke='#000000'/>")
+    for d, anchor in ((days[0], "start"), (days[len(days) // 2], "middle"), (days[-1], "end")):
+        parts.append(f"<text x='{x(d):.1f}' y='{y1 + 14}' text-anchor='{anchor}' {label} "
+                     f"fill='{INK}'>{d:%d-%b-%y}</text>")
+    legend_y = 182
+    parts.append(f"<line x1='40' x2='58' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{PRIMARY}' stroke-width='2'/>"
+                 f"<text x='62' y='{legend_y}' {label} fill='{INK}'>{html.escape(data['label'])}</text>"
+                 f"<line x1='100' x2='118' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{INK}' stroke-dasharray='6 4'/>"
+                 f"<text x='122' y='{legend_y}' {label} fill='{INK}'>Mean {html.escape(fmt.mult(data['mean']))}</text>"
+                 f"<line x1='190' x2='208' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{INK}' stroke-dasharray='1.5 3'/>"
+                 f"<text x='212' y='{legend_y}' {label} fill='{INK}'>Median {html.escape(fmt.mult(data['median']))}</text>"
+                 f"<text x='290' y='{legend_y}' {label} fill='{INK}'>Kini p{data['percentile']:.0f}</text>")
+    parts.append("</svg>")
+    parts.append(f"<p class='src'>{html.escape(ex['catatan_sumber'])}</p></div>")
+    return "".join(parts)
+
+
+def _exhibits_paired(exs):
+    """Render exhibits in order; consecutive band charts share one row."""
+    out, i = [], 0
+    while i < len(exs):
+        if (exs[i].get("tipe") == "band_chart" and i + 1 < len(exs)
+                and exs[i + 1].get("tipe") == "band_chart"):
+            out.append(f"<div class='band-pair'>{_exhibit(exs[i])}{_exhibit(exs[i + 1])}</div>")
+            i += 2
+        else:
+            out.append(_exhibit(exs[i]))
+            i += 1
+    return "".join(out)
+
+
 def _exhibit(ex):
     t = ex.get("tipe")
+    if t == "band_chart":
+        return _band_chart(ex)
     if t == "bar_chart":
         return _bar_chart(ex)
     if t == "combo_chart":
@@ -776,12 +849,10 @@ def _render_page_content(b):
         for p in paras:
             res.append(f"<p>{html.escape(p)}</p>")
         split = b.get("risks_after", 0) if b.get("risks") else len(exs)
-        for e in exs[:split]:
-            res.append(_exhibit(e))
+        res.append(_exhibits_paired(exs[:split]))
         if b.get("risks"):
             res.append(_risk_block(b["risks"]))
-        for e in exs[split:]:
-            res.append(_exhibit(e))
+        res.append(_exhibits_paired(exs[split:]))
 
     elif halaman == 2:
         if len(paras) >= 2:
