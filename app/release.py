@@ -578,6 +578,130 @@ def assess_pbv_roe_fy(intake, forecast, valuation, assumption_status):
     }
 
 
+def _scenario_base(intake, forecast, valuation, assumption_status):
+    """Earnings-led evidence gate without the peer PER set (scenario methods)."""
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share"))]
+    rows = ((forecast or {}).get("outyear_scenario") or {}).get("rows") or []
+    if len(rows) != 4:
+        blockers.append("four validated out-year rows are required for an explicit horizon")
+    return blockers
+
+
+def assess_ddm_scenario(intake, forecast, valuation, assumption_status):
+    """Bank primary DDM on the validated scenario (spec Opsi B).
+
+    Same evidence as the earnings-led route (official 1H actual, validated
+    scenario, fresh close, official shares), plus a five-year explicit
+    dividend path, a Sectors payout with dividend history, and CoE above g.
+    """
+    blockers = _scenario_base(intake, forecast, valuation, assumption_status)
+    if (intake or {}).get("model_profile") != "financial_ddm":
+        blockers.append("scenario DDM is the bank primary method")
+    detail = (valuation or {}).get("detail") or {}
+    if str((intake or {}).get("payout_basis") or "").startswith("asumsi analis") or \
+            not _number(detail.get("payout")):
+        blockers.append("sourced historical payout is required for DDM")
+    if len((intake or {}).get("dps_hist") or []) < 3:
+        blockers.append("dividend history shorter than three years; payout not representative")
+    coe, g = detail.get("coe"), detail.get("g")
+    if not (_number(coe) and _number(g)) or coe <= g:
+        blockers.append("cost of equity must exceed long-term growth")
+    lines = detail.get("lines") or []
+    if len(lines) != 5 or any(not _number(x.get("dps")) or x["dps"] <= 0 for x in lines):
+        blockers.append("five positive forecast dividends are required")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "DDM (dividend scenario, Cost of Equity)",
+        "blockers": blockers,
+        "limitations": ["laba FY dan empat tahun lanjutan adalah skenario analis (aktual 1H "
+                        "resmi + asumsi H2 + asumsi tahunan), bukan forecast driver "
+                        "terekonsiliasi",
+                        "payout historis data Sectors dianggap berlanjut; CoE CAPM dan "
+                        "pertumbuhan jangka panjang adalah parameter kebijakan analis"],
+    }
+
+
+def assess_fcff_scenario(intake, forecast, valuation, assumption_status):
+    """Going-concern primary FCFF DCF on the validated scenario (spec Opsi A).
+
+    Same evidence as the earnings-led route plus revenue/EBITDA/capex for all
+    five explicit years, a sourced cash/debt bridge, WACC above g and a
+    positive terminal cash flow and equity value.
+    """
+    blockers = _scenario_base(intake, forecast, valuation, assumption_status)
+    if (intake or {}).get("model_profile") != "going_concern_fcff":
+        blockers.append("scenario FCFF DCF is the going-concern primary method")
+    detail = (valuation or {}).get("detail") or {}
+    lines = detail.get("lines") or []
+    if len(lines) != 5 or any(not _number(x.get(k)) for x in lines
+                              for k in ("revenue", "ebitda", "capex", "fcff")):
+        blockers.append("five explicit years of revenue, EBITDA, capex and FCFF are required")
+    wacc, g = detail.get("wacc"), detail.get("g")
+    if not (_number(wacc) and _number(g)) or wacc <= g:
+        blockers.append("WACC must exceed long-term growth")
+    if not _number(detail.get("terminal_fcff")) or detail["terminal_fcff"] <= 0:
+        blockers.append("terminal FCFF is not positive; Gordon value undefined")
+    for key in ("cash", "debt", "shares"):
+        if not _number(detail.get(key)):
+            blockers.append(f"enterprise-to-equity bridge is missing {key}")
+    if not _number(detail.get("equity")) or detail["equity"] <= 0:
+        blockers.append("equity value is not positive")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "FCFF DCF (earnings scenario, Gordon terminal)",
+        "blockers": blockers,
+        "limitations": ["pendapatan, margin EBITDA dan capex adalah skenario analis (aktual 1H "
+                        "resmi + asumsi H2 + asumsi tahunan), bukan forecast driver "
+                        "terekonsiliasi",
+                        "D&A, tarif pajak efektif dan intensitas modal kerja dari sejarah; "
+                        "WACC dan pertumbuhan terminal adalah parameter kebijakan analis",
+                        "exit EV/EBITDA historis hanya cross-check; selisihnya diungkapkan, "
+                        "tidak dirata-rata"],
+    }
+
+
+def assess_holding_sotp(intake, forecast, valuation, assumption_status):
+    """Holding SOTP as the primary for a group with dissimilar lines (Gate 0).
+
+    The value needs no forecast: official parent equity, listed stakes from
+    the issuer pack at market capitalisation, the rest at book. The report
+    still rests on the official 1H actual, a fresh close and the validated
+    earnings scenario that carries its thesis.
+    """
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share",
+                                     "official share count"))]
+    if (intake or {}).get("model_profile") != "going_concern_fcff":
+        blockers.append("holding SOTP is the going-concern holding method")
+    detail = (valuation or {}).get("detail") or {}
+    if not _number(detail.get("shares")) or detail["shares"] <= 0:
+        blockers.append("official share count is missing from the balance sheet")
+    if not _number(detail.get("parent_equity")) or detail["parent_equity"] <= 0:
+        blockers.append("parent equity is missing or not positive")
+    components = detail.get("components") or []
+    if not components:
+        blockers.append("holding SOTP needs at least one listed subsidiary at market value")
+    for c in components:
+        if not _text(c.get("stake_source")) or not _text(c.get("market_source")):
+            blockers.append(f"holding SOTP component {c.get('ticker', '?')} lacks a source")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "Holding SOTP (listed stakes at market, rest at book)",
+        "blockers": blockers,
+        "limitations": ["segmen tanpa harga pasar dinilai pada nilai buku (lahan industri pada "
+                        "biaya perolehan), sehingga nilainya konservatif",
+                        "diskon holding 20-30% adalah asumsi analis untuk sensitivitas",
+                        "DCF konsolidasi atas skenario analis hanya referensi"],
+    }
+
+
+SCENARIO_ASSESSORS = {"ddm": assess_ddm_scenario, "fcff_dcf": assess_fcff_scenario,
+                      "dcf_reference": assess_fcff_scenario}
+
+
 ASSET_HEAVY_SHARE = 0.5
 
 

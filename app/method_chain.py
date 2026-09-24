@@ -422,6 +422,8 @@ def run(profile: str, candidates: dict, price, order=None, override_key=None) ->
 
 
 _READER_REASONS = (
+    ("aset pengembangan Elang", "Elang belum dapat dinilai: capex dan jadwal produksi studi "
+     "kelayakan belum diungkapkan emiten"),
     ("SOTP incomplete", "NAV per aset dan jembatan ekuitas SOTP belum lengkap"),
     ("forecast agent scenario", "skenario forecast analis belum tervalidasi"),
     ("latest interim actuals", "hasil interim resmi belum tervalidasi"),
@@ -452,6 +454,16 @@ _READER_REASONS = (
     ("Holding SOTP", "SOTP holding memerlukan evidence pack per anak usaha"),
     ("Property NAV", "NAV properti memerlukan evidence pack per aset"),
     ("official share count", "jumlah saham resmi belum tersedia"),
+    ("four validated out-year rows", "skenario empat tahun lanjutan belum tervalidasi"),
+    ("sourced historical payout", "payout historis bersumber belum tersedia"),
+    ("dividend history shorter", "riwayat dividen kurang dari tiga tahun"),
+    ("cost of equity must exceed", "CoE tidak melebihi pertumbuhan jangka panjang"),
+    ("five positive forecast dividends", "dividen lima tahun eksplisit belum lengkap"),
+    ("five explicit years", "arus kas lima tahun eksplisit belum lengkap"),
+    ("WACC must exceed", "WACC tidak melebihi pertumbuhan jangka panjang"),
+    ("terminal FCFF is not positive", "FCFF terminal tidak positif"),
+    ("enterprise-to-equity bridge", "jembatan EV ke ekuitas belum lengkap"),
+    ("equity value is not positive", "nilai ekuitas tidak positif"),
     ("belum tersedia", "belum dimodelkan"),
     ("tidak dapat dinilai", "tidak dapat dinilai"),
 )

@@ -131,6 +131,7 @@ def holding_sotp_exhibit(va):
     if not sotp or sotp["status"] != "sufficient":
         return None
     released = ((va.get("release") or {}).get("status") or "").startswith("distributable")
+    primary = chain.get("selected") == "holding_sotp"
     d = sotp["detail"]
     bn = lambda v: fmt._id(v / 1e9, 1)
     rows = []
@@ -153,14 +154,16 @@ def holding_sotp_exhibit(va):
     stake_sources = "; ".join(sorted({c["stake_source"] for c in d["components"]
                                       if c.get("stake_source")}))
     return _exhibit(
-        "Cross-check SOTP holding: anak usaha tercatat pada nilai pasar",
+        ("SOTP holding: anak usaha tercatat pada nilai pasar" if primary else
+         "Cross-check SOTP holding: anak usaha tercatat pada nilai pasar"),
         ["Komponen", "Basis", "Rp miliar"], rows,
         f"Source: Company, Sektoral Estimates; kepemilikan: {stake_sources}; kapitalisasi dan "
         f"ekuitas anak usaha: {', '.join(sorted({c['market_source'] for c in d['components']}))}; "
         "ekuitas induk: neraca interim emiten. Segmen tanpa harga pasar dinilai pada nilai buku "
         "(lahan industri tercatat pada biaya perolehan, sehingga nilai ini konservatif). Diskon "
-        "holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. Cross-check, bukan "
-        "dasar target harga.")
+        "holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. "
+        + ("Metode utama (Gate 0: grup dengan lini usaha berbeda); target memakai diskon 0%."
+           if primary else "Cross-check, bukan dasar target harga."))
 
 
 def attach_method_chain(doc, va):

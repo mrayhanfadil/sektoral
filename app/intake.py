@@ -342,6 +342,11 @@ def load(ticker, as_of=None):
             "assets": _num(h.get("total_assets")),
             "liab": _num(h.get("total_liabilities")),
             "shares": _num(h.get("outstanding_shares")),
+            # Working-capital lines for the scenario FCFF (ΔNWC); None when absent.
+            "current_assets": _num(h.get("current_assets")),
+            "current_liabilities": _num(h.get("current_liabilities")),
+            "short_term_debt": _num(h.get("short_term_debt")),
+            "ebt": _num(h.get("earnings_before_tax")),
         })
     if len(annuals) < 3:
         raise ValueError(f"only {len(annuals)} usable annuals for {t}, need >= 3")
