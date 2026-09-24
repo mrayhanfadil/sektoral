@@ -414,7 +414,8 @@ def main(argv=None):
     parser.add_argument("--illustrative-scenarios", action="store_true",
                         help="tambahkan screen historis dan valuasi ilustratif ke draft")
     parser.add_argument("--analyst-target", action="store_true",
-                        help="opt-in target FY26F EV/EBITDA dari rencana agent tervalidasi")
+                        help="tampilkan skenario ilustratif; metode dipilih otomatis oleh rantai "
+                             "metode (pakai --method untuk override analis)")
     parser.add_argument("--refresh-assumptions", action="store_true",
                          help="panggil ulang agent forecast walau bukti sama sudah punya rencana tersimpan")
     parser.add_argument("--method", default="auto",

@@ -479,7 +479,14 @@ def _fresh_close_blockers(intake, publication):
             quote.get("source_url"))
         same_price = quote.get("price") == intake.get("price")
     else:
-        quote_day, sourced, same_price = _date(intake.get("price_date")), True, True
+        # A cache close needs a provenance record whose date matches and whose
+        # value was confirmed against the cached daily series.
+        provenance = intake.get("price_provenance") or {}
+        quote_day = _date(intake.get("price_date"))
+        sourced = (provenance.get("verified") is True and
+                   _verified_source_reference(provenance.get("source")) and
+                   _date(provenance.get("date")) == quote_day)
+        same_price = True
     if (not report_day or not publication or not quote_day or not sourced or
             not same_price or not publication <= quote_day <= report_day or
             (report_day - quote_day).days > 5):

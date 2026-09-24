@@ -47,7 +47,11 @@ def test_departure_from_run_rate_needs_news_or_guidance():
     ok = _scenario(h2_revenue_to_h1=1.6, source_ids=["official", "news:0"])
     assert agent._validate_earnings(ok, _source()) == []
     guided = dict(OFFICIAL, guidance=[{"fact": "FY revenue +20%"}])
-    assert agent._validate_earnings(_scenario(h2_net_margin_pct=20), _source(official=guided)) == []
+    # Guidance in the pack is not enough; the scenario must cite the item.
+    assert agent._validate_earnings(_scenario(h2_net_margin_pct=20), _source(official=guided))
+    assert agent._validate_earnings(
+        _scenario(h2_net_margin_pct=20, source_ids=["official", "guidance:0"]),
+        _source(official=guided)) == []
 
 
 def test_rejects_bounds_bad_sources_and_mining():

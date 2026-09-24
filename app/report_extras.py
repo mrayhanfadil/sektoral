@@ -88,7 +88,10 @@ def method_chain_exhibit(va):
     for t in trace:
         value = (f"Rp{fmt.rp(round(t['per_share'] / 10) * 10)}"
                  if released and t.get("per_share") and t["decision"] in
-                 ("selected", "cross_check") else "ditahan" if t.get("per_share") else "-")
+                 ("selected", "cross_check")
+                 else "ditahan" if (t.get("per_share") and not released
+                                    and t["decision"] in ("selected", "cross_check", "stop_extreme"))
+                 else "-")
         why = (method_chain.reader_reason(t["reasons"][0]) if t.get("reasons")
                else "; ".join(t.get("labels") or []) or "input lengkap")
         role_tag = ""

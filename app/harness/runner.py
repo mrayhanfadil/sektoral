@@ -19,21 +19,22 @@ from .schema import check_output_schema
 from .profiles import normalize
 
 
-def _earnings_gate_passes(intake, forecast, valuation) -> bool:
+def _earnings_gate_passes(intake, forecast, valuation, assumption_status) -> bool:
     from app import release as _release
     trace = next((t for t in (valuation.get("method_chain") or {}).get("trace") or []
                   if t.get("key") == "pe_fy_scenario"), None)
     if not trace:
         return False
-    status = (trace.get("gate") or {}).get("status")
+    # The agent status comes from the caller (the agent run), never from the
+    # engine's recorded gate result, so the harness re-checks it independently.
     again = _release.assess_earnings_led(
-        intake, forecast, {"detail": trace.get("detail") or {}},
-        "validated" if status == "distributable_assumption_led" else None)
+        intake, forecast, {"detail": trace.get("detail") or {}}, assumption_status)
     return again["status"] == "distributable_assumption_led"
 
 
 def run_all(intake: dict | None = None, forecast: dict | None = None,
-            valuation: dict | None = None, doc: dict | None = None) -> dict:
+            valuation: dict | None = None, doc: dict | None = None,
+            assumption_status: str | None = None) -> dict:
     intake, forecast, valuation = intake or {}, forecast or {}, valuation or {}
     profile = normalize(intake.get("model_profile") or (doc.get("meta") or {}).get("model_profile")
                         if isinstance(doc, dict) else intake.get("model_profile"))
@@ -88,7 +89,7 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
             # re-assessed here from the same inputs (not trusted blindly).
             (profile in ("going_concern_fcff", "financial_ddm") and
              selected_method == "pe_fy_scenario" and
-             _earnings_gate_passes(intake, forecast, valuation)))
+             _earnings_gate_passes(intake, forecast, valuation, assumption_status)))
     )
     g2_blockers = list(r2["blockers"])
     if assumption_led:
