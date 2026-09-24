@@ -25,9 +25,9 @@ def _fake(status="validated", interim="validated"):
 def test_identical_evidence_reuses_plan_even_on_another_day(monkeypatch, tmp_path):
     fake, calls = _fake()
     monkeypatch.setattr(F, "run_live", fake)
-    first = F.run_cached(INTAKE, store_dir=tmp_path)
+    first = F.run_cached(INTAKE, db=tmp_path)
     later = dict(INTAKE, as_of="2026-09-30")
-    second = F.run_cached(later, store_dir=tmp_path)
+    second = F.run_cached(later, db=tmp_path)
     assert calls == ["2026-09-24"]
     assert first["reused"] is False and second["reused"] is True
     assert second["plan"] == first["plan"]
@@ -36,23 +36,23 @@ def test_identical_evidence_reuses_plan_even_on_another_day(monkeypatch, tmp_pat
 def test_new_evidence_or_refresh_calls_the_agent_again(monkeypatch, tmp_path):
     fake, calls = _fake()
     monkeypatch.setattr(F, "run_live", fake)
-    F.run_cached(INTAKE, store_dir=tmp_path)
+    F.run_cached(INTAKE, db=tmp_path)
     changed = copy.deepcopy(INTAKE)
     changed["latest_official_actual"]["published_at"] = "2026-10-30"
-    F.run_cached(changed, store_dir=tmp_path)
-    F.run_cached(INTAKE, store_dir=tmp_path, refresh=True)
+    F.run_cached(changed, db=tmp_path)
+    F.run_cached(INTAKE, db=tmp_path, refresh=True)
     assert len(calls) == 3
 
 
 def test_failed_plans_are_not_stored(monkeypatch, tmp_path):
     fake, calls = _fake(status="invalid")
     monkeypatch.setattr(F, "run_live", fake)
-    F.run_cached(INTAKE, store_dir=tmp_path)
-    F.run_cached(INTAKE, store_dir=tmp_path)
+    F.run_cached(INTAKE, db=tmp_path)
+    F.run_cached(INTAKE, db=tmp_path)
     assert len(calls) == 2 and not list(tmp_path.glob("*.json"))
 
 
 def test_intake_without_identity_runs_agent_without_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(F, "run_live", lambda intake: {"status": "validated", "plan": {}})
-    assert F.run_cached({}, store_dir=tmp_path)["status"] == "validated"
+    assert F.run_cached({}, db=tmp_path)["status"] == "validated"
     assert not list(tmp_path.glob("*.json"))

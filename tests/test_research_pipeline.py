@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app import research, research_context
+from app import outputs, research, research_context, store
 
 
 def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path):
@@ -56,7 +56,8 @@ def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path
     trace_html = (tmp_path / "TEST-trace.html").read_text(encoding="utf-8")
     assert "Commodity prices firm" in trace_html
     assert "earnings depend" in trace_html
-    trace = json.loads((tmp_path / "TEST-trace.json").read_text(encoding="utf-8"))
+    trace = outputs.load(outputs.TRACE, tmp_path, "TEST")
+    assert not list(tmp_path.glob("*.json"))
     assert trace["report"]["research_status"] == "loaded"
     assert trace["report"]["as_of"] == "2026-09-23"
     assert trace["report"]["market_price_date"] == "2026-09-11"
@@ -88,19 +89,18 @@ def test_rejected_agent_prose_is_not_published_in_trace(monkeypatch, tmp_path):
 
     assert output["research_ok"] is False
     assert "UNVALIDATED MODEL CLAIM" not in (tmp_path / "AMMN-trace.html").read_text()
-    assert "UNVALIDATED MODEL CLAIM" not in (tmp_path / "AMMN-trace.json").read_text()
+    assert "UNVALIDATED MODEL CLAIM" not in json.dumps(outputs.load(outputs.TRACE, tmp_path, "AMMN"))
 
 
 def test_invalid_persisted_research_does_not_enter_report(monkeypatch, tmp_path):
     from agents.research import run as agent
 
-    (tmp_path / "AMMN.json").write_text(json.dumps({
-        "ticker": "AMMN", "summary": "Forged", "insights": []}), encoding="utf-8")
+    store.put("research_analysis", "AMMN", {"ticker": "AMMN", "summary": "Forged", "insights": []}, tmp_path)
     monkeypatch.setattr(agent, "validate_against_cache",
                         lambda ticker, document, as_of=None: (None, ["citation mismatch"]))
 
     analysis, status = research_context.load_analysis(
-        "AMMN", "2026-09-11", analysis_dir=tmp_path)
+        "AMMN", "2026-09-11", db=tmp_path)
 
     assert analysis is None
     assert status["status"] == "invalid"

@@ -135,7 +135,7 @@ def test_agent_plans_adapts_and_concludes_with_cited_signals(tmp_path):
                     SYNTHESIS)
     events = []
     with progress.capture(events.append):
-        result = A.run("SIDO", chat=chat, memory_dir=tmp_path)
+        result = A.run("SIDO", chat=chat, db=tmp_path)
     assert result["status"] == "ok" and result["problems"] == []
     assert [(s["tool"], s["origin"]) for s in result["steps"]] == [
         ("find_peers", "agent"), ("rank_peers", "agent"),
@@ -149,7 +149,7 @@ def test_agent_plans_adapts_and_concludes_with_cited_signals(tmp_path):
 def test_invalid_synthesis_is_repaired_then_accepted(tmp_path):
     bad = dict(SYNTHESIS, headline="Laba turun 49% dan saham layak dibeli")
     chat = scripted(PLAN, {"done": True}, bad, SYNTHESIS)
-    result = A.run("SIDO", chat=chat, memory_dir=tmp_path)
+    result = A.run("SIDO", chat=chat, db=tmp_path)
     assert result["synthesis"]["source"] == "agent"
     repair = chat.calls[-1][-1]["content"]
     assert "49%" in repair and "layak dibeli" in repair
@@ -159,7 +159,7 @@ def test_invalid_synthesis_is_repaired_then_accepted(tmp_path):
 
 def test_unrecoverable_synthesis_falls_back_to_labelled_host_summary(tmp_path):
     bad = dict(SYNTHESIS, findings=[dict(SYNTHESIS["findings"][0], signal_ids=["invented"])])
-    result = A.run("SIDO", chat=scripted(PLAN, {"done": True}, bad, bad), memory_dir=tmp_path)
+    result = A.run("SIDO", chat=scripted(PLAN, {"done": True}, bad, bad), db=tmp_path)
     assert result["status"] == "partial"
     assert result["synthesis"]["source"] == "host_fallback"
     assert all(v["verdict"] == "belum terjawab" for v in result["synthesis"]["hypotheses"])
@@ -168,7 +168,7 @@ def test_unrecoverable_synthesis_falls_back_to_labelled_host_summary(tmp_path):
 def test_llm_outage_still_finishes_with_host_plan(tmp_path):
     def down(_messages):
         raise TimeoutError("provider timeout")
-    result = A.run("AMMN", chat=down, memory_dir=tmp_path)
+    result = A.run("AMMN", chat=down, db=tmp_path)
     assert result["status"] == "partial"
     assert result["plan"]["source"] == "host_fallback"
     assert result["signals"] and all(s["origin"] == "host" for s in result["steps"])
@@ -305,7 +305,7 @@ def test_web_news_keeps_only_dated_items_inside_window_and_reuses_store(tmp_path
 
     ring = tavily.KeyRing(["k"])
     first = tavily.news_context("AMMN", "PT Amman Mineral Internasional Tbk.", "2026-09-11",
-                                ring=ring, post=post, store_dir=tmp_path)
+                                ring=ring, post=post, db=tmp_path)
     assert [i["title"] for i in first["items"]] == ["Dalam jendela"]
     assert first["items"][0]["domain"] == "kontan.co.id"
     assert calls[0]["topic"] == "news" and calls[0]["end_date"] == "2026-09-11"
@@ -313,7 +313,7 @@ def test_web_news_keeps_only_dated_items_inside_window_and_reuses_store(tmp_path
     assert searched == len(tavily.build_queries(
         "AMMN", "PT Amman Mineral Internasional Tbk."))
     again = tavily.news_context("AMMN", "PT Amman Mineral Internasional Tbk.", "2026-09-11",
-                                ring=ring, post=post, store_dir=tmp_path)
+                                ring=ring, post=post, db=tmp_path)
     assert again["from_store"] is True and len(calls) == searched
 
 
@@ -358,7 +358,7 @@ def test_malformed_model_output_never_aborts_the_run(tmp_path, responses):
             return queue.pop(0)
         raise TimeoutError("no more scripted responses")
 
-    result = A.run("SIDO", chat=chat, memory_dir=tmp_path)
+    result = A.run("SIDO", chat=chat, db=tmp_path)
     assert result["signals"], "tools still ran"
     assert result["synthesis"]["findings"] is not None
     assert all(isinstance(i, str) for f in result["synthesis"]["findings"] for i in f["signal_ids"])
@@ -377,7 +377,7 @@ def test_relative_return_uses_dates_both_series_share():
 
 def test_plan_with_leaked_cjk_is_cleaned_not_rejected(tmp_path):
     plan = dict(PLAN, question="Bagaimana posisi SIDO读取 terhadap peer farmasi?")
-    result = A.run("SIDO", chat=scripted(plan, {"done": True}, SYNTHESIS), memory_dir=tmp_path)
+    result = A.run("SIDO", chat=scripted(plan, {"done": True}, SYNTHESIS), db=tmp_path)
     assert result["plan"]["source"] == "agent"
     assert "读取" not in result["plan"]["question"]
 
@@ -387,7 +387,7 @@ def test_signal_ids_and_label_numbers_are_not_invented_figures(tmp_path):
     chat = scripted(PLAN, {"calls": [{"tool": "foreign_flow", "args": {}, "why": "asing"}]},
                     {"done": True}, dict(prose, findings=[dict(SYNTHESIS["findings"][0],
                                                                signal_ids=["flow.net_20d"])]))
-    result = A.run("SIDO", chat=chat, memory_dir=tmp_path)
+    result = A.run("SIDO", chat=chat, db=tmp_path)
     assert result["synthesis"]["source"] == "agent", result["problems"]
     assert "flow.net_20d" not in result["synthesis"]["headline"]
     assert "arus bersih asing" in result["synthesis"]["headline"]

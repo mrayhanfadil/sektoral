@@ -119,8 +119,8 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
                         "Research job failed. The browser shows the failure state; "
                         "no successful demo recording was produced."
                     )
-                trace_data_path = ROOT / "out" / "demo" / job_id / f"{ticker}-trace.json"
-                trace_data = json.loads(trace_data_path.read_text(encoding="utf-8"))
+                from app import outputs
+                trace_data = outputs.load(outputs.TRACE, ROOT / "out" / "demo" / job_id, ticker) or {}
                 if require_brief and not trace_data.get("research", {}).get("ok"):
                     raise RuntimeError(
                         "Research brief did not pass validation; failure capture is available "

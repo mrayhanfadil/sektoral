@@ -413,13 +413,13 @@ def _synthesize(chat, ticker, plan, all_signals, headlines, changes, problems):
 
 # -------------------------------------------------------------------- run
 
-def run(ticker, *, chat=None, memory_dir=None, persist=True):
+def run(ticker, *, chat=None, db=None, persist=True):
     """Run the analyst agent for one ticker. Never raises on LLM failure."""
     ticker = str(ticker).strip().upper()
     chat = chat or _chat
     problems = []
     info = tools.overview(ticker)
-    previous = memory.latest(ticker, memory_dir)
+    previous = memory.latest(ticker, db)
     emit("memory", "Membaca memori riset",
          f"riset terakhir {str(previous.get('run_at'))[:10]}" if previous else "belum ada riset sebelumnya")
 
@@ -459,6 +459,6 @@ def run(ticker, *, chat=None, memory_dir=None, persist=True):
         "problems": problems,
     }
     if persist:
-        memory.save(ticker, result, memory_dir)
+        memory.save(ticker, result, db)
     emit("memory", "Memori riset diperbarui" if persist else "Memori tidak disimpan")
     return result

@@ -43,9 +43,8 @@ def test_relevant_news_is_ticker_filtered_and_as_of_capped():
 def test_report_includes_only_agent_news_matched_to_current_cache(monkeypatch, tmp_path):
     cached_intake, _ = intake.load("AMMN")
     article = cached_intake["news"][0]
-    analysis_dir = tmp_path / "agent-news"
-    analysis_dir.mkdir()
-    (analysis_dir / "AMMN.json").write_text(json.dumps({
+    from app import store
+    store.put(news.NEWS_ANALYSIS_COLLECTION, "AMMN", {
         "ticker": "AMMN",
         "news_analysis": [{
             "summary": "A jump in copper benchmarks coincided with renewed market interest.",
@@ -55,8 +54,7 @@ def test_report_includes_only_agent_news_matched_to_current_cache(monkeypatch, t
             "source": f"sectors_cache /news/ | {article['title']} | {article['source']}",
             "timestamp": article["timestamp"],
         }],
-    }), encoding="utf-8")
-    monkeypatch.setattr(news, "NEWS_ANALYSIS_DIR", analysis_dir)
+    })
 
     doc = build.build("AMMN", tmp_path / "report")
 

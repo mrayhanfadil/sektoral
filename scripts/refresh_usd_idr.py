@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicitly refresh and print the cached Yahoo Finance USD/IDR close."""
+"""Explicitly refresh and print the stored Yahoo Finance USD/IDR close."""
 from __future__ import annotations
 
 import argparse
@@ -10,16 +10,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.fx import DEFAULT_CACHE_PATH, refresh_usd_idr  # noqa: E402
+from app.fx import refresh_usd_idr  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE_PATH,
-                        help=f"cache JSON path (default: {DEFAULT_CACHE_PATH})")
+    parser.add_argument("--db", type=Path, default=None,
+                        help="app database (default: SECTORAL_DB or data/sectoral.db)")
     args = parser.parse_args()
     try:
-        result = refresh_usd_idr(cache_path=args.cache)
+        result = refresh_usd_idr(db=args.db)
     except Exception as exc:
         print(f"USD/IDR refresh failed: {exc}", file=sys.stderr)
         return 1

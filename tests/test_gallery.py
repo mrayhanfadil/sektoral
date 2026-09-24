@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from app import gallery  # noqa: E402
+from app import gallery, outputs  # noqa: E402
 
 
 def _report(folder: Path, ticker: str, published: bool = True, chain=True):
@@ -24,7 +24,7 @@ def _report(folder: Path, ticker: str, published: bool = True, chain=True):
                ["1. DCF FCFF (utama)", "Dilewati", "-", "forecast"],
                ["2. PER FY skenario", "Terpilih", "Rp1.100", "ok"],
                ["3. P/BV buku", "Silang cek", "Rp900", "ok"]]}}] if chain else [])}
-    (folder / f"{ticker}.json").write_text(json.dumps(doc))
+    outputs.save(outputs.REPORT, folder, ticker, doc)
     (folder / f"{ticker}.pdf").write_bytes(b"%PDF-1.4 test")
     (folder / f"{ticker}-trace.html").write_text("<html>trace</html>")
 
@@ -32,7 +32,7 @@ def _report(folder: Path, ticker: str, published: bool = True, chain=True):
 def test_summaries_hold_drafts_and_read_the_method_chain(tmp_path):
     _report(tmp_path, "AAAA")
     _report(tmp_path, "BBBB", published=False)
-    (tmp_path / "notes.json").write_text("{}")
+    outputs.save(outputs.REPORT, tmp_path, "NOTES", {})  # not a report
     items = gallery.load(tmp_path)
     assert [i["ticker"] for i in items] == ["AAAA", "BBBB"]
     first, held = items
@@ -53,8 +53,8 @@ def test_artifacts_are_confined_to_the_reports_folder(tmp_path):
 
 def test_draft_profile_falls_back_to_the_run_manifest(tmp_path):
     _report(tmp_path, "BBBB", published=False)
-    doc = json.loads((tmp_path / "BBBB.json").read_text())
+    doc = outputs.load(outputs.REPORT, tmp_path, "BBBB")
     del doc["meta"]["model_profile"]
     doc["run_manifest"] = {"profile": "financial_ddm"}
-    (tmp_path / "BBBB.json").write_text(json.dumps(doc))
+    outputs.save(outputs.REPORT, tmp_path, "BBBB", doc)
     assert gallery.load(tmp_path)[0]["profile"] == "Bank"

@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from agents.forecast_assumptions.run import _source_payload, _validate  # noqa: E402
-from app import news_fetch  # noqa: E402
+from app import news_fetch, store  # noqa: E402
 
 
 HTML_SAMPLE = """<html><head><title>Sample issuer story</title></head><body>
@@ -33,18 +33,17 @@ def test_enrich_one_uses_disk_cache_offline(tmp_path, monkeypatch):
               "fetch_status": "fetched", "fetched_at": "2026-09-11T00:00:00+00:00",
               "full_text": "Teks lengkap tersimpan untuk pengujian offline.",
               "full_length": 46, "title_extracted": "Judul cache"}
-    (tmp_path / f"{news_fetch._url_key(url)}.json").write_text(
-        json.dumps(record), encoding="utf-8")
+    store.put(news_fetch.COLLECTION, news_fetch._url_key(url), record, tmp_path)
     monkeypatch.setenv("SEKTORAL_DISABLE_DEEPDIVE", "1")
     out = news_fetch.enrich_one({"source": url, "title": "Judul cache",
-                                 "timestamp": "2026-09-10T10:00:00"}, cache_dir=tmp_path)
+                                 "timestamp": "2026-09-10T10:00:00"}, db=tmp_path)
     assert out["full_text"].startswith("Teks lengkap tersimpan")
     assert out["fetch_status"] == "fetched"
 
 
 def test_enrich_one_bad_url_never_raises(tmp_path):
     out = news_fetch.enrich_one({"source": "notaurl", "title": "x",
-                                 "timestamp": "2026-09-10T10:00:00"}, cache_dir=tmp_path)
+                                 "timestamp": "2026-09-10T10:00:00"}, db=tmp_path)
     assert out["fetch_status"] == "unavailable_bad_url"
     assert out["full_text"] == ""
 
@@ -55,7 +54,7 @@ def test_enrich_all_preserves_order_offline(tmp_path, monkeypatch):
              "timestamp": "2026-09-10T10:00:00", "body": "snippet a"},
             {"source": "notaurl", "title": "B",
              "timestamp": "2026-09-10T10:00:00", "body": "snippet b"}]
-    out = news_fetch.enrich_all(rows, cache_dir=tmp_path)
+    out = news_fetch.enrich_all(rows, db=tmp_path)
     assert [item["source_url"] for item in out] == ["https://contoh.test/a", "notaurl"]
     assert out[0]["fetch_status"] == "unavailable_offline"
 
