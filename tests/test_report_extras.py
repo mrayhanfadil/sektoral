@@ -184,3 +184,15 @@ def test_non_mining_issuer_gets_an_industry_and_sentiment_page(tmp_path):
     assert "IHSG" in text and "-" not in re.findall(r"(?:naik|turun) (\S+)", text)[0]
     titles = [p["judul"] for p in doc["bagian"]]
     assert titles.index("Industri dan sentimen") < titles.index("Katalis, risiko, dan kepemilikan")
+
+
+def test_band_reports_its_real_window_and_implied_prices(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    table = next(e for e in doc["exhibits"] if e["judul"].startswith("Band historis"))
+    assert "1 tahun" not in table["judul"] and "bulan" in table["judul"]
+    pe = next(r for r in table["data"]["rows"] if r[0] == "P/E")
+    assert re.fullmatch(r"Rp[\d.]+ / Rp[\d.]+", pe[4])
+    charts = [e for e in doc["exhibits"] if e.get("tipe") == "band_chart"]
+    assert [c["data"]["label"] for c in charts] == ["P/E", "P/BV"]
+    html_out = render.render(doc)
+    assert "class='band-pair'" in html_out and "class='band-chart'" in html_out
