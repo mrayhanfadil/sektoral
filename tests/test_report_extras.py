@@ -171,3 +171,16 @@ def test_bank_statements_switch_to_bank_layout(tmp_path):
     labels = [r[0] for r in ratios["data"]["rows"]]
     assert {"Marjin bunga bersih (NIM)", "Kredit terhadap simpanan (LDR)",
             "Rasio kecukupan modal (CAR)"} <= set(labels)
+
+
+def test_non_mining_issuer_gets_an_industry_and_sentiment_page(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    page = next(p for p in doc["bagian"] if p["judul"] == "Industri dan sentimen")
+    table = page["exhibit"][0]
+    assert table["judul"].startswith("Kondisi sub-sektor")
+    assert [r[0] for r in table["data"]["rows"]][:2] == [
+        "Kapitalisasi pasar (Rp triliun)", "Perubahan kapitalisasi pasar 1 tahun"]
+    text = " ".join(page["paragraf"])
+    assert "IHSG" in text and "-" not in re.findall(r"(?:naik|turun) (\S+)", text)[0]
+    titles = [p["judul"] for p in doc["bagian"]]
+    assert titles.index("Industri dan sentimen") < titles.index("Katalis, risiko, dan kepemilikan")

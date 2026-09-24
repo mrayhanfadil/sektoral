@@ -287,8 +287,101 @@ def industry_page(intake):
                         f"{'naik' if eps >= 0 else 'turun'} {fmt.pct(abs(eps))} dengan pendapatan "
                         f"{'naik' if rev >= 0 else 'turun'} {fmt.pct(abs(rev))}.")
     if not exhibits:
-        return None
+        return peer_industry_page(intake)
     return _page("Industri dan harga komoditas", paragraphs, exhibits)
+
+
+def _window_change(rows, key, start_day):
+    """Change of ``key`` from the first row on/after ``start_day`` to the last row."""
+    points = sorted((str(r.get("date"))[:10], _num(r.get(key))) for r in rows or []
+                    if isinstance(r, dict) and r.get("date") and _num(r.get(key)))
+    points = [p for p in points if p[0] >= start_day]
+    return (points[-1][1] / points[0][1] - 1, points[0][0], points[-1][0]) if len(points) >= 2 else None
+
+
+def peer_industry_page(intake):
+    """Struktur slide 2 for issuers without a cached Sectors sub-sector report:
+    the sub-sector read from the issuer's Sectors peer table, the issuer's
+    position in it, and market sentiment (price vs IHSG, foreign flow)."""
+    ticker = intake["ticker"]
+    peers = peer_tools.find_peers(ticker)
+    rows = peers.get("rows") or []
+    subject = next((r for r in rows if r["is_self"]), None)
+    others = [r for r in rows if not r["is_self"]]
+    if not subject or len(others) < 3:
+        return None
+    stats = _peer_stats(rows)
+    caps = [(r["metrics"].get("market_cap"), r["metrics"].get("mcap_change_1y")) for r in others]
+    weighted = [(cap, chg) for cap, chg in caps if cap and chg is not None]
+    peer_change = (sum(cap * chg for cap, chg in weighted) / sum(cap for cap, _ in weighted)
+                   if weighted else None)
+    total_cap = sum(cap for cap, _ in caps if cap)
+    own = subject["metrics"]
+    mult = lambda v: "-" if v is None else fmt.mult(v)
+    pct = lambda v: "-" if v is None else fmt.pct(v)
+    table = [
+        ["Kapitalisasi pasar (Rp triliun)", fmt._id(total_cap / 1e12, 1),
+         fmt._id((own.get("market_cap") or 0) / 1e12, 1)],
+        ["Perubahan kapitalisasi pasar 1 tahun", pct(peer_change), pct(own.get("mcap_change_1y"))],
+        [f"P/E (median peer {_band_label(method_chain.PEER_PE_BAND)})", mult(stats["pe"][0]),
+         mult(own.get("pe"))],
+        [f"P/B (median peer {_band_label(method_chain.PEER_PB_BAND)})", mult(stats["pb"][0]),
+         mult(own.get("pb"))],
+        ["ROE (median)", pct(stats["roe"][0]), pct(own.get("roe"))],
+        ["Margin laba bersih (median)", pct(stats["net_margin"][0]), pct(own.get("net_margin"))],
+        ["Liabilitas/ekuitas (median)", mult(stats["leverage"][0]), mult(own.get("leverage"))]]
+    group = peers.get("group") or intake.get("sub_sector") or "sub-sektor"
+    exhibit = _exhibit(
+        f"Kondisi sub-sektor {group}: peer dibanding {ticker}",
+        ["Metrik", f"Peer ({len(others)} emiten, tanpa {ticker})", ticker], table,
+        f"Sumber: {peers['source']} ({peers['basis']}), tahun buku {own.get('year') or '-'}; "
+        "perubahan kapitalisasi peer ditimbang kapitalisasi pasar; median P/E dan P/B memakai "
+        "rentang yang sama dengan valuasi.")
+    paragraphs = []
+    if peer_change is not None and own.get("mcap_change_1y") is not None:
+        gap = own["mcap_change_1y"] - peer_change
+        verdict = ("mengungguli" if gap > 0.05 else "tertinggal dari" if gap < -0.05
+                   else "sejalan dengan")
+        paragraphs.append(
+            f"Sub-sektor {group} berisi {len(others)} peer dengan kapitalisasi total "
+            f"Rp{fmt._id(total_cap / 1e12, 1)} triliun; kapitalisasi pasar peer "
+            f"{'naik' if peer_change >= 0 else 'turun'} {fmt.pct(abs(peer_change))} dalam setahun "
+            f"(tertimbang kapitalisasi). {ticker} {verdict} peer: kapitalisasinya "
+            f"{'naik' if own['mcap_change_1y'] >= 0 else 'turun'} "
+            f"{fmt.pct(abs(own['mcap_change_1y']))}.")
+    if own.get("roe") is not None and stats["roe"][0] is not None:
+        paragraphs.append(
+            f"ROE {ticker} {fmt.pct(own['roe'])} dibanding median peer {fmt.pct(stats['roe'][0])}, "
+            f"dengan margin laba bersih {pct(own.get('net_margin'))} (median peer "
+            f"{pct(stats['net_margin'][0])}); selisih ini menjelaskan posisi valuasinya terhadap "
+            "peer, bukan tren industri yang terukur.")
+    # Sentiment: price vs IHSG on common dates, and net foreign flow.
+    daily = (local_data.cache_get(ticker, f"/daily/{ticker}/") or {}).get("data") or []
+    index = cache.first("/index-daily/ihsg/")
+    index_rows = index.get("data") if isinstance(index, dict) else index
+    # Common window: the later of the two series' first dates.
+    firsts = [min((str(r.get("date"))[:10] for r in rows_ if isinstance(r, dict) and r.get("date")),
+                  default=None) for rows_ in (daily, index_rows or [])]
+    start = max(firsts) if all(firsts) else None
+    own_move = _window_change(daily, "close", start) if start else None
+    ihsg_move = _window_change(index_rows, "price", start) if start else None
+    flows = (local_data.cache_get(ticker, f"/foreign-flow/{ticker}/") or {}).get("data") or []
+    net_flow = sum(_num(r.get("net_foreign_inflow")) or 0 for r in flows if isinstance(r, dict))
+    sentiment = []
+    if own_move and ihsg_move:
+        sentiment.append(
+            f"Sejak {own_move[1]}, saham {ticker} {'naik' if own_move[0] >= 0 else 'turun'} "
+            f"{fmt.pct(abs(own_move[0]))} sementara IHSG {'naik' if ihsg_move[0] >= 0 else 'turun'} "
+            f"{fmt.pct(abs(ihsg_move[0]))}")
+    if flows:
+        sentiment.append(
+            f"investor asing mencatat {'beli' if net_flow >= 0 else 'jual'} bersih "
+            f"Rp{_rp_bn(abs(net_flow), 1)} miliar pada {str(flows[0].get('date'))[:10]} sampai "
+            f"{str(flows[-1].get('date'))[:10]}")
+    if sentiment:
+        paragraphs.append("Sentimen pasar: " + "; ".join(sentiment) +
+                          ". Angka ini konteks pasar, bukan dasar target harga.")
+    return _page("Industri dan sentimen", paragraphs, [exhibit])
 
 
 # ------------------------------------------------------------ peer page
