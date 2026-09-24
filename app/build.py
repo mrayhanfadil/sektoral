@@ -5,7 +5,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import evidence as evidence_mod, forecast, intake, narrative, render, report_contract, report_extras, run_manifest, valuation
+from . import evidence as evidence_mod, forecast, intake, narrative, render, report_contract, report_extras, run_manifest, scrub, valuation
 
 PDF_OK = True
 try:
@@ -36,6 +36,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     doc = narrative.build(doc_in, fc, va, g1, method=method,
                           illustrative_scenarios=illustrative_scenarios or analyst_target)
     report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va, fc=fc)
+    scrub.normalize_doc_prose(doc)
     doc["forecast_assumptions"] = {
         "plan": fc.get("assumption_plan"),
         "news_effects": fc.get("news_assumptions") or [],
