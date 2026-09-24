@@ -125,14 +125,20 @@ def _validate(plan, source, require_news_coverage=True):
         return ["response is not an object"]
     # The agent proposes magnitudes; the engine calculates TP/valuation.
     # Any direct TP/valuation/readiness write is rejected.
-    for forbidden in ("target_price", "valuation", "production_ready",
-                      "forecast_basis", "tp", "rating"):
+    forbidden_keys = ("target_price", "valuation", "production_ready",
+                      "forecast_basis", "tp", "rating")
+    for forbidden in forbidden_keys:
         if forbidden in plan:
             problems.append(f"agent must not write {forbidden}; the engine calculates it")
     effects = plan.get("news_effects")
     if not isinstance(effects, list):
         problems.append("news_effects must be a list")
         effects = []
+    for i, item in enumerate(effects):
+        if isinstance(item, dict):
+            for forbidden in forbidden_keys:
+                if forbidden in item:
+                    problems.append(f"news_effects[{i}] must not write {forbidden}")
     seen = set()
     available = {row["index"]: row for row in source["news"]}
     for i, item in enumerate(effects):
@@ -207,7 +213,7 @@ def _validate(plan, source, require_news_coverage=True):
                     or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
                                for v in uncertainty_range)):
                 problems.append(f"news_effects[{i}] uncertainty_range must be [low, high] numbers")
-            elif driver in bounds:
+            elif driver in bounds and _number(change, -1e18, 1e18):
                 lower, upper = bounds[driver]
                 span = upper - lower
                 if not (uncertainty_range[0] <= change <= uncertainty_range[1]

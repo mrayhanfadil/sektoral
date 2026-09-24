@@ -277,7 +277,7 @@ def news_context(ticker, company_name, end_date, *, ring=None, post=None,
         except (OSError, ValueError):
             pass
     merged, seen_urls = [], set()
-    query_meta = []
+    query_meta, failures = [], []
     for qi, query in enumerate(queries):
         if qi == 0 and legacy_items:
             batch = legacy_items
@@ -287,7 +287,15 @@ def news_context(ticker, company_name, end_date, *, ring=None, post=None,
                     "end_date": end.isoformat(), "filter_by_published_date": True,
                     "include_domains": NEWS_DOMAINS, "include_answer": False,
                     "include_raw_content": False, "chunks_per_source": 1}
-            payload, _index = _search(body, ring=ring, post=post)
+            try:
+                payload, _index = _search(body, ring=ring, post=post)
+            except TavilyError as error:
+                # Keep results from queries that already succeeded; a failed
+                # hint query must not discard the base result set.
+                failures.append({"query": query, "error": str(error)})
+                query_meta.append({"query": query, "returned": 0, "kept": 0,
+                                   "error": str(error)})
+                continue
             batch = _items_from_payload(payload, start, end)
             for item in batch:
                 item["query"] = query
@@ -301,16 +309,19 @@ def news_context(ticker, company_name, end_date, *, ring=None, post=None,
             fresh += 1
         query_meta.append({"query": query, "returned": len(batch), "kept": fresh,
                            **({"from_store": True} if qi == 0 and legacy_items else {})})
+    if failures and len(failures) == len(queries):
+        raise TavilyError(failures[0]["error"])
     # Newest first; stable sort keeps base-query priority on ties.
     merged.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
     result = {"items": merged, "query": queries[0] if queries else "",
               "queries": query_meta,
               "window": f"{start.isoformat()} s.d. {end.isoformat()}",
-              "profile": profile,
+              "profile": profile, "partial_failures": failures,
               "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    try:
-        folder.mkdir(parents=True, exist_ok=True)
-        stored.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
-    except OSError:
-        pass
+    if not failures:  # never cache a partial result; retry on the next run
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            stored.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError:
+            pass
     return dict(result, from_store=False)

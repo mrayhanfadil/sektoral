@@ -148,7 +148,11 @@ def _driver_evidence_inputs(official_evidence, payout, payout_basis,
     def _row(note):
         return {"source": source_ref, "source_date": source_date,
                 "page": page, "unit": unit or "as reported",
-                "note": note}
+                "note": note,
+                # Base-period level only: proves the actual exists, not a
+                # forward driver chain. forecast.build will not count it as
+                # production coverage.
+                "origin": "official_actual_base"}
 
     if profile == "financial_ddm":
         evidence = {}

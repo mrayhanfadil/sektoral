@@ -121,7 +121,7 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
             existing["origins"] = list(dict.fromkeys(existing["origins"] + row["origins"]))
             if row.get("tavily_query") and row["tavily_query"] not in str(existing.get("tavily_query") or ""):
                 existing["tavily_query"] = "; ".join(filter(None, [existing.get("tavily_query"), row.get("tavily_query")]))
-            _reject(row, f"duplicate URL merged into {existing.get('register_id') or 'existing'}")
+            _reject(row, f"duplicate URL merged into {existing.get('source')}")
             return
         if len(chosen) >= limit:
             _reject(row, f"over limit={limit}: kept newest-first balanced quota")
@@ -136,7 +136,7 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
             same_title = next((c for c in chosen if c.get("event_key") == event
                                and c.get("origin") == row.get("origin")), None)
             if same_title is not None:
-                _reject(row, f"duplicate syndicated event merged into {same_title.get('register_id') or 'existing'}")
+                _reject(row, f"duplicate syndicated event merged into {same_title.get('source')}")
                 return
         row = dict(row)
         row["register_id"] = f"src-{len(chosen)}"

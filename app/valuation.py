@@ -343,11 +343,11 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
             g3 = {
                 "G3.1_method": "dilabeli",
                 "G3.2_skala": "lolos" if tp is not None else "gagal",
-                "G3.3_implied": "lolos",
+                "G3.3_implied": "dilabeli",
                 "G3.4_downside": "lolos" if (tp_down is not None and tp is not None and tp_down < tp) else "gagal",
-                "G3.5_keyfin": "lolos",
+                "G3.5_keyfin": "lolos" if (f_last.get("net") and intake.get("shares")) else "gagal",
                 "G3.6_peer": "dilabeli" if not intake["peers"] else "lolos",
-                "G3.7_band": "lolos",
+                "G3.7_band": "dilabeli",
                 "G3.8_method_divergence": "dilabeli",
                 "G3.9_extreme_thesis": ("lolos" if (upside is not None and abs(upside) <= 0.50) else "gagal"),
             }

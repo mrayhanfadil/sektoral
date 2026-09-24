@@ -347,9 +347,10 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
         evidence_register = evidence_mod.build(
             t, report_as_of, forecast_intake, register, combined_full,
             assumption_result.get("plan"))
-    except Exception:
+    except Exception as e:
+        print(f"{t}: evidence_register gagal: {e}", flush=True)
         evidence_register = {"ticker": t, "as_of": report_as_of, "rows": [],
-                             "violations": [], "counts": {}}
+                             "violations": [], "counts": {}, "error": str(e)}
     try:
         manifest = run_manifest.build_manifest(
             ticker=t, as_of=report_as_of, intake=forecast_intake,
@@ -362,8 +363,9 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
             assumption_plan=assumption_result.get("plan"),
             release=report.get("log_gate", {}).get("release"),
             spec_sha=assumption_result.get("spec_sha256"))
-    except Exception:
-        manifest = {"ticker": t, "as_of": report_as_of}
+    except Exception as e:
+        print(f"{t}: run_manifest gagal: {e}", flush=True)
+        manifest = {"ticker": t, "as_of": report_as_of, "error": str(e)}
     audit = {
         "ticker": t,
         "analyst": intel,

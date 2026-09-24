@@ -247,3 +247,30 @@ def test_assumption_event_chain_and_no_tp_write():
     bad_type = {"news_effects": [dict(good["news_effects"][0],
                                      assumption_type="issuer_fact")]}
     assert any("assumption_type" in p for p in assumption_run._validate(bad_type, source))
+
+
+def test_tavily_hint_query_failure_keeps_base_results(tmp_path):
+    ok = {"results": [{"title": "BBRI catat laba", "url": "https://kontan.co.id/a",
+                       "published_date": "2026-09-10", "content": "laba"}]}
+    calls = {"n": 0}
+
+    def post(key, body, timeout=20):
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise tavily.TavilyError("rate limited")
+        return ok
+
+    result = tavily.news_context("BBRI", "Bank Rakyat Indonesia", "2026-09-23",
+                                 profile="financial_ddm", post=post,
+                                 ring=tavily.KeyRing(["k"]), store_dir=tmp_path)
+    assert len(result["items"]) == 1
+    assert result["partial_failures"]
+    assert not list(tmp_path.glob("*.json"))  # partial results are not cached
+
+
+def test_validator_rejects_nested_forbidden_key_and_bad_change():
+    problems = assumption_run._validate(
+        {"news_effects": [{"target_price": 1, "change": "x", "driver": "none",
+                          "uncertainty_range": [0, 1]}]},
+        {"news": []}, require_news_coverage=False)
+    assert any("target_price" in p for p in problems)
