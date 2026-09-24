@@ -555,7 +555,8 @@ def render(doc):
     h.append(_kv("Jumlah Saham (juta)", saham_val))
     h.append(_kv("Kap. Pasar (Rp miliar)", mcap_val))
     h.append(_kv("Rata-rata T/O Harian (Rp miliar)", str(dp.get("adtv", "-"))))
-    h.append(_kv("Free Float (%)", str(dp.get("free_float", "-"))))
+    h.append(_kv("Public ownership (%)", str(
+        dp.get("public_ownership", dp.get("free_float", "-")))))
     for holder in (doc.get("holders") or [])[:2]:
         h.append(_kv(str(holder[0])[:22], str(holder[1])))
     h.append("</div>")

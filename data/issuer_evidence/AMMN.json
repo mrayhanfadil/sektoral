@@ -5,12 +5,24 @@
   "annual_source_title": "AMMAN FY 2025 Earnings Release",
   "annual_source_url": "https://www.amman.co.id/earnings-release",
   "annual_actuals": [
-    {"year": 2024, "revenue": 2664000000, "ebitda": 1426000000,
-     "net_profit": 642000000, "net_profit_attributable": 636895000,
-     "equity": 5248000000, "equity_attributable": 5159842000},
-    {"year": 2025, "revenue": 1847000000, "ebitda": 1057000000,
-     "net_profit": 258000000, "net_profit_attributable": 248979000,
-     "equity": 5431000000, "equity_attributable": 5338096000}
+    {
+      "year": 2024,
+      "revenue": 2664000000,
+      "ebitda": 1426000000,
+      "net_profit": 642000000,
+      "net_profit_attributable": 636895000,
+      "equity": 5248000000,
+      "equity_attributable": 5159842000
+    },
+    {
+      "year": 2025,
+      "revenue": 1847000000,
+      "ebitda": 1057000000,
+      "net_profit": 258000000,
+      "net_profit_attributable": 248979000,
+      "equity": 5431000000,
+      "equity_attributable": 5338096000
+    }
   ],
   "latest_actual": {
     "period": "1H26",
@@ -27,6 +39,47 @@
       "capital_expenditure": 130000000,
       "operating_cash_flow": 763000000
     },
+    "financial_statements_usd_thousand": {
+      "source_basis": "H1 2026 unaudited interim financial statements attached to the earnings release; exact values in US$ thousands.",
+      "income_statement": {
+        "net_sales": 2052410,
+        "cost_applicable_to_sales": -1088256,
+        "gross_profit": 964154,
+        "accretion_expense": -12823,
+        "exploration_expense": -10137,
+        "marketing_general_administrative": -31654,
+        "operating_profit": 909540,
+        "share_of_associate_profit": 16613,
+        "finance_costs": -255699,
+        "other_income_net": 24621,
+        "profit_before_tax": 695075,
+        "income_tax": -140823,
+        "profit_before_non_tax_revenue": 554252,
+        "non_tax_government_revenue": -50566,
+        "net_income": 503686
+      },
+      "cash_flow": {
+        "receipts_from_customers": 2506338,
+        "payments_to_suppliers": -1202800,
+        "royalties_taxes_and_non_tax_revenue": -304435,
+        "finance_costs_paid": -236487,
+        "operating_cash_flow": 762616,
+        "property_plant_equipment": -102045,
+        "advance_for_property_plant_equipment": -20000,
+        "additions_to_mining_properties": -7987,
+        "investing_cash_used": -130032,
+        "short_term_loan_proceeds": 115482,
+        "short_term_loan_repayments": -264442,
+        "long_term_loan_proceeds": 209855,
+        "long_term_loan_repayments": -580866,
+        "restricted_cash_movement": 57531,
+        "financing_cash_flow": -462440,
+        "net_increase_in_cash": 170144,
+        "fx_effect": -28036,
+        "opening_cash": 676829,
+        "closing_cash": 818937
+      }
+    },
     "prior_year": {
       "period": "1H25",
       "revenue": 183000000,
@@ -34,82 +87,1669 @@
       "net_profit": -146000000,
       "capital_expenditure": 719000000,
       "operating_cash_flow": -644000000
+    },
+    "document_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+    "full_financial_statements_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "financial_statements_source_pages": [
+      4,
+      5,
+      6
+    ],
+    "source_pages": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "quarterly_actuals": {
+    "q1_2026": {
+      "period": "Q1 2026",
+      "published_at": "2026-04-30",
+      "source_title": "AMMAN Q1 2026 Performance Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NTE3MSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--bdebd31a4a6b6ef9db77af5a59feac0491699741/Siaran%20Pers%20-%20Laporan%20Kinerja%20AMMAN%20Q1%202026%20vF.pdf?disposition=inline&locale=id",
+      "source_pages": [
+        3,
+        4,
+        5,
+        7
+      ],
+      "financials_usd_mn": {
+        "net_sales": 808,
+        "ebitda": 508,
+        "net_income": 163,
+        "capex": 114
+      },
+      "income_statement_usd_thousand": {
+        "net_sales": 807912,
+        "cost_applicable_to_sales": -465566,
+        "gross_profit": 342346,
+        "accretion_expense": -6411,
+        "exploration_expense": -4607,
+        "marketing_general_administrative": -16909,
+        "operating_profit": 314419,
+        "share_of_associate_profit": 7089,
+        "finance_costs": -126619,
+        "other_income_net": 23708,
+        "profit_before_tax": 218597,
+        "income_tax": -41194,
+        "profit_before_non_tax_revenue": 177403,
+        "non_tax_government_revenue": -14798,
+        "net_income": 162605
+      },
+      "cash_flow_usd_thousand": {
+        "receipts_from_customers": 949139,
+        "payments_to_suppliers": -574545,
+        "royalties_taxes_and_non_tax_revenue": -77029,
+        "finance_costs_paid": -104061,
+        "operating_cash_flow": 193504,
+        "property_plant_equipment": -91527,
+        "advance_for_property_plant_equipment": -20000,
+        "additions_to_mining_properties": -2501,
+        "investing_cash_used": -114028,
+        "short_term_loan_proceeds": 0,
+        "short_term_loan_repayments": -31718,
+        "long_term_loan_proceeds": 209855,
+        "long_term_loan_repayments": -125858,
+        "restricted_cash_movement": 12953,
+        "financing_cash_flow": 65232,
+        "net_increase_in_cash": 144708,
+        "fx_effect": -6966,
+        "opening_cash": 676829,
+        "closing_cash": 814571
+      },
+      "revenue_by_product_usd_mn": {
+        "cathode_copper": 391,
+        "refined_gold": 82,
+        "concentrate": 334
+      },
+      "sales_production_bridge": [
+        {
+          "product_key": "concentrate",
+          "production": 167792,
+          "sales": 30013,
+          "unit": "dmt",
+          "copper_production_mlbs": 101,
+          "copper_sales_mlbs": 19,
+          "gold_production_oz": 136115,
+          "gold_sales_oz": 30505,
+          "copper_selling_price_usd_per_lb": 5.87,
+          "gold_selling_price_usd_per_oz": 4858,
+          "selling_price_basis": "reported gross selling price; excludes treatment/refining and prior-shipment mark-to-market adjustments"
+        },
+        {
+          "product_key": "cathode_copper",
+          "production": 27670,
+          "sales": 28764,
+          "unit": "ton",
+          "net_realized_price_usd_per_unit": 13596
+        },
+        {
+          "product_key": "refined_gold",
+          "production": 66209,
+          "sales": 16043,
+          "unit": "oz",
+          "net_realized_price_usd_per_unit": 5139
+        }
+      ],
+      "temporary_concentrate_export_permit_expired": "2026-04-30",
+      "permit_source_page": 3,
+      "cost_of_sales_components_usd_thousand": {
+        "status": "reported actual",
+        "source_title": "AMMAN Q1 2026 Interim Consolidated Financial Statements",
+        "source_url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q1/AMMN_Q1_2026.pdf",
+        "source_document_note": "Issuer-filed interim financial statements; this link is an archive mirror of the company filing.",
+        "source_note": "Note 25, printed page 105",
+        "components": {
+          "mining_processing_operating": 310875,
+          "deferred_stripping_movement": 327672,
+          "depreciation_amortization": 117906,
+          "government_royalty": 90269,
+          "export_duty": 28131,
+          "employee_costs": 22061,
+          "freight_marketing": 11387,
+          "silver_byproduct_credit": -42470,
+          "selenium_byproduct_credit": -609,
+          "sulfuric_acid_byproduct_credit": -8956,
+          "stockpiles_product_inventory_movement": -538800,
+          "other": 148100,
+          "total_costs_applicable_to_sales": 465566
+        }
+      }
+    },
+    "q2_2026_derived": {
+      "period": "Q2 2026 (derived)",
+      "status": "derived as H1 2026 reported actual less Q1 2026 reported actual",
+      "derivation": "H1 2026 figures minus Q1 2026 figures; product revenue inherits rounding in the two releases.",
+      "source_titles": [
+        "AMMAN Q1 2026 Performance Release",
+        "AMMAN H1 2026 Earnings Release"
+      ],
+      "source_urls": [
+        "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NTE3MSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--bdebd31a4a6b6ef9db77af5a59feac0491699741/Siaran%20Pers%20-%20Laporan%20Kinerja%20AMMAN%20Q1%202026%20vF.pdf?disposition=inline&locale=id",
+        "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline"
+      ],
+      "financials_usd_mn": {
+        "net_sales": 1244,
+        "ebitda": 620,
+        "net_income": 341,
+        "capex": 16
+      },
+      "income_statement_usd_thousand": {
+        "net_sales": 1244498,
+        "cost_applicable_to_sales": -622690,
+        "gross_profit": 621808,
+        "accretion_expense": -6412,
+        "exploration_expense": -5530,
+        "marketing_general_administrative": -14745,
+        "operating_profit": 595121,
+        "share_of_associate_profit": 9524,
+        "finance_costs": -129080,
+        "other_income_net": 913,
+        "profit_before_tax": 476478,
+        "income_tax": -99629,
+        "profit_before_non_tax_revenue": 376849,
+        "non_tax_government_revenue": -35768,
+        "net_income": 341081
+      },
+      "cash_flow_usd_thousand": {
+        "receipts_from_customers": 1557199,
+        "payments_to_suppliers": -628255,
+        "royalties_taxes_and_non_tax_revenue": -227406,
+        "finance_costs_paid": -132426,
+        "operating_cash_flow": 569112,
+        "property_plant_equipment": -10518,
+        "advance_for_property_plant_equipment": 0,
+        "additions_to_mining_properties": -5486,
+        "investing_cash_used": -16004,
+        "short_term_loan_proceeds": 115482,
+        "short_term_loan_repayments": -232724,
+        "long_term_loan_proceeds": 0,
+        "long_term_loan_repayments": -455008,
+        "restricted_cash_movement": 44578,
+        "financing_cash_flow": -527672,
+        "net_increase_in_cash": 25436,
+        "fx_effect": -21070,
+        "opening_cash": 814571,
+        "closing_cash": 818937,
+        "free_cash_flow_derived": 553108
+      },
+      "revenue_by_product_usd_mn": {
+        "cathode_copper": 272,
+        "refined_gold": 229,
+        "concentrate": 744,
+        "rounding_note": "Segment revenues sum to US$1,245m versus reported net sales of US$1,244m because source values are rounded."
+      },
+      "sales_production_bridge": [
+        {
+          "product_key": "concentrate",
+          "production": 179515,
+          "sales": 90066,
+          "unit": "dmt",
+          "segment_revenue_usd_mn": 744,
+          "revenue_per_sold_unit_proxy": 8260.6,
+          "copper_production_mlbs": 110,
+          "copper_sales_mlbs": 53,
+          "gold_production_oz": 210239,
+          "gold_sales_oz": 90162
+        },
+        {
+          "product_key": "cathode_copper",
+          "production": 21086,
+          "sales": 19890,
+          "unit": "ton",
+          "segment_revenue_usd_mn": 272,
+          "revenue_per_sold_unit_proxy": 13675.2,
+          "implied_net_realized_price": {
+            "value": 13666.94,
+            "unit": "USD/tonne",
+            "status": "derived estimate; not separately reported",
+            "derivation": "(H1 reported net realized price × H1 sales − Q1 reported net realized price × Q1 sales) ÷ derived Q2 sales",
+            "q1_price": 13596,
+            "q1_sales": 28764,
+            "h1_price": 13625,
+            "h1_sales": 48654,
+            "q2_sales": 19890,
+            "basis": "Q1 and H1 reported net realized prices both exclude prior-shipment mark-to-market adjustments; rounded source prices and volumes mean implied Q2 price is approximate",
+            "source_pages": {
+              "q1": 3,
+              "h1": 22
+            },
+            "additional_limitation": "Reported Q1/H1 prices are provisional-price accounting measures marked to market before final settlement; implied Q2 may contain settlement-timing and prior-shipment MTM effects and is not a final shipment price.",
+            "pricing_policy_source": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+            "pricing_policy_note": "Note 2.s, printed page 40; Note 30.a.ii, printed page 113"
+          }
+        },
+        {
+          "product_key": "refined_gold",
+          "production": 55922,
+          "sales": 49501,
+          "unit": "oz",
+          "segment_revenue_usd_mn": 229,
+          "revenue_per_sold_unit_proxy": 4626.0,
+          "implied_net_realized_price": {
+            "value": 4618.63,
+            "unit": "USD/oz",
+            "status": "derived estimate; not separately reported",
+            "derivation": "(H1 reported net realized price × H1 sales − Q1 reported net realized price × Q1 sales) ÷ derived Q2 sales",
+            "q1_price": 5139,
+            "q1_sales": 16043,
+            "h1_price": 4746,
+            "h1_sales": 65544,
+            "q2_sales": 49501,
+            "basis": "Q1 and H1 reported net realized prices both exclude prior-shipment mark-to-market adjustments; rounded source prices and volumes mean implied Q2 price is approximate",
+            "source_pages": {
+              "q1": 3,
+              "h1": 22
+            },
+            "additional_limitation": "Reported Q1/H1 prices are provisional-price accounting measures marked to market before final settlement; implied Q2 may contain settlement-timing and prior-shipment MTM effects and is not a final shipment price.",
+            "pricing_policy_source": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+            "pricing_policy_note": "Note 2.s, printed page 40; Note 30.a.ii, printed page 113"
+          }
+        },
+        {
+          "product_key": "revenue_per_sold_unit_note",
+          "note": "Revenue per sold unit is a derived segment-revenue proxy; not a realized price/netback. Concentrate blends metal content, payability, TC-RC, and sales mix."
+        }
+      ],
+      "cost_of_sales_components": {
+        "status": "derived actual as reported H1 less reported Q1",
+        "source_title_h1": "AMMAN H1 2026 Interim Financial Statements",
+        "source_url_h1": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+        "source_note_h1": "Note 25, printed page 108",
+        "source_title_q1": "AMMAN Q1 2026 Interim Consolidated Financial Statements",
+        "source_url_q1": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q1/AMMN_Q1_2026.pdf",
+        "source_note_q1": "Note 25, printed page 105",
+        "unit": "USD thousand",
+        "components": {
+          "reported_q1": {
+            "mining_processing_operating": 310875,
+            "deferred_stripping_movement": 327672,
+            "depreciation_amortization": 117906,
+            "government_royalty": 90269,
+            "export_duty": 28131,
+            "employee_costs": 22061,
+            "freight_marketing": 11387,
+            "silver_byproduct_credit": -42470,
+            "selenium_byproduct_credit": -609,
+            "sulfuric_acid_byproduct_credit": -8956,
+            "stockpiles_product_inventory_movement": -538800,
+            "other": 148100,
+            "total_costs_applicable_to_sales": 465566,
+            "source_page": 105
+          },
+          "derived_q2": {
+            "mining_processing_operating": 436928,
+            "deferred_stripping_movement": 285956,
+            "depreciation_amortization": 118001,
+            "government_royalty": 168587,
+            "export_duty": 59284,
+            "employee_costs": 22101,
+            "freight_marketing": 11798,
+            "silver_byproduct_credit": -30563,
+            "selenium_byproduct_credit": -524,
+            "sulfuric_acid_byproduct_credit": -15330,
+            "stockpiles_product_inventory_movement": -435924,
+            "other": 2376,
+            "total_costs_applicable_to_sales": 622690
+          },
+          "reported_h1": {
+            "mining_processing_operating": 747803,
+            "deferred_stripping_movement": 613628,
+            "depreciation_amortization": 235907,
+            "government_royalty": 258856,
+            "export_duty": 87415,
+            "employee_costs": 44162,
+            "freight_marketing": 23185,
+            "silver_byproduct_credit": -73033,
+            "selenium_byproduct_credit": -1133,
+            "sulfuric_acid_byproduct_credit": -24286,
+            "stockpiles_product_inventory_movement": -974724,
+            "other": 150476,
+            "total_costs_applicable_to_sales": 1088256,
+            "source_page": 108
+          }
+        },
+        "limitations": [
+          "Q2 component values are arithmetic H1 less Q1, not separately reported quarterly figures.",
+          "Component values are not standalone cash costs; stripping accounting, inventory movements and by-product credits materially affect reported cost of sales.",
+          "Do not carry Q2 component ratios into H2 without production, grade, payable/sales, inventory and regulatory/royalty assumptions."
+        ]
+      },
+      "deferred_stripping_rollforward": {
+        "unit": "USD thousand",
+        "source_note": "Note 11",
+        "reported_q1": {
+          "beginning_balance": 3322167,
+          "additions": 0,
+          "amortization": -327672,
+          "ending_balance": 2994495,
+          "source_pages": [
+            72
+          ]
+        },
+        "derived_q2": {
+          "beginning_balance": 2994495,
+          "additions": 0,
+          "amortization": -285956,
+          "ending_balance": 2708539
+        },
+        "reported_h1": {
+          "beginning_balance": 3322167,
+          "additions": 0,
+          "amortization": -613628,
+          "ending_balance": 2708539,
+          "source_pages": [
+            73
+          ]
+        },
+        "status": "Q1 and H1 reported; Q2 derived H1 less Q1",
+        "interpretation": "The costs-applicable-to-sales line for deferred stripping is amortization of the deferred stripping asset; it is not current-period capitalized stripping additions. Note 11 reports zero additions in Q1 and H1 2026."
+      },
+      "inventory_movement_gross_profit_diagnostic": {
+        "status": "derived diagnostic; not a company-reported metric",
+        "source_title_q1": "AMMAN Q1 2026 Interim Consolidated Financial Statements",
+        "source_url_q1": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q1/AMMN_Q1_2026.pdf",
+        "source_note_q1": "Consolidated income statement and Note 25, printed pages 4 and 105",
+        "source_title_h1": "AMMAN H1 2026 Interim Financial Statements",
+        "source_url_h1": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+        "source_note_h1": "Consolidated income statement and Note 25, printed pages 4-5 and 108",
+        "unit": "USD thousand",
+        "periods": {
+          "q1_reported": {
+            "net_sales_usd_thousand": 807912,
+            "reported_costs_applicable_to_sales_usd_thousand": 465566,
+            "stockpiles_product_inventory_movement_in_cogs_usd_thousand": -538800,
+            "cogs_excluding_that_movement_usd_thousand": 1004366,
+            "gross_profit_excluding_that_movement_usd_thousand": -196454
+          },
+          "q2_derived": {
+            "net_sales_usd_thousand": 1244498,
+            "reported_costs_applicable_to_sales_usd_thousand": 622690,
+            "stockpiles_product_inventory_movement_in_cogs_usd_thousand": -435924,
+            "cogs_excluding_that_movement_usd_thousand": 1058614,
+            "gross_profit_excluding_that_movement_usd_thousand": 185884
+          },
+          "h1_reported": {
+            "net_sales_usd_thousand": 2052410,
+            "reported_costs_applicable_to_sales_usd_thousand": 1088256,
+            "stockpiles_product_inventory_movement_in_cogs_usd_thousand": -974724,
+            "cogs_excluding_that_movement_usd_thousand": 2062980,
+            "gross_profit_excluding_that_movement_usd_thousand": -10570
+          }
+        },
+        "calculation": "Subtract the negative movement-in-stockpiles-and-product-inventories cost line from reported costs applicable to sales, then subtract the adjusted cost from reported net sales. Q2 = H1 minus Q1.",
+        "limitations": [
+          "This is an analytical reconciliation of an accounting line, not adjusted gross profit, cash cost, EBITDA or free cash flow.",
+          "It removes only the disclosed movement line and does not adjust royalty, deferred-stripping amortization, depreciation, by-product credits, or other cost components.",
+          "Do not treat carrying-value changes as physical concentrate volumes or assume this movement repeats in H2."
+        ]
+      },
+      "inventory_carrying_value_vs_cogs_movement": {
+        "status": "derived balance comparison; no physical volume reconciliation",
+        "unit": "USD thousand",
+        "opening_inventory_and_stockpile_carrying_value": 2037687,
+        "closing_inventory_and_stockpile_carrying_value": 3062320,
+        "increase_in_carrying_value": 1024633,
+        "h1_cogs_stockpiles_product_inventory_movement": -974724,
+        "difference_not_reconciled_by_public_note": 49909,
+        "source_pages": {
+          "balance_sheet_note_7": 61,
+          "income_statement_note_25": 108
+        },
+        "interpretation": "Combined balance carrying value of inventory and stockpiles rose by US$1,024.633m, while the H1 costs-applicable-to-sales movement line was a US$974.724m credit. Notes do not provide a physical roll-forward or a direct reconciliation of these amounts; the difference must not be translated into tonnes or sales."
+      }
     }
   },
   "balance_sheet": {
     "period_end": "2026-06-30",
     "source_title": "AMMAN H1 2026 Financial Statements",
-    "source_url": "https://www.amman.co.id/financial-statement",
-    "source_pages": [8, 9, 10, 101],
-    "cash": 819000000,
-    "total_debt": 5845000000,
-    "total_equity": 5861000000,
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "source_pages": [
+      1,
+      2,
+      3,
+      89,
+      98,
+      101
+    ],
+    "cash": 818937000,
+    "total_debt": 5883363000,
+    "debt_scope": "Derived financial debt: short- and long-term bank loans net of financing fees plus present-value lease and finance liabilities; excludes customer prepayment pending delivery/cash-flow reconciliation.",
+    "total_equity": 5861471000,
     "non_controlling_interest": 95328000,
     "shares_issued": 72518217656,
     "shares_outstanding": 72412413856
   },
+  "valuation_fx_reference": {
+    "pair": "USD/IDR",
+    "rate": 17803.0,
+    "date": "2026-09-23",
+    "source_title": "Bank Indonesia JISDOR",
+    "source_url": "https://www.bi.go.id/id/statistik/informasi-kurs/jisdor/Default.aspx",
+    "note": "Used only to translate June 30, 2026 USD balance-sheet inputs to raw IDR for the SOTP bridge; it is the dated spot rate as of the report's latest market-data date."
+  },
   "mine_life_context": {
     "source_title": "AMMAN H1 2026 Earnings Release",
-    "source_url": "https://www.amman.co.id/earnings-release",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
     "source_page": 6,
     "batu_hijau_reserves_mt": 777,
     "elang_reserves_mt": 2581,
     "batu_hijau_mining_through": "2031/2032",
     "batu_hijau_stockpile_through": "2033/2034",
     "elang_first_ore": "2031/2032",
-    "elang_fid_target": "2027"
+    "elang_fid_target": "2027",
+    "reserves_as_of": "2026-06-30",
+    "competent_person": "AMC Consultants Pty Ltd",
+    "batu_hijau_grade_cu_pct": 0.34,
+    "batu_hijau_grade_au_gpt": 0.24,
+    "batu_hijau_contained_cu_blb": 5.75,
+    "batu_hijau_contained_au_moz": 5.9,
+    "batu_hijau_resources_mt": 2609,
+    "batu_hijau_resource_grade_cu_pct": 0.27,
+    "batu_hijau_resource_grade_au_gpt": 0.15,
+    "batu_hijau_resource_contained_cu_blb": 15.52,
+    "batu_hijau_resource_contained_au_moz": 12.4,
+    "elang_grade_cu_pct": 0.32,
+    "elang_grade_au_gpt": 0.33,
+    "elang_contained_cu_blb": 18.17,
+    "elang_contained_au_moz": 27.0,
+    "elang_resources_mt": 3982,
+    "elang_resource_grade_cu_pct": 0.3,
+    "elang_resource_grade_au_gpt": 0.28,
+    "elang_resource_contained_cu_blb": 26.03,
+    "elang_resource_contained_au_moz": 36.7,
+    "stockpile_mt": 316,
+    "stockpile_grade_cu_pct": 0.33,
+    "stockpile_grade_au_gpt": 0.14,
+    "stockpile_contained_cu_blb": 2.31,
+    "stockpile_contained_au_moz": 1.4,
+    "reserve_cu_price_usd_per_lb": 4.0,
+    "reserve_au_price_usd_per_oz": 2500.0,
+    "resource_source_date": "2026-06-30",
+    "development_status": {
+      "mine_planning_status": "in progress",
+      "elang_fid_target": "2027",
+      "elang_first_ore": "2031/2032",
+      "batu_hijau_mining_through": "2031/2032",
+      "batu_hijau_stockpile_processing_through": "2033/2034",
+      "overland_conveyor_corridor_permitting": "in progress",
+      "early_engineering_contractor_selection": "in progress",
+      "feasibility_study_status": "completed (FY2025 presentation)",
+      "optimization_study_status": "ongoing: primary crusher relocation, sediment pond/PAR redesign, and waste dump optimization",
+      "infrastructure_scope": "Uses existing Batu Hijau concentrator, power facilities, Benete port/jetties and smelter; Elang ore requires a 54 km overland conveyor, extension of the primary access road, and high-voltage transmission infrastructure.",
+      "infrastructure_scope_source_title": "AMMAN Paparan Publik Tahun 2026",
+      "infrastructure_scope_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk4NCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--efda2a2fcf91d23331d10bbd76dd9aa95de1099e/PAPARAN%20PUBLIK%20TAHUN%202026.pdf?disposition=inline&locale=id",
+      "infrastructure_scope_source_page": 20,
+      "feasibility_source_title": "AMMAN FY 2025 Earnings Presentation",
+      "feasibility_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk3OCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--50df1975317d5d37d39e6c868f5b05f51f29bb1d/FY%202025%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+      "feasibility_source_page": 20,
+      "annual_report_context": {
+        "source_title": "AMMAN 2025 Annual Report",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NTEzNywicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--8894e69222f3c75d05cccfe4d7b692e23e5b362a/Annual%20Report%202025%20-%20PT%20Amman%20Mineral%20Internasional%20Tbk.pdf?disposition=inline",
+        "source_pages": [
+          37,
+          49,
+          86,
+          103
+        ],
+        "definitive_feasibility_study": "completed in 2025; sets parameters for mine and processing facilities",
+        "elang_operations_start": "after the end of Batu Hijau mine life",
+        "elang_operations_through": "at least 2050",
+        "planned_processing_capacity_million_tonnes_per_year_range": [
+          85,
+          90
+        ],
+        "expanded_plant_first_ore_to_mills_target": "July 2026",
+        "capacity_status_note": "FY2025 Annual Report disclosed an 85-90 Mtpa expansion range and July 2026 first-ore-to-mills target; H1 2026 investor presentation subsequently states 85 Mtpa expanded plant capacity. Treat 85 Mtpa as the later stated operating/nameplate figure and 85-90 Mtpa as the earlier disclosed range, not as an additional throughput assumption.",
+        "detailed_engineering_and_optimization": "ongoing as of the 2025 Annual Report",
+        "disclosed_forecast_detail": "The annual report discussion identifies infrastructure and development status but does not publish an annual Elang production, cost, capex or cash-flow schedule in the reviewed discussion."
+      },
+      "2026_public_consultation_context": {
+        "source_title": "ANTARA, Konsultasi publik studi AMDAL Blok Elang",
+        "source_url": "https://mataram.antaranews.com/berita/572144/investasi-tambang-blok-elang-sumbawa-diperkirakan-capai-rp8-triliun",
+        "event_date": "2026-09-22",
+        "publication_date": "2026-09-22",
+        "source_attribution": "ANTARA/HO-Prokopim Kabupaten Sumbawa; Bupati Sumbawa said he received the information from PT AMNT.",
+        "reported_initial_investment_idr_trillion_range": [
+          6,
+          8
+        ],
+        "reported_scope": "production facilities and supporting mining facilities; land requirement greater than 60 hectares",
+        "reported_construction_target": "mid-2027, after completion of study and permitting requirements",
+        "reported_project_status": "At the 22 September public consultation for the feasibility study and AMDAL, AMNT described the meeting as an input-gathering stage. ANTARA reported the project remained at exploration stage, with AMDAL and initial-area studies still to be completed and further government/socialization steps before construction.",
+        "classification": "Indicative public-consultation information relayed by a local-government official through ANTARA; not an issuer filing, approved capex budget, contractor award, or annual spend schedule.",
+        "modeling_limitations": [
+          "scope and contingency basis are not disclosed",
+          "no USD conversion basis or price date",
+          "no annual capex phasing or committed-versus-uncommitted split",
+          "does not provide production, operating-cost, cash-flow, or valuation schedule",
+          "not reconciled to completed feasibility study or ongoing optimization"
+        ]
+      },
+      "2026_amdal_scoping_notice": {
+        "source_title": "Pengumuman Penyusunan Studi AMDAL PT Amman Mineral Nusa Tenggara",
+        "published_date": "2026-09-21",
+        "issuer": "PT Amman Mineral Nusa Tenggara",
+        "dissemination_page_url": "https://kabarsumbawa.com/2026/09/21/pengumuman-penyusunan-studi-amdal-pt-amman-mineral-nusa-tenggara/",
+        "document_url": "https://drive.google.com/file/d/1vAmwPrZYUmqXX_OVY-zmhs0Fc8mZ40Go/view?usp=drivesdk",
+        "document_description": "One-page issuer notice for preparation of the Elang AMDAL study, dated 21 September 2026; distributed for public input, not an approved AMDAL or final feasibility design.",
+        "ore_mining_capacity_million_tonnes_per_year_approx": 90,
+        "context_comparators": {
+          "annual_processing_ore_capacity_million_tonnes": 85,
+          "source_title": "AMMAN H1 2026 Earnings Presentation",
+          "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+          "source_page": 10,
+          "interpretation": "The 90 Mtpa figure is planned Elang ore mining capacity in the AMDAL notice; 85 Mtpa is expanded processing-plant annual ore capacity in the H1 presentation. These are different stages/definitions and are not forced into a single throughput assumption."
+        },
+        "planned_support_facilities": [
+          "primary ore crusher",
+          "overland ore conveyor approximately 60 km",
+          "275 kV transmission line approximately 80 km",
+          "main access road connecting Elang with Batu Hijau",
+          "employee accommodation, offices, workshops, warehouses, and fuel storage"
+        ],
+        "public_input_period_working_days": 10,
+        "modeling_limitations": [
+          "ore mining capacity is not a year-by-year ore processing or saleable production schedule",
+          "notice provides no annual grades, recoveries, product volumes, prices, operating costs, capex phasing, or cash flows",
+          "the approximately 60 km conveyor in this notice differs from the approximately 54 km OLC described in the March 2026 public presentation; route/scope difference is unresolved",
+          "this scoping notice does not show AMDAL approval or final design"
+        ]
+      },
+      "source_title": "AMMAN H1 2026 Earnings Presentation",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+      "source_page": 20,
+      "forecast_implication": "The FY2025 Annual Report disclosed an 85-90 Mtpa planned processing-plant expansion range; the H1 2026 presentation subsequently states 85 Mtpa, while the 21 September 2026 AMDAL scoping notice gives approximately 90 Mtpa as planned Elang ore-mining capacity. These are different dates/stages/definitions and are shown separately, not combined as one throughput assumption. The AMDAL notice also supplies initial infrastructure scope but no year-by-year processing, grade, recovery, saleable production, cost, capex or cash-flow schedule. Its roughly 60 km conveyor length differs from the roughly 54 km OLC in the March 2026 public presentation and remains unresolved. Completed FY2025 feasibility work plus ongoing optimization and mine planning still do not supply the annual asset-level FCFF schedule needed for NAV LoM."
+    }
   },
   "operating_metrics": [
-    {"name": "Fresh ore mined (juta ton)", "prior": 6, "current": 66, "decimals": 0},
-    {"name": "Mill throughput (juta ton)", "prior": 16, "current": 20, "decimals": 0},
-    {"name": "Kadar tembaga (%)", "prior": 0.33, "current": 0.52, "decimals": 2},
-    {"name": "Kadar emas (g/t)", "prior": 0.14, "current": 0.65, "decimals": 2},
-    {"name": "Konsentrat diproduksi (dmt)", "prior": 191657, "current": 347307, "decimals": 0},
-    {"name": "Konsentrat terjual (dmt)", "prior": null, "current": 120079, "decimals": 0},
-    {"name": "Tembaga dalam konsentrat (Mlbs)", "prior": 89, "current": 211, "decimals": 0},
-    {"name": "Emas dalam konsentrat (oz)", "prior": 59578, "current": 346354, "decimals": 0},
-    {"name": "Katoda tembaga (ton)", "prior": 19805, "current": 48756, "decimals": 0},
-    {"name": "Katoda tembaga terjual (ton)", "prior": 18522, "current": 48654, "decimals": 0},
-    {"name": "Emas murni (oz)", "prior": null, "current": 122131, "decimals": 0},
-    {"name": "Emas murni terjual (oz)", "prior": null, "current": 65544, "decimals": 0}
+    {
+      "name": "Fresh ore mined (juta ton)",
+      "prior": 6,
+      "current": 66,
+      "decimals": 0
+    },
+    {
+      "name": "Mill throughput (juta ton)",
+      "prior": 16,
+      "current": 20,
+      "decimals": 0
+    },
+    {
+      "name": "Kadar tembaga (%)",
+      "prior": 0.33,
+      "current": 0.52,
+      "decimals": 2
+    },
+    {
+      "name": "Kadar emas (g/t)",
+      "prior": 0.14,
+      "current": 0.65,
+      "decimals": 2
+    },
+    {
+      "name": "Konsentrat diproduksi (dmt)",
+      "prior": 191657,
+      "current": 347307,
+      "decimals": 0
+    },
+    {
+      "name": "Konsentrat terjual (dmt)",
+      "prior": null,
+      "current": 120079,
+      "decimals": 0
+    },
+    {
+      "name": "Tembaga dalam konsentrat (Mlbs)",
+      "prior": 89,
+      "current": 211,
+      "decimals": 0
+    },
+    {
+      "name": "Emas dalam konsentrat (oz)",
+      "prior": 59578,
+      "current": 346354,
+      "decimals": 0
+    },
+    {
+      "name": "Katoda tembaga (ton)",
+      "prior": 19805,
+      "current": 48756,
+      "decimals": 0
+    },
+    {
+      "name": "Katoda tembaga terjual (ton)",
+      "prior": 18522,
+      "current": 48654,
+      "decimals": 0
+    },
+    {
+      "name": "Emas murni (oz)",
+      "prior": null,
+      "current": 122131,
+      "decimals": 0
+    },
+    {
+      "name": "Emas murni terjual (oz)",
+      "prior": null,
+      "current": 65544,
+      "decimals": 0
+    }
   ],
   "sales_production_bridge": [
-    {"product": "Konsentrat", "unit": "dmt", "production": 347307, "sales": 120079},
-    {"product": "Katoda tembaga", "unit": "ton", "production": 48756, "sales": 48654},
-    {"product": "Emas murni", "unit": "oz", "production": 122131, "sales": 65544}
+    {
+      "product": "Konsentrat",
+      "unit": "dmt",
+      "production": 347307,
+      "sales": 120079,
+      "status": "reported actual",
+      "period": "1H26",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+      "source_date": "2026-09-21",
+      "source_page": 3,
+      "metal_sales": {
+        "copper_mlbs": 72,
+        "gold_oz": 120667
+      },
+      "metal_production": {
+        "copper_mlbs": 211,
+        "gold_oz": 346354
+      },
+      "net_realized_prices": {
+        "copper_usd_per_lb": 6.8,
+        "gold_usd_per_oz": 4864,
+        "basis": "net of treatment/refining charges and prior-shipment mark-to-market adjustments",
+        "source_title": "AMMAN H1 2026 Earnings Presentation",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+        "source_page": 22
+      }
+    },
+    {
+      "product": "Katoda tembaga",
+      "unit": "ton",
+      "production": 48756,
+      "sales": 48654,
+      "status": "reported actual",
+      "period": "1H26",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+      "source_date": "2026-09-21",
+      "source_page": 3,
+      "net_realized_price": {
+        "value": 13625,
+        "unit": "USD/tonne",
+        "status": "reported actual",
+        "period": "1H26",
+        "source_title": "AMMAN H1 2026 Earnings Release",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+        "source_date": "2026-09-21",
+        "page": 22,
+        "price_source_title": "AMMAN H1 2026 Earnings Presentation",
+        "price_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline"
+      }
+    },
+    {
+      "product": "Emas murni",
+      "unit": "oz",
+      "production": 122131,
+      "sales": 65544,
+      "status": "reported actual",
+      "period": "1H26",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+      "source_date": "2026-09-21",
+      "source_page": 3,
+      "net_realized_price": {
+        "value": 4746,
+        "unit": "USD/oz",
+        "status": "reported actual",
+        "period": "1H26",
+        "source_title": "AMMAN H1 2026 Earnings Release",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+        "source_date": "2026-09-21",
+        "page": 22,
+        "price_source_title": "AMMAN H1 2026 Earnings Presentation",
+        "price_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline"
+      }
+    }
   ],
   "revenue_breakdown": {
     "source_page": 4,
     "segments": [
-      {"name": "Katoda tembaga", "current": 663000000},
-      {"name": "Emas murni", "current": 311000000},
-      {"name": "Penjualan konsentrat", "current": 1078000000}
+      {
+        "name": "Katoda tembaga",
+        "current": 663000000
+      },
+      {
+        "name": "Emas murni",
+        "current": 311000000
+      },
+      {
+        "name": "Penjualan konsentrat",
+        "current": 1078000000
+      }
     ]
   },
+  "inventory_and_sales_detail": {
+    "period": "2026-06-30",
+    "comparison_period": "2025-12-31",
+    "unit": "USD thousand",
+    "source_title": "AMMAN H1 2026 Financial Statements",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "inventory_source_page": 61,
+    "sales_source_page": 107,
+    "inventory_and_stockpile_carrying_amounts": [
+      {
+        "name": "In-process - mill",
+        "jun_2026": 9715,
+        "dec_2025": 6709
+      },
+      {
+        "name": "Concentrate inventory",
+        "jun_2026": 78132,
+        "dec_2025": 31030
+      },
+      {
+        "name": "In-process - smelter",
+        "jun_2026": 198022,
+        "dec_2025": 159240
+      },
+      {
+        "name": "Finished copper cathode",
+        "jun_2026": 13225,
+        "dec_2025": 14652
+      },
+      {
+        "name": "Finished refined gold",
+        "jun_2026": 47513,
+        "dec_2025": 7007
+      },
+      {
+        "name": "Materials and supplies, net",
+        "jun_2026": 342065,
+        "dec_2025": 292156
+      },
+      {
+        "name": "Total inventory, net",
+        "jun_2026": 688672,
+        "dec_2025": 510794
+      },
+      {
+        "name": "Stockpiles, total",
+        "jun_2026": 2373648,
+        "dec_2025": 1526893
+      },
+      {
+        "name": "Stockpiles - current portion",
+        "jun_2026": 801818,
+        "dec_2025": 535176
+      },
+      {
+        "name": "Stockpiles - non-current portion",
+        "jun_2026": 1571830,
+        "dec_2025": 991717
+      }
+    ],
+    "net_sales_by_product_and_market": [
+      {
+        "product": "Copper cathode",
+        "domestic": 0,
+        "export": 662905,
+        "total": 662905
+      },
+      {
+        "product": "Refined gold",
+        "domestic": 311062,
+        "export": 0,
+        "total": 311062
+      },
+      {
+        "product": "Concentrate - copper",
+        "domestic": 0,
+        "export": 491523,
+        "total": 491523
+      },
+      {
+        "product": "Concentrate - gold",
+        "domestic": 0,
+        "export": 586920,
+        "total": 586920
+      },
+      {
+        "product": "Total net sales",
+        "domestic": 741770,
+        "export": 1310640,
+        "total": 2052410
+      }
+    ],
+    "customer_sales_over_10pct": [
+      {
+        "customer": "Glencore",
+        "share_pct": 61.1,
+        "sales": 1254159
+      },
+      {
+        "customer": "PT Aneka Tambang",
+        "share_pct": 15.1,
+        "sales": 310110
+      },
+      {
+        "customer": "Marubeni Indonesia",
+        "share_pct": 11.3,
+        "sales": 231850
+      }
+    ],
+    "inventory_cost_recognized_in_cost_of_sales": {
+      "jun_2026_h1": 568324,
+      "jun_2025_h1": 41090
+    },
+    "management_stockpile_assessment": "Management states the stockpiles can be used or sold and their net realizable value exceeds carrying amount; no physical concentrate inventory roll-forward is provided.",
+    "interpretation": "Carrying values and sales by market do not reconcile physical concentrate produced less sold; concentrate and smelter work-in-process values use cost accounting and do not disclose dmt/metals awaiting smelting or final sale. Customer sales concentration does not disclose product-level contract volumes or price formulas."
+  },
   "management_guidance": [
-    {"name": "Tembaga dalam konsentrat (Mlbs)", "value": 485},
-    {"name": "Emas dalam konsentrat (koz)", "value": 775},
-    {"name": "Katoda tembaga (kt)", "value": 130},
-    {"name": "Emas murni (koz)", "value": 350}
+    {
+      "name": "Concentrate (dmt)",
+      "value": 900000,
+      "status": "management guidance",
+      "period": "FY2026",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+      "source_date": "2026-09-21",
+      "source_page": 7
+    },
+    {
+      "name": "Tembaga dalam konsentrat (Mlbs)",
+      "value": 485,
+      "status": "management guidance",
+      "period": "FY2026",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+      "source_date": "2026-09-21",
+      "source_page": 7
+    },
+    {
+      "name": "Emas dalam konsentrat (koz)",
+      "value": 775,
+      "status": "management guidance",
+      "previous_value": 579,
+      "revision_change_pct": 33.9,
+      "revision_reason": "AMMAN mengaitkan kenaikan panduan dengan kadar bijih yang ditambang lebih tinggi.",
+      "previous_guidance_source_title": "AMMAN FY 2025 Earnings Presentation",
+      "previous_guidance_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk3OCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--50df1975317d5d37d39e6c868f5b05f51f29bb1d/FY%202025%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+      "previous_guidance_source_page": 19,
+      "revision_source_title": "AMMAN H1 2026 Earnings Presentation",
+      "revision_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+      "revision_source_page": 19,
+      "period": "FY2026",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+      "source_date": "2026-09-21",
+      "source_page": 7
+    },
+    {
+      "name": "Katoda tembaga (kt)",
+      "value": 130,
+      "status": "management guidance",
+      "period": "FY2026",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+      "source_date": "2026-09-21",
+      "source_page": 7
+    },
+    {
+      "name": "Emas murni (koz)",
+      "value": 350,
+      "status": "management guidance",
+      "period": "FY2026",
+      "source_title": "AMMAN H1 2026 Earnings Release",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+      "source_date": "2026-09-21",
+      "source_page": 7
+    }
   ],
+  "product_sales_timing_context": {
+    "fact": "AMMAN menyatakan produksi konsentrat dapat bervariasi saat output tambang diseimbangkan dengan operasi smelter; prioritas utilisasi smelter yang stabil dapat memengaruhi timing persediaan dan penjualan konsentrat.",
+    "source_title": "AMMAN FY 2025 Earnings Presentation",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk3OCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--50df1975317d5d37d39e6c868f5b05f51f29bb1d/FY%202025%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+    "source_page": 19,
+    "status": "management disclosure; explains timing uncertainty, not a forecast of sales volume"
+  },
+  "strategic_export_governance_2026": {
+    "source_title": "Peraturan Pemerintah Nomor 24 Tahun 2026 tentang Tata Kelola Ekspor Komoditas Sumber Daya Alam Strategis",
+    "source_url": "https://peraturan.bpk.go.id/Download/413645/PP%20Nomor%2024%20Tahun%202026.pdf",
+    "metadata_url": "https://peraturan.bpk.go.id/Details/349945/pp-no-24-tahun-2026",
+    "effective_date": "2026-06-01",
+    "source_pages": [
+      3,
+      5
+    ],
+    "initial_covered_commodities": [
+      "batubara",
+      "kelapa sawit",
+      "ferro alloy"
+    ],
+    "initial_scope_includes_copper_concentrate": false,
+    "interpretation": "PP 24/2026 does not place copper concentrate in its initial commodity scope. It therefore does not itself establish AMNT's post-30-April export permit, sales channel, sales volume, or realized price. Other permits and later scope additions remain separate questions.",
+    "reported_export_realization": {
+      "volume": 296000,
+      "unit": "WMT",
+      "period_cutoff": "menjelang berakhirnya izin pada akhir April 2026",
+      "reported_share_of_allocation_pct": 56,
+      "source_title": "Bloomberg Technoz, quoting M. Rivai Abbas, Director of Industrial and Mining Products Export, Ministry of Trade",
+      "source_url": "https://www.bloombergtechnoz.com/detail-news/107907/izin-ekspor-konsentrat-tembaga-amman-habis-baru-terealisasi-56",
+      "published_date": "2026-05-04",
+      "verification_status": "angka sementara; narasumber menyebut Kemendag sedang berkoordinasi dengan DJBC untuk verifikasi",
+      "limitations": [
+        "bukan filing emiten atau dokumen izin ekspor",
+        "unit WMT tidak sama dengan kuota rekomendasi AMMAN 480000 DMT; kadar air/konversi tidak tersedia, sehingga persentase 56% tidak direkonsiliasi ke kuota DMT",
+        "data ekspor shipment tidak langsung sama dengan penjualan yang diakui dalam laporan keuangan",
+        "periode berakhir sebelum H2 FY26 dan tidak membuktikan izin ekspor H2"
+      ]
+    }
+  },
+  "historical_capex_reference": {
+    "unit": "USD million",
+    "source_title": "AMMAN Paparan Publik Tahun 2026",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk4NCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--efda2a2fcf91d23331d10bbd76dd9aa95de1099e/PAPARAN%20PUBLIK%20TAHUN%202026.pdf?disposition=inline&locale=id",
+    "source_page": 16,
+    "fy2024": 1792,
+    "fy2025": 1372,
+    "fy2025_by_use_usd_million": {
+      "phase_8_mining_sustaining": 474,
+      "copper_smelter_and_precious_metal_refinery": 177,
+      "processing_plant_expansion": 577,
+      "combined_cycle_power_plant_lng_facilities": 144,
+      "material_capital_investment_commitments_disclosed_for_2025": 1029,
+      "source_title": "AMMAN 2025 Annual Report",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NTEzNywicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--8894e69222f3c75d05cccfe4d7b692e23e5b362a/Annual%20Report%202025%20-%20PT%20Amman%20Mineral%20Internasional%20Tbk.pdf?disposition=inline",
+      "source_page": 104,
+      "note": "The FY2025 allocation sums to US$1,372m due rounding; report states total capex of US$1,373m. The commitment disclosure relates to 2025 and is not a 2026 remaining-commitments schedule."
+    },
+    "h1_2025": 719,
+    "h1_2026": 130.032,
+    "h1_2026_exact_source_title": "AMMAN H1 2026 Financial Statements",
+    "h1_2026_exact_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "h1_2026_exact_source_pages": [
+      8
+    ],
+    "forward_guidance_status": "No FY26 capex budget, project-by-project spend schedule, or remaining commitment schedule identified in the reviewed official public materials.",
+    "construction_in_progress": {
+      "as_of": "2026-06-30",
+      "source_title": "AMMAN H1 2026 Financial Statements",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+      "source_page": 71,
+      "unit": "USD million",
+      "current": [
+        {
+          "asset_class": "Buildings, facilities and related assets",
+          "accumulated_cost": 3002.537,
+          "completion_pct_range": [
+            0.5,
+            99.4
+          ],
+          "estimated_completion": "Q3 2026-Q4 2027"
+        },
+        {
+          "asset_class": "Machinery and equipment",
+          "accumulated_cost": 79.806,
+          "completion_pct_range": [
+            2.6,
+            99.4
+          ],
+          "estimated_completion": "Q3 2026-Q4 2027"
+        }
+      ],
+      "current_total": 3082.343,
+      "prior_as_of": "2025-12-31",
+      "prior_total": 3108.939,
+      "prior_by_asset_class": [
+        {
+          "asset_class": "Buildings, facilities and related assets",
+          "accumulated_cost": 3018.272,
+          "completion_pct_range": [
+            0.1,
+            90.2
+          ],
+          "estimated_completion": "Q1 2026-Q4 2027"
+        },
+        {
+          "asset_class": "Machinery and equipment",
+          "accumulated_cost": 90.667,
+          "completion_pct_range": [
+            0.1,
+            98.9
+          ],
+          "estimated_completion": "Q1 2026-Q4 2027"
+        }
+      ],
+      "limitations": [
+        "Accumulated construction-in-progress balance is capitalized cost to date, not remaining contract cost, future capex or a payment schedule.",
+        "The consolidated balances are not allocated by project and cannot be attributed specifically to Elang, smelter, processing plant or other assets from this note alone.",
+        "Completion percentages and dates are broad ranges across assets; they do not reveal annual completion milestones or remaining capex by project.",
+        "The H1 2026 cash-capex/additions figure remains a separate reported flow measure and should not be inferred from the change in construction-in-progress balance."
+      ]
+    },
+    "interpretation": "FY24/FY25 expansion-heavy actual capex is a historical comparator, not a forward run-rate. H1 2026 statements add US$3.082bn of consolidated accumulated construction-in-progress costs and broad completion dates into Q4 2027, but do not disclose remaining spend or project allocation. The user's FY26 US$390m estimate remains an analyst scenario and is not validated by these actuals."
+  },
+  "processing_capacity": {
+    "source_title": "AMMAN FY 2025 Earnings Presentation",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk3OCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--50df1975317d5d37d39e6c868f5b05f51f29bb1d/FY%202025%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+    "source_pages": [
+      12,
+      13
+    ],
+    "products": {
+      "cathode_copper": {
+        "name": "Copper cathode",
+        "unit": "tonne",
+        "fy2025_production": 79849,
+        "fy2025_output_rate_pct": 44,
+        "annual_design_capacity": 220000
+      },
+      "refined_gold": {
+        "name": "Refined gold",
+        "unit": "oz",
+        "fy2025_production": 124723,
+        "fy2025_output_rate_pct": 43,
+        "annual_design_capacity": 579000
+      }
+    },
+    "capacity_caveat": "Design capacity is a nameplate reference, not a sales commitment or assured production/utilization forecast."
+  },
   "operating_context": [
     {
+      "label": "Phase 8 dan akses bijih segar",
       "fact": "Akses bijih segar Phase 8 meningkat menjadi 66 juta ton dari 6 juta ton; kadar dan volume olah yang lebih tinggi menaikkan produksi konsentrat 81% yoy.",
       "source_title": "AMMAN H1 2026 Earnings Release",
       "source_url": "https://www.amman.co.id/earnings-release",
       "published_at": "2026-09-21"
     },
     {
-      "fact": "Smelter dan PMR memperoleh Project Acceptance Certificate pada Juli 2026; perluasan processing plant menghasilkan first ore to mill pada Agustus 2026.",
-      "source_title": "AMMAN H1 2026 Earnings Release",
-      "source_url": "https://www.amman.co.id/earnings-release",
+      "label": "Ramp-up fasilitas hilir",
+      "fact": "Presentasi H1 menyebut smelter dan PMR lulus Performance Guarantee Test; smelter rate Juni 93%, rate produksi Juli-Agustus membaik/stabil, dan catatan H2 menyebut rekor kinerja baru pada Juli-Agustus. Pabrik diperluas berkapasitas input desain 85 Mtpa, mekanikal selesai Q2, dan first ore masuk mill pada pertengahan Agustus. Presentasi tidak memberi tonase umpan smelter atau produksi bulanan Juli-Agustus.",
+      "source_title": "AMMAN H1 2026 Earnings Presentation",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+      "source_pages": [
+        10,
+        12,
+        18
+      ],
       "published_at": "2026-09-21"
     },
     {
+      "label": "Produksi katoda dan emas murni",
       "fact": "Smelter dan PMR sudah berproduksi pada 1H26: 48.756 ton katoda tembaga dan 122.131 oz emas murni. PAC pada Juli adalah tonggak penerimaan proyek, bukan awal operasi.",
       "source_title": "AMMAN H1 2026 Earnings Release",
       "source_url": "https://www.amman.co.id/earnings-release",
       "published_at": "2026-09-21"
     }
-  ]
+  ],
+  "cost_actuals": {
+    "period": "1H26",
+    "source_title": "AMMAN H1 2026 Earnings Release",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+    "published_at": "2026-09-21",
+    "source_page": 4,
+    "unit_mining_cost_usd_per_tonne": 3.11,
+    "prior_unit_mining_cost_usd_per_tonne": 2.44,
+    "unit_processing_cost_usd_per_tonne": 5.05,
+    "prior_unit_processing_cost_usd_per_tonne": 5.7,
+    "smelting_refining_cost_usd_per_cathode_tonne": 2044,
+    "prior_smelting_refining_cost_usd_per_cathode_tonne": 3340,
+    "fy2025_unit_mining_cost_usd_per_tonne": 2.54,
+    "fy2024_unit_mining_cost_usd_per_tonne": 2.24,
+    "fy2025_cost_context_source_title": "AMMAN Annual Report 2025",
+    "fy2025_cost_context_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NTEzNywicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--8894e69222f3c75d05cccfe4d7b692e23e5b362a/Annual%20Report%202025%20-%20PT%20Amman%20Mineral%20Internasional%20Tbk.pdf?disposition=inline",
+    "fy2025_cost_context_source_page": 88,
+    "fy2025_cost_context_note": "Annual report states full-year mining unit cost rose 13% from US$2.24/t in 2024 to US$2.54/t in 2025, mainly due to longer haul distances and higher fuel prices. Annual and interim period/basis are not normalized; this is historical context, not FY26 guidance.",
+    "operating_cost_history": {
+      "source_title": "AMMAN H1 2026 Earnings Presentation",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+      "source_page": 13,
+      "unit_cost_trend": [
+        {
+          "period": "H1 2024",
+          "unit_mining_cost_usd_per_tonne_mined": 2.34,
+          "unit_processing_cost_usd_per_tonne_milled": 4.96,
+          "unit_smelt_refine_cost_usd_per_tonne_cathode": null,
+          "ore_mined_mt": 19,
+          "waste_mined_mt": 134,
+          "ore_processed_mt": 13,
+          "stockpiles_mt": 7,
+          "cathode_production_tonnes": null
+        },
+        {
+          "period": "H2 2024",
+          "unit_mining_cost_usd_per_tonne_mined": 2.15,
+          "unit_processing_cost_usd_per_tonne_milled": 5.85,
+          "unit_smelt_refine_cost_usd_per_tonne_cathode": null,
+          "ore_mined_mt": 12,
+          "waste_mined_mt": 157,
+          "ore_processed_mt": 9,
+          "stockpiles_mt": 9,
+          "cathode_production_tonnes": null
+        },
+        {
+          "period": "H1 2025",
+          "unit_mining_cost_usd_per_tonne_mined": 2.44,
+          "unit_processing_cost_usd_per_tonne_milled": 5.7,
+          "unit_smelt_refine_cost_usd_per_tonne_cathode": 3340,
+          "ore_mined_mt": 6,
+          "waste_mined_mt": 140,
+          "ore_processed_mt": 10,
+          "stockpiles_mt": 6,
+          "cathode_production_tonnes": 19805
+        },
+        {
+          "period": "H2 2025",
+          "unit_mining_cost_usd_per_tonne_mined": 2.64,
+          "unit_processing_cost_usd_per_tonne_milled": 6.04,
+          "unit_smelt_refine_cost_usd_per_tonne_cathode": 1604,
+          "ore_mined_mt": 43,
+          "waste_mined_mt": 103,
+          "ore_processed_mt": 15,
+          "stockpiles_mt": 1,
+          "cathode_production_tonnes": 60044
+        },
+        {
+          "period": "H1 2026",
+          "unit_mining_cost_usd_per_tonne_mined": 3.11,
+          "unit_processing_cost_usd_per_tonne_milled": 5.05,
+          "unit_smelt_refine_cost_usd_per_tonne_cathode": 2044,
+          "ore_mined_mt": 66,
+          "waste_mined_mt": 60,
+          "ore_processed_mt": 19,
+          "stockpiles_mt": 1,
+          "cathode_production_tonnes": 48756
+        }
+      ],
+      "cash_cost_per_copper_lb_sold": [
+        {
+          "period": "H1 2024",
+          "operating_costs_ex_adjustments": 3.4,
+          "byproduct_credits": -4.64,
+          "smelt_refine_treatment_costs": 0.16,
+          "royalties": 0.67,
+          "unit_cash_cost": -0.4
+        },
+        {
+          "period": "H2 2024",
+          "operating_costs_ex_adjustments": 6.62,
+          "byproduct_credits": -7.39,
+          "smelt_refine_treatment_costs": 0.19,
+          "royalties": 1.0,
+          "unit_cash_cost": 0.43
+        },
+        {
+          "period": "H1 2025",
+          "operating_costs_ex_adjustments": 12.58,
+          "byproduct_credits": -0.19,
+          "smelt_refine_treatment_costs": 1.62,
+          "royalties": 0.67,
+          "unit_cash_cost": 14.68
+        },
+        {
+          "period": "H2 2025",
+          "operating_costs_ex_adjustments": 3.57,
+          "byproduct_credits": -3.74,
+          "smelt_refine_treatment_costs": 0.54,
+          "royalties": 1.0,
+          "unit_cash_cost": 1.37
+        },
+        {
+          "period": "H1 2026",
+          "operating_costs_ex_adjustments": 3.0,
+          "byproduct_credits": -5.55,
+          "smelt_refine_treatment_costs": 0.53,
+          "royalties": 1.44,
+          "unit_cash_cost": -0.58
+        }
+      ],
+      "unit_cash_cost_unit": "USD per pound of copper sold",
+      "footnotes": [
+        "By-product credits include gold, silver, sulphuric acid and selenium.",
+        "Smelting and refining treatment costs reflect costs of the smelter and PMR."
+      ],
+      "interpretation": "Reported half-year actuals show extreme variability, including US$14.68/lb in H1 2025 and negative US$0.58/lb in H1 2026. The metric is affected by sales volumes, grades, by-product credits and royalties; it is a historical cross-check, not a forward unit-cost forecast or an asset-level C1/FCF schedule. The chart's mined, milled and cathode volumes are rounded."
+    },
+    "notes": "Reported H1 unit costs and five-period historical series; no FY26 unit-cost guidance or full segment reconciliation provided."
+  },
+  "royalty_and_export_duty": {
+    "statutory_source_title": "Peraturan Pemerintah Republik Indonesia Nomor 19 Tahun 2025",
+    "statutory_source_url": "https://peraturan.bpk.go.id/Download/381682/PP%20Nomor%2019%20Tahun%202025.pdf",
+    "regulation_source_pages": [
+      18,
+      19,
+      20
+    ],
+    "effective_from": "2025-04-26",
+    "rates_pct_of_reference_price": {
+      "copper_in_concentrate_by_hma_usd_per_tonne": [
+        {
+          "below": 7000,
+          "rate_pct": 7.0
+        },
+        {
+          "from_inclusive": 7000,
+          "to_exclusive": 8500,
+          "rate_pct": 7.5
+        },
+        {
+          "from_inclusive": 8500,
+          "to_exclusive": 10000,
+          "rate_pct": 8.0
+        },
+        {
+          "from_inclusive": 10000,
+          "rate_pct": 10.0
+        }
+      ],
+      "gold_byproduct_in_copper_concentrate_by_hma_usd_per_oz": [
+        {
+          "below": 1800,
+          "rate_pct": 7.0
+        },
+        {
+          "from_inclusive": 1800,
+          "to_exclusive": 2000,
+          "rate_pct": 10.0
+        },
+        {
+          "from_inclusive": 2000,
+          "to_exclusive": 2200,
+          "rate_pct": 11.0
+        },
+        {
+          "from_inclusive": 2200,
+          "to_exclusive": 2500,
+          "rate_pct": 12.0
+        },
+        {
+          "from_inclusive": 2500,
+          "to_exclusive": 2700,
+          "rate_pct": 14.0
+        },
+        {
+          "from_inclusive": 2700,
+          "to_exclusive": 3000,
+          "rate_pct": 15.0
+        },
+        {
+          "from_inclusive": 3000,
+          "rate_pct": 16.0
+        }
+      ],
+      "copper_cathode_by_hma_usd_per_tonne": [
+        {
+          "below": 7000,
+          "rate_pct": 4.0
+        },
+        {
+          "from_inclusive": 7000,
+          "to_exclusive": 8500,
+          "rate_pct": 5.0
+        },
+        {
+          "from_inclusive": 8500,
+          "to_exclusive": 10000,
+          "rate_pct": 6.0
+        },
+        {
+          "from_inclusive": 10000,
+          "rate_pct": 7.0
+        }
+      ],
+      "primary_refined_gold_by_hma_usd_per_oz": [
+        {
+          "below": 1800,
+          "rate_pct": 7.0
+        },
+        {
+          "from_inclusive": 1800,
+          "to_exclusive": 2000,
+          "rate_pct": 10.0
+        },
+        {
+          "from_inclusive": 2000,
+          "to_exclusive": 2200,
+          "rate_pct": 11.0
+        },
+        {
+          "from_inclusive": 2200,
+          "to_exclusive": 2500,
+          "rate_pct": 12.0
+        },
+        {
+          "from_inclusive": 2500,
+          "to_exclusive": 2700,
+          "rate_pct": 14.0
+        },
+        {
+          "from_inclusive": 2700,
+          "to_exclusive": 3000,
+          "rate_pct": 15.0
+        },
+        {
+          "from_inclusive": 3000,
+          "rate_pct": 16.0
+        }
+      ]
+    },
+    "concentrate_export_duty_pct": 7.5,
+    "hpm_concentrate_methodology": {
+      "source_title": "Keputusan Menteri ESDM Nomor 144.K/MB.01/MEM.B/2026 tentang perubahan Pedoman Penetapan Harga Patokan",
+      "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm144k.pdf",
+      "effective_period_note": "Kepmen ditetapkan 10 April 2026; periode H1 mencakup masa sebelum dan sesudah perubahan pedoman.",
+      "copper_concentrate_formula": "HPM konsentrat = Cu grade × payable Cu × (HMA Cu − TC/RC Cu) + Au grade × payable Au × (HMA Au − RC Au) + Ag grade × payable Ag × (HMA Ag − RC Ag).",
+      "published_payable_rules": "Payable Cu maksimum 96.55% (dengan pengurang sesuai kadar); payable Au 97.0%–97.5% sesuai kadar; payable Ag hanya dihitung bila kadar sekurangnya 30 ppm, setelah pengurang 15 ppm.",
+      "not_company_realized_price": true,
+      "missing_company_inputs": [
+        "shipment-period HMA/HPM basis",
+        "shipment-specific Cu/Au/Ag assays",
+        "payable-metal terms",
+        "TC/RC and penalty terms",
+        "shipment volumes and timing",
+        "mapping of royalty/export duty into reported net realized prices"
+      ]
+    },
+    "hma_h1_2026": {
+      "basis": "Official ESDM HMA decree attachments, page 5; two periods per month. HMA determines statutory reference-price bands and is not AMMAN realized price or shipment HPM.",
+      "periods": [
+        {
+          "period": "2026-01-P1",
+          "decree": "458.K/MB.01/MEM.B/2025",
+          "copper_usd_per_dmt": 11790.32,
+          "gold_usd_per_oz": 4302.37,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2025kmesdm458k.pdf"
+        },
+        {
+          "period": "2026-01-P2",
+          "decree": "12.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 12557.27,
+          "gold_usd_per_oz": 4415.85,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm12k.pdf"
+        },
+        {
+          "period": "2026-02-P1",
+          "decree": "47.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 13060.87,
+          "gold_usd_per_oz": 4628.79,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm47k.pdf"
+        },
+        {
+          "period": "2026-02-P2",
+          "decree": "97.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 13066.44,
+          "gold_usd_per_oz": 4960.24,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm97k.pdf"
+        },
+        {
+          "period": "2026-03-P1",
+          "decree": "102.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 12878.2,
+          "gold_usd_per_oz": 5025.35,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm102k.pdf"
+        },
+        {
+          "period": "2026-03-P2",
+          "decree": "124.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 12958.0,
+          "gold_usd_per_oz": 5135.76,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm124k.pdf"
+        },
+        {
+          "period": "2026-04-P1",
+          "decree": "135.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 12501.1,
+          "gold_usd_per_oz": 4891.57,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm135k.pdf"
+        },
+        {
+          "period": "2026-04-P2",
+          "decree": "145.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 12134.21,
+          "gold_usd_per_oz": 4589.33,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm145k.pdf"
+        },
+        {
+          "period": "2026-05-P1",
+          "decree": "179.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 12950.04,
+          "gold_usd_per_oz": 4764.9,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm179k.pdf"
+        },
+        {
+          "period": "2026-05-P2",
+          "decree": "204.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 13148.5,
+          "gold_usd_per_oz": 4682.8,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm204k.pdf"
+        },
+        {
+          "period": "2026-06-P1",
+          "decree": "227.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 13535.86,
+          "gold_usd_per_oz": 4615.65,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm227k.pdf"
+        },
+        {
+          "period": "2026-06-P2",
+          "decree": "253.K/MB.01/MEM.B/2026",
+          "copper_usd_per_dmt": 13648.27,
+          "gold_usd_per_oz": 4453.73,
+          "source_url": "https://jdih.esdm.go.id/dokumen/download?id=2026kmesdm253k.pdf"
+        }
+      ],
+      "copper_hma_range_usd_per_dmt": [
+        11790.32,
+        13648.27
+      ],
+      "gold_hma_range_usd_per_oz": [
+        4302.37,
+        5135.76
+      ],
+      "statutory_tiers_selected_for_all_12_periods": {
+        "copper_in_concentrate_pct": 10,
+        "copper_cathode_pct": 7,
+        "gold_byproduct_in_copper_concentrate_pct": 16,
+        "primary_refined_gold_pct": 16
+      },
+      "not_established": [
+        "shipment HMA/HPM basis",
+        "actual payable quantities and statutory base by product",
+        "shipment-specific realized prices",
+        "actual royalty/export-duty expense allocation and tie-out to cash paid"
+      ]
+    },
+    "company_confirmation_source_title": "AMMAN H1 2026 Financial Statements",
+    "company_confirmation_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "company_confirmation_source_pages": [
+      6,
+      77,
+      123,
+      124
+    ],
+    "h1_2026_pnbp_expense_usd_thousand": 50566,
+    "h1_2026_cash_paid_royalties_taxes_pnbp_usd_thousand": 304435,
+    "basis_and_limitation": "The 12 official H1 2026 HMA periods have been mapped from ESDM decree attachments. They select the highest PP 19/2025 bands for copper concentrate (10%), cathode copper (7%), gold byproduct in concentrate (16%) and primary refined gold (16%). HMA is a statutory reference price, not shipment HPM or AMMAN realized price. H1 cash-flow line combines royalties, taxes and PNBP; product-specific reference-price bases/actual royalty allocation are not disclosed. Reported H1 realized prices are stated net of treatment/refining and prior-shipment mark-to-market adjustments, but do not specify treatment of royalties/export duty. Do not deduct statutory rates again from realized prices or apply rates to H2 until the actual accounting reconciliation is established."
+  },
+  "debt_outlook": {
+    "as_of": "2026-09-21",
+    "source_title": "AMMAN H1 2026 Earnings Release",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+    "source_page": 5,
+    "planned_q3_debt_repayment_usd": 350000000,
+    "status": "management presentation reports repayment completed in Q3; repayment amount is disclosed but post-repayment debt and cash balances are not provided",
+    "actual_q3_debt_repayment_usd": 350000000,
+    "actual_source_title": "AMMAN H1 2026 Earnings Presentation",
+    "actual_source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+    "actual_source_page": 16,
+    "actual_as_of": "2026-09-21"
+  },
+  "debt_and_contract_evidence": {
+    "period_end": "2026-06-30",
+    "source_title": "AMMAN H1 2026 Financial Statements",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "debt_usd_thousand": {
+      "short_term_bank_loans": 115365,
+      "long_term_loans_gross": 5793709,
+      "unamortized_finance_cost": -64370,
+      "long_term_loans_net": 5729339,
+      "long_term_current_maturities": 75384,
+      "long_term_noncurrent_net": 5653955,
+      "h1_principal_repayments": 580866,
+      "h1_early_partial_repayments_included": 340022,
+      "source_pages": [
+        82,
+        89
+      ]
+    },
+    "other_financial_liabilities_usd_thousand": {
+      "lease_liabilities": 27514,
+      "finance_liabilities": 11145,
+      "total": 38659,
+      "current_portion": 10303,
+      "noncurrent_portion": 28356,
+      "source_page": 98,
+      "interpretation": "Present-value lease and finance liabilities; current/noncurrent allocation."
+    },
+    "cash_and_equivalents_usd_thousand": 818937,
+    "cash_source_page": 1,
+    "non_controlling_interest_usd_thousand": 95328,
+    "minority_source_page": 3,
+    "shares_outstanding": 72412413856,
+    "shares_source_page": 101,
+    "h1_finance_costs_usd_thousand": {
+      "long_term_interest_expense": 219578,
+      "long_term_unamortized_fee_amortization": 26441,
+      "long_term_finance_cost_total": 246019,
+      "total_consolidated_pnl_finance_cost": 255699,
+      "cash_finance_costs_paid": 236487,
+      "source_page": 90
+    },
+    "contractual_undiscounted_long_term_loan_cashflows_usd_thousand": {
+      "less_than_1_year": 449580,
+      "1_to_3_years": 2469261,
+      "more_than_3_years": 4203738,
+      "total": 7122579,
+      "source_page": 117,
+      "interpretation": "Undiscounted contractual cash flows, including principal and interest; maturity buckets are not a principal-only repayment schedule."
+    },
+    "accrued_capital_expenditure_usd_thousand": 99524,
+    "accrued_capex_source_page": 77,
+    "accrued_capex_interpretation": "Balance-sheet accrual at June 30, 2026, not a forecast of remaining project capex or payment timing.",
+    "h1_bank_debt_cash_flows_usd_thousand": {
+      "period": "H1 2026",
+      "source_title": "AMMAN H1 2026 Financial Statements",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+      "source_pages": {
+        "cash_flow_statement": 8,
+        "long_term_principal_detail": 89
+      },
+      "short_term_bank_loan_proceeds": 115482,
+      "short_term_bank_loan_repayments": -264442,
+      "long_term_bank_loan_proceeds": 209855,
+      "long_term_bank_loan_principal_repayments": -580866,
+      "net_cash_flow_from_bank_borrowing_calculated": -519971,
+      "net_cash_used_in_financing_activities_reported": -462440,
+      "management_presentation_repayment_headline_usd_thousand": 588000,
+      "difference_presentation_headline_vs_exact_long_term_repayments": 7134,
+      "interpretation": "Bank loan cash flow is proceeds less repayments across short and long term facilities; the restricted-cash cash-flow line reconciles net bank borrowing cash flow to total net financing cash flow in the statement. H1 presentation labels USD 588m debt repaid YTD, while the financial statement reports USD 580.866m exact long-term principal repayments; the USD 7.134m nominal difference is not bridged in the reviewed materials and the two headline bases are not confirmed to be identical. The presentation amount is rounded and should not replace the financial-statement cash-flow amounts. Does not include Q3 repayment or represent net debt balance change.",
+      "restricted_cash_change_cash_flow": 57531
+    }
+  },
+  "customer_delivery_commitment": {
+    "counterparty": "Glencore",
+    "product": "copper cathodes",
+    "contract_amended": "2025-10",
+    "delivery_commitment_until": "31 Desember 2027; dapat berlanjut sampai seluruh komitmen pengiriman dipenuhi atau uang muka pelanggan lunas",
+    "prepayment_advance_usd_thousand": {
+      "received_2025_11": 375000,
+      "received_2026_04": 125000,
+      "balance_2026_06_30": 388393,
+      "balance_2025_12_31": 359375
+    },
+    "settlement_mechanism": "Monthly proportionate deductions from customer prepayment on cathode deliveries; failure to meet delivery commitment requires repayment of relevant prepayment plus interest.",
+    "undisclosed_fields": [
+      "contracted delivery volume by month/quarter",
+      "contract price formula/netback",
+      "remaining delivery volume"
+    ],
+    "source_title": "AMMAN H1 2026 Financial Statements",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "source_page": 100
+  },
+  "provisional_pricing_evidence": {
+    "source_title": "AMMAN H1 2026 Interim Financial Statements",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "accounting_policy_note": "Note 2.s, printed page 40",
+    "market_risk_note": "Note 30.a.ii, printed page 113",
+    "products_explicitly_covered": [
+      "copper concentrate",
+      "copper cathode"
+    ],
+    "revenue_recognition": "Concentrate and copper cathode sales are initially recorded at 100% of provisional sales prices.",
+    "pre_settlement_measurement": "Before final settlement, provisional prices are marked to market using forward prices for the estimated month of settlement; the embedded derivative is measured through profit or loss before final settlement.",
+    "quantity_adjustments": "Provisional sales quantities may be adjusted when new metal quantity information and assay results are received.",
+    "contract_finalization": "Substantially all copper and gold sales are provisionally priced at shipment and finalized in a future period specified in the contract; shipment-specific pricing periods are not disclosed in the cited note.",
+    "risk_disclosure": "A significant price decline between provisional pricing and final settlement could require a return of part of proceeds received on provisional invoices. The company states a 2% copper/gold market-price decrease was unlikely to have a significant profitability effect at 30 June 2026, without disclosing a dollar sensitivity in this note.",
+    "missing_forecast_inputs": [
+      "shipment-level Q3/Q4 volume and assay",
+      "contractual pricing month and finalization date",
+      "payable metal and TC/RC terms by contract",
+      "forward metal curve for the settlement month",
+      "provisional receivable and embedded derivative balance by shipment/customer",
+      "provisional-to-final realized-price adjustment history"
+    ],
+    "forecast_implication": "The Q2 implied net realized prices derived from rounded Q1/H1 weighted-average data are historical calibration estimates only. Future price assumptions must separately model shipment timing, provisional forward pricing, settlement terms, assay and payability; do not label the Q2 estimate a final realized price or confirmed H2 netback.",
+    "receivables_and_derivatives": {
+      "unit": "USD thousand",
+      "source_title": "AMMAN H1 2026 Interim Financial Statements",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+      "classification_source_note": "Note 2, printed page 29; Note 29, printed page 111",
+      "derivative_source_note": "Note 18, printed page 92",
+      "trade_receivables": {
+        "2026-06-30": {
+          "total": 284275,
+          "fair_value_through_profit_or_loss": 23326,
+          "amortized_cost": 260949
+        },
+        "2025-12-31": {
+          "total": 610721,
+          "fair_value_through_profit_or_loss": 540516,
+          "amortized_cost": 70205
+        }
+      },
+      "derivative_balances": {
+        "2026-06-30": {
+          "assets": 18231,
+          "liabilities": 174497,
+          "instrument_types": [
+            "AMNT IRS",
+            "AMNT CCS",
+            "AMNT POS",
+            "AMIN IRS"
+          ]
+        },
+        "2025-12-31": {
+          "assets": 11013,
+          "liabilities": 81943,
+          "instrument_types": [
+            "AMNT IRS",
+            "AMNT CCS",
+            "AMNT POS",
+            "AMIN IRS"
+          ]
+        }
+      },
+      "interpretation": "The accounting policy states that FVTPL financial assets include certain trade receivables from provisional copper or gold sales. Note 18 derivative asset/liability balances are itemized as interest-rate and cross-currency/principal-only swaps, not separate copper/gold price derivatives. FVTPL receivables are not split by product, customer, shipment, final pricing month or remaining provisional quantity. The fall in their balance is a point-in-time book-value change, not a standalone measure of H1 settlements, shipment volume or realized price.",
+      "limitations": [
+        "Do not add Note 18 derivative assets to provisional metal receivables as if they were the same exposure.",
+        "No shipment-level provisional balance, forward curve, final price schedule or subsequent settlement reconciliation is disclosed."
+      ]
+    }
+  }
 }

@@ -149,6 +149,12 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                          analyst_target=analyst_target,
                          assumption_status=assumption_result.get(
                              "interim_status", assumption_result.get("status")))
+    normalized_plan = (report.get("forecast_assumptions") or {}).get("plan")
+    if isinstance(normalized_plan, dict) and isinstance(assumption_plan, dict):
+        if normalized_plan != assumption_plan:
+            assumption_result["agent_plan_raw"] = assumption_plan
+            assumption_result["plan"] = normalized_plan
+            assumption_result["plan_normalized_for_report"] = True
     validated, validation_status = research_context.load_analysis(
         t, report["meta"].get("harga_tanggal"))
     safe_research = {
@@ -162,6 +168,8 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
         "ticker": t,
         "research": safe_research,
         "forecast_assumptions": assumption_result,
+        "product_sales_scenario": report.get("forecast_assumptions", {}).get(
+            "product_sales_scenario"),
         "news_deepdive": forecast_intake.get("news_full") or [],
         "report": {"status": report["meta"].get("status"),
                    "as_of": report["meta"].get("tanggal"),
