@@ -504,22 +504,10 @@ def _validate_stage(payload, source):
     return errors
 
 
-# Analyst prose fields that reach the report body. Source titles, URLs and
-# timestamps are provenance and must stay exactly as supplied.
-_PROSE_KEYS = {"rationale", "factual_basis", "mechanism", "uncertainty", "item",
-               "timing", "driver_path", "thesis_points", "conditions"}
-
-
 def _normalize_prose(value, key=None):
-    """Deterministic style fix after validation (spec §5.1: no em/en dash)."""
-    from app.scrub import normalize_dashes
-    if isinstance(value, dict):
-        return {k: _normalize_prose(v, k) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_normalize_prose(v, key) for v in value]
-    if isinstance(value, str) and key in _PROSE_KEYS:
-        return normalize_dashes(value)
-    return value
+    """Deterministic style fix after validation (see app.scrub.normalize_plan)."""
+    from app.scrub import normalize_plan
+    return normalize_plan(value, key)
 
 
 def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):

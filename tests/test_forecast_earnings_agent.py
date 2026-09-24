@@ -104,3 +104,19 @@ def test_llm_prose_dashes_are_normalized_but_titles_kept():
     assert out["rationale"] == "Volume naik di sebagian besar segmen, DOC +60% QoQ, rentang 5-7%."
     assert out["thesis_points"] == ["Margin pulih, biaya pakan turun."]
     assert out["source_refs"]["news:0"]["title"] == "Japfa — laba naik"
+
+
+def test_prose_periods_and_pipeline_word_are_normalized():
+    from app import scrub
+    text = ("Volume kuat di semua segmen Q2 2026 menjadi engine revenue H2; "
+            "katalis Q3-Q4 2026 dan Kuartal II 2026, hasil H1 2026.")
+    assert scrub.normalize_prose(text) == (
+        "Volume kuat di semua segmen 2Q26 menjadi penggerak revenue H2; "
+        "katalis 3Q26-4Q26 dan 2Q26, hasil 1H26.")
+    # Aircraft engines at an MRO stay "engine".
+    assert "engine lessor" in scrub.normalize_prose("reaktivasi airframe dan engine lessor")
+    plan = {"earnings_scenario": {"rationale": "Q2 2026 — kuat", "source_refs": {
+        "news:0": {"title": "Q2 2026 — judul asli"}}}}
+    out = scrub.normalize_plan(plan)["earnings_scenario"]
+    assert out["rationale"] == "2Q26, kuat"
+    assert out["source_refs"]["news:0"]["title"] == "Q2 2026 — judul asli"
