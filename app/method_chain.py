@@ -245,6 +245,35 @@ def pbv_relative(peers, bvps_fwd, shares, market_cap) -> dict:
         detail={"median_pbv": median, "q1_pbv": q1, "peer_count": len(pbvs)})
 
 
+PEER_PS_BAND = (0.0, 20.0)
+
+
+def peer_pss(peers) -> list[float]:
+    """P/S peer valid (0 < P/S <= 20), terurut; market cap / revenue Sectors."""
+    lo, hi = PEER_PS_BAND
+    return sorted(p.get("ps") for p in peers or []
+                  if _finite(p.get("ps")) and lo < p["ps"] <= hi)
+
+
+def ps_peer(peers, revenue_fwd, shares, market_cap) -> dict:
+    """Median P/S peer x sales per share; downside lower quartile. Framework:
+    loss-making or early-stage issuers where earnings multiples fail."""
+    pss = peer_pss(peers)
+    if len(pss) < MIN_PEERS:
+        return candidate("ps_peer", reasons=[
+            f"peer P/S valid {len(pss)} < {MIN_PEERS}; belum dimodelkan"])
+    if not (_finite(revenue_fwd) and revenue_fwd > 0 and _finite(shares) and shares > 0):
+        return candidate("ps_peer", reasons=["pendapatan forward atau jumlah saham belum tersedia"])
+    q1, median, _q3 = pe_quartiles(pss)
+    sps = revenue_fwd / shares
+    ps = median * sps
+    return candidate(
+        "ps_peer", per_share=ps, per_share_down=q1 * sps,
+        reasons=scale_reasons(ps, shares, market_cap),
+        labels=["P/S peer (kapitalisasi / pendapatan Sectors) x pendapatan per saham"],
+        detail={"median_ps": median, "q1_ps": q1, "peer_count": len(pss), "sps": sps})
+
+
 HOLDING_DISCOUNTS = (0.0, 0.2, 0.3)
 
 

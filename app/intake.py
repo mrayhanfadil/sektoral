@@ -551,11 +551,14 @@ def _peers(rep, t):
                 if (c.get("group") or []) == ["self"]:
                     continue
                 if c.get("symbol") and c.get("pe_ttm"):
+                    mcap, revenue = _num(c.get("market_cap")), _num(c.get("total_revenue"))
                     out.append({"symbol": c.get("symbol"),
                                 "name": c.get("company_name", ""),
                                 "pe": _num(c.get("pe_ttm")),
                                 "pb": _num(c.get("pb_mrq")),
-                                "mcap": _num(c.get("market_cap"))})
+                                "mcap": mcap, "revenue": revenue,
+                                # P/S from the same Sectors row: market cap / revenue.
+                                "ps": mcap / revenue if mcap and revenue and revenue > 0 else None})
     except Exception:
         pass
     pes = sorted(p for p in (c["pe"] for c in out) if p and p > 0)

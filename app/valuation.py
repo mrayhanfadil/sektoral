@@ -627,9 +627,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         candidates["ev_sales_peer"] = method_chain.ev_sales_peer(
             intake.get("peers"), fwd.get("revenue"), shares, mcap, net_debt=net_debt)
     if "ps_peer" in prelim_order:
-        # P/S peer: no EV data in cache; mark belum tersedia (same provenance rule).
-        candidates["ps_peer"] = method_chain.unavailable(
-            "ps_peer", "peer P/S belum tersedia di cache Sectors; belum dimodelkan")
+        # P/S needs no EV: market cap and revenue sit in the Sectors peer rows.
+        candidates["ps_peer"] = method_chain.ps_peer(
+            intake.get("peers"), fwd.get("revenue"), shares, mcap)
     holding = None
     if "holding_sotp" in prelim_order or (nci_pct_val is not None and 15.0 < nci_pct_val <= 40.0):
         holding = _holding_sotp_candidate(intake)
