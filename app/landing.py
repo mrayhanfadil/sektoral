@@ -324,8 +324,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <span class="pill live">Riset emiten BEI · metode valuasi berbasis gerbang</span>
         <h1 id="hero-title">Company update dengan <em>metode yang tepat</em>, bukan DCF untuk semua.</h1>
         <p class="lead">Sectoral membaca data Sectors dan rilis resmi emiten, menyusun skenario laba dari
-        berita bertanggal, lalu memilih metode valuasi lewat gerbang framework: DDM atau P/BV untuk bank,
-        EV/EBITDA untuk tambang, PER atau P/BV untuk korporasi. Rating hanya terbit bila setiap pemeriksaan lolos.</p>
+        berita bertanggal, lalu memilih metode valuasi lewat gerbang framework: DDM untuk bank, DCF FCFF
+        untuk korporasi, SOTP untuk grup beragam lini, NAV cadangan untuk tambang. Rating hanya terbit bila
+        setiap pemeriksaan lolos.</p>
         <div class="cta-row">
           <a href="/research" class="btn btn-primary">Coba riset emiten <span class="arrow" aria-hidden="true">→</span></a>
           <a href="/laporan" class="btn btn-ghost">Lihat laporan</a>
