@@ -39,8 +39,21 @@ def _annual_revenue_falling(annuals) -> bool:
     return revs[-1] < revs[0]
 
 
-def validate(payload: dict, annuals=None) -> tuple[bool, list[str], dict]:
-    """Validate stage payload. Returns (ok, errors, normalized)."""
+def _latest(annuals, key):
+    for row in reversed(annuals or []):
+        value = row.get(key) if isinstance(row, dict) else None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return value
+    return None
+
+
+def validate(payload: dict, annuals=None, allowed_sources=None) -> tuple[bool, list[str], dict]:
+    """Validate stage payload. Returns (ok, errors, normalized).
+
+    ``allowed_sources`` is the set of citable ids actually supplied to the
+    agent ("official" only when an official release exists, "news:N" only for
+    supplied articles). When given, every cited id must be in it.
+    """
     errors = []
     if not isinstance(payload, dict):
         return False, ["stage payload must be an object"], {}
@@ -64,16 +77,27 @@ def validate(payload: dict, annuals=None) -> tuple[bool, list[str], dict]:
     if not isinstance(sources, list):
         errors.append("source_ids must be a list")
         sources = []
+    if allowed_sources is not None:
+        unknown = [str(x) for x in sources if str(x) not in allowed_sources]
+        if unknown:
+            errors.append(f"source_ids not supplied to the agent: {unknown}")
+            sources = [x for x in sources if str(x) in allowed_sources]
     is_default = (stage == "mature" and steady is True and comm is False and segs == 1)
     if not is_default:
-        has_official = any(str(s) == "official" or str(s).startswith("official")
-                           for s in sources)
+        has_official = any(str(s) == "official" for s in sources)
         has_news = any(str(s).startswith("news:") for s in sources)
         if not (has_official or has_news):
             errors.append("non-default classification must cite official or dated article")
+    # Non-default stages must also agree with the reported numbers; a citation
+    # alone cannot turn a profitable, revenue-earning issuer into early stage.
+    revenue, earnings = _latest(annuals, "revenue"), _latest(annuals, "earnings")
+    if stage == "pre_revenue" and revenue is not None and revenue > 0:
+        errors.append("pre_revenue contradicts reported revenue in latest annuals")
+    if stage == "high_growth_pre_profit" and earnings is not None and earnings > 0:
+        errors.append("high_growth_pre_profit contradicts positive latest annual earnings")
     if stage == "decline" and not errors:
         if not _annual_revenue_falling(annuals):
-            # Allow cited restructuring as alternative; require news citation then.
+            # Allow a cited restructuring article as the alternative evidence.
             has_news = any(str(s).startswith("news:") for s in sources)
             if not has_news:
                 errors.append("decline requires falling revenue in latest annuals or cited restructuring")

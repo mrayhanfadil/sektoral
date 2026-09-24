@@ -233,41 +233,16 @@ def unavailable(key, reason="belum tersedia; belum dimodelkan") -> dict:
 
 def chain_for(verdict, profile: str) -> tuple:
     """Order rantai dari verdict Gates 0-5 (plan §1.3). Fixed sebelum nilai dihitung."""
-    primary = ""
-    failed: set = set()
-    reasons: list = []
-    if isinstance(verdict, dict):
-        primary = str(verdict.get("primary") or "")
-        failed = set(verdict.get("gates_failed") or [])
-        reasons = list(verdict.get("reasons") or [])
-    else:
-        primary = str(getattr(verdict, "primary", "") or "")
-        failed = set(getattr(verdict, "gates_failed", []) or [])
-        reasons = list(getattr(verdict, "reasons", []) or [])
+    get = (verdict.get if isinstance(verdict, dict)
+           else lambda key, default=None: getattr(verdict, key, default))
+    primary = str(get("primary") or "")
+    failed = set(get("gates_failed") or [])
+    unassessed = set(get("gates_unassessed") or [])
     prof = (profile or "").strip().lower()
-    joined = " ".join(reasons).lower()
 
     def _assessed(gate_id: str) -> bool:
-        """True bila gate gagal karena nilai nyata, bukan 'tidak dapat dinilai'."""
-        if gate_id not in failed:
-            return False
-        # Unassessed gates record tidak dapat dinilai; keep default DCF order.
-        # Heuristic: if any tidak-dapat-dinilai reason mentions the gate number, treat as unassessed.
-        gate_num = gate_id.split("_")[0]  # e.g. 1a, 1b, 1d
-        for r in reasons:
-            rl = str(r).lower()
-            if "tidak dapat dinilai" in rl and gate_num in rl:
-                return False
-        # Generic tidak-dapat-dinilai without gate number: check overall.
-        if "tidak dapat dinilai" in joined and gate_id in ("1a_filing_history", "1b_profitability", "1d_equity_base"):
-            # If primary was not forced by that gate, it was unassessed.
-            if primary in ("FCFF/WACC DCF", "DCF (shortened horizon)", ""):
-                # For 1a: thin_data would be True if truly <4y; check primary.
-                if gate_id == "1a_filing_history" and primary != "DCF (shortened horizon)":
-                    return False
-                if gate_id in ("1b_profitability", "1d_equity_base") and primary != "Relative Valuation":
-                    return False
-        return True
+        """Gate failed on a real value; an unassessed gate never moves the chain."""
+        return gate_id in failed and gate_id not in unassessed
 
     # Financial institution
     if primary.startswith("DDM") or prof == "financial_ddm":
@@ -278,8 +253,10 @@ def chain_for(verdict, profile: str) -> tuple:
     # Holding / NCI>40% / dissimilar segments
     if primary == "SOTP":
         return ("holding_sotp", "dcf_reference", "pe_fy_scenario")
-    # Finite reserves / commodity-driven
-    if primary in ("NAV / Reserve-based",):
+    # Finite reserves / commodity-driven. Checked before thin history: a
+    # short filing record changes the disclosure, not the asset-based chain,
+    # and miners have no earnings-scenario or EV/EBITDA-peer candidate.
+    if primary == "NAV / Reserve-based" or prof == "finite_life_mining":
         return ("sotp_lom", "rnav_lom", "ev_ebitda_fy")
     # History <4y or ramping (thin_data or 1a assessed)
     if primary == "DCF (shortened horizon)" or _assessed("1a_filing_history"):

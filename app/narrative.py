@@ -347,6 +347,12 @@ def _chain_cover_label(va, default):
             f"{chain['trace'][0]['short']}; belum lengkap)")
 
 
+def _method_label(method):
+    """Reader label for an analyst-selected method key (legacy or chain key)."""
+    legacy = {"ddm": "DDM (dividen, Rp)", "dcf": "DCF (FCFF, Rp)", "rnav": "RNAV LoM (Rp)"}
+    return legacy.get(method) or method_chain.LABELS.get(method) or method
+
+
 def _build_general_draft(intake, fc, va, g1, method="auto",
                          illustrative_scenarios=False):
     """Company-update shaped evidence brief while the production model is gated."""
@@ -3729,10 +3735,11 @@ def _build_draft(intake, fc, va, g1, method="auto",
         "method": ("DDM (dividen, Rp)" if method == "ddm" else
                    "DCF (FCFF, Rp)" if method == "dcf" else
                    "RNAV LoM (Rp)" if method == "rnav" else
+                   method_chain.LABELS[method] if method in method_chain.LABELS else
                    _chain_cover_label(va, "SOTP/LoM (belum lengkap)")),
         "method_select": method, "holders": [],
         "catatan_metodologi": (
-            [f"metode valuasi dipilih analis: {'DDM (dividen, Rp)' if method == 'ddm' else 'DCF (FCFF, Rp)' if method == 'dcf' else 'RNAV LoM (Rp)'}."] if method != "auto" else []
+            [f"metode valuasi dipilih analis: {_method_label(method)}."] if method != "auto" else []
         ) + [
             "DRAFT NON-DISTRIBUTABLE: skenario nilai belum disajikan karena bukti belum lengkap.",
             "SOTP/LoM memerlukan NAV per aset, kepemilikan, net debt, minority interest, "

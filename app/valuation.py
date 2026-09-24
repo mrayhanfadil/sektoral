@@ -340,8 +340,19 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                 return float(v)
         return None
 
-    total_equity_off = _off_num("total_equity", "equity_attributable", "equity")
+    # Official balance sheet is in the reporting currency; gate ratios mix it
+    # with Sectors/forecast figures in IDR, so convert first (USD reporters).
+    usd_report = official_ev.get("reporting_currency") == "USD"
+    fx_rate = (intake.get("fx_spot") or {}).get("rate") if usd_report else 1.0
+    fx_ok = isinstance(fx_rate, (int, float)) and fx_rate > 0
+
     nci_off = _off_num("non_controlling_interest")
+    total_equity_off = _off_num("total_equity")
+    if total_equity_off is None:
+        parent = _off_num("equity_attributable", "equity")
+        if parent is not None:
+            # NCI share is measured against total equity (parent + NCI).
+            total_equity_off = parent + (nci_off or 0.0)
     if total_equity_off is not None and total_equity_off != 0 and nci_off is not None:
         nci_pct_val = nci_off / total_equity_off * 100.0
     else:
@@ -357,16 +368,22 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                 break
         equity_pos_val = (secs_equity > 0) if isinstance(secs_equity, (int, float)) else None
 
-    # D/E, ND/EBITDA, ICR from official BS when present, else forecast/Sectors.
-    d_off = _off_num("total_debt", "total_liabilities")
-    # Official cash may be under cash / cash_and_equivalents
+    # Financial debt only: total_debt, else loans + leases. Total liabilities
+    # (payables, provisions, bank deposits) is never treated as debt.
+    d_off = _off_num("total_debt")
+    if d_off is None:
+        parts = [_off_num(k) for k in ("loans_current", "loans_noncurrent",
+                                       "lease_current", "lease_noncurrent")]
+        d_off = sum(v for v in parts if v is not None) if any(v is not None for v in parts) else None
     cash_off = _off_num("cash", "cash_and_equivalents")
     if d_off is not None and total_equity_off is not None and (d_off + total_equity_off) != 0:
-        d_de_val = d_off / (d_off + total_equity_off)
+        d_de_val = d_off / (d_off + total_equity_off)   # same currency: ratio is FX-free
     else:
         d_de_val = D / max(E + D, 1.0) if isinstance(D, (int, float)) else None
-    if d_off is not None and cash_off is not None and isinstance(ebitda_first, (int, float)) and ebitda_first:
-        nd_ebitda_val = (d_off - cash_off) / max(ebitda_first, 1.0)
+    net_debt_off_idr = ((d_off - cash_off) * fx_rate
+                        if d_off is not None and cash_off is not None and fx_ok else None)
+    if net_debt_off_idr is not None and isinstance(ebitda_first, (int, float)) and ebitda_first:
+        nd_ebitda_val = net_debt_off_idr / max(ebitda_first, 1.0)   # IDR / IDR
     else:
         nd_ebitda_val = nd_ebitda_fc
     # ICR needs official interest; keep forecast-based but None if no interest data.
@@ -525,10 +542,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             intake.get("peers"), _bvps_fwd, shares, mcap)
     if "ev_ebitda_peer" in prelim_order:
         _ebitda_fwd = fwd.get("ebitda")
-        _nd = net_debt
-        # Official net debt when available
-        if d_off is not None and cash_off is not None:
-            _nd = d_off - cash_off
+        # Official net debt (converted to IDR) when available; EV and EBITDA are IDR.
+        _nd = net_debt_off_idr if net_debt_off_idr is not None else net_debt
         candidates["ev_ebitda_peer"] = method_chain.ev_ebitda_peer(
             intake.get("peers"), _ebitda_fwd, shares, mcap, net_debt=_nd)
     if "ev_sales_peer" in prelim_order:
@@ -587,7 +602,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         _nci_for_x = 0.0
     needs_x = (
         (verdict.primary in ("FCFF/WACC DCF", "DCF (shortened horizon)")) or
-        ("1c_capital_structure" in verdict.gates_failed and gate_inputs.get("d_de_ratio") is not None) or
+        ("1c_capital_structure" in verdict.gates_failed and
+         "1c_capital_structure" not in verdict.gates_unassessed) or
         (15.0 < _nci_for_x <= 40.0)
     )
     chain["cross_check_required"] = bool(needs_x)

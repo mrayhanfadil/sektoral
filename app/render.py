@@ -445,14 +445,18 @@ def _combo_chart(ex):
             parts.append(f"<rect x='{x:.1f}' y='{y:.1f}' width='{bw:.1f}' height='{h:.1f}' fill='{color}'/>")
         # line for growth/margin
         line = s.get("line") or []
-        if line:
+        valid = [v for v in line if isinstance(v, (int, float))]
+        if valid:
+            # Secondary axis: scale the line to its own range inside the
+            # 60 px plot band, so margins/ROE above 20% keep their shape.
+            lo, hi = min(valid), max(valid)
+            span = (hi - lo) or 1.0
             pts = []
             for i, v in enumerate(line):
-                if v is None:
+                if not isinstance(v, (int, float)):
                     continue
                 x = 45 + ox + i * (bw + 8) + bw / 2
-                # normalize line to 0-40 range around 95+oy
-                y = 95 + oy - max(-20, min(20, (v or 0)))
+                y = 95 + oy - 60 * (v - lo) / span
                 pts.append(f"{x:.1f},{y:.1f}")
             if len(pts) >= 2:
                 parts.append(f"<polyline points='{' '.join(pts)}' fill='none' stroke='#1DCD9F' stroke-width='2'/>")
