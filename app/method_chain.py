@@ -1,6 +1,6 @@
 """Rantai metode valuasi: primary → fallback → draft (Instruksi-Report-v3 §4.1a §4.4 §4.6).
 
-Urutan metode dikunci dari verdict Gates 0-5 sebelum nilai dihitung (chain_for).
+Urutan metode dikunci dari verdict Method Gates 0-5 sebelum nilai dihitung (chain_for).
 Metode berikutnya hanya dicoba bila metode sebelumnya *insufficient*: input wajib
 hilang atau cek struktural gagal (skala vs market cap, downside tidak lebih
 rendah, divergensi Gordon vs exit). Hasil yang tidak disukai bukan alasan
@@ -64,7 +64,7 @@ def _finite(x) -> bool:
 
 
 def scale_reasons(per_share, shares, market_cap) -> list[str]:
-    """G3.2: ekuitas tersirat harus 20-300% dari market cap."""
+    """S3.2: ekuitas tersirat harus 20-300% dari market cap."""
     if not (_finite(per_share) and _finite(shares) and _finite(market_cap)) or market_cap <= 0:
         return []
     ratio = per_share * shares / market_cap
@@ -322,7 +322,7 @@ HOLDING_DISCOUNTS = (0.0, 0.2, 0.3)
 
 
 def holding_sotp(listed, parent_equity, shares) -> dict:
-    """Holding SOTP (framework Gate 2): listed subsidiaries at market value
+    """Holding SOTP (framework Method Gate 2): listed subsidiaries at market value
     times the stake held, the rest of the group at book.
 
     listed: [{"ticker", "segment", "stake", "market_cap", "book_equity",
@@ -364,13 +364,13 @@ def unavailable(key, reason="belum tersedia; belum dimodelkan") -> dict:
 
 
 def chain_for(verdict, profile: str) -> tuple:
-    """Order rantai dari verdict Gates 0-5 (plan §1.3). Fixed sebelum nilai dihitung."""
+    """Order rantai dari verdict Method Gates 0-5 (plan §1.3). Fixed sebelum nilai dihitung."""
     get = (verdict.get if isinstance(verdict, dict)
            else lambda key, default=None: getattr(verdict, key, default))
     primary = str(get("primary") or "")
     failed = set(get("gates_failed") or [])
     unassessed = set(get("gates_unassessed") or [])
-    # Gate 3 ramping asset. Structural Gate 0 primaries (bank DDM, holding
+    # Method Gate 3 ramping asset. Structural Method Gate 0 primaries (bank DDM, holding
     # SOTP, reserve NAV) never carry the flag and route above.
     ramping = primary == "Relative Valuation" and bool(get("ramping"))
     prof = (profile or "").strip().lower()
@@ -393,7 +393,7 @@ def chain_for(verdict, profile: str) -> tuple:
     # and miners have no earnings-scenario or EV/EBITDA-peer candidate.
     if primary == "NAV / Reserve-based" or prof == "finite_life_mining":
         return ("sotp_lom", "rnav_lom", "ev_ebitda_fy")
-    # History <4y (thin_data or 1a assessed) or a Gate 3 ramping asset: both
+    # History <4y (thin_data or 1a assessed) or a Method Gate 3 ramping asset: both
     # value forward EBITDA against mature peers first.
     if primary == "DCF (shortened horizon)" or _assessed("1a_filing_history") or ramping:
         return ("ev_ebitda_peer", "pe_fy_scenario")
@@ -484,7 +484,7 @@ _READER_REASONS = (
     ("financial DDM", "hasil DDM belum tersedia"),
     ("mining forecast is not", "forecast fisik tambang masih screening"),
     ("operating bridge missing", "jembatan operasi fisik ke keuangan belum ada"),
-    ("forecast gate failed", "forecast belum lolos rekonsiliasi G2.9"),
+    ("forecast gate failed", "forecast belum lolos rekonsiliasi S2.9"),
     ("sourced operating and cash-flow forecast", "forecast driver bersumber belum lengkap"),
     ("forecast is not verified", "forecast masih screening"),
     ("forecast: ", "forecast masih screening"),

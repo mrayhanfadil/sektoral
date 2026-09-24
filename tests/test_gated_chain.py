@@ -1,4 +1,4 @@
-"""Phase 1 acceptance: gate-driven chain, stage validator, Gate 5 shared constant."""
+"""Phase 1 acceptance: gate-driven chain, stage validator, Method Gate 5 shared constant."""
 import sys
 from pathlib import Path
 
@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT))
 from app import gate_thresholds as GT, method_chain as MC, model_profiles as MP, stage as ST
 
 
-def test_gate5_shared_constant():
+def test_method_gate5_shared_constant():
     assert GT.EXTREME_UPSIDE_PCT == 100.0
     assert GT.EXTREME_DOWNSIDE_PCT == -50.0
     assert GT.TV_SHARE_PCT == 80.0
@@ -114,7 +114,7 @@ def test_short_history_miner_keeps_mining_chain():
     assert MC.chain_for(thin, "finite_life_mining") == ("sotp_lom", "rnav_lom", "ev_ebitda_fy")
 
 
-def test_gate5_percent_is_never_read_as_ratio():
+def test_method_gate5_percent_is_never_read_as_ratio():
     assert GT.is_extreme_pct(1.5) is False and GT.is_extreme_pct(-1.2) is False
     assert GT.gate_upside_pct({"upside_pct": 1.5}) == 1.5
     assert GT.gate_upside_pct({"upside": 1.5}) == 150.0
@@ -198,7 +198,7 @@ def test_draft_method_note_uses_chain_label():
     assert narrative._method_label("rnav") == "RNAV LoM (Rp)"
 
 
-def test_gate5_exit_range_is_own_ev_ebitda_history_not_peer_pe():
+def test_method_gate5_exit_range_is_own_ev_ebitda_history_not_peer_pe():
     from app import intake as I
     doc_in, _ = I.load("SSIA", as_of="2026-09-24")
     values = [h["value"] for h in doc_in["historical_ev_ebitda"]]
@@ -231,7 +231,7 @@ def test_ssia_nci_band_runs_holding_sotp_as_cross_check_not_target(tmp_path):
     assert labels[0].startswith("PT Nusa Raya Cipta Tbk (NRCA)")
     assert "Total nilai SOTP" in labels
     table = next(e for e in chain if e["judul"] == "Rantai metode valuasi")
-    assert any(r[0].startswith("x. ") and "Gate 2" in r[3] for r in table["data"]["rows"])
+    assert any(r[0].startswith("x. ") and "Method Gate 2" in r[3] for r in table["data"]["rows"])
     assert doc["meta"].get("method") != "Holding SOTP"
 
 
@@ -289,14 +289,14 @@ def test_going_concern_chain_ends_with_book_value_fallback():
     assert order[-1] == "pbv_book" and order.index("pe_fy_scenario") < order.index("pbv_book")
 
 
-# ------------------------------------------- Gate 3 ramping -> forward EV/EBITDA
+# ------------------------------------------- Method Gate 3 ramping -> forward EV/EBITDA
 
 _HEALTHY = {"filing_history_years": 6, "ebit_positive_count": 3, "d_de_ratio": 0.2,
             "net_debt_to_ebitda": 0.5, "icr": 8.0, "equity_positive": True, "nci_pct": 2.0,
             "life_cycle_stage": "mature"}
 
 
-def test_gate3_ramping_verdict_routes_to_forward_ev_ebitda_chain():
+def test_method_gate3_ramping_verdict_routes_to_forward_ev_ebitda_chain():
     v = MP.evaluate(dict(_HEALTHY, domain="going_concern_fcff", has_steady_state_3y=False))
     assert v.primary == "Relative Valuation" and v.ramping is True
     assert any(r.startswith("3 newly commissioned") for r in v.reasons)
@@ -308,7 +308,7 @@ def test_gate3_ramping_verdict_routes_to_forward_ev_ebitda_chain():
     assert MC.chain_for(steady, "going_concern_fcff")[0] == "fcff_dcf"
 
 
-def test_gate1b_chronic_losses_keep_ev_sales_not_the_ramping_chain():
+def test_method_gate1b_chronic_losses_keep_ev_sales_not_the_ramping_chain():
     v = MP.evaluate(dict(_HEALTHY, domain="going_concern_fcff", ebit_positive_count=1,
                          has_steady_state_3y=True))
     assert v.primary == "Relative Valuation" and v.ramping is False
@@ -330,7 +330,7 @@ def test_structural_primaries_ignore_the_ramping_gate():
     assert MC.chain_for({"primary": "SOTP", "ramping": True}, "going_concern_fcff")[0] == "holding_sotp"
 
 
-def test_gate4_stage_still_overrides_a_ramping_primary():
+def test_method_gate4_stage_still_overrides_a_ramping_primary():
     v = MP.evaluate(dict(_HEALTHY, domain="going_concern_fcff", has_steady_state_3y=False,
                          life_cycle_stage="decline"))
     assert v.primary == "P/BV"

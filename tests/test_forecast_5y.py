@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_forecast_horizon_is_minimal_5y():
-    doc_in, g1 = intake.load("BBCA")
+    doc_in, s1 = intake.load("BBCA")
     fc = forecast.build(doc_in)
     rows = fc["rows"]
     assert len(rows) >= 5, f"Expected at least 5 forecast years, got {len(rows)}"
@@ -19,9 +19,9 @@ def test_forecast_horizon_is_minimal_5y():
     assert actual_years == expected_years
     
     # Assert accounting identities hold across all years
-    assert fc["g2"]["G2.5_neraca"] == "lolos"
-    assert fc["g2"]["G2.6_variasi"] == "lolos"
-    assert fc["g2"]["G2.4_konsistensi"] == "lolos"
+    assert fc["s2"]["S2.5_neraca"] == "lolos"
+    assert fc["s2"]["S2.6_variasi"] == "lolos"
+    assert fc["s2"]["S2.4_konsistensi"] == "lolos"
     
     # Revenue should grow or differ across consecutive years
     for i in range(len(rows) - 1):

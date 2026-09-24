@@ -1,4 +1,4 @@
-"""TAHAP 2: FORECAST ENGINE (GATE 2). Generik, berbasis driver, tiga tahun."""
+"""TAHAP 2: FORECAST ENGINE (STAGE CHECK S2). Generik, berbasis driver, tiga tahun."""
 from . import fmt
 from . import scrub
 from . import rnav
@@ -126,7 +126,7 @@ def build(intake, n_years=5, assumption_plan=None):
     y0 = base["year"]
     n_years = max(5, int(n_years or 5))
     years = [y0 + 1 + i for i in range(n_years)]
-    g2, assumptions = {}, []
+    s2, assumptions = {}, []
 
     # --- revenue growth: CAGR historis, diturunkan bertahap, wajib beda antar tahun
     revs = [a["revenue"] for a in A]
@@ -232,21 +232,21 @@ def build(intake, n_years=5, assumption_plan=None):
                      "assets": nc + cash, "eps": net / intake["shares"]})
         prev_rev = rev
 
-    # --- GATE 2
-    g2["G2.4_konsistensi"] = "lolos"  # satu angka dipakai di IS, CF, DCF by construction
-    g2["G2.5_neraca"] = "lolos" if all(
+    # --- STAGE CHECK S2
+    s2["S2.4_konsistensi"] = "lolos"  # satu angka dipakai di IS, CF, DCF by construction
+    s2["S2.5_neraca"] = "lolos" if all(
         abs(r["assets"] - (debt0 + oth_liab) - r["equity"]) < max(r["assets"] * 1e-9, 1.0)
         for r in rows) else "gagal"
-    g2["G2.6_variasi"] = "lolos" if not all(
+    s2["S2.6_variasi"] = "lolos" if not all(
         rows[i]["revenue"] == rows[i + 1]["revenue"] for i in range(len(rows) - 1)) else "gagal"
-    g2["G2.7_kolom"] = "lolos"
-    g2["G2.2_margin"] = "lolos" if all(mmin - 1e-9 <= r["margin"] <= mmax + 1e-9
+    s2["S2.7_kolom"] = "lolos"
+    s2["S2.2_margin"] = "lolos" if all(mmin - 1e-9 <= r["margin"] <= mmax + 1e-9
                                        for r in rows) else "gagal-dilabeli"
-    g2["G2.1_runrate"] = "dilabeli"
-    g2["G2.3_leverage"] = "lolos"
+    s2["S2.1_runrate"] = "dilabeli"
+    s2["S2.3_leverage"] = "lolos"
     bridge = None
     mo = intake.get("mineops")
-    g2["catatan"] = ["G2.1: tanpa interim terstruktur di data Sectors; diuji saat rilis tersedia."]
+    s2["catatan"] = ["S2.1: tanpa interim terstruktur di data Sectors; diuji saat rilis tersedia."]
     if mo:
         # rows revenue dalam Rupiah → konversi ke USD via FX asumsi.
         gross = rnav.metal_gross_usd(mo)
@@ -257,11 +257,11 @@ def build(intake, n_years=5, assumption_plan=None):
                   "fy1_usd_bn": rep_usd / 1e9, "payability": pay,
                   "gap_pct": gap,
                   "needs_explanation": gap is not None and gap > 0.25}
-        g2["G2.8_bridge"] = ("dilabeli",
+        s2["S2.8_bridge"] = ("dilabeli",
             f"nilai logam bruto USD{gross/1e9:.2f} miliar vs pendapatan "
             f"{rows[0]['label']} USD{rep_usd/1e9:.2f} miliar (payability "
             f"{pay*100:.0f}%, {rnav.FX_BASIS})")
-        g2["catatan"].append("G2.8: selisih bruto-vs-tercatat mencerminkan "
+        s2["catatan"].append("S2.8: selisih bruto-vs-tercatat mencerminkan "
             "payability/TC-RC/royalti/mix; dijelaskan di narasi valuasi.")
     operating_bridge = intake.get("operating_bridge")
     is_mining = intake.get("model_profile") == "finite_life_mining"
@@ -277,14 +277,14 @@ def build(intake, n_years=5, assumption_plan=None):
         # Source rows by themselves are not a physical-to-financial forecast.
         # Until that engine is implemented and reconciled, CAGR remains a
         # screening diagnostic and cannot pass the production release gate.
-        g2["G2.9_operating_bridge"] = "gagal"
-        g2["catatan"].append(
-            "G2.9: forecast fisik-ke-keuangan belum dihitung; angka CAGR hanya "
+        s2["S2.9_operating_bridge"] = "gagal"
+        s2["catatan"].append(
+            "S2.9: forecast fisik-ke-keuangan belum dihitung; angka CAGR hanya "
             "screening proxy dan tidak layak menjadi forecast produksi.")
         forecast_basis, production_ready = "historical_screening_proxy", False
     else:
         # Per-series driver provenance is judged once, by the release gate
-        # (release._check_driver_forecast); this screen cannot pass G2.9.
+        # (release._check_driver_forecast); this screen cannot pass S2.9.
         # Interim reconciliation: a validated current-year anchor must be
         # consistent with the published FY row; otherwise the forecast year
         # does not reconcile to valuation.
@@ -299,7 +299,7 @@ def build(intake, n_years=5, assumption_plan=None):
                         "reconcile before production release")
             except (TypeError, ValueError):
                 pass
-        base_g2_failed = [k for k, v in g2.items()
+        base_s2_failed = [k for k, v in s2.items()
                           if k != "catatan" and (v == "gagal" or (isinstance(v, tuple) and str(v[0]).startswith("gagal")))]
         if is_ddm:
             production_blockers.append(
@@ -309,16 +309,16 @@ def build(intake, n_years=5, assumption_plan=None):
             production_blockers.append(
                 "operating driver-to-FCFF bridge is not calculated; historical CAGR, "
                 "capex=D&A, flat debt and balancing cash remain screening inputs")
-        g2["G2.9_driver_forecast"] = "gagal"
+        s2["S2.9_driver_forecast"] = "gagal"
         reasons = list(production_blockers)
-        if base_g2_failed:
-            reasons.append(f"gate {', '.join(base_g2_failed)} gagal")
-        g2["catatan"].append(
-            "G2.9: forecast masih screening; bukti driver belum dihitung menjadi "
+        if base_s2_failed:
+            reasons.append(f"gate {', '.join(base_s2_failed)} gagal")
+        s2["catatan"].append(
+            "S2.9: forecast masih screening; bukti driver belum dihitung menjadi "
             f"proyeksi yang direkonsiliasi ({'; '.join(reasons)}).")
         forecast_basis, production_ready = "historical_screening_proxy", False
     earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
-    return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
+    return {"rows": rows, "assumptions": assumptions, "s2": s2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
             "earnings_scenario": earnings_scenario,

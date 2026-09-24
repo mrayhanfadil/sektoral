@@ -370,7 +370,7 @@ def _method_label(method):
     return legacy.get(method) or method_chain.LABELS.get(method) or method
 
 
-def _build_general_draft(intake, fc, va, g1, method="auto",
+def _build_general_draft(intake, fc, va, s1, method="auto",
                          illustrative_scenarios=False):
     """Company-update shaped evidence brief while the production model is gated."""
     ticker = intake["ticker"]
@@ -2631,8 +2631,8 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                    "key_financials": key_rows},
         "bagian": sections,
         "tabel_asumsi": [], "exhibits": exhibits,
-        "log_gate": {"G1": g1.get("G1", {}), "G2": fc.get("g2", {}),
-                     "G3": {},
+        "log_gate": {"S1": s1.get("S1", {}), "S2": fc.get("s2", {}),
+                     "S3": {},
                      "release": {"status": "draft_non_distributable",
                                  "blocker_count": len(blockers),
                                  "blockers": blockers}},
@@ -2799,9 +2799,9 @@ def _lom_exhibits(intake, va, detail):
             "text": text, "notes": notes}
 
 
-def _build_assumption_led(intake, fc, va, g1, method="auto"):
+def _build_assumption_led(intake, fc, va, s1, method="auto"):
     """Publish the validated FY scenario as the selected multiple-based method."""
-    doc = _build_general_draft(intake, fc, va, g1, method=method,
+    doc = _build_general_draft(intake, fc, va, s1, method=method,
                                illustrative_scenarios=True)
     scenario = fc["interim_scenario"]
     forecast_label = f"FY{scenario['year'] % 100:02d}F"
@@ -2818,7 +2818,7 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
                 status_rating=va["rating"], illustrative_scenarios=False)
     rail = _market_rail(intake)
     doc["method"] = va["method"]
-    doc["log_gate"]["G3"] = va["g3"]
+    doc["log_gate"]["S3"] = va["s3"]
     doc["log_gate"]["release"] = va["release"]
     doc["cover"]["headline"] = _assumption_headline(va["rating"], forecast_label)
     doc["cover"]["bullets"][2] = (
@@ -2951,7 +2951,7 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
             page["paragraf"] = [
                 "Metode utama adalah FY forecast EV/EBITDA 8x dengan asumsi analis. "
                 "Status rilis distributable_assumption_led berlaku melalui jalur opt-in analyst-target; "
-                "gate operating bridge G2.9 dan SOTP aset tetap gagal. "
+                "gate operating bridge S2.9 dan SOTP aset tetap gagal. "
                 "LoM/SOTP tetap belum lengkap; daftar di bawah menunjukkan bukti "
                 "yang diperlukan untuk menguji ulang nilai aset dan capex."]
         page["halaman"] = doc["bagian"].index(page) + 2
@@ -3633,7 +3633,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None):
     if ev_s:
         return [
             "Rating dan target harga memakai EV/EBITDA peer forward, metode untuk aset yang masih "
-            "ramping atau riwayat singkat (Gate 3, §4.1a): EV = median EV/EBITDA "
+            "ramping atau riwayat singkat (Method Gate 3, §4.1a): EV = median EV/EBITDA "
             f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} x EBITDA {label} "
             "skenario analis (aktual 1H resmi + margin EBITDA asumsi agen).",
             f"EV/EBITDA tiap peer dihitung dari {ev_s['peer_source']}: market cap tabel peer "
@@ -3646,7 +3646,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None):
             "Kuartil bawah dan atas peer menjadi sensitivitas.",
             "PER FY skenario menjadi langkah berikutnya di rantai metode, tidak dirata-rata "
             "dengan target. DCF menunggu tiga tahun kondisi stabil.",
-            "Skenario bukan forecast driver terekonsiliasi (G2.9); statusnya berbasis asumsi.",
+            "Skenario bukan forecast driver terekonsiliasi (S2.9); statusnya berbasis asumsi.",
             "Tanda '-' berarti angka tidak tersedia, bukan nol.",
         ]
     if ddm_s:
@@ -3655,7 +3655,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None):
             f"skenario analis {label}-{last} x payout {fmt.pct(ddm_s['payout'])} "
             f"({ddm_s['payout_basis']}), didiskonto dengan Cost of Equity, terminal Gordon.",
             f"Laba {label} dari aktual 1H resmi dan asumsi H2; tahun sesudahnya asumsi analis "
-            "tahunan. Skenario ini bukan forecast driver terekonsiliasi (G2.9), sehingga "
+            "tahunan. Skenario ini bukan forecast driver terekonsiliasi (S2.9), sehingga "
             "statusnya berbasis asumsi.",
             f"CoE {fmt.pct(ddm_s['coe'])} dari CAPM (rf INDOGB 10Y, beta dan ERP 4% kebijakan "
             f"analis); g {fmt.pct(ddm_s['g'])}. Tanggal valuasi {ddm_s['valuation_date']}; "
@@ -3676,13 +3676,13 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None):
         "terminal di akhir tahun eksplisit terakhir.",
         "Exit EV/EBITDA historis emiten tampil berdampingan sebagai cross-check; selisih dengan "
         "Gordon diungkapkan, tidak dirata-rata (§4.4).",
-        "Skenario bukan forecast driver terekonsiliasi (G2.9); statusnya berbasis asumsi.",
+        "Skenario bukan forecast driver terekonsiliasi (S2.9); statusnya berbasis asumsi.",
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
     ]
 
 
 def _extreme_stop_overlay(doc, intake, va):
-    """Draft whose selected method stopped at Gate 5: say so on the cover.
+    """Draft whose selected method stopped at Method Gate 5: say so on the cover.
 
     Per-share values stay held; the reader sees which method ran, on which
     side of the band it fell and where the cross-checks point.
@@ -3715,7 +3715,7 @@ def _extreme_stop_overlay(doc, intake, va):
             "metode terpilih sesudah " + "; ".join(skipped) + " dilewati" if skipped else
             "metode terpilih rantai")
     text = (f"{sel['short']}, {role}, dihitung atas {basis}; nilainya {direction} "
-            "dari harga penutupan, sehingga Gate 5 framework menghentikan rantai dan menandai "
+            "dari harga penutupan, sehingga Method Gate 5 framework menghentikan rantai dan menandai "
             "Review Required. "
             + (f"Cross-check di atas harga: {', '.join(sides[True])}. " if sides[True] else "")
             + (f"Cross-check di bawah harga: {', '.join(sides[False])}. " if sides[False] else "")
@@ -3759,16 +3759,16 @@ def _ev_ebitda_scenario_exhibit(intake, ev, label):
             + f"; harga penutupan {intake['price_date']}.")}
 
 
-def _build_earnings_led(intake, fc, va, g1, method="auto"):
+def _build_earnings_led(intake, fc, va, s1, method="auto"):
     """Going concern / bank: FY PER peer on the validated earnings scenario."""
-    doc = _build_general_draft(intake, fc, va, g1, method=method)
+    doc = _build_general_draft(intake, fc, va, s1, method=method)
     scenario = fc["earnings_scenario"]
     forward = (fc.get("outyear_scenario") or {}).get("rows") or []
     a = scenario["assumptions"]
     sel = next(t for t in va["method_chain"]["trace"] if t["key"] == "pe_fy_scenario")
     d = sel["detail"]
     # Banks: justified P/BV on the same scenario is the target method; PER
-    # stays as the cross-check (framework Gate 0).
+    # stays as the cross-check (framework Method Gate 0).
     pbv = (next((t["detail"] for t in va["method_chain"]["trace"] if t["key"] == "pbv_roe_fy"), None)
            if va["method_chain"].get("selected") == "pbv_roe_fy" else None)
     # Asset-heavy going concern with too few PER peers: peer P/B on reported book.
@@ -3811,7 +3811,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                 tp=va["tp"], upside_persen=va["upside"] * 100,
                 status_rating=va["rating"], illustrative_scenarios=False)
     doc["method"] = va["method"]
-    doc["log_gate"]["G3"] = va["g3"]
+    doc["log_gate"]["S3"] = va["s3"]
     doc["log_gate"]["release"] = va["release"]
 
     # --- cover: forward thesis, not draft checklist
@@ -3974,7 +3974,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         deepest = sotp_h["discounts"][-1]
         sotp_lead = (
             f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai SOTP holding, metode utama "
-            "untuk grup dengan lini usaha berbeda (Gate 0): anak usaha tercatat pada nilai pasar "
+            "untuk grup dengan lini usaha berbeda (Method Gate 0): anak usaha tercatat pada nilai pasar "
             f"({parts}) ditambah ekuitas pemilik induk lainnya pada nilai buku "
             f"Rp{bn(sotp_h['remainder_book'])} miliar, total Rp{bn(sotp_h['total'])} miliar. "
             f"Dengan diskon holding {fmt.pct(deepest['discount'])} nilainya "
@@ -4002,7 +4002,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
             f"Pada WACC +1pp dan g 2,5% nilainya Rp{fmt.rp(va['tp_down'])}. ")
     ev_lead = (
         f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai EV/EBITDA peer forward, metode "
-        f"untuk aset yang masih ramping atau riwayat singkat (Gate 3): EV/EBITDA median "
+        f"untuk aset yang masih ramping atau riwayat singkat (Method Gate 3): EV/EBITDA median "
         f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} (FY terakhir tiap "
         f"peer, {ev_s['peer_source']}) atas EBITDA {label} Rp{bn(ev_s['ebitda_idr'])} miliar (aktual 1H "
         f"resmi dan margin EBITDA asumsi agen) memberi EV Rp{bn(ev_s['ev'])} miliar; ditambah "
@@ -4070,7 +4070,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                 (f"Target harga memakai "
                  f"{'DDM' if ddm_s else 'EV/EBITDA peer forward' if ev_s else 'DCF FCFF'} "
                  "atas skenario analis; "
-                 "forecast driver produksi tetap perlu direkonsiliasi (G2.9). Tabel berikut "
+                 "forecast driver produksi tetap perlu direkonsiliasi (S2.9). Tabel berikut "
                  "mencatat bukti yang akan menguji target.") if primary else
                 "Target harga di atas tidak bergantung pada DCF atau DDM. Metode arus kas "
                 "tetap menunggu forecast driver yang direkonsiliasi; tabel berikut mencatat "
@@ -4083,7 +4083,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                      if t["key"] == va["method_chain"].get("selected")), "metode terpilih")
                 exhibit["data"]["rows"][-1][1] = (
                     f"Target berbasis {selected_short} diterbitkan; forecast driver produksi "
-                    "tetap perlu direkonsiliasi (G2.9).")
+                    "tetap perlu direkonsiliasi (S2.9).")
             elif exhibit.get("judul") == "Katalis, risiko, dan indikator pemantauan" and catalyst_rows:
                 exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
                                             "Driver dan jalur dampak", "Arah"],
@@ -4280,7 +4280,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     if sotp_h:
         doc["catatan_metodologi"] = [
             "Rating dan target harga memakai SOTP holding, metode utama untuk grup dengan lini "
-            "usaha berbeda (Gate 0 framework): anak usaha tercatat pada kapitalisasi pasar dikali "
+            "usaha berbeda (Method Gate 0 framework): anak usaha tercatat pada kapitalisasi pasar dikali "
             "kepemilikan, sisa ekuitas pemilik induk pada nilai buku.",
             "Segmen tanpa harga pasar (lahan industri, hotel, utilitas) dinilai pada nilai buku; "
             "diskon holding 20-30% hanya sensitivitas.",
@@ -4391,7 +4391,7 @@ def _rnav_exhibit(lom, cash_idr, debt_idr, shares, discount_pct=0.0):
         assets, cash_idr, debt_idr, 0, shares, discount_pct)
 
 
-def _build_draft(intake, fc, va, g1, method="auto",
+def _build_draft(intake, fc, va, s1, method="auto",
                  illustrative_scenarios=False):
     """Build a clearly non-distributable evidence/status report.
 
@@ -4402,7 +4402,7 @@ def _build_draft(intake, fc, va, g1, method="auto",
     """
     if (intake.get("model_profile") != "finite_life_mining" or
             intake.get("official_evidence")):
-        return _build_general_draft(intake, fc, va, g1, method=method,
+        return _build_general_draft(intake, fc, va, s1, method=method,
                                     illustrative_scenarios=illustrative_scenarios)
     t, name = intake["ticker"], intake["name"]
     release_result = va.get("release") or {}
@@ -4643,8 +4643,8 @@ def _build_draft(intake, fc, va, g1, method="auto",
         },
         "bagian": sections,
         "tabel_asumsi": [],
-        "log_gate": {"G1": g1.get("G1", {}), "G2": fc.get("g2", {}),
-                     "G3": {}, "release": {"status": release_result.get("status"),
+        "log_gate": {"S1": s1.get("S1", {}), "S2": fc.get("s2", {}),
+                     "S3": {}, "release": {"status": release_result.get("status"),
                                               "blocker_count": len(blockers)}},
         "method": ("DDM (dividen, Rp)" if method == "ddm" else
                    "DCF (FCFF, Rp)" if method == "dcf" else
@@ -4667,7 +4667,7 @@ def _build_draft(intake, fc, va, g1, method="auto",
     }
 
 
-def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
+def build(intake, fc, va, s1, method="auto", illustrative_scenarios=False):
     method = (method or "auto").lower()
     # Override analis (gate-driven keys) diterima untuk display; validasi DCF/DDM/RNAV lama dipertahankan.
     from . import method_chain as _mc
@@ -4680,7 +4680,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
         raise ValueError("method rnav ditolak: tanpa overlay operasional di data Sectors")
     if (va.get("release") or {}).get("status") == "distributable_assumption_led":
         if intake.get("model_profile") == "finite_life_mining":
-            return _build_assumption_led(intake, fc, va, g1, method=method)
+            return _build_assumption_led(intake, fc, va, s1, method=method)
         chain = va.get("method_chain") or {}
         selected = chain.get("selected")
         scenario_primary = any(
@@ -4688,10 +4688,10 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
             for t in chain.get("trace") or [])
         if selected in ("pe_fy_scenario", "pbv_roe_fy", "pbv_book", "holding_sotp") or \
                 scenario_primary:
-            return _build_earnings_led(intake, fc, va, g1, method=method)
-        return _build_assumption_led(intake, fc, va, g1, method=method)
+            return _build_earnings_led(intake, fc, va, s1, method=method)
+        return _build_assumption_led(intake, fc, va, s1, method=method)
     if (va.get("release") or {}).get("status") != "distributable":
-        doc = _build_draft(intake, fc, va, g1, method=method,
+        doc = _build_draft(intake, fc, va, s1, method=method,
                            illustrative_scenarios=illustrative_scenarios)
         _extreme_stop_overlay(doc, intake, va)
         return doc
@@ -4975,7 +4975,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
                 for row in fc["assumptions"]]
     E("Asumsi forecast", "tabel", {"cols": asu_cols, "rows": asu_rows})
 
-    # G2.3: operating leverage — ±10% revenue mengalir penuh ke EBITDA
+    # S2.3: operating leverage — ±10% revenue mengalir penuh ke EBITDA
     sens_rows = [[f"Pendapatan {s}"] +
                  [fmt.miliar(r["ebitda"] + (0.1 if s == "+10%" else -0.1) * r["revenue"])
                   for r in F] for s in ["+10%", "-10%"]]
@@ -5212,7 +5212,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
     for para in (p1, p2, p3):
         assert fmt.words(para) <= MAX_PARA, f"paragraf cover {fmt.words(para)} kata"
 
-    g32 = va["g3"].get("G3.2_skala")
+    g32 = va["s3"].get("S3.2_skala")
     mnotes = methodnote.methodology_notes(intake, fc, va, intake.get("mineops"))
     method = (method or "auto").lower()
     if method not in ("auto", "dcf", "ddm", "rnav"):
@@ -5232,8 +5232,8 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
                   "dicatat sebagai keterbatasan)"]
                  if isinstance(g32, tuple) and "gagal" in g32[0] else [])
               + [f"{k}: {v[1]} (dicatat sebagai keterbatasan)"
-                 for k, v in va["g3"].items()
-                 if isinstance(v, tuple) and "gagal" in v[0] and k != "G3.2_skala"]
+                 for k, v in va["s3"].items()
+                 if isinstance(v, tuple) and "gagal" in v[0] and k != "S3.2_skala"]
               + mnotes[:2]
               + [methodnote.capex_impact_line(False, "volume penjualan dan jadwal investasi")]
               )[:6]
@@ -5264,8 +5264,8 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
             }
             for item in fc["assumptions"]
         ],
-        "log_gate": {"G1": g1["G1"], "G2": fc["g2"], "G3": {k: (v if isinstance(v, str) else v[0])
-                                                          for k, v in va["g3"].items()}},
+        "log_gate": {"S1": s1["S1"], "S2": fc["s2"], "S3": {k: (v if isinstance(v, str) else v[0])
+                                                          for k, v in va["s3"].items()}},
         "method": "DCF (FCFF, Rp)" if method == "auto" else method_label,
         "method_select": method,
         "fy26": {"Pendapatan": fmt.miliar(f1["revenue"]),

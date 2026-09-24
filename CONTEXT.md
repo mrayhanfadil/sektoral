@@ -1,0 +1,183 @@
+# Sektoral
+
+Sektoral turns a locally held snapshot of Sectors data on an IDX-listed issuer into a sourced Company Update for Indonesian equity analysts, and shows where the evidence stops.
+
+## Language
+
+### Outputs
+
+**Company Update**:
+The sourced research report on one issuer as of one Report Date, rendered as a web page and optionally a PDF.
+_Avoid_: report card, research note
+
+**Report Date**:
+The date a Company Update is written for; evidence published after it is excluded, and a market price keeps its own date.
+_Avoid_: run date, today
+
+**Audit Trace**:
+The record behind a Company Update: every data read, agent step, Method Gate and Stage Check verdict, blocker and assumption with its source.
+_Avoid_: log, debug output
+
+**Partial Result**:
+A Company Update whose evidence could not support every section; the missing evidence is shown, never filled in.
+_Avoid_: failed run, degraded report
+
+**Report Gallery**:
+The collection of finished Company Updates with their rating, target, method and status.
+
+### Evidence
+
+**Sectors Snapshot**:
+The local copy of Sectors data that is the only source of market data; it never expires and is refreshed only on purpose.
+_Avoid_: Sectors API, live data, database
+
+**Issuer Evidence**:
+Dated metrics transcribed from an issuer's official release, used when the Sectors Snapshot omits them; it can be quoted but does not by itself approve a forecast or valuation.
+_Avoid_: manual input, source pack
+
+**Latest Interim Actuals**:
+The issuer's most recent official period result (for example 1H26) published by the Report Date, treated as actual rather than context.
+_Avoid_: latest quarter, recent results
+
+**Market Quote Override**:
+A dated closing price newer than the one in the Sectors Snapshot.
+
+**Web News**:
+Dated headlines from Indonesian business media, used as narrative context only; no figure ever comes from it.
+_Avoid_: news source, market data
+
+**Signal**:
+A deterministic fact computed from the Sectors Snapshot (a peer rank, a year-on-year move, a flow streak) with an id that agent conclusions must cite.
+_Avoid_: metric, indicator, feature
+
+**Provenance Status**:
+Whether a datapoint is an actual, company guidance, or an analyst assumption; guidance is never labelled actual.
+
+**Analyst Assumption**:
+A judgement with a stated basis, source and uncertainty range, always labelled as such and never presented as issuer data.
+_Avoid_: estimate, default
+
+**Peer Group**:
+The issuer's comparable companies as listed in the Sectors peer table.
+_Avoid_: comps, sector
+
+### Agents
+
+**Planning Analyst Agent**:
+The agent that writes a research question and hypotheses, chooses which tools to call after each result, and gives a verdict on each hypothesis.
+_Avoid_: research agent, analyst bot
+
+**Hypothesis Verdict**:
+The Planning Analyst Agent's conclusion on one hypothesis: supported, not supported, or unanswered, citing Signals.
+
+**Research Agent**:
+The agent that reads only the Sectors Snapshot and writes a qualitative Research Brief; it produces no forecast or valuation.
+
+**Research Brief**:
+The Research Agent's evidence-linked summary, whose citations are checked against the rows actually read.
+
+**Forecast Assumption Agent**:
+The agent that turns dated issuer results and ticker news into bounded, source-matched Analyst Assumptions.
+
+**Host Fallback**:
+A labelled summary the system writes itself when an agent's output still fails validation after one repair.
+
+**Run Memory**:
+The per-ticker record of earlier runs that briefs the next plan and drives "since the last run".
+
+### Forecast
+
+**Model Profile**:
+The business archetype that decides which drivers, methods, Stage Checks and metrics apply: going concern, financial institution, or finite-life mining. A ticker never selects it.
+_Avoid_: sector, company type
+
+**Stage Classification**:
+The sourced judgement of an issuer's life-cycle stage, steady-state history, commodity dependence and segment mix that feeds method selection; an analyst may override it.
+
+**Screening Forecast**:
+A forecast extrapolated from history (CAGR, three-year averages, capex equal to D&A, flat debt); useful as a diagnostic but never production evidence.
+_Avoid_: base case, forecast (unqualified)
+
+**Analyst Scenario**:
+A full-year path built from the Latest Interim Actuals plus agent-chosen second-half and out-year assumptions; it can support an assumption-led target but is never a production forecast.
+_Avoid_: forecast, LoM forecast, projection
+
+**Forecast Plan**:
+A validated set of Analyst Assumptions tied to the exact evidence it was built on, reused while that evidence is unchanged.
+
+**Physical Chain**:
+For a finite-life miner, the chain from reserves through throughput, recovery, processing and realized price to revenue, costs and cash flow.
+_Avoid_: operating model, bridge
+
+### Valuation and release
+
+**Method Gates**:
+The six checks whose verdicts order the Method Chain: 0 business model, 1 data eligibility, 2 ownership structure, 3 cyclicality and operating stage, 4 life-cycle stage, 5 output sanity (the extreme-result threshold). Financial institutions are judged on Method Gates 0 and 5 only.
+_Avoid_: Gates 0-5, gate (unqualified)
+
+**Stage Checks**:
+The reasonableness checks run at each stage of building a Company Update: S1 intake, S2 forecast, S3 valuation (for example S2.9 for a complete, sourced driver chain).
+_Avoid_: G1/G2/G3, Gate 1/2/3, gate (unqualified)
+
+**Method Chain**:
+The ordered list of valuation methods for an issuer (primary, then fallbacks, then a last step), fixed from its Method Gate verdicts before any value is computed.
+_Avoid_: method ranking, blended valuation
+
+**Primary Method**:
+The first method in the Method Chain, and the one the Model Profile considers correct for the business.
+
+**Insufficient**:
+A method's state when a required input is missing or a structural check fails; only this moves the Method Chain to the next method.
+_Avoid_: rejected, failed, unreasonable
+
+**Selected Method**:
+The first sufficient method in the Method Chain, which alone sets the target price; other sufficient methods are only cross-checks and are never averaged in.
+
+**Last Step**:
+The final, assumption-led method in a Method Chain (for example FY EV/EBITDA for miners, FY PER for banks), with its own evidence requirements.
+
+**Method Override**:
+An analyst's recorded choice of method that replaces the system's proposal, shown in the Company Update alongside the system's proposal.
+
+**Release Gate**:
+The check that decides whether a Company Update may carry a target price and rating. The only term that uses the bare word "gate".
+_Avoid_: approval, sign-off
+
+**Release Status**:
+The Release Gate's outcome: production-ready, distributable assumption-led, or draft non-distributable.
+
+**Production-Ready**:
+Released on a sourced, reconciled driver forecast and the Model Profile's Primary Method.
+
+**Assumption-Led**:
+Released on an Analyst Scenario or a Last Step, with every assumption labelled; the forecast is still not production-ready.
+_Avoid_: production, provisional
+
+**Draft**:
+Not distributable; the target price and rating are withheld, and each blocker is named.
+_Avoid_: preview, internal
+
+**Blocker**:
+A named, critical gap that forces a Draft; it is never turned into a caveat.
+_Avoid_: warning, caveat
+
+**Target Price**:
+The per-share value from the Selected Method, shown only when the Release Gate passes.
+_Avoid_: fair value, intrinsic value
+
+**Rating**:
+Buy, Hold or Sell from the upside to the Target Price, or Review Required when that upside is extreme.
+_Avoid_: recommendation, call
+
+**Review Required**:
+The rating when upside exceeds +100% or downside is worse than -50%; it needs a sourced fundamental thesis and a stated model limitation.
+
+## Relationships
+
+- A **Model Profile** and a **Stage Classification** feed the **Method Gates**, whose verdicts fix the **Method Chain**.
+- **Stage Checks** failing on a critical input make every driver-based method **Insufficient**, so the chain can reach its **Last Step**.
+- The **Method Chain** yields one **Selected Method**; the **Release Gate** then decides the **Release Status**.
+- Only a **Production-Ready** or **Assumption-Led** **Release Status** allows a **Target Price** and **Rating**.
+- A **Hypothesis Verdict** cites **Signals**; **Web News** may accompany it but cannot stand alone.
+- An **Analyst Scenario** is anchored to **Latest Interim Actuals**; a **Screening Forecast** is not.
+

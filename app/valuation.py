@@ -349,7 +349,7 @@ def _holding_sotp_candidate(intake):
 
 def build(intake, fc, analyst_target=False, assumption_status=None,
           method_override=None, assumption_plan=None):
-    g3, notes = {}, []
+    s3, notes = {}, []
     t = intake["ticker"]
     profile = intake.get("model_profile", "unsupported")
     is_miner = profile == "finite_life_mining"
@@ -419,22 +419,22 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     eq_dcf = ev_g - net_debt
     ratio = eq_dcf / intake["market_cap"]
     tv_flag = gate_thresholds.tv_flagged(pv_tv / ev_g if ev_g else None)
-    g3["G3.1_terminal"] = ("peringatan" if tv_flag else "lolos",
+    s3["S3.1_terminal"] = ("peringatan" if tv_flag else "lolos",
                            f"porsi terminal {pv_tv/ev_g*100:.0f}% dari EV")
-    g3["G3.2_skala"] = ("lolos" if 0.2 <= ratio <= 3.0 else "gagal-dilabeli",
+    s3["S3.2_skala"] = ("lolos" if 0.2 <= ratio <= 3.0 else "gagal-dilabeli",
                         f"ekuitas DCF {ratio*100:.0f}% dari market cap")
-    g3["G3.3_implied"] = "lolos"  # dihitung dari model, bukan ketik manual
-    g3["G3.4_downside"] = ("lolos" if tp_down < tp else "gagal",
+    s3["S3.3_implied"] = "lolos"  # dihitung dari model, bukan ketik manual
+    s3["S3.4_downside"] = ("lolos" if tp_down < tp else "gagal",
                            f"downside Rp{fmt.rp(tp_down)} vs base Rp{fmt.rp(tp)}")
-    g3["G3.5_keyfin"] = "lolos"
-    g3["G3.6_peer"] = "dilabeli" if not intake["peers"] else "lolos"
-    g3["G3.7_band"] = "lolos"
+    s3["S3.5_keyfin"] = "lolos"
+    s3["S3.6_peer"] = "dilabeli" if not intake["peers"] else "lolos"
+    s3["S3.7_band"] = "lolos"
     method_gap = abs(ps_g - ps_x) / max(abs(ps_g), abs(ps_x), 1)
-    g3["G3.8_method_divergence"] = (
+    s3["S3.8_method_divergence"] = (
         "lolos" if method_gap <= 0.30 else "gagal",
         f"selisih Gordon vs exit {method_gap*100:.1f}%")
     _extreme = gate_thresholds.is_extreme_ratio(upside)
-    g3["G3.9_extreme_thesis"] = (
+    s3["S3.9_extreme_thesis"] = (
         "gagal" if _extreme else "lolos",
         "upside/downside ekstrem memerlukan tesis fundamental dan validasi analis"
         if _extreme else "band ekstrem tidak terpicu")
@@ -504,7 +504,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     ebitda_first = r_first.get("ebitda", 1.0)
     nd_ebitda_fc = net_debt / max(ebitda_first, 1.0) if ebitda_first else 0.0
 
-    # Gate 5 exit-multiple range: the issuer's own EV/EBITDA history (Sectors
+    # Method Gate 5 exit-multiple range: the issuer's own EV/EBITDA history (Sectors
     # peer tables carry no EV). It was the peer P/E range, a unit mismatch.
     peer_exit_low = None
     peer_exit_high = None
@@ -593,7 +593,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # Conservative defaults, gates will still record unverified via notes.
         pass
 
-    # Gate 0 holding with dissimilar lines: a validated count of dissimilar
+    # Method Gate 0 holding with dissimilar lines: a validated count of dissimilar
     # segments plus a holding signal (listed subsidiaries or NCI > 15%).
     listed_subs = (official_ev.get("listed_subsidiaries") or [])
     holding_signal = bool(listed_subs) or (nci_pct_val is not None and nci_pct_val > 15.0)
@@ -623,8 +623,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         "peer_exit_high": peer_exit_high,
     }
 
-    # --- Rantai metode (§4.1a v3.7): order dari verdict Gates 0-5, fixed sebelum nilai.
-    # Preliminary verdict untuk order (upside DCF awal); Gate 5 final dinilai ulang
+    # --- Rantai metode (§4.1a v3.7): order dari verdict Method Gates 0-5, fixed sebelum nilai.
+    # Preliminary verdict untuk order (upside DCF awal); Method Gate 5 final dinilai ulang
     # pada metode terpilih di bawah.
     prelim_verdict = model_profiles.evaluate(gate_inputs)
     prelim_order = method_chain.chain_for(prelim_verdict, profile)
@@ -790,7 +790,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         holding = _holding_sotp_candidate(intake)
     if "holding_sotp" in prelim_order:
         # Primary for a holding with dissimilar lines: its own evidence gate
-        # (official equity, listed stakes at market), not the forecast G2.9.
+        # (official equity, listed stakes at market), not the forecast S2.9.
         gate = release.assess_holding_sotp(intake, fc, holding, assumption_status)
         holding = method_chain.with_reasons(holding, gate["blockers"])
         holding.update(gate=gate, labels=list(holding.get("labels") or []) + gate["limitations"])
@@ -819,7 +819,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                     label=scenario_dcf["label"] + " [referensi]")
     if profile == "going_concern_fcff" and "ev_ebitda_peer" in candidates:
         # Ramping / thin history: the forward multiple values the scenario FY
-        # EBITDA behind its own gate, not the screening forecast's G2.9.
+        # EBITDA behind its own gate, not the screening forecast's S2.9.
         scenario_ev = _ev_ebitda_scenario_candidate(intake, fc, assumption_status)
         if scenario_ev:
             candidates["ev_ebitda_peer"] = scenario_ev
@@ -840,7 +840,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     selected = chain["selected"]
     sel = next((t for t in chain["trace"] if t["key"] == selected), None)
 
-    # Gate 5 dinilai ulang pada metode terpilih, bukan DCF bila DCF di-skip.
+    # Method Gate 5 dinilai ulang pada metode terpilih, bukan DCF bila DCF di-skip.
     if sel and sel["upside"] is not None:
         gate_inputs["upside_pct"] = sel["upside"] * 100.0
     scenario_sel = bool(sel and sel.get("gate") and
@@ -858,7 +858,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     chain["prelim_order"] = list(prelim_order)
     chain["stage"] = {"values": stage_vals, "source": stage_info.get("source"),
                       "rationale": stage_info.get("values", {}).get("rationale") if False else None}
-    # 1.5 Mandatory cross-checks: DCF primary, Gate 1c breach, atau NCI 15-40%.
+    # 1.5 Mandatory cross-checks: DCF primary, Method Gate 1c breach, atau NCI 15-40%.
     try:
         _nci_for_x = float(nci_pct_val) if nci_pct_val is not None else 0.0
     except (TypeError, ValueError):
@@ -870,7 +870,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         (15.0 < _nci_for_x <= 40.0)
     )
     chain["cross_check_required"] = bool(needs_x)
-    # Gate 5: an extreme result points to relative valuation as the cross-check.
+    # Method Gate 5: an extreme result points to relative valuation as the cross-check.
     # P/S needs no earnings, so it still reads when every earnings multiple is
     # extreme (a high-growth issuer on thin current profit).
     if chain.get("extreme") and "ps_peer" not in chain["order"]:
@@ -887,7 +887,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "decision": "cross_check" if ps_check["status"] == "sufficient" else "not_available",
             "upside": (ps_check["per_share"] / price_now - 1
                        if ps_check.get("per_share") and price_now else None),
-            "why": "Gate 5: target metode terpilih ekstrem; framework menunjuk valuasi "
+            "why": "Method Gate 5: target metode terpilih ekstrem; framework menunjuk valuasi "
                    "relatif (P/S peer) sebagai cross-check"})
     if needs_x:
         x_keys = {"relative_pe", "pbv_relative", "ev_ebitda_peer", "ev_sales_peer",
@@ -897,7 +897,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # Also count selected itself if it is relative/SOTP.
         if selected in x_keys:
             has_x = True
-        # Gate 2 (NCI 15-40%): the holding SOTP runs beside the chain as the
+        # Method Gate 2 (NCI 15-40%): the holding SOTP runs beside the chain as the
         # mandatory cross-check; it never becomes the target method.
         if holding and "holding_sotp" not in chain["order"]:
             price_now = intake.get("price")
@@ -907,7 +907,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                                       "decision": ("cross_check" if holding["status"] == "sufficient"
                                                    else "not_available"),
                                       "upside": up,
-                                      "why": "Gate 2: kepentingan non-pengendali 15-40% dari "
+                                      "why": "Method Gate 2: kepentingan non-pengendali 15-40% dari "
                                              "ekuitas mewajibkan cross-check SOTP"}]
             has_x = has_x or holding["status"] == "sufficient"
         chain["cross_check_present"] = bool(has_x)
@@ -1054,42 +1054,42 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             impl["ev_ebitda"] = ev_at_tp / first["ebitda"] if first["ebitda"] > 0 else None
 
     if selected != "fcff_dcf" or scenario_sel:
-        g3 = {
-            "G3.1_method": "lolos" if selected else "gagal",
-            "G3.2_skala": "lolos" if tp is not None else "dilabeli",
-            "G3.3_implied": "dilabeli",
-            "G3.4_downside": ("lolos" if (tp is not None and tp_down is not None and tp_down < tp)
+        s3 = {
+            "S3.1_method": "lolos" if selected else "gagal",
+            "S3.2_skala": "lolos" if tp is not None else "dilabeli",
+            "S3.3_implied": "dilabeli",
+            "S3.4_downside": ("lolos" if (tp is not None and tp_down is not None and tp_down < tp)
                               else "dilabeli" if tp is None or selected in ("sotp_lom", "ev_ebitda_fy")
                               else "gagal"),
-            "G3.5_keyfin": "lolos" if (f_last.get("net") and shares) else "gagal",
-            "G3.6_peer": "dilabeli" if not intake["peers"] else "lolos",
-            "G3.7_band": "dilabeli",
-            "G3.8_method_divergence": "dilabeli",
-            "G3.9_extreme_thesis": "gagal" if chain["extreme"] else "lolos",
-            "G3.10_method_chain": (chain["route"] or "none") + ":" + (selected or "-"),
+            "S3.5_keyfin": "lolos" if (f_last.get("net") and shares) else "gagal",
+            "S3.6_peer": "dilabeli" if not intake["peers"] else "lolos",
+            "S3.7_band": "dilabeli",
+            "S3.8_method_divergence": "dilabeli",
+            "S3.9_extreme_thesis": "gagal" if chain["extreme"] else "lolos",
+            "S3.10_method_chain": (chain["route"] or "none") + ":" + (selected or "-"),
         }
         if is_miner:
-            g3["G3.2_sotp"] = ("lolos" if sotp_result["status"] == "complete" else
+            s3["S3.2_sotp"] = ("lolos" if sotp_result["status"] == "complete" else
                                "dilabeli" if selected else "gagal")
-            g3["G3.5_release"] = release_result["status"]
+            s3["S3.5_release"] = release_result["status"]
         if scenario_sel:
             detail = sel["detail"]
-            g3["G3.3_implied"] = "lolos" if impl.get("per") or impl.get("ev_ebitda") else "dilabeli"
-            g3["G3.7_band"] = "lolos"
+            s3["S3.3_implied"] = "lolos" if impl.get("per") or impl.get("ev_ebitda") else "dilabeli"
+            s3["S3.7_band"] = "lolos"
             if detail.get("tv_share") is not None:
-                g3["G3.1_terminal"] = (
+                s3["S3.1_terminal"] = (
                     "peringatan" if gate_thresholds.tv_flagged(detail["tv_share"]) else "lolos",
                     f"porsi terminal {detail['tv_share'] * 100:.0f}% dari "
                     + ("nilai DDM" if selected == "ddm" else "EV"))
             if selected in ("fcff_dcf", "dcf_reference"):
                 gap = detail.get("exit_gap")
-                g3["G3.8_method_divergence"] = (
+                s3["S3.8_method_divergence"] = (
                     "dilabeli",
                     f"TP memakai Gordon; selisih dengan exit EV/EBITDA historis "
                     f"{gap * 100:.0f}% diungkapkan, tidak dirata-rata" if gap is not None
                     else "exit EV/EBITDA historis kurang dari tiga titik; Gordon saja")
     else:
-        g3["G3.10_method_chain"] = f"{chain['route']}:{selected}"
+        s3["S3.10_method_chain"] = f"{chain['route']}:{selected}"
 
     valuation_asset = sotp_result if is_miner else (ddm_result if is_bank else None)
     if isinstance(valuation_asset, dict):
@@ -1126,10 +1126,10 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
             "ps_exit": ps_x, "dcf_blend": fmt.tick((ps_g + ps_x) / 2), "tp": tp, "tp_down": tp_down, "tp_grid": grid,
             "upside": upside, "rating": rating,
-            "implied": impl, "lom": lom, "g3": g3, "notes": notes,
+            "implied": impl, "lom": lom, "s3": s3, "notes": notes,
             "method_chain": chain}
     if scenario_sel and selected in ("fcff_dcf", "dcf_reference"):
-        # The report, harness G3.1/G3.8 and Gate 5 read the DCF the target
+        # The report, harness S3.1/S3.8 and Method Gate 5 read the DCF the target
         # was built on; the screening DCF stays in wacc_inputs/trace only.
         d = sel["detail"]
         out.update(wacc=d["wacc"], pv_explicit=d["pv_explicit"], pv_terminal=d["pv_tv"],
