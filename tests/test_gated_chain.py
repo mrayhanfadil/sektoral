@@ -39,7 +39,7 @@ def test_chain_for_verdict_orders():
         "sotp_lom", "rnav_lom", "ev_ebitda_fy")
     assert MC.chain_for(_verdict("SOTP"), "going_concern_fcff")[0] == "holding_sotp"
     assert MC.chain_for(_verdict("FCFF/WACC DCF"), "going_concern_fcff") == (
-        "fcff_dcf", "relative_pe", "pe_fy_scenario")
+        "fcff_dcf", "relative_pe", "pe_fy_scenario", "pbv_book")
     # Thin history assessed -> EV/EBITDA peer first
     v_thin = {"primary": "DCF (shortened horizon)", "gates_failed": ["1a_filing_history"],
               "reasons": ["1a filing history 2y < 4y → shortened-horizon"]}
@@ -267,3 +267,23 @@ def test_ps_peer_uses_market_cap_over_revenue_in_band():
     from app import intake as I
     doc_in, _ = I.load("JPFA", as_of="2026-09-24")
     assert any(p.get("ps") for p in doc_in["peers"])
+
+
+def test_pbv_book_gate_requires_asset_heavy_issuer_and_three_pb_peers():
+    from app import release
+    base = {"model_profile": "going_concern_fcff"}
+    ok = release.assess_pbv_book(base, {}, {"detail": {"equity": 100.0, "shares": 10,
+                                                       "fixed_asset_share": 0.64,
+                                                       "peer_count": 6}}, "validated")
+    assert not any(k in b for b in ok["blockers"]
+                   for k in ("fixed assets", "peer P/BV", "peer PER", "parent equity"))
+    light = release.assess_pbv_book(base, {}, {"detail": {"equity": 100.0, "shares": 10,
+                                                          "fixed_asset_share": 0.2,
+                                                          "peer_count": 2}}, "validated")
+    assert any("fixed assets below half" in b for b in light["blockers"])
+    assert any("peer P/BV set" in b for b in light["blockers"])
+
+
+def test_going_concern_chain_ends_with_book_value_fallback():
+    order = MC.chain_for(_verdict("FCFF/WACC DCF"), "going_concern_fcff")
+    assert order[-1] == "pbv_book" and order.index("pe_fy_scenario") < order.index("pbv_book")

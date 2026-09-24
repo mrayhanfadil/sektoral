@@ -37,6 +37,7 @@ LABELS = {
     "ddm": "DDM dividen eksplisit + terminal Gordon (CoE, bukan WACC)",
     "pbv_roe": "P/BV wajar vs ROE (Inverse CoE)",
     "pbv_roe_fy": "P/BV wajar dari ROE skenario laba FY",
+    "pbv_book": "P/BV peer x nilai buku terlapor (aset berat)",
     "pe_fy_scenario": "FY26F PER median peer x EPS skenario analis",
 }
 
@@ -46,7 +47,7 @@ SHORT = {"sotp_lom": "SOTP/LoM", "rnav_lom": "RNAV LoM", "ev_ebitda_fy": "EV/EBI
          "holding_sotp": "Holding SOTP", "property_nav": "Property NAV",
          "dcf_reference": "DCF referensi",
          "fcff_dcf": "DCF FCFF", "relative_pe": "PER relatif", "ddm": "DDM",
-         "pbv_roe": "P/BV-ROE", "pbv_roe_fy": "P/BV-ROE FY skenario",
+         "pbv_roe": "P/BV-ROE", "pbv_roe_fy": "P/BV-ROE FY skenario", "pbv_book": "P/BV buku",
          "pe_fy_scenario": "PER FY skenario"}
 
 SCALE_BAND = gate_thresholds.SCALE_BAND
@@ -368,7 +369,7 @@ def chain_for(verdict, profile: str) -> tuple:
         return ("sotp_lom", "rnav_lom", "ev_ebitda_fy")
     if prof == "financial_ddm":
         return ("ddm", "pbv_roe", "pbv_roe_fy", "relative_pe", "pe_fy_scenario")
-    return ("fcff_dcf", "relative_pe", "pe_fy_scenario")
+    return ("fcff_dcf", "relative_pe", "pe_fy_scenario", "pbv_book")
 
 
 def run(profile: str, candidates: dict, price, order=None, override_key=None) -> dict:

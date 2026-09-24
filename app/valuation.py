@@ -204,6 +204,42 @@ def _pbv_roe_fy_candidate(intake, fc, assumption_status, coe, g):
     return candidate
 
 
+def _pbv_book_candidate(intake, fc, assumption_status):
+    """Median peer P/B x reported BVPS (official interim), for asset-heavy
+    going concerns; downside at the lower quartile."""
+    evidence = intake.get("official_evidence") or {}
+    balance = evidence.get("balance_sheet") or {}
+    usd = evidence.get("reporting_currency") == "USD"
+    fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
+    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    equity = balance.get("equity_attributable")
+    if equity is None and balance.get("total_equity") is not None:
+        equity = balance["total_equity"] - (balance.get("non_controlling_interest") or 0)
+    equity = equity * fx if equity is not None and fx else None
+    history = ((cache.company_report(intake["ticker"]) or {}).get("financials") or {}) \
+        .get("historical_financials") or []
+    last = history[-1] if history else {}
+    share = (last.get("fixed_assets") / last["total_assets"]
+             if last.get("fixed_assets") and last.get("total_assets") else None)
+    pbvs = method_chain.peer_pbvs(intake.get("peers"))
+    detail = {"shares": shares, "equity": equity, "fixed_asset_share": share,
+              "fixed_asset_year": last.get("year"), "peer_count": len(pbvs),
+              "balance_period": balance.get("period_end"),
+              "bvps": equity / shares if equity and shares else None}
+    ps = down = None
+    if len(pbvs) >= method_chain.MIN_PEERS and detail["bvps"]:
+        q1, median, q3 = method_chain.pe_quartiles(pbvs)
+        detail.update(q1_pb=q1, median_pb=median, q3_pb=q3)
+        ps, down = median * detail["bvps"], q1 * detail["bvps"]
+    gate = release.assess_pbv_book(intake, fc, {"detail": detail}, assumption_status)
+    candidate = method_chain.candidate("pbv_book", per_share=ps, per_share_down=down,
+                                       reasons=gate["blockers"], labels=gate["limitations"],
+                                       detail=detail)
+    candidate["label"] = "P/BV median peer x nilai buku terlapor"
+    candidate["gate"] = gate
+    return candidate
+
+
 def _holding_sotp_candidate(intake):
     """Holding SOTP inputs: stakes from the issuer pack (IDX register), each
     listed subsidiary's market cap and book equity from the Sectors peer
@@ -602,6 +638,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "pbv_roe", per_share=tp_inv, per_share_down=pbv_down,
             reasons=pbv_reasons + method_chain.scale_reasons(tp_inv, shares, mcap),
             detail={"fair_pbv": (ddm_result or {}).get("fair_pbv"), "roae": roae, "bvps": bvps})
+    if "pbv_book" in prelim_order:
+        candidates["pbv_book"] = _pbv_book_candidate(intake, fc, assumption_status)
     if "pbv_roe_fy" in prelim_order:
         candidates["pbv_roe_fy"] = _pbv_roe_fy_candidate(intake, fc, assumption_status, re, g)
     # Generic peer/NAV/SOTP placeholders for gate-driven orders (1.4)
@@ -745,7 +783,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         if extreme_blocker and release_result["status"] != "draft_non_distributable":
             release_result.update(status="draft_non_distributable",
                                   blockers=release_result["blockers"] + [extreme_blocker])
-    elif selected in ("pe_fy_scenario", "pbv_roe_fy"):
+    elif selected in ("pe_fy_scenario", "pbv_roe_fy", "pbv_book"):
         release_result = dict(sel["gate"])
         release_result["underlying_primary"] = release.common_blockers(profile, intake, fc)
         release_result["route"], release_result["method_key"] = chain["route"], selected
@@ -815,7 +853,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         if tp_down is None and sel["per_share_down"] is not None:
             tp_down = fmt.tick(sel["per_share_down"])
         rating = (rating_mod.classify(upside) if selected in ("ev_ebitda_fy", "pe_fy_scenario",
-                                                              "pbv_roe_fy")
+                                                              "pbv_roe_fy", "pbv_book")
                   else verdict.rating_override or rating_mod.classify(upside))
         if selected == "ev_ebitda_fy":
             tp_down, grid = None, {}

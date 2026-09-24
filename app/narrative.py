@@ -3284,6 +3284,9 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     # stays as the cross-check (framework Gate 0).
     pbv = (next((t["detail"] for t in va["method_chain"]["trace"] if t["key"] == "pbv_roe_fy"), None)
            if va["method_chain"].get("selected") == "pbv_roe_fy" else None)
+    # Asset-heavy going concern with too few PER peers: peer P/B on reported book.
+    book = (next((t["detail"] for t in va["method_chain"]["trace"] if t["key"] == "pbv_book"), None)
+            if va["method_chain"].get("selected") == "pbv_book" else None)
     label = f"FY{scenario['year'] % 100:02d}F"
     usd = (intake.get("official_evidence") or {}).get("reporting_currency") == "USD"
     to_idr = d.get("fx") or 1.0
@@ -3331,6 +3334,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         f"{va['rating']}: target Rp{fmt.rp(va['tp'])} ({fmt.pct(va['upside'])}) dari "
         + (f"P/BV wajar {fmt.mult(pbv['fair_pbv'], 1)} atas ROE {label} "
            f"{fmt.pct(pbv['roe'])}." if pbv else
+           f"P/B median peer {fmt.mult(book['median_pb'], 1)} atas nilai buku terlapor." if book else
            f"PER median peer {fmt.mult(d['median_pe'], 1)} atas EPS {label}."), 30)
     fy_attr = fy["net_profit_attributable"]
     fy_money = (f"US${money(fy_attr)} juta" if usd else f"Rp{money(fy_attr)} miliar")
@@ -3358,6 +3362,12 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                   + ("sehingga pasar belum sepenuhnya memasukkan profitabilitas ini."
                      if pbv_now < pbv["fair_pbv"] else
                      "sehingga harga sudah melampaui nilai yang dibenarkan ROE tersebut."))
+    elif own_move and ihsg_move and book:
+        pb_now = intake["price"] / book["bvps"]
+        priced = (f" Sejak rilis {own_move[1]} saham {'naik' if own_move[0] >= 0 else 'turun'} "
+                  f"{fmt.pct(abs(own_move[0]))} (IHSG {'naik' if ihsg_move[0] >= 0 else 'turun'} "
+                  f"{fmt.pct(abs(ihsg_move[0]))}); P/B kini {fmt.mult(pb_now, 1)} dibanding median "
+                  f"peer {fmt.mult(book['median_pb'], 1)}.")
     elif own_move and ihsg_move and pe_now:
         relative = "di bawah" if pe_now < d["median_pe"] else "di atas"
         priced = (f" Sejak rilis {own_move[1]} saham {'naik' if own_move[0] >= 0 else 'turun'} "
@@ -3399,11 +3409,18 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         f"Rp{fmt.rp(round(pbv['bvps']))} (ekuitas pemilik induk, {pbv['equity_source']}); "
         f"pada CoE +1pp nilainya Rp{fmt.rp(fmt.tick(pbv['fair_pbv_down'] * pbv['bvps']))}. "
         if pbv else "")
+    book_lead = (
+        f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai P/B median {book['peer_count']} "
+        f"peer {fmt.mult(book['median_pb'], 2)} atas BVPS terlapor Rp{fmt.rp(round(book['bvps']))} "
+        f"(ekuitas pemilik induk per {book.get('balance_period') or '-'}), dengan kuartil bawah "
+        f"Rp{fmt.rp(fmt.tick(book['q1_pb'] * book['bvps']))}. P/BV dipakai karena aset tetap "
+        f"{fmt.pct(book['fixed_asset_share'])} dari total aset (FY{book.get('fixed_asset_year')}) "
+        f"dan PER peer valid kurang dari tiga. " if book else "")
     per_lead = (
         f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai PER median {d['peer_count']} "
         f"peer {fmt.mult(d['median_pe'], 1)} atas EPS {label} Rp{fmt.rp(round(eps_fy))} (laba "
         f"1H resmi dan asumsi semester kedua), dengan rentang kuartil Rp{fmt.rp(va['tp_down'])} "
-        f"sampai Rp{fmt.rp(fmt.tick(d['per_share_up']))}. " if not pbv else "")
+        f"sampai Rp{fmt.rp(fmt.tick(d['per_share_up']))}. " if not (pbv or book) else "")
     driver_text = ((driver[:1].lower() + driver[1:] if driver[1:2].islower() else driver)
                    if driver else None)
     growth_text = (f"Target ini mengimplikasikan {growth}"
@@ -3414,10 +3431,15 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                         if d.get("median_pe") else "")
                      + (f" dan rata-rata band P/E {fmt.mult(band['mean'], 1)}" if band else "")
                      + ". " if pe_now else "")
-    skipped_text = (f"{', '.join(skipped)} belum dipakai karena forecast driver belum "
-                    "direkonsiliasi." if skipped else "")
-    valuation_text = pbv_lead + per_lead + growth_text + multiple_text + skipped_text
-    doc["cover"]["paragraf"][2] = {"judul": ("Target harga berbasis ROE FY" if pbv
+    # Each skipped method with its own reason (forecast gap, too few peers, ...).
+    skipped_reasons = [f"{t['short']} ({method_chain.reader_reason(t['reasons'][0])})"
+                       for t in va["method_chain"]["trace"]
+                       if t["decision"] == "skipped" and t.get("reasons")]
+    skipped_text = (f"Metode sebelumnya dilewati: {'; '.join(skipped_reasons)}."
+                    if skipped_reasons else "")
+    valuation_text = pbv_lead + book_lead + per_lead + growth_text + multiple_text + skipped_text
+    doc["cover"]["paragraf"][2] = {"judul": ("Target harga berbasis ROE FY" if pbv else
+                                             "Target harga berbasis nilai buku" if book
                                              else "Target harga berbasis laba FY"),
                                    "isi": valuation_text}
 
@@ -3477,25 +3499,27 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
             f"Sumber: {actual_title} ({scenario['published_at']}); H2 adalah asumsi analis "
             f"dari rilis dan berita bertanggal ({cite(a.get('source_ids'))}), bukan panduan "
             f"emiten. EPS memakai {scenario['attributable_basis']}.")}
-    rows = []
-    for name, pe in (("Kuartil bawah", d["q1_pe"]), ("Median (basis)", d["median_pe"]),
-                     ("Kuartil atas", d["q3_pe"])):
-        value = fmt.tick(pe * d["eps_idr"])
-        rows.append([name, fmt.mult(pe, 1), f"Rp{fmt.rp(value)}",
-                     fmt.pct(value / intake["price"] - 1)])
-    sensitivity = {
-        "n": 0, "judul": f"Target harga: PER peer x EPS {label}", "tipe": "tabel",
-        "data": {"cols": ["PER peer", "Kelipatan", "Nilai per saham", "Terhadap harga"],
-                 "rows": rows},
-        "catatan_sumber": (
-            f"Sumber: PER TTM data Sectors"
-            + (f" ({intake['peer_basis']})" if intake.get("peer_basis") else "")
-            + f" untuk peer dengan PER 0-50x ({peer_names}); "
-            + (f"saham dari {_shares_source(intake.get('official_evidence'))}"
-               if _shares_source(intake.get("official_evidence"))
-               else "saham dari neraca interim resmi")
-            + (f"; kurs Rp{fmt.rp(d['fx'])}/USD" if d.get("fx") else "")
-            + f"; harga penutupan {intake['price_date']}.")}
+    sensitivity = None
+    if d.get("median_pe"):
+        rows = []
+        for name, pe in (("Kuartil bawah", d["q1_pe"]), ("Median (basis)", d["median_pe"]),
+                         ("Kuartil atas", d["q3_pe"])):
+            value = fmt.tick(pe * d["eps_idr"])
+            rows.append([name, fmt.mult(pe, 1), f"Rp{fmt.rp(value)}",
+                         fmt.pct(value / intake["price"] - 1)])
+        sensitivity = {
+            "n": 0, "judul": f"Target harga: PER peer x EPS {label}", "tipe": "tabel",
+            "data": {"cols": ["PER peer", "Kelipatan", "Nilai per saham", "Terhadap harga"],
+                     "rows": rows},
+            "catatan_sumber": (
+                f"Sumber: PER TTM data Sectors"
+                + (f" ({intake['peer_basis']})" if intake.get("peer_basis") else "")
+                + f" untuk peer dengan PER 0-50x ({peer_names}); "
+                + (f"saham dari {_shares_source(intake.get('official_evidence'))}"
+                   if _shares_source(intake.get("official_evidence"))
+                   else "saham dari neraca interim resmi")
+                + (f"; kurs Rp{fmt.rp(d['fx'])}/USD" if d.get("fx") else "")
+                + f"; harga penutupan {intake['price_date']}.")}
     if pbv:
         coes = [pbv["coe"] - 0.01, pbv["coe"], pbv["coe"] + 0.01]
         gs = [pbv["g"] - 0.01, pbv["g"], pbv["g"] + 0.01]
@@ -3520,7 +3544,24 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                    if _shares_source(intake.get("official_evidence"))
                    else "saham dari neraca interim resmi")
                 + f"; harga penutupan {intake['price_date']}. PER peer menjadi cross-check.")}
-    exhibits = [bridge, sensitivity]
+    if book:
+        rows_pb = []
+        for name, pb in (("Kuartil bawah", book["q1_pb"]), ("Median (basis)", book["median_pb"]),
+                         ("Kuartil atas", book["q3_pb"])):
+            value = fmt.tick(pb * book["bvps"])
+            rows_pb.append([name, fmt.mult(pb, 2), f"Rp{fmt.rp(value)}",
+                            fmt.pct(value / intake["price"] - 1)])
+        sensitivity = {
+            "n": 0, "judul": "Target harga: P/B peer x nilai buku terlapor", "tipe": "tabel",
+            "data": {"cols": ["P/B peer", "Kelipatan", "Nilai per saham", "Terhadap harga"],
+                     "rows": rows_pb},
+            "catatan_sumber": (
+                "Sumber: P/B TTM data Sectors untuk peer dengan P/B 0-10x; ekuitas pemilik induk "
+                f"dari neraca interim resmi per {book.get('balance_period') or '-'}"
+                + (f"; kurs Rp{fmt.rp(d['fx'])}/USD" if d.get("fx") else "")
+                + f"; harga penutupan {intake['price_date']}. Skenario laba FY menjadi konteks "
+                  "tesis, bukan dasar target.")}
+    exhibits = [bridge] + ([sensitivity] if sensitivity else [])
     if forward:
         exhibits.append({
             "n": 0, "judul": f"Skenario laba {forward[0]['label']}-{forward[-1]['label']}",
@@ -3536,7 +3577,8 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                 "Sumber: asumsi analis tahunan dari rilis resmi dan berita bertanggal; "
                 "bukan panduan emiten. Target harga tetap memakai " + label + ".")})
     doc["bagian"].append(_thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr))
-    doc["bagian"].append({"halaman": 0, "judul": (f"Target harga berbasis ROE {label}" if pbv
+    doc["bagian"].append({"halaman": 0, "judul": (f"Target harga berbasis ROE {label}" if pbv else
+                                                   "Target harga berbasis nilai buku" if book
                                                    else f"Target harga berbasis laba {label}"),
                           "layout": "stack", "paragraf": [valuation_text],
                           "exhibit": exhibits})
@@ -3611,10 +3653,14 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         (f"Rating dan target harga memakai P/BV wajar dari ROE {label} (excess return untuk "
          "bank); ROE memakai laba skenario analis dari aktual 1H resmi dan asumsi H2, dan PER "
          "peer menjadi cross-check." if pbv else
+         "Rating dan target harga memakai P/B median peer atas nilai buku terlapor (emiten "
+         "aset berat, PER peer valid kurang dari tiga); skenario laba FY menjadi konteks tesis."
+         if book else
          f"Rating dan target harga memakai PER median peer atas EPS {label}; EPS adalah "
          "skenario analis dari aktual 1H resmi dan asumsi H2, bukan forecast driver."),
         f"Rantai metode: {', '.join(skipped) or '-'} dilewati karena forecast driver belum "
-        "direkonsiliasi" + ("." if pbv else "; metode ini adalah langkah terakhir rantai."),
+        "direkonsiliasi" + ("." if pbv else "; P/BV buku adalah langkah terakhir rantai."
+                            if book else "; metode ini adalah langkah terakhir rantai."),
         f"PER peer adalah TTM dari data Sectors ({peer_names}); peer dianggap sebanding, "
         "dan kuartil bawah/atas menjadi sensitivitas.",
         "Skenario tahun lanjutan adalah asumsi analis tahunan dan tidak mengubah tahun dasar target.",
@@ -3982,7 +4028,8 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
     if method == "rnav" and not intake.get("mineops"):
         raise ValueError("method rnav ditolak: tanpa overlay operasional di data Sectors")
     if (va.get("release") or {}).get("status") == "distributable_assumption_led":
-        if (va.get("method_chain") or {}).get("selected") in ("pe_fy_scenario", "pbv_roe_fy"):
+        if (va.get("method_chain") or {}).get("selected") in ("pe_fy_scenario", "pbv_roe_fy",
+                                                              "pbv_book"):
             return _build_earnings_led(intake, fc, va, g1, method=method)
         return _build_assumption_led(intake, fc, va, g1, method=method)
     if (va.get("release") or {}).get("status") != "distributable":

@@ -218,7 +218,9 @@ def test_going_concern_reaches_earnings_led_route_and_releases():
     va = valuation.build(intake_, fc, assumption_status="validated")
     chain = va["method_chain"]
     assert chain["selected"] == "pe_fy_scenario" and chain["route"] == "fallback"
-    assert [t["decision"] for t in chain["trace"]] == ["skipped", "skipped", "selected"]
+    # pbv_book (asset-heavy fallback) follows and is not needed once PER FY is selected.
+    assert [t["decision"] for t in chain["trace"]] == ["skipped", "skipped", "selected",
+                                                       "not_needed"]
     assert va["release"]["status"] == "distributable_assumption_led"
     eps = 9e12 / test_valtables.SHARES
     assert va["tp"] == fmt.tick(2.8 * eps)  # median peer PER, IDX tick
