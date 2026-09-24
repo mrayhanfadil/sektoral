@@ -1,5 +1,6 @@
 """TAHAP 2: FORECAST ENGINE (GATE 2). Generik, berbasis driver, tiga tahun."""
 from . import fmt
+from . import scrub
 from . import rnav
 
 
@@ -40,6 +41,49 @@ def _interim_scenario(intake, plan):
                 "capital_expenditure": metrics["capital_expenditure"] + h2_capex}}
 
 
+def _earnings_scenario(intake, plan):
+    """FY laba dari aktual 1H resmi + asumsi H2 agen (going concern/bank).
+
+    Revenue dan laba dari 1H + H2; going concern juga membawa margin EBITDA
+    dan intensitas capex FY dari agen untuk DCF skenario. Hasilnya skenario
+    analis berlabel, bukan forecast driver produksi.
+    """
+    scenario = (plan or {}).get("earnings_scenario")
+    actual = intake.get("latest_official_actual") or {}
+    metrics = actual.get("metrics") or {}
+    if (not isinstance(scenario, dict) or not actual or
+            not str(actual.get("period") or "").startswith("1H") or
+            any(not isinstance(metrics.get(key), (int, float)) for key in
+                ("revenue", "net_profit"))):
+        return None
+    h1_revenue, h1_net = metrics["revenue"], metrics["net_profit"]
+    h2_revenue = h1_revenue * scenario["h2_revenue_to_h1"]
+    h2_net = h2_revenue * scenario["h2_net_margin_pct"] / 100
+    attributable = metrics.get("net_profit_attributable")
+    if isinstance(attributable, (int, float)) and h1_net > 0 and attributable > 0:
+        share, basis = attributable / h1_net, "porsi induk 1H resmi"
+    else:
+        share, basis = 1.0, "laba konsolidasi (porsi induk tidak dilaporkan terpisah)"
+    full_net = h1_net + h2_net
+    full_revenue = h1_revenue + h2_revenue
+    full_year = {"revenue": full_revenue, "net_profit": full_net,
+                 "net_profit_attributable": full_net * share}
+    # Going concern: FY EBITDA margin and capex intensity feed the scenario
+    # FCFF DCF. They are the agent's validated FY assumptions, not 1H actuals.
+    for key, field in (("ebitda", "fy_ebitda_margin_pct"),
+                       ("capex", "fy_capex_to_revenue_pct")):
+        if isinstance(scenario.get(field), (int, float)):
+            full_year[key] = full_revenue * scenario[field] / 100
+    return {"year": int(str(actual["period_end"])[:4]),
+            "unit": actual.get("unit"), "source_url": scenario.get("source_url"),
+            "published_at": scenario.get("published_at"),
+            "rationale": scenario.get("rationale"), "assumptions": scenario,
+            "h1": {"revenue": h1_revenue, "net_profit": h1_net},
+            "h2": {"revenue": h2_revenue, "net_profit": h2_net},
+            "full_year": full_year,
+            "attributable_share": share, "attributable_basis": basis}
+
+
 def _outyear_scenario(interim, plan):
     """Calculate earnings from four validated, explicit agent assumption rows."""
     assumptions = (plan or {}).get("outyear_scenario")
@@ -49,20 +93,24 @@ def _outyear_scenario(interim, plan):
     if [row.get("year") for row in assumptions if isinstance(row, dict)] != expected:
         return None
     previous_revenue = interim["full_year"]["revenue"]
+    share = interim.get("attributable_share") or 1.0
     rows = []
+    optional = lambda revenue, pct: None if pct is None else revenue * pct / 100
     for assumption in assumptions:
         revenue = previous_revenue * (1 + assumption["revenue_growth_pct"] / 100)
+        net = revenue * assumption["net_income_margin_pct"] / 100
         rows.append({
             "year": assumption["year"],
             "label": f"FY{assumption['year'] % 100:02d}F",
             "revenue": revenue,
-            "ebitda": revenue * assumption["ebitda_margin_pct"] / 100,
-            "net_profit": revenue * assumption["net_income_margin_pct"] / 100,
-            "capex": revenue * assumption["capex_to_revenue_pct"] / 100,
+            "ebitda": optional(revenue, assumption.get("ebitda_margin_pct")),
+            "net_profit": net,
+            "net_profit_attributable": net * share,
+            "capex": optional(revenue, assumption.get("capex_to_revenue_pct")),
             "revenue_growth_pct": assumption["revenue_growth_pct"],
-            "ebitda_margin_pct": assumption["ebitda_margin_pct"],
+            "ebitda_margin_pct": assumption.get("ebitda_margin_pct"),
             "net_income_margin_pct": assumption["net_income_margin_pct"],
-            "capex_to_revenue_pct": assumption["capex_to_revenue_pct"],
+            "capex_to_revenue_pct": assumption.get("capex_to_revenue_pct"),
             "rationale": assumption["rationale"],
             "source_ids": assumption["source_ids"],
         })
@@ -89,7 +137,8 @@ def build(intake, n_years=5, assumption_plan=None):
     for i in range(1, len(gs)):
         if gs[i] >= gs[i - 1]:
             gs[i] = round(gs[i - 1] - 0.5, 1)
-    normalized_plan = dict(assumption_plan or {})
+    # Plans cached before a style rule existed are cleaned the same way.
+    normalized_plan = dict(scrub.normalize_plan(assumption_plan or {}))
     if isinstance(normalized_plan.get("interim_scenario"), dict):
         interim_plan = dict(normalized_plan["interim_scenario"])
         scenario_profile = intake.get("analyst_scenario") or {}
@@ -216,6 +265,14 @@ def build(intake, n_years=5, assumption_plan=None):
             "payability/TC-RC/royalti/mix; dijelaskan di narasi valuasi.")
     operating_bridge = intake.get("operating_bridge")
     is_mining = intake.get("model_profile") == "finite_life_mining"
+    is_ddm = intake.get("model_profile") == "financial_ddm"
+    driver_evidence = (normalized_plan.get("driver_evidence")
+                       if isinstance(normalized_plan.get("driver_evidence"), dict)
+                       else None) or intake.get("driver_evidence") or intake.get("drivers")
+    interim_scenario = _interim_scenario(intake, normalized_plan)
+    # Source coverage is necessary, but cannot turn the historical screening
+    # rows above into a calculated driver forecast.
+    production_blockers = []
     if is_mining:
         # Source rows by themselves are not a physical-to-financial forecast.
         # Until that engine is implemented and reconciled, CAGR remains a
@@ -224,20 +281,54 @@ def build(intake, n_years=5, assumption_plan=None):
         g2["catatan"].append(
             "G2.9: forecast fisik-ke-keuangan belum dihitung; angka CAGR hanya "
             "screening proxy dan tidak layak menjadi forecast produksi.")
+        forecast_basis, production_ready = "historical_screening_proxy", False
     else:
+        # Per-series driver provenance is judged once, by the release gate
+        # (release._check_driver_forecast); this screen cannot pass G2.9.
+        # Interim reconciliation: a validated current-year anchor must be
+        # consistent with the published FY row; otherwise the forecast year
+        # does not reconcile to valuation.
+        if interim_scenario and rows:
+            try:
+                anchor_rev = float((interim_scenario.get("full_year") or {}).get("revenue") or 0)
+                row_rev = float(rows[0].get("revenue") or 0)
+                if anchor_rev > 0 and row_rev > 0 and abs(anchor_rev / row_rev - 1) > 0.50:
+                    production_blockers.append(
+                        f"interim anchor FY{interim_scenario.get('year')} "
+                        f"deviates {abs(anchor_rev/row_rev-1)*100:.0f}% from forecast row; "
+                        "reconcile before production release")
+            except (TypeError, ValueError):
+                pass
+        base_g2_failed = [k for k, v in g2.items()
+                          if k != "catatan" and (v == "gagal" or (isinstance(v, tuple) and str(v[0]).startswith("gagal")))]
+        if is_ddm:
+            production_blockers.append(
+                "financial driver-to-earnings/capital bridge is not calculated; "
+                "historical revenue/margins and assumed payout remain screening inputs")
+        else:
+            production_blockers.append(
+                "operating driver-to-FCFF bridge is not calculated; historical CAGR, "
+                "capex=D&A, flat debt and balancing cash remain screening inputs")
         g2["G2.9_driver_forecast"] = "gagal"
+        reasons = list(production_blockers)
+        if base_g2_failed:
+            reasons.append(f"gate {', '.join(base_g2_failed)} gagal")
         g2["catatan"].append(
-            "G2.9: angka CAGR dan capex=D&A hanyalah screen; forecast driver, "
-            "modal kerja, serta jadwal utang belum direkonsiliasi.")
-    interim_scenario = _interim_scenario(intake, normalized_plan)
+            "G2.9: forecast masih screening; bukti driver belum dihitung menjadi "
+            f"proyeksi yang direkonsiliasi ({'; '.join(reasons)}).")
+        forecast_basis, production_ready = "historical_screening_proxy", False
+    earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
-            "outyear_scenario": _outyear_scenario(interim_scenario, assumption_plan),
+            "earnings_scenario": earnings_scenario,
+            "outyear_scenario": _outyear_scenario(
+                interim_scenario if is_mining else earnings_scenario, normalized_plan),
             "operating_bridge": operating_bridge,
-            "driver_evidence": intake.get("driver_evidence") or intake.get("drivers"),
-            "forecast_basis": "historical_screening_proxy",
-            "production_ready": False,
+            "driver_evidence": driver_evidence,
+            "forecast_basis": forecast_basis,
+            "production_ready": production_ready,
+            "production_blockers": production_blockers,
             "assumption_plan": normalized_plan,
             "base": {"cash": cash0, "debt": debt0, "equity": eq0,
                      "other_liab": oth_liab, "noncash": nc0}}

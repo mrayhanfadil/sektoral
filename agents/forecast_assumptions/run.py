@@ -17,6 +17,9 @@ from agents.estimator.run import _chat, _response_text
 DRIVERS = {"revenue_growth_pp", "ebitda_margin_pp", "wacc_bps", "coe_bps", "none"}
 SPEC_PATH = Path(__file__).resolve().parents[2] / "spec" / "Instruksi-Report-v3.md"
 PLAN_STORE = Path(__file__).resolve().parents[2] / "data" / "forecast_plans"
+# Bump when a subagent's required output changes, so cached plans without the
+# new fields are not reused (2: earnings key_risks; 3: thesis_titles).
+PLAN_SCHEMA = 4
 
 
 def _spec_sections():
@@ -64,6 +67,7 @@ def _source_payload(intake):
     deepdive = {str(item.get("source_url") or ""): item
                 for item in (intake.get("news_full") or [])
                 if isinstance(item, dict)}
+    search = intake.get("news_search") or {}
     selected_news = []
     for row in news:
         if not isinstance(row, dict):
@@ -80,6 +84,9 @@ def _source_payload(intake):
                               "origin": row.get("origin") or "sectors",
                               "origins": row.get("origins") or ["sectors"],
                               "publisher": row.get("publisher"),
+                              "register_id": row.get("register_id") or f"src-{len(selected_news)}",
+                              "event_key": row.get("event_key"),
+                              "tavily_query": row.get("tavily_query") or search.get("query"),
                               "body": str(row.get("body") or "")[:1400],
                               "full_text": full_text,
                               "full_text_status": str(full.get("fetch_status") or "unavailable_unknown"),
@@ -89,6 +96,13 @@ def _source_payload(intake):
     return {
         "ticker": intake["ticker"], "as_of": intake["as_of"],
         "model_profile": intake.get("model_profile"),
+        "annuals": [{"year": a.get("year"), "revenue": a.get("revenue"),
+                     "earnings": a.get("earnings"), "ebitda": a.get("ebitda"),
+                     "capex": a.get("capex_out")}
+                    for a in (intake.get("annuals") or []) if isinstance(a, dict)][-6:],
+        "tavily_search": {"status": search.get("status"),
+                          "queries": search.get("queries") or ([search.get("query")] if search.get("query") else []),
+                          "window": search.get("window")},
         "official": {
             "source_url": actual.get("source_url"),
             "published_at": actual.get("published_at"),
@@ -116,10 +130,22 @@ def _validate(plan, source, require_news_coverage=True):
     problems = []
     if not isinstance(plan, dict):
         return ["response is not an object"]
+    # The agent proposes magnitudes; the engine calculates TP/valuation.
+    # Any direct TP/valuation/readiness write is rejected.
+    forbidden_keys = ("target_price", "valuation", "production_ready",
+                      "forecast_basis", "tp", "rating")
+    for forbidden in forbidden_keys:
+        if forbidden in plan:
+            problems.append(f"agent must not write {forbidden}; the engine calculates it")
     effects = plan.get("news_effects")
     if not isinstance(effects, list):
         problems.append("news_effects must be a list")
         effects = []
+    for i, item in enumerate(effects):
+        if isinstance(item, dict):
+            for forbidden in forbidden_keys:
+                if forbidden in item:
+                    problems.append(f"news_effects[{i}] must not write {forbidden}")
     seen = set()
     available = {row["index"]: row for row in source["news"]}
     for i, item in enumerate(effects):
@@ -172,6 +198,39 @@ def _validate(plan, source, require_news_coverage=True):
                 not isinstance(item.get(field), str) or len(item[field].strip()) < 12
                 for field in ("factual_basis", "mechanism", "uncertainty")):
             problems.append(f"news_effects[{i}] needs fact, mechanism, and uncertainty")
+        # Forward-looking event chain (optional but validated when present):
+        # published fact -> timing/condition -> driver -> annual assumption.
+        # Publication date (timestamp) must be <= as_of; the expected event
+        # date may lie in the future when the announcement was already public.
+        event_date = item.get("event_date") or item.get("event_window")
+        if event_date is not None:
+            try:
+                date.fromisoformat(str(event_date)[:10])
+            except ValueError:
+                problems.append(f"news_effects[{i}] event_date must be YYYY-MM-DD")
+        conditions = item.get("conditions") or item.get("probability")
+        if conditions is not None and not isinstance(conditions, str):
+            problems.append(f"news_effects[{i}] conditions must be text")
+        base_value = item.get("base_value")
+        if base_value is not None and not _number(base_value, -1e18, 1e18):
+            problems.append(f"news_effects[{i}] base_value must be numeric")
+        uncertainty_range = item.get("uncertainty_range")
+        if uncertainty_range is not None:
+            if (not isinstance(uncertainty_range, list) or len(uncertainty_range) != 2
+                    or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                               for v in uncertainty_range)):
+                problems.append(f"news_effects[{i}] uncertainty_range must be [low, high] numbers")
+            elif driver in bounds and _number(change, -1e18, 1e18):
+                lower, upper = bounds[driver]
+                span = upper - lower
+                if not (uncertainty_range[0] <= change <= uncertainty_range[1]
+                        and lower - span <= uncertainty_range[0] <= upper + span
+                        and lower - span <= uncertainty_range[1] <= upper + span):
+                    problems.append(f"news_effects[{i}] uncertainty_range inconsistent with change/bounds")
+        assumption_type = item.get("assumption_type")
+        if assumption_type is not None and assumption_type not in (
+                "issuer_guidance", "analyst_judgment"):
+            problems.append(f"news_effects[{i}] assumption_type must be issuer_guidance or analyst_judgment")
         quote = item.get("full_text_quote")
         if row.get("origin") == "tavily" and driver != "none" and not quote:
             problems.append(
@@ -276,7 +335,11 @@ def _validate_outyears(rows, source):
                   "ebitda_margin_pct": (0, 85),
                   "net_income_margin_pct": (-30, 60),
                   "capex_to_revenue_pct": (0, 60)}
+        optional = (set() if source.get("model_profile") == "finite_life_mining"
+                    else {"ebitda_margin_pct", "capex_to_revenue_pct"})
         for field, (lower, upper) in bounds.items():
+            if field in optional and row.get(field) is None:
+                continue
             if not _number(row.get(field), lower, upper):
                 problems.append(f"outyear_scenario[{year}].{field} outside bounds")
         rationale = row.get("rationale")
@@ -296,6 +359,250 @@ def _validate_outyears(rows, source):
     return list(dict.fromkeys(problems))
 
 
+EARNINGS_PROFILES = {"going_concern_fcff", "financial_ddm"}
+EARNINGS_LIMITS = {"h2_revenue_to_h1": (0.4, 2.5), "h2_net_margin_pct": (-30, 60)}
+# FCFF drivers for the going-concern scenario DCF. A problem with these only
+# removes the DCF inputs; the earnings scenario itself stays valid.
+DCF_SOFT = " (dcf)"
+FY_DCF_FIELDS = {"fy_ebitda_margin_pct": (0, 85), "fy_capex_to_revenue_pct": (0, 60)}
+
+
+def _outyear_dcf_problems(rows, source):
+    """Going concern: EBITDA margin and capex intensity on every out-year row."""
+    if source.get("model_profile") != "going_concern_fcff" or not isinstance(rows, list):
+        return []
+    problems = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        year = row.get("year")
+        for field, (lower, upper) in (("ebitda_margin_pct", (0, 85)),
+                                      ("capex_to_revenue_pct", (0, 60))):
+            if not _number(row.get(field), lower, upper):
+                problems.append(f"outyear_scenario[{year}].{field} outside bounds" + DCF_SOFT)
+        if (_number(row.get("ebitda_margin_pct"), 0, 85) and
+                _number(row.get("net_income_margin_pct"), -30, 60) and
+                row["ebitda_margin_pct"] < row["net_income_margin_pct"]):
+            problems.append(f"outyear_scenario[{year}].ebitda_margin_pct is below the net "
+                            "margin" + DCF_SOFT)
+    return problems
+
+
+def _dcf_field_problems(scenario, source):
+    """Going concern: FY EBITDA margin and capex intensity for the scenario DCF."""
+    if source.get("model_profile") != "going_concern_fcff":
+        return []
+    problems = []
+    for field, (lower, upper) in FY_DCF_FIELDS.items():
+        if not _number(scenario.get(field), lower, upper):
+            problems.append(f"earnings_scenario.{field} outside bounds" + DCF_SOFT)
+    metrics = (source.get("official") or {}).get("metrics") or {}
+    if (not problems and _number(metrics.get("revenue"), 1e-9, float("inf")) and
+            _number(scenario.get("h2_revenue_to_h1"), 0, float("inf")) and
+            _number(scenario.get("h2_net_margin_pct"), -1e9, 1e9) and
+            _number(metrics.get("net_profit"), float("-inf"), float("inf"))):
+        revenue_h2 = metrics["revenue"] * scenario["h2_revenue_to_h1"]
+        net = metrics["net_profit"] + revenue_h2 * scenario["h2_net_margin_pct"] / 100
+        net_margin = net / (metrics["revenue"] + revenue_h2) * 100
+        if scenario["fy_ebitda_margin_pct"] < net_margin:
+            problems.append("earnings_scenario.fy_ebitda_margin_pct is below the FY net "
+                            "margin" + DCF_SOFT)
+    return problems
+
+
+def _earnings_eligible(source):
+    official = source.get("official") or {}
+    metrics = official.get("metrics") or {}
+    return (source.get("model_profile") in EARNINGS_PROFILES and
+            str(official.get("period") or "").startswith("1H") and
+            _number(metrics.get("revenue"), 1e-9, float("inf")) and
+            _number(metrics.get("net_profit"), float("-inf"), float("inf")))
+
+
+def _validate_earnings(scenario, source):
+    """H2 earnings assumption for going concern / bank, anchored to official 1H.
+
+    Departures from the 1H run-rate need a cited article or official guidance,
+    so news is what moves the number away from a mechanical 1H x 2.
+    """
+    if not _earnings_eligible(source):
+        return ["earnings_scenario requires official 1H revenue and net profit"]
+    if not isinstance(scenario, dict):
+        return ["earnings_scenario must be an object"]
+    problems = []
+    official = source["official"]
+    for field, (lower, upper) in EARNINGS_LIMITS.items():
+        if not _number(scenario.get(field), lower, upper):
+            problems.append(f"earnings_scenario.{field} outside bounds")
+    if (scenario.get("source_url") != official.get("source_url") or
+            scenario.get("published_at") != official.get("published_at")):
+        problems.append("earnings_scenario source does not match official release")
+    if not _dated_on_or_before(official.get("published_at"), source["as_of"]):
+        problems.append("earnings_scenario official release is future-dated")
+    rationale = scenario.get("rationale")
+    if not isinstance(rationale, str) or not 40 <= len(rationale.strip()) <= 1400:
+        problems.append("earnings_scenario needs a 40-1400 character rationale")
+    elif re.search(r"[\u4e00-\u9fff]", rationale):
+        problems.append("earnings_scenario rationale must use Indonesian text")
+    allowed = ({"official"} | {f"news:{item['index']}" for item in source["news"]}
+               | {f"guidance:{i}" for i, _ in enumerate(official.get("guidance") or [])})
+    source_ids = scenario.get("source_ids")
+    if (not isinstance(source_ids, list) or "official" not in source_ids or
+            any(item not in allowed for item in source_ids)):
+        problems.append("earnings_scenario must cite official plus valid news source_ids")
+        source_ids = []
+    metrics = official["metrics"]
+    h1_margin = metrics["net_profit"] / metrics["revenue"] * 100
+    departs = (
+        _number(scenario.get("h2_revenue_to_h1"), 0, float("inf")) and
+        not 0.8 <= scenario["h2_revenue_to_h1"] <= 1.25) or (
+        _number(scenario.get("h2_net_margin_pct"), -1e9, 1e9) and
+        abs(scenario["h2_net_margin_pct"] - h1_margin) > 5)
+    # A departure must cite the specific article or guidance item behind it;
+    # the mere existence of some guidance in the pack is not a reason.
+    cites_driver = any(item.startswith(("news:", "guidance:")) for item in source_ids)
+    if departs and not cites_driver:
+        problems.append("earnings_scenario departs from the 1H run-rate without a cited "
+                        "news article or official guidance")
+    problems.extend(_validate_thesis(scenario, allowed))
+    return problems
+
+
+_RECOMMENDATION = re.compile(
+    r"\b(?:rekomendasi|akumulasi|buy|sell|hold|overweight|underweight|"
+    r"target\s+harga|(?:beli|jual|tahan|lepas)\s+(?:saham|posisi))\b", re.I)
+DIRECTIONS = {"Positif", "Negatif", "Dua arah"}
+# Spec §5.4 page 4: risks come from these areas when material for the issuer.
+RISK_CATEGORIES = {"Operasi", "Pendanaan", "Modal", "Komoditas", "Regulasi",
+                   "Tata kelola", "Proyek"}
+
+
+def _validate_thesis(scenario, allowed):
+    """Forward thesis and sourced catalysts/risks for a published report."""
+    problems = []
+    points = scenario.get("thesis_points")
+    if (not isinstance(points, list) or not 2 <= len(points) <= 3 or
+            any(not isinstance(p, str) or not 40 <= len(p.strip()) <= 280 for p in points)):
+        problems.append("thesis_points must be 2-3 sentences of 40-280 characters")
+        points = []
+    items = scenario.get("catalysts_risks")
+    if not isinstance(items, list) or not 2 <= len(items) <= 5:
+        problems.append("catalysts_risks must list 2-5 items")
+        items = []
+    texts = list(points)
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            problems.append(f"catalysts_risks[{i}] must be an object")
+            continue
+        for field, (lo, hi) in {"item": (8, 90), "timing": (4, 120),
+                                "driver_path": (30, 280)}.items():
+            if not isinstance(item.get(field), str) or not lo <= len(item[field].strip()) <= hi:
+                problems.append(f"catalysts_risks[{i}].{field} length invalid")
+        if item.get("direction") not in DIRECTIONS:
+            problems.append(f"catalysts_risks[{i}].direction must be one of {sorted(DIRECTIONS)}")
+        ids = item.get("source_ids")
+        if not isinstance(ids, list) or not ids or any(x not in allowed for x in ids):
+            problems.append(f"catalysts_risks[{i}] must cite valid source_ids")
+        texts += [str(item.get(f) or "") for f in ("item", "timing", "driver_path")]
+    if items and not any(isinstance(x, dict) and x.get("direction") in ("Negatif", "Dua arah")
+                         for x in items):
+        problems.append("catalysts_risks must include at least one downside risk")
+    risk_problems, risk_texts = _validate_key_risks(scenario.get("key_risks"), allowed)
+    problems += risk_problems
+    texts += risk_texts
+    texts.append(str(scenario.get("rationale") or ""))
+    if any(_RECOMMENDATION.search(t) for t in texts):
+        problems.append("thesis/risks must not contain recommendation or target-price language")
+    if any(re.search(r"[\u4e00-\u9fff]", t) for t in texts):
+        problems.append("thesis/risks must use Indonesian text")
+    return problems
+
+
+def _trim_sentences(text, limit):
+    """Cut prose to whole sentences within ``limit`` characters (length only)."""
+    text = str(text or "").strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    end = max(cut.rfind(". "), cut.rfind("; "))
+    return cut[:end + 1].strip() if end >= limit // 3 else cut.rsplit(" ", 1)[0].rstrip(",;") + "."
+
+
+def _salvage_key_risks(scenario, allowed):
+    """Keep the valid risks when at least three survive; one malformed risk
+    must not discard a validated earnings scenario. Dropped items are logged."""
+    risks = scenario.get("key_risks")
+    if not isinstance(risks, list):
+        return []
+    kept, dropped = [], []
+    for risk in risks:
+        problems, _ = _validate_key_risks([risk] * 3, allowed)
+        (dropped if problems else kept).append((risk, problems))
+    if dropped and len(kept) >= 3:
+        scenario["key_risks"] = [risk for risk, _ in kept][:5]
+        return [f"dropped key_risk: {problems[0]}" for _, problems in dropped]
+    return []
+
+
+def _salvage_titles(scenario):
+    """Card titles are presentation only: keep them when they line up with the
+    thesis points and fit 12-60 characters, otherwise drop them (the report
+    falls back to the opening clause of each point)."""
+    titles, points = scenario.get("thesis_titles"), scenario.get("thesis_points")
+    if titles is None:
+        return []
+    ok = (isinstance(titles, list) and isinstance(points, list) and len(titles) == len(points)
+          and all(isinstance(t, str) and 12 <= len(t.strip()) <= 60 for t in titles))
+    if ok:
+        scenario["thesis_titles"] = [t.strip().rstrip(".") for t in titles]
+        return []
+    scenario.pop("thesis_titles", None)
+    return ["dropped thesis_titles: must match thesis_points, 12-60 characters each"]
+
+
+def _validate_key_risks(risks, allowed):
+    """Spec §5.4 'Risiko utama': 3-5 issuer risks, each named, categorised,
+    quantified from the evidence and cited."""
+    problems, texts = [], []
+    if not isinstance(risks, list) or not 3 <= len(risks) <= 5:
+        return ["key_risks must list 3-5 items"], texts
+    for i, risk in enumerate(risks):
+        if not isinstance(risk, dict):
+            problems.append(f"key_risks[{i}] must be an object")
+            continue
+        if risk.get("category") not in RISK_CATEGORIES:
+            problems.append(f"key_risks[{i}].category must be one of {sorted(RISK_CATEGORIES)}")
+        headline, explanation = risk.get("headline"), risk.get("explanation")
+        if not isinstance(headline, str) or not 8 <= len(headline.strip()) <= 70:
+            problems.append(f"key_risks[{i}].headline must be 8-70 characters")
+        elif not headline.strip()[0].isupper():
+            problems.append(f"key_risks[{i}].headline must start with a capital letter")
+        if not isinstance(explanation, str) or not 80 <= len(explanation.strip()) <= 450:
+            problems.append(f"key_risks[{i}].explanation must be 80-450 characters")
+        elif not re.search(r"\d", explanation):
+            problems.append(f"key_risks[{i}].explanation must quantify the risk with a sourced number")
+        ids = risk.get("source_ids")
+        if not isinstance(ids, list) or not ids or any(x not in allowed for x in ids):
+            problems.append(f"key_risks[{i}] must cite valid source_ids")
+        texts += [str(headline or ""), str(explanation or "")]
+    return problems, texts
+
+
+def _earnings_anchor(source, earnings):
+    official = source["official"]
+    metrics = official["metrics"]
+    revenue_h2 = metrics["revenue"] * earnings["h2_revenue_to_h1"]
+    revenue = metrics["revenue"] + revenue_h2
+    full_year = {"revenue": revenue,
+                 "net_profit": metrics["net_profit"] +
+                 revenue_h2 * earnings["h2_net_margin_pct"] / 100}
+    for key, field in (("ebitda", "fy_ebitda_margin_pct"), ("capex", "fy_capex_to_revenue_pct")):
+        if _number(earnings.get(field), float("-inf"), float("inf")):
+            full_year[key] = revenue * earnings[field] / 100
+    return {"year": int(str(official["period_end"])[:4]), "unit": official.get("unit"),
+            "source_url": official.get("source_url"), "full_year": full_year}
+
+
 def _interim_anchor(source, interim):
     official = source["official"]
     actual = official["metrics"]
@@ -313,6 +620,42 @@ def _interim_anchor(source, interim):
             "net_profit": actual["net_profit"] + net_h2,
         },
     }
+
+
+def _validate_stage(payload, source):
+    """Stage classifier: life-cycle, steady-state, commodity, segments."""
+    from app import stage as _stage
+    if not isinstance(payload, dict):
+        return ["stage_classification must be an object"]
+    annuals = source.get("annuals") or []
+    allowed = {f"news:{item['index']}" for item in source.get("news") or []}
+    if source.get("official"):
+        allowed.add("official")
+    if annuals:
+        # The Sectors annual history is supplied and the decline rule reads it.
+        allowed.add("annuals")
+    ok, errors, _ = _stage.validate(payload, annuals, allowed_sources=allowed)
+    return errors
+
+
+def _normalize_prose(value, key=None):
+    """Deterministic style fix after validation (see app.scrub.normalize_plan)."""
+    from app.scrub import normalize_plan
+    return normalize_plan(value, key)
+
+
+def _drop_dcf_fields(name, fragment, problems):
+    """Keep a valid earnings path when only its DCF drivers failed validation."""
+    if name == "earnings":
+        scenario = fragment.get("earnings_scenario") or {}
+        for field in FY_DCF_FIELDS:
+            scenario.pop(field, None)
+        scenario["dcf_fields_dropped"] = list(problems)
+    elif name == "outyears":
+        for row in fragment.get("outyear_scenario") or []:
+            if isinstance(row, dict):
+                row["ebitda_margin_pct"] = row["capex_to_revenue_pct"] = None
+        fragment["outyear_dcf_fields_dropped"] = list(problems)
 
 
 def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
@@ -337,7 +680,15 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "one item per supplied article, including irrelevant articles. Each item "
             "requires article_index, exact "
             "source_url, exact title, exact timestamp, driver, change, years, "
-            "factual_basis, mechanism, uncertainty, rationale. Drivers: "
+            "factual_basis, mechanism, uncertainty, rationale. Chain each nonzero "
+            "item as published fact -> expected timing/condition -> profile driver "
+            "-> annual assumption: optionally add event_date (YYYY-MM-DD expected "
+            "milestone date, may be future when the announcement was already public), "
+            "conditions/probability text, base_value (counterfactual base), "
+            "uncertainty_range [low, high], and assumption_type "
+            "(issuer_guidance or analyst_judgment). Never write target_price, "
+            "valuation, production_ready, forecast_basis, tp, or rating; the engine "
+            "calculates financial effects. Drivers: "
             "revenue_growth_pp [-15,15], ebitda_margin_pp [-10,10], wacc_bps "
             "[-100,100], coe_bps [-100,100], none (change 0, years []). "
             "For financial_ddm, only coe_bps or none apply; do not use revenue, "
@@ -387,6 +738,103 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                    "model_profile": source["model_profile"],
                    "official": source["official"]}
+    elif name == "earnings":
+        role = (
+            "Role: FY EARNINGS SCENARIO ANALYST (non-mining). Return "
+            "{\"earnings_scenario\": object or null}. Anchor on the official 1H "
+            "revenue and net profit, then choose the H2 assumption: "
+            "h2_revenue_to_h1 [0.4,2.5] and h2_net_margin_pct [-30,60] (H2 net "
+            "profit / H2 revenue, in percent), plus rationale (4-6 short Indonesian "
+            "sentences, 40-1400 characters) and source_ids chosen from "
+            "[\"official\", \"news:0\", ...]. Start from the 1H run-rate and the "
+            "issuer's seasonality in annual_actuals. Move away from it (revenue ratio "
+            "outside 0.8-1.25 or net margin more than 5pp from 1H) only when a "
+            "supplied article or official guidance gives a measurable operating, "
+            "pricing, volume, cost, funding or credit-cost reason, and cite it in "
+            "source_ids. Price/index moves, broker calls and sentiment are not "
+            "reasons. For Tavily articles rely on fetched full_text, not the headline. "
+            "Separate reported facts from your judgment in the rationale. Also "
+            "return thesis_titles: one short Indonesian title per thesis point, same "
+            "order, 12-60 characters, a noun phrase without a final period (e.g. "
+            "\"Pemulihan harga livebird menopang ASP\"). And "
+            "return thesis_points: 2-3 Indonesian sentences (40-280 characters "
+            "and at most 30 words each), each a forward-looking claim tied to a measurable earnings "
+            "driver (claim -> number -> earnings implication). And "
+            "catalysts_risks: 2-5 objects {item (short name), timing (date, "
+            "window or condition), driver_path (driver -> revenue/margin/cost/"
+            "funding -> earnings effect), direction (Positif | Negatif | Dua arah), "
+            "source_ids}; include at least one downside risk. Also key_risks: 3-5 "
+            "objects {category (Operasi | Pendanaan | Modal | Komoditas | Regulasi | "
+            "Tata kelola | Proyek), headline (8-70 characters, a noun phrase that "
+            "starts with a common noun, e.g. \"Konsentrasi pelanggan Garuda\"), "
+            "explanation (Indonesian, 80-450 characters: what could go wrong, the "
+            "sourced number that sizes it, and the path to earnings or valuation), "
+            "source_ids}. These are the report's 'Risiko utama': material downside "
+            "risks for this issuer, not catalysts, not repeats of the thesis. Use only supplied "
+            "evidence; issuer-specific risks beat generic ones. Never write a "
+            "target price, valuation multiple, rating, buy/sell/hold/akumulasi, "
+            "production_ready or forecast_basis; the engine applies peer PER. "
+            "Return null if the evidence cannot support a full-year view. Cite official guidance items as \"guidance:<index>\" (position in official.guidance) when they support a departure."
+        )
+        if source.get("model_profile") == "going_concern_fcff":
+            role += (
+                " This issuer is valued with an FCFF DCF on your scenario, so also return "
+                "fy_ebitda_margin_pct [0,85] (FY EBITDA / FY revenue, percent, never below "
+                "the FY net margin) and fy_capex_to_revenue_pct [0,60] (FY capex / FY "
+                "revenue, percent). Anchor them on the official 1H EBITDA or operating "
+                "profit when reported and on the EBITDA and capex history in "
+                "sectors_annuals; a dated capex plan, new capacity or guidance may move "
+                "capex and should be named in the rationale. They are analyst "
+                "assumptions, not reported facts.")
+        payload = {"ticker": source["ticker"], "as_of": source["as_of"],
+                   "model_profile": source["model_profile"],
+                   "official": {key: source["official"].get(key) for key in (
+                       "source_url", "published_at", "period", "period_end", "unit",
+                       "metrics", "guidance", "operating_context", "revenue_breakdown",
+                       "annual_actuals")},
+                   "sectors_annuals": source.get("annuals") or [],
+                   "news": [{key: item.get(key) for key in (
+                       "index", "title", "timestamp", "url", "origin", "body",
+                       "full_text", "full_text_status")} for item in source["news"]],
+                   "json_shape": {"earnings_scenario": {
+                       "h2_revenue_to_h1": "number", "h2_net_margin_pct": "number",
+                       **({"fy_ebitda_margin_pct": "number",
+                           "fy_capex_to_revenue_pct": "number"}
+                          if source.get("model_profile") == "going_concern_fcff" else {}),
+                       "rationale": "Indonesian text", "source_ids": ["official"],
+                       "thesis_points": ["Indonesian sentence"],
+                       "thesis_titles": ["short title"],
+                       "catalysts_risks": [{"item": "text", "timing": "text",
+                                            "driver_path": "text",
+                                            "direction": "Negatif",
+                                            "source_ids": ["official"]}],
+                       "key_risks": [{"category": "Pendanaan",
+                                      "headline": "text", "explanation": "text",
+                                      "source_ids": ["official"]}]}}}
+    elif name == "stage":
+        role = (
+            "Role: STAGE CLASSIFIER. Return {\"stage_classification\": object}. "
+            "Classify operating stage from sourced evidence: life_cycle_stage "
+            "(pre_revenue | high_growth_pre_profit | mature | decline), "
+            "has_steady_state_3y (boolean), commodity_price_driven (boolean, true ONLY for extractive finite-reserve: coal/nickel/CPO/oil/gold/copper; poultry/food input sensitivity is false), "
+            "dissimilar_segments (int 1-10), rationale (Bahasa Indonesia 40-600 karakter), "
+            "source_ids ([\"official\", \"annuals\", \"news:0\", ...]). Default konservatif mature/true/false/1; "
+            "non-default wajib mengutip official atau artikel bertanggal. "
+            "Decline butuh revenue annuals turun atau restrukturisasi bersumber. "
+            "Return null bila bukti tidak cukup."
+        )
+        payload = {"ticker": source["ticker"], "as_of": source["as_of"],
+                   "model_profile": source["model_profile"],
+                   "annuals": source.get("annuals") or [],
+                   "official": source.get("official"),
+                   "news": [{key: item.get(key) for key in (
+                       "index", "title", "timestamp", "url", "origin", "body",
+                       "full_text", "full_text_status")} for item in source["news"]],
+                   "json_shape": {"stage_classification": {
+                       "life_cycle_stage": "mature", "has_steady_state_3y": True,
+                       "commodity_price_driven": False, "dissimilar_segments": 1,
+                       "rationale": "Indonesian text 40-600 chars",
+                       "source_ids": ["official"]}}}
     else:
         role = (
             "Role: OUTYEAR EARNINGS SCENARIO ANALYST. Build an assumption-led "
@@ -413,6 +861,26 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "simply repeat one flat value every year without a causal explanation. "
             "Return compact JSON only; rationale must be at most two short sentences."
         )
+        if source.get("model_profile") == "going_concern_fcff":
+            role += (
+                " This issuer is not a miner: ignore mine-life wording. The anchor "
+                "is an FY earnings scenario (revenue, net profit, EBITDA and capex). "
+                "The engine values your path with an FCFF DCF, so set "
+                "ebitda_margin_pct and capex_to_revenue_pct for every year as analyst "
+                "assumptions: start from the anchor's EBITDA margin and capex "
+                "intensity and the EBITDA/capex history in annuals (Sectors), keep "
+                "EBITDA margin at or above the net margin, and separate maintenance "
+                "from expansion capex in the rationale, citing a source when a capex "
+                "plan moves it. Drive revenue growth and net margin from demand, "
+                "pricing, capacity, costs or funding as the evidence supports.")
+        elif source.get("model_profile") != "finite_life_mining":
+            role += (
+                " This issuer is not a miner: ignore mine-life wording. The anchor "
+                "is an FY earnings scenario (revenue and net profit). Set "
+                "ebitda_margin_pct and capex_to_revenue_pct to null; a bank is valued "
+                "on equity, not EBITDA or capex. Drive revenue growth and net margin "
+                "from loans, funding, margins and credit quality as the evidence "
+                "supports.")
         news_by_id = {f"news:{item['article_index']}": {
             "title": item["title"], "timestamp": item["timestamp"],
             "url": item["source_url"], "driver": item.get("driver"),
@@ -426,6 +894,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "metrics", "guidance", "operating_metrics", "operating_context",
                        "mine_life_context", "annual_actuals")},
                    "anchor": interim_anchor, "news_effects": news_by_id,
+                   "annuals": source.get("annuals") or [],
                    "required_years": list(range(interim_anchor["year"] + 1,
                                                  interim_anchor["year"] + 5)),
                    "json_shape": {"outyear_scenario": [{
@@ -435,14 +904,19 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "rationale": "Indonesian text, 40-450 characters",
                        "source_ids": ["official"]}]}}
         attempts = 3
-    if name != "outyears":
+    # Earnings carries thesis, catalysts and risks on the longest news input.
+    if name not in ("outyears", "earnings"):
         attempts = 2
+    elif name == "earnings":
+        attempts = 3
     messages = [{"role": "system", "content": common + "\n\n" + role},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
     raw = ""
     for attempt in range(attempts):
         try:
-            raw, _ = _response_text(_chat(messages, max_tokens=8192,
+            # High-effort reasoning shares the completion budget; 8192 cut the
+            # earnings JSON off mid-string on the 12-article input.
+            raw, _ = _response_text(_chat(messages, max_tokens=16384,
                                           reasoning_effort="high"))
             fragment = _decode_response(raw)
         except Exception as error:  # noqa: BLE001 — failure is explicit in audit trace
@@ -457,11 +931,77 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                 else:
                     problems = _validate({"news_effects": fragment["news_effects"],
                                           "interim_scenario": None}, source)
+            elif name == "earnings":
+                scenario = fragment.get("earnings_scenario", fragment)
+                if scenario is None:
+                    problems = ["earnings agent returned no scenario"]
+                    fragment = None
+                elif not isinstance(scenario, dict):
+                    problems = ["earnings_scenario must be an object"]
+                    fragment = None
+                else:
+                    scenario = {key: scenario[key] for key in (
+                        "h2_revenue_to_h1", "h2_net_margin_pct", "rationale",
+                        "source_ids", "thesis_points", "thesis_titles", "catalysts_risks",
+                        "key_risks", *FY_DCF_FIELDS)
+                                if key in scenario}
+                    # Provenance is bound to the official release, not the model.
+                    scenario["source_url"] = source["official"]["source_url"]
+                    scenario["published_at"] = source["official"]["published_at"]
+                    fragment = {"earnings_scenario": scenario}
+                    allowed_ids = {"official"} | {f"news:{item['index']}" for item in source["news"]} | {
+                        f"guidance:{gi}" for gi, _ in enumerate(source["official"].get("guidance") or [])}
+                    salvaged = _salvage_key_risks(scenario, allowed_ids)
+                    salvaged += _salvage_titles(scenario)
+                    problems = _validate_earnings(scenario, source)
+                    problems += _dcf_field_problems(scenario, source)
+                    if salvaged and not problems:
+                        scenario["salvage_notes"] = salvaged
+                    # Resolve cited ids to titles/URLs so the report never
+                    # re-derives article positions from a different list.
+                    by_id = {f"news:{item['index']}": item for item in source["news"]}
+                    for gi, item in enumerate(source["official"].get("guidance") or []):
+                        text = item.get("fact") or item.get("name") or item.get("claim") \
+                            if isinstance(item, dict) else str(item)
+                        by_id[f"guidance:{gi}"] = {
+                            "title": f"Panduan resmi: {str(text or '-')[:120]}",
+                            "url": source["official"]["source_url"],
+                            "timestamp": source["official"]["published_at"]}
+                    cited = set(scenario.get("source_ids") or []) | {
+                        x for item in (scenario.get("catalysts_risks") or []) +
+                        (scenario.get("key_risks") or [])
+                        if isinstance(item, dict) for x in item.get("source_ids") or []}
+                    scenario["source_refs"] = {
+                        x: ({"title": source["official"].get("period") and
+                             f"Rilis resmi {source['official']['period']}",
+                             "url": source["official"]["source_url"],
+                             "date": source["official"]["published_at"]} if x == "official" else
+                            {"title": by_id[x]["title"], "url": by_id[x]["url"],
+                             "date": str(by_id[x]["timestamp"])[:10]})
+                        for x in cited if x == "official" or x in by_id}
+            elif name == "stage":
+                sc = fragment.get("stage_classification", fragment)
+                if sc is None:
+                    problems = ["stage agent returned no classification"]
+                    fragment = None
+                elif not isinstance(sc, dict):
+                    problems = ["stage_classification must be an object"]
+                    fragment = None
+                else:
+                    sc = {k: sc[k] for k in (
+                        "life_cycle_stage", "has_steady_state_3y",
+                        "commodity_price_driven", "dissimilar_segments",
+                        "rationale", "source_ids") if k in sc}
+                    if isinstance(sc.get("rationale"), str):
+                        sc["rationale"] = _trim_sentences(sc["rationale"], 600)
+                    fragment = {"stage_classification": sc}
+                    problems = _validate_stage(sc, source)
             elif name == "outyears":
                 if set(fragment) != {"outyear_scenario"}:
                     problems = ["outyear agent must return only outyear_scenario"]
                 else:
-                    problems = _validate_outyears(fragment["outyear_scenario"], source)
+                    problems = (_validate_outyears(fragment["outyear_scenario"], source) +
+                                _outyear_dcf_problems(fragment["outyear_scenario"], source))
             else:
                 if "interim_scenario" in fragment:
                     fragment = {"interim_scenario": fragment["interim_scenario"]}
@@ -510,11 +1050,17 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                           "Do not invent sources.")
             messages.append({"role": "user", "content":
                              repair})
+    if problems and fragment and all(str(p).endswith(DCF_SOFT) for p in problems):
+        _drop_dcf_fields(name, fragment, problems)
+        problems = []
     if problems:
         return {"status": "invalid", "fragment": None, "problems": problems}
     binding = ("official_evidence" if name == "interim" else
+               "official_evidence_and_dated_news" if name == "earnings" else
                "official_evidence_and_dated_news" if name == "outyears" else
+               "official_evidence_and_annuals" if name == "stage" else
                "sectors_and_tavily_news")
+    fragment = _normalize_prose(fragment)
     return {"status": "validated", "fragment": fragment, "problems": [],
             "provenance_binding": binding}
 
@@ -530,10 +1076,11 @@ def run_live(intake):
     if not source["news"] and not source["official"]:
         return {"status": "no_event_evidence", "plan": None, "problems": [],
                 "interim_status": "not_run", "outyears_status": "not_run",
+                "earnings_status": "not_run", "stage_status": "not_run",
                 "subagents": {},
                 "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
                 "spec_sha256": spec_sha256,
-                "model_effort": "high; 8192 completion tokens per subagent"}
+                "model_effort": "high; 16384 completion tokens per subagent"}
     tasks = []
     if source["news"]:
         tasks.append("news")
@@ -545,6 +1092,11 @@ def run_live(intake):
             str(source["official"].get("period") or "").startswith("1H")
             and not missing_interim):
         tasks.append("interim")
+    if _earnings_eligible(source):
+        tasks.append("earnings")
+    # Stage classifier runs whenever annuals/official exist (cheap, cached).
+    if source.get("annuals") or source.get("official"):
+        tasks.append("stage")
     results = {}
     with ThreadPoolExecutor(max_workers=min(len(tasks), 2) or 1) as pool:
         futures = {name: pool.submit(_run_subagent, name, source, spec) for name in tasks}
@@ -570,8 +1122,21 @@ def run_live(intake):
                 results["outyears"] = {
                     "status": "invalid", "fragment": None,
                     "problems": [f"{type(error).__name__}: {str(error)[:180]}"]}
+    earnings_result = results.get("earnings") or {}
+    if earnings_result.get("status") == "validated" and "outyears" not in results:
+        earnings = (earnings_result.get("fragment") or {}).get("earnings_scenario")
+        if isinstance(earnings, dict):
+            try:
+                results["outyears"] = _run_subagent(
+                    "outyears", source, spec, interim_anchor=_earnings_anchor(source, earnings),
+                    news_effects=(news_result.get("fragment") or {}).get("news_effects"))
+            except Exception as error:  # noqa: BLE001 — keep the FY scenario
+                results["outyears"] = {
+                    "status": "invalid", "fragment": None,
+                    "problems": [f"{type(error).__name__}: {str(error)[:180]}"]}
     plan = {"news_effects": [], "interim_scenario": None,
-            "outyear_scenario": None}
+            "outyear_scenario": None, "earnings_scenario": None,
+            "stage_classification": None}
     problems = []
     for name, result in results.items():
         if result["status"] == "validated":
@@ -593,13 +1158,15 @@ def run_live(intake):
             plan = None
     return {"status": status, "plan": plan, "problems": problems,
             "interim_status": (results.get("interim") or {}).get("status", "not_run"),
+            "earnings_status": (results.get("earnings") or {}).get("status", "not_run"),
             "outyears_status": (results.get("outyears") or {}).get("status", "not_run"),
+            "stage_status": (results.get("stage") or {}).get("status", "not_run"),
             "subagents": {name: {"status": result["status"],
                                  "problems": result["problems"]}
                           for name, result in results.items()},
             "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
             "spec_sha256": spec_sha256,
-            "model_effort": "high; 8192 completion tokens per subagent"}
+            "model_effort": "high; 16384 completion tokens per subagent"}
 
 
 def evidence_fingerprint(source, spec_sha256):
@@ -612,6 +1179,7 @@ def evidence_fingerprint(source, spec_sha256):
             for item in source.get("news") or []]
     material = {"ticker": source.get("ticker"), "profile": source.get("model_profile"),
                 "official": source.get("official"), "news": news, "spec": spec_sha256,
+                "plan_schema": PLAN_SCHEMA,
                 "model": os.environ.get("SEKTORAL_LLM_MODEL", "MiniMax-M3")}
     return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:20]
 
@@ -642,8 +1210,12 @@ def run_cached(intake, refresh=False, store_dir=None):
     result = run_live(intake)
     result["fingerprint"] = fingerprint
     result["reused"] = False
-    if result.get("plan") and result.get("interim_status") in ("validated", "not_run") and \
-            result.get("status") in ("validated", "partial"):
+    # Store only when every scenario subagent that ran succeeded; a failed
+    # earnings/interim/outyear/stage call must be retried next run, not frozen
+    # under the same evidence fingerprint.
+    scenario_ok = all(result.get(key) in ("validated", "not_run", None) for key in
+                      ("interim_status", "earnings_status", "outyears_status", "stage_status"))
+    if result.get("plan") and scenario_ok and result.get("status") in ("validated", "partial"):
         result["stored_at"] = date.today().isoformat()
         try:
             folder.mkdir(parents=True, exist_ok=True)

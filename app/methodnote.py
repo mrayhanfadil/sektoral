@@ -59,8 +59,9 @@ def methodology_notes(intake, fc, val, mineops_or_none):
 
 
 def extreme_tp_lines(upside, tp, price, driver_sentence, limitation_sentence):
-    """Dua baris TP ekstrem per spesifikasi 4.4, kosong bila |upside|<=50%."""
-    if abs(upside) <= 0.5:
+    """Dua baris TP ekstrem per spesifikasi 4.4, kosong bila tidak ekstrem."""
+    from . import gate_thresholds as _gt
+    if not _gt.is_extreme_ratio(upside):
         return []
     arah = "di atas" if upside > 0 else "di bawah"
     tesis = ("TP Rp%s (%s%s %s harga Rp%s) didukung %s."

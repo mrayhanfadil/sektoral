@@ -24,6 +24,21 @@ BANNED_PDF = ["kurasi skor", "sebelum masuk model", "aksi korporasi tercatat",
               "scraper", "scraping"]
 # Whole-word pipeline tokens (avoid substring false positives like "gap" in "lengkap").
 BANNED_TOKENS = [r"\blog\b", r"\bengine\b"]
+# "engine" is also a physical product (aircraft/vehicle engines at MRO or auto
+# issuers); only flag it outside that context.
+_MECHANICAL_CONTEXT = re.compile(
+    r"pesawat|airframe|aircraft|lessor|overhaul|\bmro\b|turbin|turbine|mesin|"
+    r"otomotif|kendaraan|motor|jet|propulsi")
+
+
+def _pipeline_token(pattern, text):
+    for match in re.finditer(pattern, text):
+        window = text[max(0, match.start() - 60):match.end() + 60]
+        if pattern != r"\bengine\b" or not _MECHANICAL_CONTEXT.search(window):
+            return True
+    return False
+
+
 BANNED_PHRASE = ["tentu saja", "perlu dicatat bahwa", "sebagai kesimpulan"]
 CACHE_ALLOW = ("tidak ada di cache", "snapshot cache sectors", "sectors cache")
 
@@ -54,6 +69,9 @@ def _body_texts(doc: dict) -> list[str]:
         if isinstance(sec, dict):
             for p in sec.get("paragraf") or []:
                 out.append(str(p))
+    for risk in (doc or {}).get("risks") or []:
+        if isinstance(risk, dict):
+            out.append(f"{risk.get('judul') or ''}. {risk.get('isi') or ''}")
     return out
 
 
@@ -138,7 +156,7 @@ def check_narrative(doc: dict | None) -> dict:
 
     # N-pipeline terms in body (whole-word for log/engine to avoid false positives).
     pipe = [t for t in BANNED_BODY if t.lower() in blob_low]
-    pipe += [pat for pat in BANNED_TOKENS if re.search(pat, blob_low)]
+    pipe += [pat for pat in BANNED_TOKENS if _pipeline_token(pat, blob_low)]
     v("N.pipeline", not pipe, "nol istilah pipeline di body" if not pipe
       else f"istilah pipeline di body: {pipe}", True)
 
@@ -217,12 +235,60 @@ def check_narrative(doc: dict | None) -> dict:
         v("N.exhibit_sumber", True, "tanpa exhibit; dilabeli", False, "dilabeli")
         v("N.baris_sampah", True, "tanpa exhibit; dilabeli", False, "dilabeli")
 
+    # Spec §5.4: a published report names its main risks on page 4 and on the cover.
+    risks = [r for r in doc.get("risks") or [] if isinstance(r, dict) and r.get("isi")]
+    cover_text = " ".join(str(p.get("isi") or "") for p in
+                          (doc.get("cover") or {}).get("paragraf") or [] if isinstance(p, dict))
+    published = (doc.get("meta") or {}).get("status") not in (None, "draft_non_distributable")
+    ok = len(risks) >= 3 and "Risiko utama:" in cover_text
+    v("N.risiko", ok,
+      f"{len(risks)} risiko utama" + ("" if "Risiko utama:" in cover_text
+                                      else "; cover tidak menyebut risiko"),
+      published, None if ok or published else "peringatan")
+
     # N-TP consistency + extreme + downside are cross-checked in G3; re-assert presence.
     meta = doc.get("meta") or {}
     if meta.get("tp") is not None and meta.get("status") == "draft_non_distributable":
         v("N.tp_draft", False, "draft memuat TP; tahan sampai release lolos", True)
     else:
         v("N.tp_draft", True, "TP hanya saat production-ready", False)
+
+    # Phase 2: Key Financials 2A+3F, tie-out charts/statements, belum dimodelkan.
+    try:
+        kf = next((e for e in _exhibits(doc) if (e.get("judul") or "") == "Key Financials"), None)
+        if kf:
+            cols = ((kf.get("data") or {}).get("cols") or [])
+            # Expect 1 label + 5 periods (2A+3F) after trim.
+            v("N.keyfin_periode", len(cols) >= 6,
+              f"Key Financials {len(cols)-1} periode (2A+3F)" if len(cols) >= 6
+              else f"Key Financials hanya {len(cols)-1} periode", False,
+              None if len(cols) >= 6 else "peringatan")
+            # Forecast gaps must be belum dimodelkan/- , never empty or screening numbers without provenance.
+            rows = ((kf.get("data") or {}).get("rows") or [])
+            empty = sum(1 for r in rows for c in (r[1:] if isinstance(r, list) else [])
+                        if isinstance(c, str) and c.strip() == "")
+            v("N.keyfin_belum", empty == 0,
+              "forecast gaps belum dimodelkan/-" if empty == 0
+              else f"{empty} sel kosong; pakai belum dimodelkan", True)
+        else:
+            v("N.keyfin_periode", True, "tanpa Key Financials; dilabeli", False, "dilabeli")
+            v("N.keyfin_belum", True, "tanpa Key Financials; dilabeli", False, "dilabeli")
+        # Combo chart tie-out: labels overlap Key Financials periods when both present.
+        combo = next((e for e in _exhibits(doc)
+                      if (e.get("tipe") or "") in ("combo_chart", "combo_panel")), None)
+        if combo and kf:
+            ccols = ((combo.get("data") or {}).get("cols") or [])
+            kcols = ((kf.get("data") or {}).get("cols") or [])[1:]
+            overlap = len(set(map(str, ccols)) & set(map(str, kcols)))
+            v("N.tieout", overlap >= 2,
+              f"tie-out Key Financials/combo {overlap} periode" if overlap >= 2
+              else "tie-out Key Financials/combo <2 periode", False,
+              None if overlap >= 2 else "peringatan")
+        else:
+            v("N.tieout", True, "tie-out dilabeli (combo/Key Financials belum lengkap)", False,
+              "dilabeli")
+    except Exception as e:
+        v("N.tieout", True, f"tie-out check gagal: {e}", False, "dilabeli")
 
     blockers = [f"{c['check']}: {c['message']}" for c in checks if c.get("blocker")]
     return {"tool": "check_narrative", "status": "lolos" if not blockers else "gagal",

@@ -20,6 +20,9 @@ data/news_analysis/
 data/agent_memory/
 data/web_news/
 data/forecast_plans/
+data/yahoo_fundamentals/
+# Fetched article full text (Tavily); earlier tracked snapshots stay as fixtures.
+data/news_full/
 
 # Python
 __pycache__/

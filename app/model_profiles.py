@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Literal, Optional
 
+from . import gate_thresholds
+
 
 SUPPORTED_PROFILES = {
     "finite_life_mining": "LoM/SOTP",
@@ -37,6 +39,13 @@ class GateVerdict:
     reasons: list[str]
     gates_passed: list[str] = field(default_factory=list)
     gates_failed: list[str] = field(default_factory=list)
+    # Gates that could not be judged (missing inputs). They stay in
+    # gates_failed for the release trace, but must not drive method choice.
+    gates_unassessed: list[str] = field(default_factory=list)
+    # Gate 3 found a ramping asset (no 3y steady state) on a non-structural
+    # primary. Gate 1b chronic losses set the same "Relative Valuation"
+    # primary but lead to EV/Sales; this flag keeps the two chains apart.
+    ramping: bool = False
 
     def __iter__(self):
         yield self.primary
@@ -77,7 +86,11 @@ def resolve(metadata: dict) -> tuple[str, str]:
 
 
 def _secondary_for(primary: str, gates_failed: list[str], nci_pct: float) -> Optional[str]:
-    if 15.0 < nci_pct <= 40.0:
+    try:
+        nci = float(nci_pct or 0.0)
+    except (TypeError, ValueError):
+        nci = 0.0
+    if 15.0 < nci <= 40.0:
         return "SOTP"
     if primary in ("FCFF/WACC DCF", "DCF (shortened horizon)"):
         return "Relative Valuation"
@@ -98,8 +111,10 @@ def evaluate(inputs: dict) -> GateVerdict:
     """Run Gates 0-5 and return GateVerdict(primary, secondary, thin_data, rating_override, reasons)."""
     gates_passed: list[str] = []
     gates_failed: list[str] = []
+    gates_unassessed: list[str] = []
     reasons: list[str] = []
     thin_data = False
+    ramping = False
     rating_override: Optional[str] = None
 
     domain = inputs.get("domain") or inputs.get("model_profile")
@@ -171,21 +186,33 @@ def evaluate(inputs: dict) -> GateVerdict:
     else:
         gates_passed.append("0_business_model")
 
-    # Gate 1: Data eligibility
-    filing_history_years = inputs.get("filing_history_years", 5)
-    ebit_positive_count = inputs.get("ebit_positive_count", 3)
-    d_de_ratio = inputs.get("d_de_ratio", 0.0)
-    net_debt_to_ebitda = inputs.get("net_debt_to_ebitda", 0.0)
-    icr = inputs.get("icr", inputs.get("interest_coverage", 10.0))
+    # Gate 0 is the structural business-model call (holding SOTP, reserve
+    # NAV, bank DDM). Gates 3-4 describe how each line is valued and never
+    # replace it; data-eligibility gates (1) and NCI > 40% (2) still can.
+    structural = primary in ("SOTP", "NAV / Reserve-based")
+
+    # Gate 1: Data eligibility (missing stays None -> tidak dapat dinilai)
+    filing_history_years = inputs.get("filing_history_years")
+    ebit_positive_count = inputs.get("ebit_positive_count")
+    d_de_ratio = inputs.get("d_de_ratio")
+    net_debt_to_ebitda = inputs.get("net_debt_to_ebitda")
+    icr = inputs.get("icr", inputs.get("interest_coverage"))
     equity_positive = inputs.get("equity_positive")
     if equity_positive is None:
         equity_positive = inputs.get("equity>0")
     if equity_positive is None:
-        eq_val = inputs.get("shareholders_equity", 1.0)
-        equity_positive = (eq_val > 0) if isinstance(eq_val, (int, float)) else True
+        eq_val = inputs.get("shareholders_equity")
+        if isinstance(eq_val, (int, float)):
+            equity_positive = eq_val > 0
+        else:
+            equity_positive = None
 
     # 1a
-    if filing_history_years >= 4:
+    if filing_history_years is None:
+        gates_failed.append("1a_filing_history")
+        reasons.append("1a filing history tidak dapat dinilai (data belum tersedia)")
+        gates_unassessed.append("1a_filing_history")
+    elif filing_history_years >= 4:
         gates_passed.append("1a_filing_history")
     else:
         gates_failed.append("1a_filing_history")
@@ -194,7 +221,11 @@ def evaluate(inputs: dict) -> GateVerdict:
         reasons.append(f"1a filing history {filing_history_years}y < 4y → shortened-horizon DCF + ⚠ Thin Data disclosure")
 
     # 1b
-    if ebit_positive_count >= 2:
+    if ebit_positive_count is None:
+        gates_failed.append("1b_profitability")
+        reasons.append("1b profitabilitas tidak dapat dinilai (data EBIT belum tersedia)")
+        gates_unassessed.append("1b_profitability")
+    elif ebit_positive_count >= 2:
         gates_passed.append("1b_profitability")
     else:
         gates_failed.append("1b_profitability")
@@ -202,14 +233,22 @@ def evaluate(inputs: dict) -> GateVerdict:
         primary = "Relative Valuation"
 
     # 1c
-    if d_de_ratio <= 0.80 and net_debt_to_ebitda <= 6.0 and icr >= 1.0:
+    if d_de_ratio is None or net_debt_to_ebitda is None or icr is None:
+        gates_failed.append("1c_capital_structure")
+        reasons.append("1c struktur modal tidak dapat dinilai (D/E, ND/EBITDA atau ICR belum tersedia)")
+        gates_unassessed.append("1c_capital_structure")
+    elif d_de_ratio <= 0.80 and net_debt_to_ebitda <= 6.0 and icr >= 1.0:
         gates_passed.append("1c_capital_structure")
     else:
         gates_failed.append("1c_capital_structure")
         reasons.append(f"1c capital structure breach (D/(D+E)={d_de_ratio:.2f}, ND/EBITDA={net_debt_to_ebitda:.2f}×, IC={icr:.2f}×) → DCF proceeds with mandatory Relative cross-check")
 
     # 1d
-    if equity_positive:
+    if equity_positive is None:
+        gates_failed.append("1d_equity_base")
+        reasons.append("1d basis ekuitas tidak dapat dinilai (ekuitas resmi belum tersedia)")
+        gates_unassessed.append("1d_equity_base")
+    elif equity_positive:
         gates_passed.append("1d_equity_base")
     else:
         gates_failed.append("1d_equity_base")
@@ -217,41 +256,93 @@ def evaluate(inputs: dict) -> GateVerdict:
         primary = "Relative Valuation"
 
     # Gate 2: Ownership Structure
-    nci_pct = float(inputs.get("nci_pct", 0.0) or 0.0)
-    if nci_pct <= 15.0:
-        gates_passed.append("2_nci")
-    elif nci_pct <= 40.0:
-        gates_passed.append("2_nci")
-        reasons.append(f"2 NCI {nci_pct:.1f}% in 15–40% band → DCF + mandatory SOTP cross-check")
-    else:
+    _nci_raw = inputs.get("nci_pct")
+    if _nci_raw is None:
         gates_failed.append("2_nci")
-        reasons.append(f"2 NCI {nci_pct:.1f}% > 40% → SOTP becomes primary, consolidated DCF is rough reference only")
-        primary = "SOTP"
+        reasons.append("2 NCI tidak dapat dinilai (NCI resmi belum tersedia)")
+        gates_unassessed.append("2_nci")
+        nci_pct = 0.0
+        _nci_missing = True
+    else:
+        try:
+            nci_pct = float(_nci_raw or 0.0)
+        except (TypeError, ValueError):
+            gates_failed.append("2_nci")
+            reasons.append("2 NCI tidak dapat dinilai (format tidak valid)")
+            gates_unassessed.append("2_nci")
+            nci_pct = 0.0
+            _nci_missing = True
+        else:
+            _nci_missing = False
+            if nci_pct <= 15.0:
+                gates_passed.append("2_nci")
+            elif nci_pct <= 40.0:
+                gates_passed.append("2_nci")
+                reasons.append(f"2 NCI {nci_pct:.1f}% in 15–40% band → DCF + mandatory SOTP cross-check")
+            else:
+                gates_failed.append("2_nci")
+                reasons.append(f"2 NCI {nci_pct:.1f}% > 40% → SOTP becomes primary, consolidated DCF is rough reference only")
+                primary = "SOTP"
 
-    # Gate 3: Cyclicality / Operating Stage
-    revenue_drivers = inputs.get("revenue_drivers") or []
-    has_steady_state_3y = inputs.get("has_steady_state_3y", True)
-    commodity_tags = {"commodity_coal", "commodity_nickel", "commodity_cpo", "commodity_oil", "commodity_gold", "commodity_copper", "commodity"}
-    if any(tag in commodity_tags or "commodity" in str(tag) for tag in revenue_drivers):
+    # Gate 3: Cyclicality / Operating Stage (extractive commodity only triggers NAV).
+    # Generic poultry/input price sensitivity (going_concern) keeps DCF; only
+    # finite-reserve extractive tags (coal, nickel, CPO, oil, gold, copper)
+    # or mining profile trigger reserve-based NAV.
+    revenue_drivers = inputs.get("revenue_drivers")
+    has_steady_state_3y = inputs.get("has_steady_state_3y")
+    if revenue_drivers is None:
+        revenue_drivers = []
+    _extractive = {"commodity_coal", "commodity_nickel", "commodity_cpo",
+                   "commodity_oil", "commodity_gold", "commodity_copper",
+                   "coal", "nickel", "cpo", "oil_gas", "gold", "copper"}
+    _prof = str(inputs.get("model_profile") or inputs.get("domain") or "").lower()
+    _is_extractive = any(str(tag).lower() in _extractive or
+                         any(x in str(tag).lower() for x in
+                             ("coal", "nickel", "cpo", "oil", "gold", "copper"))
+                         for tag in revenue_drivers)
+    # Generic "commodity" alone (e.g. poultry price sensitivity) does not trigger NAV.
+    if _is_extractive or (_prof in ("finite_life_mining", "mining", "oil_gas", "plantation", "reit")
+                          and any("commodity" in str(tag).lower() for tag in revenue_drivers)):
         gates_passed.append("3_cyclicality")
         primary = "NAV / Reserve-based"
         reasons.append("3 commodity-driven revenue → NAV/reserve-based primary + DCF as long-run price deck comparison")
+    elif any("commodity" in str(tag).lower() for tag in revenue_drivers):
+        gates_passed.append("3_cyclicality")
+        reasons.append("3 commodity price sensitivity noted (non-extractive); DCF primary retained")
+    elif has_steady_state_3y is None:
+        gates_failed.append("3_cyclicality")
+        reasons.append("3 tahap operasi tidak dapat dinilai (klasifikasi steady-state belum tervalidasi)")
+        gates_unassessed.append("3_cyclicality")
+    elif not has_steady_state_3y and structural:
+        gates_passed.append("3_cyclicality")
+        reasons.append(f"3 no 3y steady state noted; Gate 0 {primary} primary retained (structural)")
     elif not has_steady_state_3y:
         gates_passed.append("3_cyclicality")
         primary = "Relative Valuation"
+        ramping = True
         reasons.append("3 newly commissioned / ramping asset (<3y steady-state) → forward Relative Valuation primary (EV/EBITDA at target capacity against mature peers)")
     else:
         gates_passed.append("3_cyclicality")
 
     # Gate 4: Life Cycle Stage
-    life_cycle_stage = str(inputs.get("life_cycle_stage", "mature")).lower()
-    gates_passed.append("4_life_cycle")
-    if life_cycle_stage == "decline":
-        primary = "P/BV"
-        reasons.append("4 decline / turnaround → P/BV (or NAV if asset base is substantial), DCF too speculative")
-    elif life_cycle_stage in ("pre_revenue", "high_growth_pre_profit", "high_growth"):
-        primary = "EV/Sales"
-        reasons.append(f"4 {life_cycle_stage} → EV/Sales primary")
+    _lc_raw = inputs.get("life_cycle_stage")
+    if _lc_raw is None:
+        gates_failed.append("4_life_cycle")
+        reasons.append("4 tahap siklus hidup tidak dapat dinilai (klasifikasi LLM/bukti belum tervalidasi)")
+        gates_unassessed.append("4_life_cycle")
+        life_cycle_stage = "mature"
+    else:
+        life_cycle_stage = str(_lc_raw).lower()
+        gates_passed.append("4_life_cycle")
+        if structural and life_cycle_stage in ("decline", "pre_revenue",
+                                               "high_growth_pre_profit", "high_growth"):
+            reasons.append(f"4 {life_cycle_stage}; Gate 0 {primary} primary retained (structural)")
+        elif life_cycle_stage == "decline":
+            primary = "P/BV"
+            reasons.append("4 decline / turnaround → P/BV (or NAV if asset base is substantial), DCF too speculative")
+        elif life_cycle_stage in ("pre_revenue", "high_growth_pre_profit", "high_growth"):
+            primary = "EV/Sales"
+            reasons.append(f"4 {life_cycle_stage} → EV/Sales primary")
 
     # Determine secondary
     secondary = _secondary_for(primary, gates_failed, nci_pct)
@@ -267,15 +358,19 @@ def evaluate(inputs: dict) -> GateVerdict:
         reasons=reasons,
         gates_passed=gates_passed,
         gates_failed=gates_failed,
+        gates_unassessed=gates_unassessed,
+        ramping=ramping,
     )
 
 
+def is_extreme_upside(upside_ratio) -> bool:
+    """Gate 5 rule on a ratio (tp / price - 1); one source in gate_thresholds."""
+    return gate_thresholds.is_extreme_ratio(upside_ratio)
+
+
 def _eval_gate5_override(inputs: dict) -> Optional[str]:
-    upside = inputs.get("upside_pct", inputs.get("upside"))
-    if upside is not None:
-        u_pct = upside * 100.0 if abs(upside) <= 2.0 and not (upside > 1.0 and upside == int(upside)) else upside
-        if u_pct > 100.0 or u_pct < -50.0:
-            return "Review Required"
+    if gate_thresholds.is_extreme_pct(gate_thresholds.gate_upside_pct(inputs)):
+        return "Review Required"
     return None
 
 
@@ -287,30 +382,34 @@ def _eval_gate5(inputs: dict, gates_passed: list[str], gates_failed: list[str], 
     peer_high = inputs.get("peer_exit_high")
 
     if upside is not None:
-        u_pct = upside * 100.0 if abs(upside) <= 2.0 and not (upside > 1.0 and upside == int(upside)) else upside
-        if u_pct > 100.0:
-            gates_failed.append("5_upside_extreme")
-            rating_override = "Review Required"
-            reasons.append(f"5 upside {u_pct:.1f}% > 100% → rating auto-override to Review Required")
-        elif u_pct < -50.0:
-            gates_failed.append("5_downside_extreme")
-            rating_override = "Review Required"
-            reasons.append(f"5 downside {u_pct:.1f}% < -50% → rating auto-override to Review Required")
-        else:
+        pct = gate_thresholds.gate_upside_pct(inputs)
+        if pct is not None and gate_thresholds.is_extreme_pct(pct):
+            if pct > 0:
+                gates_failed.append("5_upside_extreme")
+                rating_override = "Review Required"
+                reasons.append(f"5 upside {pct:.1f}% > {gate_thresholds.EXTREME_UPSIDE_PCT:.0f}% → rating auto-override to Review Required")
+            else:
+                gates_failed.append("5_downside_extreme")
+                rating_override = "Review Required"
+                reasons.append(f"5 downside {pct:.1f}% < {gate_thresholds.EXTREME_DOWNSIDE_PCT:.0f}% → rating auto-override to Review Required")
+        elif pct is not None:
             gates_passed.append("5_upside_band")
 
     if tv_share is not None:
-        tv_pct = tv_share * 100.0 if tv_share <= 1.0 else tv_share
-        if tv_pct > 75.0:
+        if gate_thresholds.tv_flagged(tv_share):
             gates_failed.append("5_tv_share_high")
-            reasons.append(f"5 terminal value {tv_pct:.1f}% > 75% of EV → flagged for cross-check (implied exit-multiple or Relative Valuation)")
+            try:
+                tv_pct = float(tv_share) * 100.0 if float(tv_share) <= 1.0 else float(tv_share)
+            except (TypeError, ValueError):
+                tv_pct = 0.0
+            reasons.append(f"5 terminal value {tv_pct:.1f}% > {gate_thresholds.TV_SHARE_PCT:.0f}% of EV → flagged for cross-check (implied exit-multiple or Relative Valuation)")
         else:
             gates_passed.append("5_tv_share")
 
     if implied_exit is not None and peer_low is not None and peer_high is not None:
         if not (peer_low <= implied_exit <= peer_high):
             gates_failed.append("5_exit_multiple_out_of_range")
-            reasons.append(f"5 implied exit EV/EBITDA {implied_exit:.1f}× outside peer range {peer_low:.1f}-{peer_high:.1f}× → WACC/g out of sync with market pricing, cross-check vs EV/EBITDA relative valuation")
+            reasons.append(f"5 implied exit EV/EBITDA {implied_exit:.1f}× outside historical range {peer_low:.1f}-{peer_high:.1f}× → WACC/g out of sync with market pricing, cross-check vs EV/EBITDA relative valuation")
         else:
             gates_passed.append("5_exit_multiple_in_range")
 

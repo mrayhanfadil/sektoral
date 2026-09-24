@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from .profiles import g3_for, normalize
 
+from .. import gate_thresholds
+
 
 def _v(check_id: str, ok: bool, msg: str, blocker: bool = True,
        status_override: str | None = None) -> dict:
@@ -37,10 +39,12 @@ def check_g3(intake: dict | None, forecast: dict | None, valuation: dict | None)
     price = _num(intake.get("price"))
     mcap = _num(intake.get("market_cap"))
     tp = _num(valuation.get("tp"))
-    tv_share = _num(valuation.get("tv_share"))
+    chain = valuation.get("method_chain") or {}
+    dcf_selected = not chain.get("order") or chain.get("selected") == "fcff_dcf"
+    tv_share = _num(valuation.get("tv_share")) if dcf_selected else None
     g3log = valuation.get("g3") or {}
 
-    # G3.1 terminal share >75% flagged. N/A for LoM without terminal.
+    # G3.1 terminal share >80% flagged. N/A for LoM without terminal.
     if applies("G3.1"):
         if profile == "finite_life_mining":
             checks.append(_v("G3.1", True, "LoM tanpa terminal perpetual; tidak berlaku",
@@ -48,10 +52,10 @@ def check_g3(intake: dict | None, forecast: dict | None, valuation: dict | None)
         elif tv_share is None:
             checks.append(_v("G3.1", True, "porsi terminal tak tersedia; dilabeli", False, "dilabeli"))
         else:
-            ok = tv_share <= 0.75
+            ok = not gate_thresholds.tv_flagged(tv_share)
             checks.append(_v("G3.1", True,
                              f"porsi terminal {tv_share*100:.0f}% dari EV"
-                             + ("" if ok else " >75%: wajib catatan + uji"),
+                             + ("" if ok else f" >{gate_thresholds.TV_SHARE_PCT:.0f}%: wajib catatan + uji"),
                              False, "lolos" if ok else "peringatan"))
 
     # G3.2 equity/TP vs market cap 20–300% same unit/date.
@@ -134,14 +138,21 @@ def check_g3(intake: dict | None, forecast: dict | None, valuation: dict | None)
 
     # Cross-cutting §4.4: divergence >30% must not be averaged; extreme TP needs thesis.
     upside = _num(valuation.get("upside"))
-    if upside is not None and abs(upside) > 0.50:
+    if upside is not None and gate_thresholds.is_extreme_ratio(upside):
         checks.append(_v("G3.9_extreme", False,
-                         "TP ekstrem |upside|>50%: butuh tesis fundamental + keterbatasan model di hlm 1",
+                         f"TP ekstrem upside>+{gate_thresholds.EXTREME_UPSIDE_PCT:.0f}%/downside<{gate_thresholds.EXTREME_DOWNSIDE_PCT:.0f}%: butuh tesis fundamental + keterbatasan model di hlm 1",
                          True))
     ps_g, ps_x = _num(valuation.get("ps_gordon")), _num(valuation.get("ps_exit"))
-    if ps_g is not None and ps_x is not None:
+    if dcf_selected and ps_g is not None and ps_x is not None:
         div = abs(ps_g - ps_x) / max(abs(ps_g), abs(ps_x), 1)
-        if div > 0.30:
+        if div > 0.30 and valuation.get("dcf_basis") == "gordon":
+            # §4.4: the primary (Gordon) stays the TP basis; the exit value is a
+            # disclosed cross-check, not averaged, so the gap is labeled.
+            checks.append(_v("G3.8_divergence", True,
+                             f"selisih Gordon vs exit {div*100:.1f}%: TP memakai Gordon, "
+                             "exit hanya cross-check dan selisih diungkapkan",
+                             False, "dilabeli"))
+        elif div > 0.30:
             checks.append(_v("G3.8_divergence", False,
                              f"selisih Gordon vs exit {div*100:.1f}%: jangan dirata-rata diam-diam",
                              True))

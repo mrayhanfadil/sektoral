@@ -1,4 +1,5 @@
 """Format angka Indonesia: 1.234,5. Nol em-dash, nol emoji di output."""
+import math
 
 
 def _id(x, dec=1):
@@ -10,6 +11,22 @@ def _id(x, dec=1):
         return "n.a."
     s = f"{val:,.{dec}f}"
     return s.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+# IDX price fractions (fraksi harga): tick size by price band.
+_TICKS = ((200, 1), (500, 2), (2000, 5), (5000, 10), (float("inf"), 25))
+
+
+def tick(v):
+    """Round a per-share value to the IDX tick for its price band.
+
+    A flat Rp10 rounding collapsed low-priced targets (Rp56 stock: base,
+    downside and upside all became Rp30)."""
+    if v is None:
+        return None
+    step = next(size for bound, size in _TICKS if abs(v) < bound)
+    units = math.floor(abs(v) / step + 0.5)  # half-up, not banker's rounding
+    return int(math.copysign(units * step, v)) if units else 0
 
 
 def rp(v):
@@ -118,6 +135,18 @@ def source_citation(note: str = "") -> str:
     if not s.startswith("Source:"):
         return f"Source: {s}"
     return s
+
+
+def house_source_line(note) -> str:
+    """Struktur rule: every exhibit's source line opens with the house line
+    'Source: Company, Sektoral Estimates'; the exhibit's own provenance
+    (data set, dates, method) follows it instead of replacing it."""
+    import re
+    detail = re.sub(r"^\s*(Source|Sumber)\s*:\s*", "", str(note or "")).strip()
+    detail = re.sub(r"^Company,\s*Sektoral Estimates[.;,]?\s*", "", detail)
+    detail = re.sub(r"^Sectors,\s*Sektoral Estimates", "Sectors", detail)
+    detail = re.sub(r"^Sektoral Estimates[.;,]?\s*", "", detail)
+    return DEFAULT_SOURCE + (f"; {detail}" if detail.strip(" ;.") else "")
 
 
 def is_valid_source_citation(note: str) -> bool:

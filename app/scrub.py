@@ -26,6 +26,98 @@ _SEL_KOSONG = frozenset({"", "-", "--", "\u2013", "\u2014", "n/a", "na", "tidak 
 _FRASE_HAMPA = ("tanpa tanggal", "aksi korporasi tercatat", "tanpa judul")
 
 
+import re as _re
+
+_DASH_RANGE = _re.compile(r"(?<=\d)\s*[\u2013\u2014]\s*(?=\d)")
+_DASH_CLAUSE = _re.compile(r"\s*[\u2013\u2014]\s*")
+
+
+def normalize_dashes(text):
+    """Spec §5.1 bans em/en dashes: numeric ranges become '-', clause
+    dashes become ', '. Used on LLM prose before it reaches the report."""
+    if not isinstance(text, str):
+        return text
+    return _DASH_CLAUSE.sub(", ", _DASH_RANGE.sub("-", text))
+
+
+_ROMAN = {"I": "1", "II": "2", "III": "3", "IV": "4"}
+_Q_RANGE = _re.compile(r"\bQ([1-4])\s*-\s*Q([1-4])[\s-]*(20\d{2})\b", _re.I)
+_Q_ONE = _re.compile(r"\bQ([1-4])[\s-]*(20\d{2})\b", _re.I)
+_H_ONE = _re.compile(r"\bH([12])[\s-]*(20\d{2})\b", _re.I)
+_KUARTAL = _re.compile(r"\bkuartal\s+(IV|III|II|I|[1-4])\s+(20\d{2})\b", _re.I)
+_ENGINE = _re.compile(r"\bengine\b", _re.I)
+_MECHANICAL = _re.compile(r"pesawat|airframe|aircraft|lessor|overhaul|\bmro\b|turbin|"
+                          r"turbine|mesin|otomotif|kendaraan|motor|jet|propulsi", _re.I)
+
+
+def normalize_periods(text):
+    """Spec §1/§5.1 period format: Q2 2026 -> 2Q26, H1 2026 -> 1H26."""
+    if not isinstance(text, str):
+        return text
+    text = _Q_RANGE.sub(lambda m: f"{m[1]}Q{m[3][2:]}-{m[2]}Q{m[3][2:]}", text)
+    text = _Q_ONE.sub(lambda m: f"{m[1]}Q{m[2][2:]}", text)
+    text = _H_ONE.sub(lambda m: f"{m[1]}H{m[2][2:]}", text)
+    return _KUARTAL.sub(lambda m: f"{_ROMAN.get(m[1].upper(), m[1])}Q{m[2][2:]}", text)
+
+
+def _replace_engine(text):
+    def swap(m):
+        window = text[max(0, m.start() - 60):m.end() + 60]
+        return m[0] if _MECHANICAL.search(window) else "penggerak"
+    return _ENGINE.sub(swap, text)
+
+
+def normalize_prose(text):
+    """Deterministic house-style pass over LLM prose (dashes, periods,
+    pipeline word 'engine' outside a mechanical context)."""
+    if not isinstance(text, str):
+        return text
+    return _replace_engine(normalize_periods(normalize_dashes(text)))
+
+
+# Analyst prose fields that reach the report body. Source titles, URLs and
+# timestamps are provenance and must stay exactly as supplied.
+PROSE_KEYS = frozenset({"rationale", "factual_basis", "mechanism", "uncertainty", "item",
+                        "timing", "driver_path", "thesis_points", "conditions",
+                        "headline", "explanation", "thesis_titles"})
+
+
+def normalize_plan(value, key=None):
+    """Apply normalize_prose to prose fields anywhere in an agent plan."""
+    if isinstance(value, dict):
+        return {k: normalize_plan(v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [normalize_plan(v, key) for v in value]
+    if isinstance(value, str) and key in PROSE_KEYS:
+        return normalize_prose(value)
+    return value
+
+
+def normalize_doc_prose(doc):
+    """House style over every prose field of a built report (cover, section
+    paragraphs, cards, risks, chart narratives). Narrative sentences built
+    from issuer packs never passed normalize_plan; table cells and source
+    lines are provenance and stay as supplied."""
+    cover = doc.get("cover") or {}
+    if isinstance(cover.get("headline"), str):
+        cover["headline"] = normalize_prose(cover["headline"])
+    cover["bullets"] = [normalize_prose(b) for b in cover.get("bullets") or []]
+    for para in cover.get("paragraf") or []:
+        if isinstance(para, dict):
+            para["isi"] = normalize_prose(para.get("isi"))
+            para["judul"] = normalize_prose(para.get("judul"))
+    for page in doc.get("bagian") or []:
+        page["paragraf"] = [normalize_prose(p) for p in page.get("paragraf") or []]
+        for card in page.get("cards") or []:
+            card["text"] = normalize_prose(card.get("text"))
+    for risk in doc.get("risks") or []:
+        risk["isi"] = normalize_prose(risk.get("isi"))
+    for exhibit in doc.get("exhibits") or []:
+        if isinstance(exhibit.get("narasi"), str):
+            exhibit["narasi"] = normalize_prose(exhibit["narasi"])
+    return doc
+
+
 def contains_banned(text):
     """True bila teks memuat salah satu untai BANNED (huruf diabaikan)."""
     if not isinstance(text, str):

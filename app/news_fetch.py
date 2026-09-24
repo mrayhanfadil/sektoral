@@ -17,6 +17,7 @@ import html as html_mod
 import json
 import os
 import re
+import tempfile
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -30,7 +31,7 @@ NEWS_FULL_DIR = ROOT / "data" / "news_full"
 TIMEOUT_S = 12
 MAX_HTML_BYTES = 500_000
 FULL_TEXT_CAP = 8000
-AGENT_TEXT_CAP = 3000
+AGENT_TEXT_CAP = 6000
 MAX_WORKERS = 4
 
 _UNAVAILABLE_OFFLINE = "unavailable_offline"
@@ -63,8 +64,19 @@ def _save(url: str, record: dict, cache_dir: Path | None = None) -> None:
     try:
         directory = Path(cache_dir) if cache_dir is not None else NEWS_FULL_DIR
         directory.mkdir(parents=True, exist_ok=True)
-        _record_path(url, directory).write_text(
-            json.dumps(record, ensure_ascii=False, indent=1), encoding="utf-8")
+        # Atomic replace: parallel ticker runs may fetch the same article,
+        # and a reader must never see a half-written record.
+        target = _record_path(url, directory)
+        handle, temp = tempfile.mkstemp(dir=directory, suffix=".tmp")
+        try:
+            with os.fdopen(handle, "w", encoding="utf-8") as stream:
+                json.dump(record, stream, ensure_ascii=False, indent=1)
+            os.replace(temp, target)
+        except OSError:
+            try:
+                os.unlink(temp)
+            except OSError:
+                pass
     except OSError:
         pass
 

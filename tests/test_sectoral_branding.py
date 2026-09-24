@@ -1,9 +1,11 @@
 """Regression tests for Sectoral branding invariants (spec-to-repo audit).
 
 Spec under test (Sectoral Design System):
-- Primary deep blue #0928B1, paper white #FFFFFF, text #333333,
-  rules #D9D9D9, table even-row fill #B4C7FF.
-- Roboto only (no Poppins or other foreign families in report CSS).
+- Primary deep blue #0928B1, paper white #FFFFFF, text #000000,
+  grid/rules #E0E0E0, highlight #E1E9FF. The Figma report templates
+  (Others, nodes 2592-2 / 2627-897) fill even table rows with the highlight
+  #E1E9FF; #B4C7FF stays the second chart series.
+- Roboto only, on screen and in print (Regular to Black Italic).
 - Charts use the six-color series
   #0928B1 / #B4C7FF / #3ED628 / #1DCD9F / #0047AB / #7596FF,
   with a black baseline and subtle grid.
@@ -18,6 +20,8 @@ from __future__ import annotations
 
 import re
 import sys
+
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,9 +43,11 @@ def _norm(hexcode: str) -> str:
 def test_palette_constants_match_spec():
     assert render.PRIMARY == "#0928B1"
     assert _norm(render.PAPER) == "#FFFFFF"
-    assert _norm(render.INK) == "#333333"
-    assert _norm(render.RULE) == "#D9D9D9"
+    assert _norm(render.INK) == "#000000"
+    assert _norm(render.RULE) == "#E0E0E0"
     assert _norm(render.EVEN_ROW) == "#B4C7FF"
+    assert _norm(render.HIGHLIGHT) == "#E1E9FF"
+    assert _norm(render.LIME) == "#3ED628"
 
 
 def test_chart_series_palette_exact_order():
@@ -56,8 +62,9 @@ def test_issuer_and_index_chart_colors_come_from_series():
 def test_report_css_uses_spec_colors():
     css = render.CSS
     assert "#0928B1" in css  # primary: topbar, headings, thead
-    assert "#333333" in css  # body text
-    assert "#D9D9D9" in css  # table/panel rules
+    assert "#000000" in css  # body text
+    assert "#E0E0E0" in css  # table/grid rules
+    assert "#E1E9FF" in css  # rating block and highlight callouts
     assert "#B4C7FF" in css  # even-row fill
     assert "#ffffff" in css  # paper background
 
@@ -74,22 +81,26 @@ def test_table_header_and_even_row_rules_use_spec_tokens():
     assert ".exhibit-table thead th{background:" + render.PRIMARY in css
     assert "nth-child(even)" in css
     assert (".exhibit-table tbody tr:nth-child(even) td{background:"
-            + render.EVEN_ROW in css)
+            + render.HIGHLIGHT in css)
 
 
 # ------------------------------------------------------------------- font
 
-def test_report_uses_roboto_on_screen_and_copy_safe_font_in_print():
+def test_report_uses_roboto_on_screen_and_in_print():
     css = render.CSS
     assert "Roboto" in css
     lowered = css.lower()
-    for foreign in ("poppins", "helvetica", "system-ui",
+    for foreign in ("poppins", "helvetica", "system-ui", "arial",
                     "segoe", "inter", "georgia", "times"):
         assert foreign not in lowered, foreign
     assert "@font-face" in css
-    assert "font-family:'Roboto'" in css
     assert "body{font-family:'Roboto',sans-serif" in css
-    assert "@media print{body,body *{font-family:Arial,sans-serif!important" in css
+    # Print keeps Roboto and bold headings; ligatures stay off for copy-safe text.
+    assert "font-weight:400!important" not in css
+    assert "@media print{body,body *{font-variant-ligatures:none;" in css
+    for weight, style in ((400, "normal"), (400, "italic"), (500, "normal"), (700, "normal"),
+                          (700, "italic"), (900, "normal"), (900, "italic")):
+        assert f"font-weight:{weight};font-style:{style}" in css, (weight, style)
 
 
 def test_roboto_font_files_exist_and_embed():
@@ -136,16 +147,17 @@ def _chart(monkeypatch):
 
 def test_chart_baseline_is_black_and_grid_is_subtle(monkeypatch):
     chart = _chart(monkeypatch)
-    assert "stroke='#000000'" in chart  # baseline (100) line
+    assert "stroke='#000000'" in chart  # baseline (relative zero) line
     assert "stroke-width='1.2'" in chart
-    assert "stroke='#E6E6E6'" in chart  # subtle grid
-    assert "stroke-width='0.5'" in chart
+    assert "stroke='#E0E0E0'" in chart  # subtle dashed grid, no frame
+    assert "stroke-dasharray='3 3'" in chart
+    assert "<rect x='30' y='15'" not in chart  # no chart frame
 
 
 def test_chart_uses_only_series_plus_neutral_colors(monkeypatch):
     chart = _chart(monkeypatch)
     allowed = {_norm(c) for c in SPEC_SERIES}
-    allowed |= {"#000000", "#E6E6E6", "#555555", "#333333"}
+    allowed |= {"#000000", "#E0E0E0", "#555555", "#FFFFFF"}
     found = {_norm(m) for m in HEX.findall(chart)}
     assert found, "no colors found in chart SVG"
     assert found <= allowed, f"off-spec chart colors: {sorted(found - allowed)}"
@@ -170,8 +182,14 @@ def test_report_topbar_uses_canonical_repo_wordmark():
 def test_report_logo_matches_canonical_asset_exactly():
     asset = (Path(render.__file__).resolve().parent
              / "assets" / "brand" / "sectoral-logo.svg")
-    canonical = (Path(__file__).resolve().parents[2]
-                / "sectors-hackathon" / "assets" / "brand" / "sectoral-logo.svg").read_text(encoding="utf-8")
+    # The canonical asset lives in the sibling sectors-hackathon checkout; look
+    # upward so the test also works from a git worktree, and skip when absent.
+    relative = Path("sectors-hackathon") / "assets" / "brand" / "sectoral-logo.svg"
+    source = next((parent / relative for parent in Path(__file__).resolve().parents
+                   if (parent / relative).is_file()), None)
+    if source is None:
+        pytest.skip("sectors-hackathon checkout not found next to this repo")
+    canonical = source.read_text(encoding="utf-8")
     assert asset.is_file(), str(asset)
     assert asset.read_text(encoding="utf-8") == canonical
     assert render.LOGO_SVG == canonical
@@ -189,3 +207,18 @@ def test_web_header_shows_logo_wordmark_and_title():
     assert "#1DCD9F" in web._LOGO_SVG
     assert "#3ED628" in web._LOGO_SVG
     assert "Sectoral" in page
+
+
+def test_source_lines_open_with_the_house_line_and_keep_provenance():
+    from app import fmt
+    assert fmt.house_source_line("Source: Sectors, Sektoral Estimates") == \
+        "Source: Company, Sektoral Estimates; Sectors"
+    assert fmt.house_source_line("Sumber: PER TTM data Sectors") == \
+        "Source: Company, Sektoral Estimates; PER TTM data Sectors"
+    assert fmt.house_source_line("Source: Company, Sektoral Estimates") == \
+        "Source: Company, Sektoral Estimates"
+
+
+def test_header_date_uses_day_dd_month_yyyy():
+    html_out = render._report_header("2026-09-24", {"ticker": "JPFA"})
+    assert "Kamis, 24 September 2026" in html_out

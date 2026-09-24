@@ -1,257 +1,80 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 420" role="img" aria-labelledby="flow-title flow-desc" width="100%" height="100%">
-  <title id="flow-title">Ilustrasi Alur Riset Sektoral</title>
-  <desc id="flow-desc">Diagram alur kerja riset terverifikasi: Baris data Sectors tersimpan, seleksi dan pembacaan oleh agen riset, validasi sitasi deterministik, pembaruan perusahaan, serta cabang penanganan bukti parsial.</desc>
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 400" role="img" aria-labelledby="flow-title flow-desc" font-family="Roboto, Arial, sans-serif">
+  <title id="flow-title">Alur riset Sectoral</title>
+  <desc id="flow-desc">Sumber bertanggal dibaca agen analis, agen asumsi menyusun skenario laba dan risiko, gerbang framework memilih rantai metode, harness memeriksa, lalu company update terbit atau rating ditahan.</desc>
   <defs>
-    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-      <path d="M 1 1 L 7 4 L 1 7 Z" fill="#0928B1"/>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0928B1"/>
     </marker>
-    <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-      <path d="M 1 1 L 7 4 L 1 7 Z" fill="#3ED628"/>
+    <marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B7791F"/>
     </marker>
   </defs>
+  <rect x="0" y="0" width="1120" height="400" rx="16" fill="#FFFFFF"/>
 
-  <!-- Background Canvas -->
-  <rect width="620" height="420" fill="#FFFFFF"/>
-  <rect x="0.5" y="0.5" width="619" height="419" fill="none" stroke="#D9D9D9" stroke-width="1"/>
-
-  <!-- ==================== HEADER BAR ==================== -->
-  <g id="header-section">
-    <!-- Brand Bars -->
-    <rect x="20" y="16" width="16" height="3" rx="1.5" fill="#0928B1"/>
-    <rect x="20" y="21" width="16" height="3" rx="1.5" fill="#1DCD9F"/>
-    <rect x="20" y="26" width="16" height="3" rx="1.5" fill="#3ED628"/>
-
-    <!-- Title and Subtitle -->
-    <text x="44" y="26" font-family="Roboto, sans-serif" font-size="13" font-weight="700" fill="#0928B1" letter-spacing="0.5">SEKTORAL</text>
-    <text x="122" y="26" font-family="Roboto, sans-serif" font-size="11.5" font-weight="500" fill="#333333">| ALUR RISET &amp; VALIDASI BUKTI</text>
-
-    <!-- Artwork Label (Ilustrasi alur riset) -->
-    <rect x="496" y="14" width="104" height="20" rx="3" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1"/>
-    <text x="548" y="27.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="9" font-weight="500" fill="#555555">Ilustrasi alur riset</text>
-
-    <!-- Divider Line -->
-    <line x1="20" y1="42" x2="600" y2="42" stroke="#D9D9D9" stroke-width="1"/>
-  </g>
-
-  <!-- ==================== MAIN WORKFLOW CONNECTORS ==================== -->
-  <g id="stage-connectors">
-    <!-- Connector 1 -> 2 -->
-    <line x1="146" y1="148" x2="168" y2="148" stroke="#0928B1" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
-    <rect x="148" y="132" width="20" height="12" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-    <text x="158" y="141" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" font-weight="700" fill="#0928B1">BACA</text>
-
-    <!-- Connector 2 -> 3 -->
-    <line x1="298" y1="148" x2="320" y2="148" stroke="#0928B1" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
-    <rect x="300" y="132" width="20" height="12" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-    <text x="310" y="141" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" font-weight="700" fill="#0928B1">DRAF</text>
-
-    <!-- Connector 3 -> 4 (Lolos Validasi) -->
-    <line x1="450" y1="148" x2="472" y2="148" stroke="#3ED628" stroke-width="1.5" marker-end="url(#arrow-green)"/>
-    <rect x="447" y="132" width="26" height="12" rx="2" fill="#FFFFFF" stroke="#3ED628" stroke-width="0.75"/>
-    <text x="460" y="141" text-anchor="middle" font-family="Roboto, sans-serif" font-size="6.5" font-weight="700" fill="#333333">LOLOS</text>
-
-    <!-- Branch Connector from Stage 3 down to Partial Branch -->
-    <path d="M 387 244 L 387 270" fill="none" stroke="#0928B1" stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#arrow-blue)"/>
-    <rect x="340" y="249" width="94" height="14" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1"/>
-    <text x="387" y="259.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">BUKTI TIDAK LENGKAP</text>
-  </g>
-
-  <!-- ==================== STAGE 1: DATA SECTORS ==================== -->
-  <g id="stage-1">
-    <rect x="20" y="54" width="126" height="190" rx="4" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1"/>
-    <rect x="20" y="54" width="126" height="24" rx="3" fill="#0928B1"/>
-    <text x="83" y="70" text-anchor="middle" font-family="Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#FFFFFF">1. DATA SECTORS</text>
-
-    <!-- Badge -->
-    <rect x="28" y="84" width="110" height="14" rx="2" fill="#B4C7FF"/>
-    <text x="83" y="94.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Snapshot bertanggal</text>
-
-    <!-- Rows -->
-    <g transform="translate(28, 104)">
-      <!-- Row 1 -->
-      <rect x="0" y="0" width="110" height="18" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="5" y="5" width="5" height="8" rx="1" fill="#0928B1"/>
-      <text x="15" y="12.5" font-family="Roboto, sans-serif" font-size="7.5" font-weight="500" fill="#333333">Profil Perusahaan</text>
-
-      <!-- Row 2 -->
-      <rect x="0" y="22" width="110" height="18" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="5" y="27" width="5" height="8" rx="1" fill="#1DCD9F"/>
-      <text x="15" y="34.5" font-family="Roboto, sans-serif" font-size="7.5" font-weight="500" fill="#333333">Laporan Keuangan</text>
-
-      <!-- Row 3 -->
-      <rect x="0" y="44" width="110" height="18" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="5" y="49" width="5" height="8" rx="1" fill="#0928B1"/>
-      <text x="15" y="56.5" font-family="Roboto, sans-serif" font-size="7.5" font-weight="500" fill="#333333">Metrik Valuasi</text>
-
-      <!-- Row 4 -->
-      <rect x="0" y="66" width="110" height="18" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="5" y="71" width="5" height="8" rx="1" fill="#B4C7FF"/>
-      <text x="15" y="78.5" font-family="Roboto, sans-serif" font-size="7.5" font-weight="500" fill="#333333">Data Historis &amp; Aksi</text>
+  <!-- stage cards -->
+  <g font-size="13" fill="#5B5F6B">
+    <!-- 1 sources -->
+    <rect x="20" y="40" width="190" height="236" rx="12" fill="#F2F5FF" stroke="#0928B1" stroke-width="1.5"/>
+    <text x="40" y="70" font-size="12" font-weight="700" fill="#0928B1" letter-spacing="1.5">01 SUMBER</text>
+    <text x="40" y="96" font-size="17" font-weight="700" fill="#333333">Bukti bertanggal</text>
+    <g font-size="13">
+      <rect x="40" y="114" width="150" height="28" rx="6" fill="#FFFFFF" stroke="#D9D9D9"/><text x="52" y="133" fill="#0928B1" font-weight="700">Sectors (inti)</text>
+      <rect x="40" y="148" width="150" height="28" rx="6" fill="#FFFFFF" stroke="#D9D9D9"/><text x="52" y="167">Rilis resmi emiten</text>
+      <rect x="40" y="182" width="150" height="28" rx="6" fill="#FFFFFF" stroke="#D9D9D9"/><text x="52" y="201">Harga IDX</text>
+      <rect x="40" y="216" width="150" height="28" rx="6" fill="#FFFFFF" stroke="#D9D9D9"/><text x="52" y="235">Berita bertanggal</text>
     </g>
 
-    <!-- Footer Note -->
-    <line x1="28" y1="196" x2="138" y2="196" stroke="#D9D9D9" stroke-width="0.5"/>
-    <text x="83" y="208" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" fill="#555555">Penyimpanan Terisolasi</text>
-    <text x="83" y="219" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" fill="#555555">Tanpa Akses Eksternal</text>
-    <text x="83" y="230" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Sumber Deterministik</text>
-  </g>
+    <!-- 2 analyst agent -->
+    <rect x="240" y="40" width="190" height="236" rx="12" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1.5"/>
+    <text x="260" y="70" font-size="12" font-weight="700" fill="#0928B1" letter-spacing="1.5">02 AGEN ANALIS</text>
+    <text x="260" y="96" font-size="17" font-weight="700" fill="#333333">Rencana &amp; sinyal</text>
+    <text x="260" y="124">Hipotesis sesuai</text><text x="260" y="142">jenis usaha emiten</text>
+    <text x="260" y="170">Peer, kuartalan, harga</text><text x="260" y="188">vs IHSG, arus asing</text>
+    <text x="260" y="216">Sinyal dihitung kode,</text><text x="260" y="234">bukan oleh model</text>
 
-  <!-- ==================== STAGE 2: AGEN RISET ==================== -->
-  <g id="stage-2">
-    <rect x="172" y="54" width="126" height="190" rx="4" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1"/>
-    <rect x="172" y="54" width="126" height="24" rx="3" fill="#0928B1"/>
-    <text x="235" y="70" text-anchor="middle" font-family="Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#FFFFFF">2. AGEN RISET</text>
+    <!-- 3 assumption agent -->
+    <rect x="460" y="40" width="190" height="236" rx="12" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1.5"/>
+    <text x="480" y="70" font-size="12" font-weight="700" fill="#1DCD9F" letter-spacing="1.5">03 AGEN ASUMSI</text>
+    <text x="480" y="96" font-size="17" font-weight="700" fill="#333333">Skenario laba</text>
+    <text x="480" y="124">Aktual 1H resmi +</text><text x="480" y="142">asumsi semester kedua</text>
+    <text x="480" y="170">Tesis, katalis, dan</text><text x="480" y="188">risiko utama bersumber</text>
+    <text x="480" y="216">Asumsi tanpa sumber</text><text x="480" y="234">ditolak validator</text>
 
-    <!-- Badge -->
-    <rect x="180" y="84" width="110" height="14" rx="2" fill="#B4C7FF"/>
-    <text x="235" y="94.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Seleksi &amp; Baca Data</text>
-
-    <!-- Action Cards -->
-    <g transform="translate(180, 104)">
-      <!-- Action 1 -->
-      <rect x="0" y="0" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <circle cx="8" cy="12" r="3" fill="#0928B1"/>
-      <text x="16" y="10" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Pilih Endpoint</text>
-      <text x="16" y="19" font-family="Roboto, sans-serif" font-size="6.5" fill="#555555">Target tabel spesifik</text>
-
-      <!-- Action 2 -->
-      <rect x="0" y="28" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <circle cx="8" cy="40" r="3" fill="#1DCD9F"/>
-      <text x="16" y="38" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Ekstraksi Baris</text>
-      <text x="16" y="47" font-family="Roboto, sans-serif" font-size="6.5" fill="#555555">Rekam log penelusuran</text>
-
-      <!-- Action 3 -->
-      <rect x="0" y="56" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <circle cx="8" cy="68" r="3" fill="#0928B1"/>
-      <text x="16" y="66" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Susun Draf Ringkasan</text>
-      <text x="16" y="75" font-family="Roboto, sans-serif" font-size="6.5" fill="#555555">Tautkan id referensi</text>
+    <!-- 4 gates -->
+    <rect x="680" y="40" width="190" height="236" rx="12" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1.5"/>
+    <text x="700" y="70" font-size="12" font-weight="700" fill="#0928B1" letter-spacing="1.5">04 GERBANG 0-5</text>
+    <text x="700" y="96" font-size="17" font-weight="700" fill="#333333">Rantai metode</text>
+    <g font-size="12.5">
+      <rect x="700" y="112" width="150" height="26" rx="13" fill="#0928B1"/><text x="775" y="129" text-anchor="middle" fill="#FFFFFF" font-weight="700">Metode utama</text>
+      <path d="M775 140 v10" stroke="#0928B1" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <rect x="700" y="154" width="150" height="26" rx="13" fill="#E3E9FF"/><text x="775" y="171" text-anchor="middle" fill="#0928B1" font-weight="700">Fallback</text>
+      <path d="M775 182 v10" stroke="#0928B1" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <rect x="700" y="196" width="150" height="26" rx="13" fill="#E8FAF4"/><text x="775" y="213" text-anchor="middle" fill="#0B6B50" font-weight="700">Silang cek</text>
     </g>
+    <text x="700" y="248">Urutan dikunci sebelum</text><text x="700" y="264">nilai dihitung</text>
 
-    <!-- Footer Note -->
-    <line x1="180" y1="196" x2="290" y2="196" stroke="#D9D9D9" stroke-width="0.5"/>
-    <text x="235" y="208" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" fill="#555555">Tanpa Asumsi Mandiri</text>
-    <text x="235" y="219" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" fill="#555555">Trace Baca Terekam</text>
-    <text x="235" y="230" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Penalaran Berdasar Data</text>
+    <!-- 5 harness + report -->
+    <rect x="900" y="40" width="200" height="236" rx="12" fill="#FFFFFF" stroke="#3ED628" stroke-width="1.5"/>
+    <text x="920" y="70" font-size="12" font-weight="700" fill="#2E9E1E" letter-spacing="1.5">05 HARNESS</text>
+    <text x="920" y="96" font-size="17" font-weight="700" fill="#333333">Terbit bila lolos</text>
+    <text x="920" y="124">Sumber, periode, dan</text><text x="920" y="142">kewajaran hasil diperiksa</text>
+    <rect x="920" y="160" width="160" height="58" rx="8" fill="#F7F8FA" stroke="#ECEEF2"/>
+    <text x="934" y="182" font-size="12.5" font-weight="700" fill="#333333">Company update</text>
+    <text x="934" y="202" font-size="12">PDF · versi web · jejak</text>
+    <text x="920" y="244">Rating &amp; target harga</text><text x="920" y="262">hanya bila semua lolos</text>
   </g>
 
-  <!-- ==================== STAGE 3: VALIDASI SITASI ==================== -->
-  <g id="stage-3">
-    <rect x="324" y="54" width="126" height="190" rx="4" fill="#FFFFFF" stroke="#0928B1" stroke-width="1.5"/>
-    <rect x="324" y="54" width="126" height="24" rx="3" fill="#0928B1"/>
-    <text x="387" y="70" text-anchor="middle" font-family="Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#FFFFFF">3. VALIDASI SITASI</text>
-
-    <!-- Badge -->
-    <rect x="332" y="84" width="110" height="14" rx="2" fill="#B4C7FF"/>
-    <text x="387" y="94.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Verifikasi Deterministik</text>
-
-    <!-- Verification Checks -->
-    <g transform="translate(332, 104)">
-      <!-- Check 1 -->
-      <rect x="0" y="0" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <path d="M 5 12 L 8 15 L 14 9" fill="none" stroke="#1DCD9F" stroke-width="1.5" stroke-linecap="round"/>
-      <text x="18" y="10" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Cek Sitasi 1-ke-1</text>
-      <text x="18" y="19" font-family="Roboto, sans-serif" font-size="6.5" fill="#555555">Klaim vs baris data</text>
-
-      <!-- Check 2 -->
-      <rect x="0" y="28" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <path d="M 5 40 L 8 43 L 14 37" fill="none" stroke="#3ED628" stroke-width="1.5" stroke-linecap="round"/>
-      <text x="18" y="38" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Integritas Sumber</text>
-      <text x="18" y="47" font-family="Roboto, sans-serif" font-size="6.5" fill="#555555">Audit baris terbaca</text>
-
-      <!-- Check 3 -->
-      <rect x="0" y="56" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <path d="M 5 68 L 10 68 M 10 64 L 14 64 M 10 72 L 14 72" fill="none" stroke="#0928B1" stroke-width="1.5" stroke-linecap="round"/>
-      <text x="18" y="66" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Pemisah Cabang</text>
-      <text x="18" y="75" font-family="Roboto, sans-serif" font-size="6.5" font-weight="700" fill="#0928B1">Lengkap vs Parsial</text>
-    </g>
-
-    <!-- Footer Note -->
-    <line x1="332" y1="196" x2="442" y2="196" stroke="#D9D9D9" stroke-width="0.5"/>
-    <text x="387" y="208" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" fill="#555555">Pengecekan Kode Ketat</text>
-    <text x="387" y="219" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" fill="#555555">Tolak Klaim Tanpa Bukti</text>
-    <text x="387" y="230" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">Validasi Nol-Toleransi</text>
+  <!-- arrows between stages -->
+  <g stroke="#0928B1" stroke-width="2" fill="none">
+    <path d="M212 158 H236" marker-end="url(#arrow)"/>
+    <path d="M432 158 H456" marker-end="url(#arrow)"/>
+    <path d="M652 158 H676" marker-end="url(#arrow)"/>
+    <path d="M872 158 H896" marker-end="url(#arrow)"/>
   </g>
 
-  <!-- ==================== STAGE 4: PEMBARUAN PERUSAHAAN ==================== -->
-  <g id="stage-4">
-    <rect x="476" y="54" width="124" height="190" rx="4" fill="#FFFFFF" stroke="#3ED628" stroke-width="1.5"/>
-    <rect x="476" y="54" width="124" height="24" rx="3" fill="#0928B1"/>
-    <text x="538" y="70" text-anchor="middle" font-family="Roboto, sans-serif" font-size="9.5" font-weight="700" fill="#FFFFFF">4. PEMBARUAN</text>
-
-    <!-- Badge -->
-    <rect x="483" y="84" width="110" height="14" rx="2" fill="#FFFFFF" stroke="#3ED628" stroke-width="1"/>
-    <text x="538" y="94.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Output Terverifikasi</text>
-
-    <!-- Report Sections -->
-    <g transform="translate(483, 104)">
-      <!-- Section 1 -->
-      <rect x="0" y="0" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="4" y="6" width="6" height="12" rx="1" fill="#B4C7FF"/>
-      <text x="14" y="10" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Ringkasan Emiten</text>
-      <text x="14" y="19" font-family="Roboto, sans-serif" font-size="6.5" font-weight="500" fill="#1DCD9F">Sitasi terverifikasi [1]</text>
-
-      <!-- Section 2 -->
-      <rect x="0" y="28" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="4" y="34" width="6" height="12" rx="1" fill="#B4C7FF"/>
-      <text x="14" y="38" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Kinerja Finansial</text>
-      <text x="14" y="47" font-family="Roboto, sans-serif" font-size="6.5" font-weight="500" fill="#1DCD9F">Sitasi terverifikasi [2]</text>
-
-      <!-- Section 3 -->
-      <rect x="0" y="56" width="110" height="24" rx="2" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="4" y="62" width="6" height="12" rx="1" fill="#B4C7FF"/>
-      <text x="14" y="66" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#333333">Analisis Sektoral</text>
-      <text x="14" y="75" font-family="Roboto, sans-serif" font-size="6.5" font-weight="500" fill="#1DCD9F">Sitasi terverifikasi [3]</text>
-    </g>
-
-    <!-- Footer Note -->
-    <line x1="483" y1="196" x2="593" y2="196" stroke="#D9D9D9" stroke-width="0.5"/>
-    <text x="538" y="208" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" fill="#555555">Tautan Bukti Lengkap</text>
-    <text x="538" y="219" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7" fill="#555555">Format Laporan Rapi</text>
-    <text x="538" y="230" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#3ED628">Status: Tervalidasi Penuh</text>
-  </g>
-
-  <!-- ==================== BOTTOM BRANCH: PARTIAL / MISSING EVIDENCE ==================== -->
-  <g id="partial-evidence-branch">
-    <!-- Branch Container Panel -->
-    <rect x="20" y="274" width="580" height="126" rx="4" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1"/>
-    <!-- Left Indicator Bar -->
-    <rect x="20" y="274" width="4" height="126" fill="#1DCD9F"/>
-
-    <!-- Section Header -->
-    <rect x="34" y="284" width="144" height="14" rx="2" fill="#B4C7FF"/>
-    <text x="106" y="294.5" text-anchor="middle" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">CABANG EVALUASI BUKTI</text>
-    <text x="188" y="295" font-family="Roboto, sans-serif" font-size="10.5" font-weight="700" fill="#333333">Penanganan Status Parsial &amp; Kekosongan Bukti</text>
-    <text x="34" y="312" font-family="Roboto, sans-serif" font-size="8.5" fill="#555555">Ketika data Sectors tidak mencukupi untuk mendukung seksi laporan, sistem secara transparan menandai status parsial tanpa substitusi data buatan.</text>
-
-    <!-- 3 Step Cards in Partial Branch -->
-    <g transform="translate(34, 322)">
-      <!-- Subcard 1: Kondisi Bukti Kurang -->
-      <rect x="0" y="0" width="174" height="66" rx="3" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="0" y="0" width="174" height="16" rx="2" fill="#FFFFFF"/>
-      <line x1="0" y1="16" x2="174" y2="16" stroke="#D9D9D9" stroke-width="0.75"/>
-      <text x="8" y="11.5" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">DETEKSI KEKOSONGAN</text>
-      <text x="8" y="28" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Baris data historis / segmen nihil</text>
-      <text x="8" y="40" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Parameter tidak ada di data Sectors</text>
-      <text x="8" y="52" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Draf klaim tidak memiliki sitasi baris</text>
-
-      <!-- Subcard 2: Perilaku Deterministik -->
-      <rect x="184" y="0" width="178" height="66" rx="3" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="0.75"/>
-      <rect x="184" y="0" width="178" height="16" rx="2" fill="#FFFFFF"/>
-      <line x1="184" y1="16" x2="362" y2="16" stroke="#D9D9D9" stroke-width="0.75"/>
-      <text x="192" y="11.5" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">PERILAKU DETERMINISTIK</text>
-      <text x="192" y="28" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Tolak klaim tanpa verifikasi baris</text>
-      <text x="192" y="40" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Labeli seksi: [BUKTI PARSIAL]</text>
-      <text x="192" y="52" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Tanpa data sintetis / estimasi liar</text>
-
-      <!-- Subcard 3: Hasil Berlabel Parsial -->
-      <rect x="372" y="0" width="174" height="66" rx="3" fill="#FFFFFF" stroke="#1DCD9F" stroke-width="1"/>
-      <rect x="372" y="0" width="174" height="16" rx="2" fill="#B4C7FF"/>
-      <line x1="372" y1="16" x2="546" y2="16" stroke="#1DCD9F" stroke-width="0.75"/>
-      <text x="380" y="11.5" font-family="Roboto, sans-serif" font-size="7.5" font-weight="700" fill="#0928B1">OUTPUT TRANSPARAN</text>
-      <text x="380" y="28" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Data yang ada tetap disajikan</text>
-      <text x="380" y="40" font-family="Roboto, sans-serif" font-size="7" fill="#333333">• Batasan bukti dicatat eksplisit</text>
-      <text x="380" y="52" font-family="Roboto, sans-serif" font-size="7" font-weight="700" fill="#0928B1">• Rekam audit siap diverifikasi analis</text>
-    </g>
-  </g>
+  <!-- held branch -->
+  <path d="M775 278 V318 H1000 V338" stroke="#B7791F" stroke-width="2" fill="none" stroke-dasharray="5 4" marker-end="url(#arrow-warn)"/>
+  <rect x="640" y="340" width="460" height="44" rx="10" fill="#FFF6E0" stroke="#F0B429"/>
+  <text x="660" y="367" font-size="14" fill="#7A4B00"><tspan font-weight="700">Bukti kurang atau hasil ekstrem:</tspan> rating ditahan, alasan tercatat di jejak</text>
+  <text x="20" y="367" font-size="13" fill="#5B5F6B">Model bahasa menalar; angka selalu dari data terstruktur.</text>
 </svg>

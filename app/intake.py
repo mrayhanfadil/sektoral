@@ -1,4 +1,6 @@
 """TAHAP 1: intake data pasar dari cache dan fakta emiten dari rilis resmi lokal."""
+import re
+import sqlite3
 import time
 from datetime import date
 from . import cache
@@ -10,6 +12,7 @@ from . import issuer_evidence
 from . import analyst_scenario
 from . import news as news_context
 from . import news_fetch
+from . import peer_fundamentals
 from . import research_context
 
 
@@ -121,6 +124,119 @@ def _sotp_bridge_inputs(evidence, as_of):
     }
 
 
+def _driver_evidence_inputs(official_evidence, payout, payout_basis,
+                             dps_hist, report_date, profile):
+    """Synthesize release-gate driver evidence from the official actual.
+
+    Each series carries an HTTPS source, source_date <= as_of, page, unit,
+    and explanatory note. A missing metric yields a missing series (explicit
+    blocker) rather than a zero assumption. An analyst payout assumption
+    without an HTTPS source stays a blocker: media/assumptions motivate
+    bounds but do not become issuer guidance.
+    """
+    if not isinstance(official_evidence, dict):
+        return None
+    actual = official_evidence.get("latest_actual") or {}
+    source_url = actual.get("source_url")
+    published_at = actual.get("published_at")
+    if not source_url or not published_at:
+        return None
+    title = actual.get("source_title") or "official issuer release"
+    source_ref = f"{title}: {source_url}"
+    source_date = str(published_at)[:10]
+    page = actual.get("page")
+    unit = actual.get("unit")
+    metrics = actual.get("metrics") or {}
+
+    def _row(note):
+        return {"source": source_ref, "source_date": source_date,
+                "page": page, "unit": unit or "as reported",
+                "note": note,
+                # Base-period level only: proves the actual exists, not a
+                # forward driver chain. forecast.build will not count it as
+                # production coverage.
+                "origin": "official_actual_base"}
+
+    if profile == "financial_ddm":
+        evidence = {}
+        if isinstance(metrics.get("revenue"), (int, float)):
+            evidence["revenue"] = _row(
+                "Sourced operating income trajectory from official interim release; "
+                "base for earnings/dividend bridge.")
+        if isinstance(metrics.get("net_profit"), (int, float)):
+            evidence["net_profit"] = _row(
+                "Sourced net profit from official interim release; "
+                "anchor for retained earnings and payout.")
+        # Equity/book: prefer official balance sheet, fall back to latest actual context.
+        balance = official_evidence.get("balance_sheet") or {}
+        equity = None
+        for key in ("total_equity", "equity_attributable", "equity"):
+            if isinstance(balance.get(key), (int, float)):
+                equity = balance[key]
+                break
+        if equity is not None:
+            evidence["equity"] = _row(
+                f"Sourced book equity {equity:,.0f} from official balance sheet; "
+                "base for BVPS/ROE/capital bridge.")
+        # Payout provenance follows where the number came from: the 25%
+        # analyst default is never sourced; a Sectors payout ratio (with or
+        # without DPS history) is cache-sourced, not an interim-release fact.
+        if isinstance(payout, (int, float)):
+            if str(payout_basis or "").startswith("asumsi analis"):
+                evidence["payout"] = {
+                    "source": f"asumsi analis {payout*100:.0f}% (tanpa payout historis di data Sectors)",
+                    "source_date": source_date, "page": page, "unit": "fraction",
+                    "note": f"Unverified payout assumption ({payout_basis}); "
+                            "official payout evidence missing."}
+            else:
+                has_dps = isinstance(dps_hist, list) and len(dps_hist) > 0
+                evidence["payout"] = {
+                    "source": "sectors_cache dividend payout_ratio"
+                              + (" + historical_dividends" if has_dps else ""),
+                    "source_date": str(report_date or source_date)[:10],
+                    "page": None, "unit": "fraction",
+                    "note": f"Payout {payout*100:.1f}% ({payout_basis})"
+                            + ("; DPS history supports DDM." if has_dps else "."),
+                    "origin": "official_actual_base"}
+        # Alias for release compatibility: profit == net_profit.
+        if "net_profit" in evidence:
+            evidence["profit"] = evidence["net_profit"]
+        return evidence or None
+
+    # going_concern_fcff (+ default): revenue/ebitda/net_profit/capex.
+    evidence = {}
+    labels = {
+        "revenue": "Sourced revenue trajectory from official interim release.",
+        "ebitda": "Sourced EBITDA from official interim release; anchors margin bridge.",
+        "net_profit": "Sourced net profit from official interim release; anchors earnings.",
+        "capex": "Sourced capex from official interim release; anchors investment bridge.",
+    }
+    metric_keys = {"revenue": "revenue", "ebitda": "ebitda",
+                   "net_profit": "net_profit", "capex": "capital_expenditure"}
+    for series, key in metric_keys.items():
+        if isinstance(metrics.get(key), (int, float)):
+            evidence[series] = _row(labels[series])
+    return evidence or None
+
+
+def _cache_close_provenance(ticker, price, price_date):
+    """Provenance of the Sectors overview close, cross-checked with the cached
+    daily series: the same date must carry the same close (0,5% tolerance)."""
+    verified = False
+    try:
+        for _, payload in cache.payloads(f"/daily/{ticker}/"):
+            for row in (payload or {}).get("data") or []:
+                if (isinstance(row, dict) and str(row.get("date"))[:10] == str(price_date)[:10]
+                        and isinstance(row.get("close"), (int, float)) and price
+                        and abs(row["close"] / price - 1) <= 0.005):
+                    verified = True
+    except (OSError, ValueError, FileNotFoundError):
+        verified = False
+    return {"source": f"sectors_cache /company/report/{ticker}/ overview; /daily/{ticker}/",
+            "date": str(price_date)[:10] if price_date else None,
+            "kind": "sectors_cache", "verified": verified}
+
+
 def load(ticker, as_of=None):
     """Build typed inputs from cache. Returns (intake, g1_log)."""
     t = ticker.upper()
@@ -152,9 +268,12 @@ def load(ticker, as_of=None):
     report_date = as_of or price_date
     if date.fromisoformat(str(report_date)[:10]) < date.fromisoformat(str(price_date)[:10]):
         raise ValueError("report date cannot precede the cached market price date")
+    price_provenance = _cache_close_provenance(t, price, price_date)
     quote = market_quote.load(t, report_date, price_date)
     if quote:
         price, price_date = float(quote["price"]), quote["date"]
+        price_provenance = {"source": quote.get("source_url"), "date": price_date,
+                            "kind": "quote_pack", "verified": True}
         notes.append(f"harga memakai {quote['source_title']} ({price_date}); "
                      f"{quote['source_url']}.")
     official_evidence = issuer_evidence.load(t, report_date) if report_date else None
@@ -225,6 +344,11 @@ def load(ticker, as_of=None):
             "assets": _num(h.get("total_assets")),
             "liab": _num(h.get("total_liabilities")),
             "shares": _num(h.get("outstanding_shares")),
+            # Working-capital lines for the scenario FCFF (ΔNWC); None when absent.
+            "current_assets": _num(h.get("current_assets")),
+            "current_liabilities": _num(h.get("current_liabilities")),
+            "short_term_debt": _num(h.get("short_term_debt")),
+            "ebt": _num(h.get("earnings_before_tax")),
         })
     if len(annuals) < 3:
         raise ValueError(f"only {len(annuals)} usable annuals for {t}, need >= 3")
@@ -241,7 +365,8 @@ def load(ticker, as_of=None):
     official_shares = official_balance.get("shares_outstanding")
     if isinstance(official_shares, (int, float)) and official_shares > 0:
         shares = official_shares
-        notes.append("jumlah saham beredar memakai laporan interim resmi; "
+        notes.append(f"jumlah saham beredar memakai "
+                     f"{official_balance.get('shares_source') or 'laporan interim resmi'}; "
                      "saham treasuri tidak masuk denominator.")
     market_cap = price * shares
 
@@ -313,6 +438,12 @@ def load(ticker, as_of=None):
     latest_quarter = quarterly_rows[-1] if quarterly_rows else None
 
     peers, peer_median_pe, peer_median_pb = _peers(rep, t)
+    peer_basis = None
+    if not peers:
+        borrowed, lender = _borrowed_peer_report(t)
+        if borrowed:
+            peers, peer_median_pe, peer_median_pb = _peers(borrowed, t)
+            peer_basis = f"tabel peer Sectors milik {lender} yang memuat {t}"
     payout = _num(div.get("payout_ratio"))
     if payout is None or not (0 <= payout <= 1.5):
         payout, payout_basis = 0.25, "asumsi analis 25% (tanpa payout historis di data Sectors)"
@@ -336,6 +467,7 @@ def load(ticker, as_of=None):
         "fx_spot": fx_spot,
         "market_quote": quote,
         "price": price, "price_date": price_date, "as_of": report_date,
+        "price_provenance": price_provenance,
         "shares": shares, "market_cap": market_cap,
         "annuals": annuals, "base_year": base["year"],
         "payout": payout, "payout_basis": payout_basis,
@@ -353,7 +485,14 @@ def load(ticker, as_of=None):
         "filings": (filings.get("results") or []) if isinstance(filings, dict) else [],
         "corp_actions": corp_list,
         "foreign_flow": (flow.get("data") or []) if isinstance(flow, dict) else [],
-        "peers": peers, "peer_median_pe": peer_median_pe,
+        "peers": peers, "peer_median_pe": peer_median_pe, "peer_basis": peer_basis,
+        # Own-history EV/EBITDA (Sectors valuation.historical_valuation) for the
+        # Gate 5 implied-exit check; the Sectors peer tables carry no EV.
+        "historical_ev_ebitda": [
+            {"year": h.get("year"), "value": _num(h.get("enterprise_to_ebitda"))}
+            for h in (val.get("historical_valuation") or [])
+            if isinstance(h, dict) and _num(h.get("enterprise_to_ebitda")) is not None
+            and 0 < _num(h.get("enterprise_to_ebitda")) <= 100][-5:],
         "peer_median_pb": peer_median_pb,
         "forward_pe_cache": _num(val.get("forward_pe")),
         "mineops": mineops.load(t),
@@ -384,8 +523,85 @@ def load(ticker, as_of=None):
         "sotp_assets": None,
         "sotp_bridge": (_sotp_bridge_inputs(official_evidence, report_date)
                         if profile == "finite_life_mining" else None),
+        "driver_evidence": _driver_evidence_inputs(
+            official_evidence, payout, payout_basis, dps_hist, report_date, profile),
     }
     return intake, {"G1": g1, "catatan": notes, "fetched_at": time.time()}
+
+
+def _borrowed_peer_report(t):
+    """Sectors has no peer table for ``t``: use another cached issuer's Sectors
+    table that lists ``t`` (the analyst agent's rule), with ``t`` as self."""
+    for endpoint in sorted(cache.endpoints()):
+        match = re.fullmatch(r"/company/report/([A-Z0-9.-]{1,10})/", endpoint)
+        other = match.group(1) if match else None
+        if not other or other == t:
+            continue
+        report = cache.company_report(other) or {}
+        companies = [c for g in report.get("peers") or []
+                     for c in (g.get("peers_data") or {}).get("companies") or []
+                     if isinstance(c, dict)]
+        if any(str(c.get("symbol") or "").replace(".JK", "") == t for c in companies):
+            relabelled = [{**c, "group": ["self"] if str(c.get("symbol") or "").replace(
+                ".JK", "") == t else ["peer"]} for c in companies]
+            return {"peers": [{"peers_data": {"companies": relabelled}}]}, other
+    return None, None
+
+
+def _peer_ev(symbol, market_cap):
+    """Peer EV: the Sectors peer-table market cap plus total debt less cash,
+    with EBITDA from the same latest FY. Debt, cash and EBITDA come from the
+    peer's own cached Sectors /company/report/<peer>/; when that report is
+    not cached, from a stored Yahoo Finance snapshot (app.peer_fundamentals),
+    and the row says so in ``ev_source_kind``. A missing part leaves the
+    multiple None with a named status; no older year fills the gap."""
+    ticker = str(symbol or "").replace(".JK", "").strip().upper()
+    try:
+        report = cache.company_report(ticker) if ticker else None
+    except (OSError, ValueError, sqlite3.Error):
+        # One unreadable peer report must not drop the peer's PER/PBV row.
+        return {"ev_status": "report_unreadable"}
+    if not isinstance(report, dict):
+        return _peer_ev_yahoo(ticker, market_cap)
+    row = max((r for r in (report.get("financials") or {}).get("historical_financials") or []
+               if isinstance(r, dict) and isinstance(r.get("year"), (int, float))),
+              key=lambda r: r["year"], default=None)
+    if row is None or market_cap is None:
+        return {"ev_status": "balance_incomplete" if row is None else "market_cap_missing"}
+    debt, ebitda = _num(row.get("total_debt")), _num(row.get("ebitda"))
+    cash = _num(row.get("cash_and_equivalents"))
+    if cash is None:
+        cash = _num(row.get("cash_only"))
+    year = int(row["year"])
+    if None in (debt, cash, ebitda):
+        return {"ev_status": "balance_incomplete", "ev_year": year}
+    ev = market_cap + debt - cash
+    meaningful = ev > 0 and ebitda > 0
+    return {"ev": ev, "ev_year": year, "ev_status": "ok" if meaningful else "not_meaningful",
+            "ev_ebitda": ev / ebitda if meaningful else None, "ev_source_kind": "sectors",
+            "ev_source": (f"Sectors: market cap tabel peer + total_debt, kas, EBITDA "
+                          f"FY{year} /company/report/{ticker}/")}
+
+
+def _peer_ev_yahoo(ticker, market_cap):
+    """Peer EV from a stored Yahoo Finance snapshot, labelled as such."""
+    snapshot = peer_fundamentals.load(ticker)
+    if snapshot is None:
+        return {"ev_status": "report_not_cached"}
+    if market_cap is None:
+        return {"ev_status": "market_cap_missing"}
+    if snapshot.get("currency") not in (None, "IDR"):
+        # The peer-table market cap is IDR; a USD reporter needs a dated FX first.
+        return {"ev_status": "currency_mismatch", "ev_year": snapshot["fiscal_year"]}
+    debt, cash, ebitda = (snapshot["total_debt"], snapshot["cash_and_equivalents"],
+                          snapshot["ebitda"])
+    year = snapshot["fiscal_year"]
+    ev = market_cap + debt - cash
+    meaningful = ev > 0 and ebitda > 0
+    return {"ev": ev, "ev_year": year, "ev_status": "ok" if meaningful else "not_meaningful",
+            "ev_ebitda": ev / ebitda if meaningful else None, "ev_source_kind": "yahoo",
+            "ev_source": (f"market cap tabel peer Sectors + total_debt, kas, EBITDA "
+                          f"{snapshot['source']} (diambil {snapshot.get('fetched_at')})")}
 
 
 def _peers(rep, t):
@@ -398,11 +614,15 @@ def _peers(rep, t):
                 if (c.get("group") or []) == ["self"]:
                     continue
                 if c.get("symbol") and c.get("pe_ttm"):
+                    mcap, revenue = _num(c.get("market_cap")), _num(c.get("total_revenue"))
                     out.append({"symbol": c.get("symbol"),
                                 "name": c.get("company_name", ""),
                                 "pe": _num(c.get("pe_ttm")),
                                 "pb": _num(c.get("pb_mrq")),
-                                "mcap": _num(c.get("market_cap"))})
+                                "mcap": mcap, "revenue": revenue,
+                                # P/S from the same Sectors row: market cap / revenue.
+                                "ps": mcap / revenue if mcap and revenue and revenue > 0 else None,
+                                **_peer_ev(c.get("symbol"), mcap)})
     except Exception:
         pass
     pes = sorted(p for p in (c["pe"] for c in out) if p and p > 0)

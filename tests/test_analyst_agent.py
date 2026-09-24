@@ -309,9 +309,12 @@ def test_web_news_keeps_only_dated_items_inside_window_and_reuses_store(tmp_path
     assert [i["title"] for i in first["items"]] == ["Dalam jendela"]
     assert first["items"][0]["domain"] == "kontan.co.id"
     assert calls[0]["topic"] == "news" and calls[0]["end_date"] == "2026-09-11"
+    searched = len(calls)  # issuer query plus brand query
+    assert searched == len(tavily.build_queries(
+        "AMMN", "PT Amman Mineral Internasional Tbk."))
     again = tavily.news_context("AMMN", "PT Amman Mineral Internasional Tbk.", "2026-09-11",
                                 ring=ring, post=post, store_dir=tmp_path)
-    assert again["from_store"] is True and len(calls) == 1
+    assert again["from_store"] is True and len(calls) == searched
 
 
 def test_web_news_is_unavailable_without_keys_and_cannot_be_sole_evidence():
