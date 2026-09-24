@@ -3489,9 +3489,16 @@ def _extreme_stop_overlay(doc, intake, va):
             sides[t["per_share"] > price].append(t["short"])
     basis = ("skenario analis tervalidasi (aktual 1H resmi, asumsi H2 dan empat tahun "
              "lanjutan)" if (sel.get("detail") or {}).get("basis") == "scenario" else
-             "input yang tersedia")
+             "skenario laba analis tervalidasi (aktual 1H resmi dan asumsi H2)"
+             if sel["key"] in ("pe_fy_scenario", "pbv_roe_fy") else "input yang tersedia")
     direction = ("di atas +100%" if above else "di bawah -50%")
-    text = (f"{sel['short']}, metode utama rantai, dihitung atas {basis}; nilainya {direction} "
+    skipped = [f"{t['short']} ({method_chain.reader_reason(t['reasons'][0])})"
+               for t in chain.get("trace") or []
+               if t.get("decision") == "skipped" and t.get("reasons")]
+    role = ("metode utama rantai" if sel.get("role") == "primary" else
+            "metode terpilih sesudah " + "; ".join(skipped) + " dilewati" if skipped else
+            "metode terpilih rantai")
+    text = (f"{sel['short']}, {role}, dihitung atas {basis}; nilainya {direction} "
             "dari harga penutupan, sehingga Gate 5 framework menghentikan rantai dan menandai "
             "Review Required. "
             + (f"Cross-check di atas harga: {', '.join(sides[True])}. " if sides[True] else "")
@@ -3797,12 +3804,12 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         for exhibit in page.get("exhibit") or []:
             if exhibit.get("judul") == "Pemeriksaan sebelum rating dan target harga":
                 exhibit["judul"] = "Bukti lanjutan untuk menguji target harga"
+                selected_short = next(
+                    (t["short"] for t in va["method_chain"]["trace"]
+                     if t["key"] == va["method_chain"].get("selected")), "metode terpilih")
                 exhibit["data"]["rows"][-1][1] = (
-                    f"Target berbasis {'DDM' if ddm_s else 'DCF FCFF'} atas skenario analis "
-                    "diterbitkan; forecast driver produksi tetap perlu direkonsiliasi."
-                    if primary else
-                    "Target berbasis PER peer atas skenario laba diterbitkan; forecast "
-                    "driver tetap perlu direkonsiliasi sebelum DCF/DDM dipakai.")
+                    f"Target berbasis {selected_short} diterbitkan; forecast driver produksi "
+                    "tetap perlu direkonsiliasi (G2.9).")
             elif exhibit.get("judul") == "Katalis, risiko, dan indikator pemantauan" and catalyst_rows:
                 exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
                                             "Driver dan jalur dampak", "Arah"],
@@ -3902,16 +3909,18 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         exhibits.append({
             "n": 0, "judul": f"Skenario laba {forward[0]['label']}-{forward[-1]['label']}",
             "tipe": "tabel",
-            "data": {"cols": ["Tahun", f"Pendapatan ({unit})", "Pertumbuhan",
-                              f"Laba bersih ({unit})", "Margin bersih", "EPS (Rp)", "Dasar"],
+            "data": {"cols": ["Tahun", "Pendapatan", "Tumbuh", "Laba bersih", "Margin bersih",
+                              "EPS (Rp)", "Dasar"],
                      "rows": [[r["label"], money(r["revenue"]),
                                fmt.pct(r["revenue_growth_pct"] / 100), money(r["net_profit"]),
                                fmt.pct(r["net_income_margin_pct"] / 100),
                                fmt.rp(round(eps_of(r["net_profit_attributable"]))),
                                r["rationale"]] for r in forward]},
             "catatan_sumber": (
-                "Sumber: asumsi analis tahunan dari rilis resmi dan berita bertanggal; "
-                "bukan panduan emiten. Target harga tetap memakai " + label + ".")})
+                f"Sumber: asumsi analis tahunan dari rilis resmi dan berita bertanggal; "
+                f"bukan panduan emiten. Pendapatan dan laba bersih dalam {unit}. "
+                + (f"Target harga menilai seluruh jalur {label}-{forward[-1]['label']}."
+                   if primary else f"Target harga tetap memakai {label}."))})
     titles = [t for t in a.get("thesis_titles") or [] if isinstance(t, str)]
     doc["bagian"].append(_thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr,
                                             titles if len(titles) == len(thesis) else None))

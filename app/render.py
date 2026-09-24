@@ -194,8 +194,10 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table tbody{display:table-row-group}"
        ".exhibit-table tbody.block{break-inside:avoid-page;page-break-inside:avoid}"
        ".exhibit-table tr{break-inside:avoid-page;page-break-inside:avoid}"
+       # Fixed layout: a long header wraps inside its column instead of
+       # running into the next one.
        ".exhibit-table thead th{background:" + PRIMARY + ";color:#fff;font-weight:900;"
-       "white-space:nowrap;padding:1.7mm}"
+       "white-space:normal;overflow-wrap:normal;padding:1.7mm}"
        ".exhibit-table .cell-text{text-align:left}"
        ".exhibit-table .cell-num{text-align:center;font-variant-numeric:tabular-nums}"
        ".exhibit-table .cell-date{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}"
