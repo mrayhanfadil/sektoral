@@ -1,6 +1,6 @@
 # Ideas & Track Decision
 
-> **Decision tracker.** We pick exactly one track before writing project code (see [`submission-checklist.md`](submission-checklist.md) Week 1). The brainstorming below is intentionally raw — judges see the final product, not this file.
+> **Decision tracker.** We pick exactly one track before writing project code (see [`submission-checklist.md`](../hackathon/submission-checklist.md) Week 1). The brainstorming below is intentionally raw — judges see the final product, not this file.
 
 ---
 

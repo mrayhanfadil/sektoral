@@ -19,7 +19,7 @@ Fadil's rule, verbatim: *"make cache forever living"*. Consequences encoded here
    the gate blocked disk reads while leaving upstream open to every caller that
    bypassed `collect()` (routers, ADK tools, backfill scripts).
 
-Credit Budget Rules (adapted from credit-calculator.md):
+Credit Budget Rules (adapted from docs/hackathon/credit-calculator.md):
 - 1,000 API credits total budget; budget them like cash.
 - 1 credit per endpoint / section.
 - Never natural language queries (?q= costs 3 credits; structured where= costs 1 credit).
@@ -46,7 +46,7 @@ except (ImportError, ModuleNotFoundError):
 _TRUTHY = ("1", "true", "yes", "on")
 _FOREVER = ("", "0", "forever", "inf", "infinite", "none")
 
-# ── Credit Cost Constants (from credit-calculator.md) ─────────────────────────
+# ── Credit Cost Constants (from docs/hackathon/credit-calculator.md) ──────────
 COST_PER_ENDPOINT = 1
 COST_PER_SECTION = 1
 COST_NL_QUERY = 3          # Screener GET /v2/companies/?q=natural_language (spikes on LLM execution)
@@ -254,7 +254,7 @@ QUINTET_SUBSECTORS = ["banks", "energy", "telecommunication-service", "basic-mat
 
 
 def calculate_quintet_budget() -> dict[str, Any]:
-    """Calculate dry-run budget for a quintet harvest per docs/sectors-swap.md / credit-calculator.md.
+    """Calculate dry-run budget for a quintet harvest per docs/sectors-swap.md / docs/hackathon/credit-calculator.md.
 
     Credit math:
       per ticker ~17 (report 5 sections + daily + dates/quarterly + segments +
