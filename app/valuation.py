@@ -681,6 +681,25 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         (15.0 < _nci_for_x <= 40.0)
     )
     chain["cross_check_required"] = bool(needs_x)
+    # Gate 5: an extreme result points to relative valuation as the cross-check.
+    # P/S needs no earnings, so it still reads when every earnings multiple is
+    # extreme (a high-growth issuer on thin current profit).
+    if chain.get("extreme") and "ps_peer" not in chain["order"]:
+        scenario_fy = (fc.get("earnings_scenario") or {}).get("full_year") or {}
+        fx_scen = ((intake.get("fx_spot") or {}).get("rate")
+                   if (intake.get("official_evidence") or {}).get("reporting_currency") == "USD"
+                   else 1.0)
+        revenue = (scenario_fy["revenue"] * fx_scen if scenario_fy.get("revenue") and fx_scen
+                   else fwd.get("revenue"))
+        ps_check = method_chain.ps_peer(intake.get("peers"), revenue, shares, mcap)
+        price_now = intake.get("price")
+        chain.setdefault("cross_checks", []).append({
+            **ps_check, "rank": "x", "role": "cross_check",
+            "decision": "cross_check" if ps_check["status"] == "sufficient" else "not_available",
+            "upside": (ps_check["per_share"] / price_now - 1
+                       if ps_check.get("per_share") and price_now else None),
+            "why": "Gate 5: target metode terpilih ekstrem; framework menunjuk valuasi "
+                   "relatif (P/S peer) sebagai cross-check"})
     if needs_x:
         x_keys = {"relative_pe", "pbv_relative", "ev_ebitda_peer", "ev_sales_peer",
                   "holding_sotp", "sotp_lom"}
@@ -698,7 +717,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             chain["cross_checks"] = [{**holding, "rank": "x", "role": "cross_check",
                                       "decision": ("cross_check" if holding["status"] == "sufficient"
                                                    else "not_available"),
-                                      "upside": up}]
+                                      "upside": up,
+                                      "why": "Gate 2: kepentingan non-pengendali 15-40% dari "
+                                             "ekuitas mewajibkan cross-check SOTP"}]
             has_x = has_x or holding["status"] == "sufficient"
         chain["cross_check_present"] = bool(has_x)
         if not has_x:

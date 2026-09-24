@@ -261,6 +261,9 @@ def test_earnings_led_extreme_result_stays_draft():
     assert va["method_chain"]["extreme"] is True
     assert va["release"]["status"] == "draft_non_distributable"
     assert va["tp"] is None
+    # Gate 5 points to relative valuation: the peer P/S cross-check is recorded.
+    checks = va["method_chain"].get("cross_checks") or []
+    assert [x["key"] for x in checks] == ["ps_peer"] and checks[0]["why"].startswith("Gate 5")
 
 
 def test_mining_profile_never_gets_earnings_scenario():

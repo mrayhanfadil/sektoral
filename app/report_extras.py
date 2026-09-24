@@ -106,7 +106,7 @@ def method_chain_exhibit(va):
         value = ("-" if not x.get("per_share") else
                  f"Rp{fmt.rp(fmt.tick(x['per_share']))}" if released else "ditahan")
         why = (method_chain.reader_reason(x["reasons"][0]) if x.get("reasons") else
-               "Gate 2: kepentingan non-pengendali 15-40% dari ekuitas mewajibkan cross-check SOTP")
+               x.get("why") or "cross-check wajib framework")
         rows.append([f"x. {x['short']} (cross-check)",
                      _DECISION.get(x["decision"], x["decision"]), value, why])
     source = ("Source: Sektoral Estimates; urutan metode dikunci dari verdict Gates 0-5 "
