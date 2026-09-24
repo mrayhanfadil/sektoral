@@ -79,7 +79,7 @@ def normalize_prose(text):
 # timestamps are provenance and must stay exactly as supplied.
 PROSE_KEYS = frozenset({"rationale", "factual_basis", "mechanism", "uncertainty", "item",
                         "timing", "driver_path", "thesis_points", "conditions",
-                        "headline", "explanation"})
+                        "headline", "explanation", "thesis_titles"})
 
 
 def normalize_plan(value, key=None):
