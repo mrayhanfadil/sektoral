@@ -30,8 +30,8 @@ def test_industry_peer_ownership_and_financial_pages_come_from_local_data(tmp_pa
     assert "Harga komoditas utama emiten" in titles
     assert any(t.startswith("Valuasi dan pertumbuhan sub-sektor") for t in titles)
     assert any(t.startswith("Perbandingan peer") for t in titles)
-    assert {"Pemegang saham utama", "Aktivitas investor asing", "Laba rugi historis",
-            "Neraca historis"} <= titles
+    assert {"Pemegang saham utama", "Aktivitas investor asing", "Laba rugi",
+            "Neraca", "Rasio utama"} <= titles
     commodity = next(e for e in doc["exhibits"] if e["judul"] == "Harga komoditas utama emiten")
     assert len(commodity["data"]["cols"]) == len(set(commodity["data"]["cols"]))
 
@@ -140,6 +140,34 @@ def test_band_and_statements_use_indonesian_format_and_hide_zero_ebitda(tmp_path
     html_out = render.render(doc)
     cells = re.findall(r"<td class='[^']*'>([^<]*)</td>", html_out)
     assert not [c for c in cells if re.search(r"\d\.\dx", c)]
-    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi historis")
+    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi")
     ebitda = next(r for r in income["data"]["rows"] if r[0] == "EBITDA")
     assert "0" not in ebitda[1:]
+
+
+def test_statements_follow_struktur_with_two_actual_and_three_forecast_years(tmp_path):
+    doc = _doc(tmp_path)  # AMMN draft: forecast columns are NA
+    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi")
+    assert income["data"]["cols"] == ["Rp miliar", "2024A", "2025A", "FY26F", "FY27F", "FY28F"]
+    labels = [r[0] for r in income["data"]["rows"]]
+    assert labels[:5] == ["Pendapatan", "Beban pokok pendapatan", "Laba kotor", "Beban usaha",
+                          "Laba usaha (EBIT)"]
+    assert labels[-1] == "Laba bersih"
+    balance = next(e for e in doc["exhibits"] if e["judul"] == "Neraca")
+    rows = {r[0]: r for r in balance["data"]["rows"]}
+    assert rows["Total aset"][1:3] == rows["Total liabilitas dan ekuitas"][1:3]
+    ratios = next(e for e in doc["exhibits"] if e["judul"] == "Rasio utama")
+    assert [r[0] for r in ratios["data"]["rows"] if r[0].startswith("Blok ")] == [
+        "Blok Pertumbuhan (%)", "Blok Profitabilitas (%)", "Blok Leverage (x)"]
+
+
+def test_bank_statements_switch_to_bank_layout(tmp_path):
+    doc = B.build("BBRI", tmp_path, as_of="2026-09-24")
+    titles = {e["judul"] for e in doc["exhibits"]}
+    assert {"Laba rugi bank", "Neraca bank"} <= titles
+    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi bank")
+    assert "Laba sebelum provisi (PPOP)" in [r[0] for r in income["data"]["rows"]]
+    ratios = next(e for e in doc["exhibits"] if e["judul"] == "Rasio utama")
+    labels = [r[0] for r in ratios["data"]["rows"]]
+    assert {"Marjin bunga bersih (NIM)", "Kredit terhadap simpanan (LDR)",
+            "Rasio kecukupan modal (CAR)"} <= set(labels)
