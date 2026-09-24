@@ -479,6 +479,13 @@ def load(ticker, as_of=None):
         "corp_actions": corp_list,
         "foreign_flow": (flow.get("data") or []) if isinstance(flow, dict) else [],
         "peers": peers, "peer_median_pe": peer_median_pe, "peer_basis": peer_basis,
+        # Own-history EV/EBITDA (Sectors valuation.historical_valuation) for the
+        # Gate 5 implied-exit check; the Sectors peer tables carry no EV.
+        "historical_ev_ebitda": [
+            {"year": h.get("year"), "value": _num(h.get("enterprise_to_ebitda"))}
+            for h in (val.get("historical_valuation") or [])
+            if isinstance(h, dict) and _num(h.get("enterprise_to_ebitda")) is not None
+            and 0 < _num(h.get("enterprise_to_ebitda")) <= 100][-5:],
         "peer_median_pb": peer_median_pb,
         "forward_pe_cache": _num(val.get("forward_pe")),
         "mineops": mineops.load(t),

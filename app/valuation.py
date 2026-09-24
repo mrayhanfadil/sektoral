@@ -319,13 +319,13 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     ebitda_first = r_first.get("ebitda", 1.0)
     nd_ebitda_fc = net_debt / max(ebitda_first, 1.0) if ebitda_first else 0.0
 
+    # Gate 5 exit-multiple range: the issuer's own EV/EBITDA history (Sectors
+    # peer tables carry no EV). It was the peer P/E range, a unit mismatch.
     peer_exit_low = None
     peer_exit_high = None
-    if intake.get("peers"):
-        pe_vals = [p.get("pe") for p in intake["peers"] if isinstance(p.get("pe"), (int, float))]
-        if pe_vals:
-            peer_exit_low = min(pe_vals)
-            peer_exit_high = max(pe_vals)
+    own_ev = [h["value"] for h in intake.get("historical_ev_ebitda") or []]
+    if len(own_ev) >= 2:
+        peer_exit_low, peer_exit_high = min(own_ev), max(own_ev)
 
     # --- 1.1 Real gate inputs: official BS when present, else Sectors; missing stays None.
     official_ev = intake.get("official_evidence") or {}
@@ -748,7 +748,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     if gate_thresholds.tv_flagged(pv_tv / ev_g if ev_g else None) and selected == "fcff_dcf":
         notes.append(f"peringatan terminal: porsi terminal {pv_tv/ev_g*100:.0f}% > {gate_thresholds.TV_SHARE_PCT:.0f}% dari EV")
     if "5_exit_multiple_out_of_range" in verdict.gates_failed:
-        notes.append("implied exit EV/EBITDA di luar rentang peer; periksa cross-check valuasi relatif")
+        notes.append("implied exit EV/EBITDA di luar rentang EV/EBITDA historis emiten; "
+                     "periksa cross-check valuasi relatif")
     if stage_info.get("source") == "default_unverified":
         notes.append("klasifikasi tahap operasi belum tervalidasi (default konservatif, belum terverifikasi).")
     elif stage_info.get("source") == "override":
