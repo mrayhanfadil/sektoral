@@ -3199,13 +3199,30 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     """Going concern / bank: FY PER peer on the validated earnings scenario."""
     doc = _build_general_draft(intake, fc, va, g1, method=method)
     scenario = fc["earnings_scenario"]
+    forward = (fc.get("outyear_scenario") or {}).get("rows") or []
+    a = scenario["assumptions"]
     sel = next(t for t in va["method_chain"]["trace"] if t["key"] == "pe_fy_scenario")
     d = sel["detail"]
     label = f"FY{scenario['year'] % 100:02d}F"
     usd = (intake.get("official_evidence") or {}).get("reporting_currency") == "USD"
+    to_idr = d.get("fx") or 1.0
     scale, unit = (1e6, "US$ juta") if usd else (1e9, "Rp miliar")
     money = lambda v: "-" if v is None else (
         f"({fmt._id(abs(v) / scale, 1)})" if v < 0 else fmt._id(v / scale, 1))
+    eps_of = lambda net_attr: net_attr * to_idr / d["shares"]
+    actual = intake.get("latest_official_actual") or {}
+    actual_title = actual.get("source_title") or "rilis interim resmi"
+    refs = a.get("source_refs") or {}
+    cite = lambda ids: "; ".join(
+        actual_title if x == "official" else
+        f"{(refs.get(x) or {}).get('title', 'berita bertanggal')} "
+        f"({(refs.get(x) or {}).get('date', '-')})"
+        for x in ids or [])
+    peers = [p for p in intake.get("peers") or []
+             if isinstance(p.get("pe"), (int, float)) and 0 < p["pe"] <= 50]
+    peer_names = ", ".join(f"{str(p.get('symbol', '?')).replace('.JK', '')} "
+                           f"{fmt.mult(p['pe'], 1)}" for p in sorted(peers, key=lambda p: p["pe"]))
+
     meta = doc["meta"]
     meta.update(status="distributable_assumption_led",
                 model_profile=intake.get("model_profile"), rating=va["rating"],
@@ -3214,38 +3231,78 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     doc["method"] = va["method"]
     doc["log_gate"]["G3"] = va["g3"]
     doc["log_gate"]["release"] = va["release"]
+
+    # --- cover: forward thesis, not draft checklist
+    thesis = [p.strip() for p in a.get("thesis_points") or [] if isinstance(p, str)]
+    fy = scenario["full_year"]
+    path = ""
+    if forward:
+        last = forward[-1]
+        path = (f" Skenario lanjutan membawa laba bersih ke {money(last['net_profit'])} "
+                f"{unit.split()[-1] if usd else 'miliar'} pada {last['label']} dengan margin "
+                f"{fmt.pct(last['net_income_margin_pct'] / 100)}.")
+        if not usd:
+            path = (f" Skenario lanjutan membawa laba bersih ke Rp{money(last['net_profit'])} "
+                    f"miliar pada {last['label']} dengan margin "
+                    f"{fmt.pct(last['net_income_margin_pct'] / 100)}.")
     doc["cover"]["headline"] = _earnings_headline(va["rating"], label)
+    if thesis:
+        doc["cover"]["bullets"][1] = _trim(thesis[0], 30)
     doc["cover"]["bullets"][2] = _trim(
         f"{va['rating']}: target Rp{fmt.rp(va['tp'])} ({fmt.pct(va['upside'])}) dari "
         f"PER median peer {fmt.mult(d['median_pe'], 1)} atas EPS {label}.", 30)
+    fy_money = (f"US${money(fy['net_profit'])} juta" if usd else f"Rp{money(fy['net_profit'])} miliar")
+    doc["cover"]["paragraf"][1] = {
+        "judul": "Pandangan Kami: driver laba ke depan",
+        "isi": (" ".join(thesis) + f" Laba bersih {label} kami perkirakan {fy_money}." + path)}
     skipped = [t["short"] for t in va["method_chain"]["trace"] if t["decision"] == "skipped"]
     valuation_text = (
-        f"EPS {label} Rp{fmt.rp(round(d['eps_idr']))} berasal dari laba 1H resmi dan "
-        f"asumsi semester kedua; basis {scenario['attributable_basis']}. PER median "
-        f"{d['peer_count']} peer {fmt.mult(d['median_pe'], 1)} menghasilkan target "
-        f"Rp{fmt.rp(va['tp'])}, dengan rentang kuartil Rp{fmt.rp(va['tp_down'])} "
-        f"sampai Rp{fmt.rp(round(d['per_share_up'] / 10) * 10)}. "
+        f"EPS {label} Rp{fmt.rp(round(eps_of(fy['net_profit_attributable'])))} berasal dari "
+        f"laba 1H resmi dan asumsi semester kedua. PER median {d['peer_count']} peer "
+        f"{fmt.mult(d['median_pe'], 1)} menghasilkan target Rp{fmt.rp(va['tp'])}, dengan "
+        f"rentang kuartil Rp{fmt.rp(va['tp_down'])} sampai "
+        f"Rp{fmt.rp(round(d['per_share_up'] / 10) * 10)}. "
         + (f"{', '.join(skipped)} belum dipakai karena forecast driver belum "
            "direkonsiliasi. " if skipped else "")
         + "Arus kas, capex dan neraca sesudah periode interim belum dimodelkan.")
     doc["cover"]["paragraf"][2] = {"judul": "Target harga berbasis laba FY",
                                    "isi": valuation_text}
-    h1, h2, fy = scenario["h1"], scenario["h2"], scenario["full_year"]
-    a = scenario["assumptions"]
-    actual_title = ((intake.get("latest_official_actual") or {}).get("source_title")
-                    or "rilis interim resmi")
-    to_idr = d.get("fx") or 1.0
-    key_fin = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
-    if key_fin and label in key_fin["data"]["cols"]:
-        col = key_fin["data"]["cols"].index(label)
-        for row in key_fin["data"]["rows"]:
-            metric = ("revenue" if row[0].startswith("Pendapatan") else
-                      "net_profit" if row[0].startswith("Laba bersih") else None)
-            if metric and col < len(row) and "Rp miliar" in row[0]:
-                row[col] = fmt._id(fy[metric] * to_idr / 1e9, 1)
-        key_fin["catatan_sumber"] = (
-            (key_fin.get("catatan_sumber") or "") +
-            f" {label}: skenario laba analis (1H resmi + asumsi H2); EBITDA tidak dimodelkan.")
+
+    # --- body pages: replace draft checklist wording
+    h2_text = (f"Asumsi semester kedua: pendapatan {fmt._id(a['h2_revenue_to_h1'], 2)}x 1H "
+               f"dengan margin laba bersih {fmt.pct(a['h2_net_margin_pct'] / 100)}. "
+               + (a.get("rationale") or ""))
+    catalyst_rows = [[x["item"], f"{x['timing']}. Sumber: {cite(x.get('source_ids'))}",
+                      x["driver_path"], x["direction"]]
+                     for x in a.get("catalysts_risks") or [] if isinstance(x, dict)]
+    for page in doc["bagian"]:
+        title = page.get("judul", "")
+        if title == "Hasil terbaru dan jembatan laba":
+            page["paragraf"] = page["paragraf"][:1] + [h2_text]
+        elif title == "Operasi dan posisi keuangan":
+            page["paragraf"] = [" ".join(thesis) or page["paragraf"][0]]
+        elif title == "Valuasi dan kelengkapan bukti":
+            page["judul"] = "Cross-check dan bukti lanjutan"
+            page["paragraf"] = [
+                "Target harga di atas tidak bergantung pada DCF atau DDM. Metode arus kas "
+                "tetap menunggu forecast driver yang direkonsiliasi; tabel berikut mencatat "
+                "bukti yang akan menguji target."]
+        for exhibit in page.get("exhibit") or []:
+            if exhibit.get("judul") == "Pemeriksaan sebelum rating dan target harga":
+                exhibit["judul"] = "Bukti lanjutan untuk menguji target harga"
+                exhibit["data"]["rows"][-1][1] = (
+                    "Target berbasis PER peer atas skenario laba diterbitkan; forecast "
+                    "driver tetap perlu direkonsiliasi sebelum DCF/DDM dipakai.")
+            elif exhibit.get("judul") == "Katalis, risiko, dan indikator pemantauan" and catalyst_rows:
+                exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
+                                            "Driver dan jalur dampak", "Arah"],
+                                   "rows": catalyst_rows}
+                exhibit["catatan_sumber"] = (
+                    "Sumber fakta: rilis resmi dan berita bertanggal yang disebut per baris; "
+                    "kolom driver dan arah adalah analisis Sektoral.")
+
+    # --- valuation page exhibits
+    h1, h2 = scenario["h1"], scenario["h2"]
     bridge = {
         "n": 0, "judul": f"Skenario laba {label}: aktual 1H dan asumsi H2",
         "tipe": "tabel",
@@ -3260,9 +3317,9 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                       f"H2/H1 {fmt._id(a['h2_revenue_to_h1'], 2)}x; margin "
                       f"{fmt.pct(a['h2_net_margin_pct'] / 100)}", "-"]]},
         "catatan_sumber": (
-            f"Sumber: {actual_title} ({scenario['published_at']}); "
-            "H2 adalah asumsi analis dari rilis dan berita bertanggal, bukan panduan "
-            f"emiten. Dasar asumsi: {scenario.get('rationale') or '-'}")}
+            f"Sumber: {actual_title} ({scenario['published_at']}); H2 adalah asumsi analis "
+            f"dari rilis dan berita bertanggal ({cite(a.get('source_ids'))}), bukan panduan "
+            f"emiten. EPS memakai {scenario['attributable_basis']}.")}
     rows = []
     for name, pe in (("Kuartil bawah", d["q1_pe"]), ("Median (basis)", d["median_pe"]),
                      ("Kuartil atas", d["q3_pe"])):
@@ -3274,32 +3331,73 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         "data": {"cols": ["PER peer", "Kelipatan", "Nilai per saham", "Terhadap harga"],
                  "rows": rows},
         "catatan_sumber": (
-            f"Sumber: PER TTM {d['peer_count']} peer dari data Sectors (0-50x); saham "
-            "dari neraca interim resmi" + (f"; kurs Rp{fmt.rp(d['fx'])}/USD" if d.get("fx") else "")
+            f"Sumber: PER TTM data Sectors untuk peer dengan PER 0-50x ({peer_names}); "
+            "saham dari neraca interim resmi"
+            + (f"; kurs Rp{fmt.rp(d['fx'])}/USD" if d.get("fx") else "")
             + f"; harga penutupan {intake['price_date']}.")}
+    exhibits = [bridge, sensitivity]
+    if forward:
+        exhibits.append({
+            "n": 0, "judul": f"Skenario laba {forward[0]['label']}-{forward[-1]['label']}",
+            "tipe": "tabel",
+            "data": {"cols": ["Tahun", f"Pendapatan ({unit})", "Pertumbuhan",
+                              f"Laba bersih ({unit})", "Margin bersih", "EPS (Rp)", "Dasar"],
+                     "rows": [[r["label"], money(r["revenue"]),
+                               fmt.pct(r["revenue_growth_pct"] / 100), money(r["net_profit"]),
+                               fmt.pct(r["net_income_margin_pct"] / 100),
+                               fmt.rp(round(eps_of(r["net_profit_attributable"]))),
+                               r["rationale"]] for r in forward]},
+            "catatan_sumber": (
+                "Sumber: asumsi analis tahunan dari rilis resmi dan berita bertanggal; "
+                "bukan panduan emiten. Target harga tetap memakai " + label + ".")})
     doc["bagian"].append({"halaman": 0, "judul": f"Target harga berbasis laba {label}",
                           "layout": "stack", "paragraf": [valuation_text],
-                          "exhibit": [bridge, sensitivity]})
-    for page in doc["bagian"]:
-        for exhibit in page.get("exhibit") or []:
-            if exhibit.get("judul") == "Pemeriksaan sebelum rating dan target harga":
-                exhibit["judul"] = "Bukti lanjutan untuk menguji target harga"
-                exhibit["data"]["rows"][-1][1] = (
-                    "Target berbasis PER peer atas skenario laba diterbitkan; forecast "
-                    "driver tetap perlu direkonsiliasi sebelum DCF/DDM dipakai.")
-    doc["exhibits"].extend([bridge, sensitivity])
+                          "exhibit": exhibits})
+    doc["exhibits"].extend(exhibits)
+
+    # --- Key Financials: FY forecast columns, EPS and PER
+    key_fin = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
+    if key_fin:
+        cols = key_fin["data"]["cols"]
+        projections = {label: {**fy, "ebitda": None}}
+        projections.update({r["label"]: r for r in forward})
+        for row in key_fin["data"]["rows"]:
+            metric = ("revenue" if row[0].startswith("Pendapatan") else
+                      "ebitda" if row[0].startswith("EBITDA") else
+                      "net_profit" if row[0].startswith("Laba bersih") else None)
+            if not metric or "Rp miliar" not in row[0]:
+                continue
+            for col, name in enumerate(cols):
+                value = (projections.get(name) or {}).get(metric)
+                if value is not None and col < len(row):
+                    row[col] = fmt._id(value * to_idr / 1e9, 1)
+        annual = {str(x["year"]): x.get("earnings") for x in intake.get("annuals") or []}
+        eps_row, per_row = ["EPS (Rp)"], ["PER (x)"]
+        for name in cols[1:]:
+            proj = projections.get(name)
+            eps = (eps_of(proj["net_profit_attributable"]) if proj and
+                   proj.get("net_profit_attributable") is not None else
+                   annual.get(name) / d["shares"] if annual.get(name) else None)
+            eps_row.append(fmt.rp(round(eps)) if eps else "-")
+            per_row.append(fmt.mult(intake["price"] / eps, 1) if eps and eps > 0 else "-")
+        key_fin["data"]["rows"] += [eps_row, per_row]
+        key_fin["catatan_sumber"] = (
+            (key_fin.get("catatan_sumber") or "") +
+            f" {label} dan tahun sesudahnya: skenario laba analis; EBITDA tidak dimodelkan. "
+            f"EPS memakai saham neraca {actual.get('period_end', '-')} (pro forma untuk tahun "
+            f"historis); PER memakai harga {intake['price_date']}.")
+
     doc["catatan_metodologi"] = [
         f"Rating dan target harga memakai PER median peer atas EPS {label}; EPS adalah "
         "skenario analis dari aktual 1H resmi dan asumsi H2, bukan forecast driver.",
         f"Rantai metode: {', '.join(skipped) or '-'} dilewati karena forecast driver belum "
         "direkonsiliasi; metode ini adalah langkah terakhir rantai.",
-        f"PER peer adalah TTM dari data Sectors dengan {d['peer_count']} peer valid; "
-        "peer dianggap sebanding, dan kuartil bawah/atas menjadi sensitivitas.",
-        f"EPS memakai {scenario['attributable_basis']}.",
+        f"PER peer adalah TTM dari data Sectors ({peer_names}); peer dianggap sebanding, "
+        "dan kuartil bawah/atas menjadi sensitivitas.",
+        "Skenario tahun lanjutan adalah asumsi analis tahunan dan tidak mengubah tahun dasar target.",
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
     ]
     return doc
-
 
 def _change_sentence(label, value, prior, period, prior_period, money_phrase):
     """One metric per sentence (spec §5.1: at most three figures per sentence).

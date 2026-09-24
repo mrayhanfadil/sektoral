@@ -186,19 +186,29 @@ def _safe_url(value):
     return str(value) if parts.scheme in ("http", "https") and parts.netloc else None
 
 
-def build_queries(ticker, company_name, profile=None):
+_NAME_NOISE = re.compile(
+    r"\b(PT|Tbk\.?|Persero|Indonesia|Internasional|International|Group|Grup|Holding)\b",
+    re.IGNORECASE)
+
+
+def build_queries(ticker, company_name, profile=None, industry=None):
     """Base issuer query plus profile-relevant future-driver queries.
 
     Base covers the issuer name/ticker; profile hints add orders/capacity
     (operating), credit/rates/capital (financials), and production/
     commissioning/commodity/permits (mining), plus announced milestones.
+    Indonesian press often names the brand without the ticker, so a brand
+    query and an industry-driver query run as well.
     """
     name = re.sub(r"\b(PT|Tbk\.?)\b", "", str(company_name or "")).strip(" .,")
+    brand = " ".join(_NAME_NOISE.sub("", name).split()[:2]) or name
     base = f'"{ticker}" {name} saham emiten berita'.strip()
-    queries = [base]
+    queries = [base, f"{brand} kinerja laba pendapatan semester"]
     hints = PROFILE_QUERY_HINTS.get(str(profile or "").strip().lower()) or []
     for hint in hints:
         queries.append(f'"{ticker}" {name} {hint}'.strip())
+    if industry and str(profile or "").strip().lower() == "going_concern_fcff":
+        queries.append(f"{brand} {industry} harga jual volume biaya bahan baku")
     # Deduplicate while preserving order.
     return list(dict.fromkeys(q for q in queries if q))
 
@@ -234,7 +244,7 @@ def _items_from_payload(payload, start, end):
 
 
 def news_context(ticker, company_name, end_date, *, ring=None, post=None,
-                 store_dir=None, profile=None, max_queries=None):
+                 store_dir=None, profile=None, max_queries=None, industry=None):
     """Dated headlines about one issuer, published within the window ending ``end_date``.
 
     Runs the base issuer query plus profile-relevant future-driver queries
@@ -248,7 +258,7 @@ def news_context(ticker, company_name, end_date, *, ring=None, post=None,
     ticker = str(ticker or "").strip().upper()
     end = date.fromisoformat(str(end_date)[:10]) if end_date else date.today()
     start = end - timedelta(days=WINDOW_DAYS)
-    queries = build_queries(ticker, company_name, profile)
+    queries = build_queries(ticker, company_name, profile, industry)
     if max_queries is not None:
         queries = queries[:max(1, int(max_queries))]
     folder = Path(store_dir or STORE_DIR)

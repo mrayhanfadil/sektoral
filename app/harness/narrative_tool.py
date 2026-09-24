@@ -24,6 +24,21 @@ BANNED_PDF = ["kurasi skor", "sebelum masuk model", "aksi korporasi tercatat",
               "scraper", "scraping"]
 # Whole-word pipeline tokens (avoid substring false positives like "gap" in "lengkap").
 BANNED_TOKENS = [r"\blog\b", r"\bengine\b"]
+# "engine" is also a physical product (aircraft/vehicle engines at MRO or auto
+# issuers); only flag it outside that context.
+_MECHANICAL_CONTEXT = re.compile(
+    r"pesawat|airframe|aircraft|lessor|overhaul|\bmro\b|turbin|turbine|mesin|"
+    r"otomotif|kendaraan|motor|jet|propulsi")
+
+
+def _pipeline_token(pattern, text):
+    for match in re.finditer(pattern, text):
+        window = text[max(0, match.start() - 60):match.end() + 60]
+        if pattern != r"\bengine\b" or not _MECHANICAL_CONTEXT.search(window):
+            return True
+    return False
+
+
 BANNED_PHRASE = ["tentu saja", "perlu dicatat bahwa", "sebagai kesimpulan"]
 CACHE_ALLOW = ("tidak ada di cache", "snapshot cache sectors", "sectors cache")
 
@@ -138,7 +153,7 @@ def check_narrative(doc: dict | None) -> dict:
 
     # N-pipeline terms in body (whole-word for log/engine to avoid false positives).
     pipe = [t for t in BANNED_BODY if t.lower() in blob_low]
-    pipe += [pat for pat in BANNED_TOKENS if re.search(pat, blob_low)]
+    pipe += [pat for pat in BANNED_TOKENS if _pipeline_token(pat, blob_low)]
     v("N.pipeline", not pipe, "nol istilah pipeline di body" if not pipe
       else f"istilah pipeline di body: {pipe}", True)
 
