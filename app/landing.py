@@ -15,17 +15,10 @@ _CSS = """
   background:
     radial-gradient(900px 420px at 85% -10%,var(--blue-50),transparent 70%),
     linear-gradient(var(--surface),var(--surface))}
-.hero::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
-  background-image:linear-gradient(var(--rule-soft) 1px,transparent 1px),
-    linear-gradient(90deg,var(--rule-soft) 1px,transparent 1px);
-  background-size:48px 48px;
-  -webkit-mask-image:linear-gradient(180deg,#000 0%,transparent 75%);
-  mask-image:linear-gradient(180deg,#000 0%,transparent 75%)}
 .hero .wrap{position:relative;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);
   gap:56px;align-items:center;padding-top:72px;padding-bottom:80px}
 .hero h1{font-size:clamp(34px,4.6vw,54px);font-weight:900;letter-spacing:-.025em;line-height:1.06;
-  margin:18px 0 20px;max-width:15ch}
-.hero h1 em{font-style:normal;color:var(--blue)}
+  margin:0 0 20px;max-width:15ch}
 .lead{font-size:18px;color:var(--ink-soft);max-width:54ch}
 .cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
 .facts{display:flex;flex-wrap:wrap;gap:8px 20px;margin:28px 0 0;padding:0;list-style:none;
@@ -65,7 +58,7 @@ section.block{padding:88px 0;scroll-margin-top:64px}
 section.block.alt{background:var(--canvas);border-top:1px solid var(--rule-soft);
   border-bottom:1px solid var(--rule-soft)}
 .intro{max-width:640px;margin-bottom:44px}
-.intro h2{font-size:clamp(26px,3vw,36px);font-weight:900;letter-spacing:-.02em;margin:10px 0 12px}
+.intro h2{font-size:clamp(26px,3vw,36px);font-weight:900;letter-spacing:-.02em;margin:0 0 12px}
 .intro p{color:var(--ink-soft);font-size:17px}
 
 .how{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;counter-reset:how;
@@ -91,9 +84,9 @@ section.block.alt{background:var(--canvas);border-top:1px solid var(--rule-soft)
 .compare th,.compare td{text-align:left;vertical-align:top;padding:18px 20px;
   border-bottom:1px solid var(--rule-soft)}
 .compare tr:last-child th,.compare tr:last-child td{border-bottom:0}
-.compare thead th{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);
+.compare thead th{font-size:14px;font-weight:700;color:var(--ink-soft);
   background:var(--canvas);padding-top:14px;padding-bottom:14px}
-.compare thead th .pill{margin-left:6px;text-transform:none;letter-spacing:0}
+.compare thead th .pill{margin-left:6px}
 .compare tbody th{width:26%;font-weight:700}
 .compare tbody th small{display:block;font-weight:400;color:var(--ink-soft);font-size:13px;margin-top:2px}
 .compare td{color:var(--ink-soft);width:37%}
@@ -127,7 +120,7 @@ section.block.alt{background:var(--canvas);border-top:1px solid var(--rule-soft)
 .hc-head{padding:14px 20px 4px;font-weight:900;font-size:17px;line-height:1.3}
 .hc-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 20px 4px}
 .hc-stats div{background:var(--canvas);border-radius:8px;padding:8px 10px}
-.hc-stats dt{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+.hc-stats dt{font-size:12.5px;color:var(--ink-soft)}
 .hc-stats dd{margin:0;font-weight:900;font-size:16px;font-variant-numeric:tabular-nums}
 .hc-stats dd.neg{color:var(--err-ink)}.hc-stats dd.pos{color:var(--ok-ink)}
 .chain{list-style:none;margin:8px 0 0;padding:6px 20px 10px}
@@ -149,7 +142,7 @@ section.block.alt{background:var(--canvas);border-top:1px solid var(--rule-soft)
 .gates{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none}
 .gates li{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);
   padding:16px 14px;position:relative}
-.gates li b{display:block;font-size:12px;letter-spacing:.1em;color:var(--blue);text-transform:uppercase}
+.gates li b{display:block;font-size:13px;font-weight:700;color:var(--blue)}
 .gates li strong{display:block;font-size:15px;margin:6px 0 4px}
 .gates li span{display:block;font-size:13px;color:var(--ink-soft);line-height:1.45}
 .gates li:last-child{border-color:var(--warn-rule)}
@@ -165,8 +158,7 @@ section.block.alt{background:var(--canvas);border-top:1px solid var(--rule-soft)
   border:1px solid var(--rule);border-radius:var(--radius);overflow:hidden;font-size:14.5px}
 .method-table th,.method-table td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--rule-soft);
   vertical-align:middle}
-.method-table thead th{background:var(--canvas);font-size:12px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--ink-soft)}
+.method-table thead th{background:var(--canvas);font-size:13px;color:var(--ink-soft)}
 .method-table td.t{font-weight:900;white-space:nowrap}
 .method-table td.o{white-space:nowrap}
 .method-table td.o .tp{display:block;margin-top:4px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -178,7 +170,7 @@ section.block.alt{background:var(--canvas);border-top:1px solid var(--rule-soft)
 .sources{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
 .source{border:1px solid var(--rule);border-radius:var(--radius);padding:18px;background:var(--surface)}
 .source.core{border-color:var(--blue);box-shadow:inset 0 3px 0 var(--blue)}
-.source b{display:block;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.source b{display:block;font-size:13px;font-weight:700;color:var(--ink-soft)}
 .source.core b{color:var(--blue)}
 .source strong{display:block;font-size:16px;margin:6px 0}
 .source p{font-size:13.5px;color:var(--ink-soft)}
@@ -282,7 +274,8 @@ def _method_rows(items) -> str:
                        f'{html.escape(item["rating"])}</span><span class="tp">Rp{fmt.rp(item["tp"])}</span>')
             method = item["method"]
         else:
-            outcome = '<span class="rating review">Review</span>'
+            outcome = (f'<span class="rating {gallery_page.rating_class(item)}">'
+                       f'{html.escape(gallery_page.rating_label(item))}</span>')
             method = f'Ditahan: {item["held_reason"]}'
         rows.append(f'<tr><td class="t">{html.escape(item["ticker"])}</td>'
                     f'<td>{html.escape(item["profile"])}</td>'
@@ -321,18 +314,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <section class="hero" aria-labelledby="hero-title">
     <div class="wrap">
       <div>
-        <span class="pill live">Riset emiten BEI · metode valuasi berbasis gerbang</span>
-        <h1 id="hero-title">Company update dengan <em>metode yang tepat</em>, bukan DCF untuk semua.</h1>
+        <h1 id="hero-title">Company update dengan metode yang tepat, bukan DCF untuk semua.</h1>
         <p class="lead">Sectoral membaca data Sectors dan rilis resmi emiten, menyusun skenario laba dari
         berita bertanggal, lalu memilih metode valuasi lewat gerbang framework: DDM untuk bank, DCF FCFF
         untuk korporasi, SOTP untuk grup beragam lini, NAV cadangan untuk tambang. Rating hanya terbit bila
         setiap pemeriksaan lolos.</p>
         <div class="cta-row">
-          <a href="/research" class="btn btn-primary">Coba riset emiten <span class="arrow" aria-hidden="true">→</span></a>
+          <a href="/research" class="btn btn-primary">Coba riset emiten</a>
           <a href="/laporan" class="btn btn-ghost">Lihat laporan</a>
         </div>
         <ul class="facts" aria-label="Ringkasan batasan">
-          <li>Gerbang framework 0-5</li>
+          <li>Enam gerbang metode</li>
           <li>Risiko utama bersumber</li>
           <li>Tanpa eksekusi transaksi</li>
         </ul>
@@ -344,7 +336,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <section id="cara-kerja" class="block" aria-labelledby="cara-kerja-title">
     <div class="wrap">
       <div class="intro">
-        <span class="eyebrow">Cara kerja</span>
         <h2 id="cara-kerja-title">Agen menalar, kode menghitung, gerbang memutuskan.</h2>
         <p>Model bahasa menyusun rencana, asumsi, dan narasi. Setiap angka dihitung dari data terstruktur,
         dan setiap keputusan terbit atau tahan diambil oleh pemeriksaan berbasis kode.</p>
@@ -377,7 +368,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <section id="framework" class="block alt" aria-labelledby="framework-title">
     <div class="wrap">
       <div class="intro">
-        <span class="eyebrow">Framework valuasi</span>
         <h2 id="framework-title">Enam gerbang memilih metode sebelum angka dihitung.</h2>
         <p>DCF bukan jawaban untuk semua emiten. Gerbang membaca model bisnis, kualitas data, kepemilikan,
         siklus, dan tahap usaha, lalu mengurutkan metode utama, fallback, dan silang cek.</p>
@@ -408,20 +398,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   {f'''<section id="laporan" class="block" aria-labelledby="laporan-title">
     <div class="wrap">
       <div class="intro">
-        <span class="eyebrow">Laporan</span>
-        <h2 id="laporan-title">{len(published)} company update terbit, {len(items) - len(published)} ditahan untuk review.</h2>
+        <h2 id="laporan-title">{len(published)} company update terbit, {len(items) - len(published)} ditahan sebagai draft.</h2>
         <p>Setiap laporan mengikuti struktur company update: sampul, tesis, industri, kinerja, katalis dan risiko,
         valuasi dengan rantai metode, serta laporan keuangan dua tahun aktual dan tiga tahun forecast.</p>
       </div>
       <div class="rgrid">{coverage}</div>
-      <div class="more-link"><a class="btn btn-ghost" href="/laporan">Semua laporan <span class="arrow" aria-hidden="true">→</span></a></div>
+      <div class="more-link"><a class="btn btn-ghost" href="/laporan">Semua laporan</a></div>
     </div>
   </section>''' if items else ""}
 
   <section id="sumber" class="block alt" aria-labelledby="sumber-title">
     <div class="wrap">
       <div class="intro">
-        <span class="eyebrow">Sumber data</span>
         <h2 id="sumber-title">Sectors di inti, setiap sumber lain diberi label.</h2>
         <p>Catatan sumber di bawah setiap exhibit menyebut dari mana angka itu berasal.</p>
       </div>
@@ -443,7 +431,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <section id="pemeriksaan" class="block" aria-labelledby="pemeriksaan-title">
     <div class="wrap">
       <div class="intro">
-        <span class="eyebrow">Pemeriksaan bukti</span>
         <h2 id="pemeriksaan-title">Apa yang terjadi saat bukti lengkap, dan saat tidak.</h2>
         <p>Validator berbasis kode memastikan tidak ada klaim yang lolos tanpa rujukan yang sahih.</p>
       </div>
@@ -452,7 +439,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <thead><tr>
             <th scope="col">Pemeriksaan</th>
             <th scope="col">Bukti lengkap <span class="pill ok">Terbit</span></th>
-            <th scope="col">Bukti kurang <span class="pill warn">Review</span></th>
+            <th scope="col">Bukti kurang <span class="pill warn">Draft</span></th>
           </tr></thead>
           <tbody>
             <tr>
@@ -484,7 +471,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <section id="batasan" class="block alt" aria-labelledby="batasan-title">
     <div class="wrap">
       <div class="intro">
-        <span class="eyebrow">Batasan</span>
         <h2 id="batasan-title">Jelas tentang apa yang tidak kami lakukan.</h2>
         <p>Kepercayaan pada analisis lahir dari kejelasan batas sistem.</p>
       </div>
@@ -501,7 +487,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </div></div>
         <div class="limit"><span class="limit-icon">{_ICON["ban"]}</span><div>
           <h3>Tanpa broker dan transaksi</h3>
-          <p>Sektoral adalah alat riset. Tidak ada koneksi ke rekening efek, broker, atau jalur eksekusi pesanan dalam bentuk apa pun.</p>
+          <p>Sectoral adalah alat riset. Tidak ada koneksi ke rekening efek, broker, atau jalur eksekusi pesanan dalam bentuk apa pun.</p>
         </div></div>
         <div class="limit"><span class="limit-icon">{_ICON["info"]}</span><div>
           <h3>Bukan rekomendasi investasi</h3>
@@ -519,7 +505,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <h2 id="cta-title">Mulai dari satu kode emiten.</h2>
           <p>Jalankan agen riset, ikuti prosesnya, lalu buka company update beserta jejak auditnya.</p>
         </div>
-        <a href="/research" class="btn">Coba riset emiten <span class="arrow" aria-hidden="true">→</span></a>
+        <a href="/research" class="btn">Coba riset emiten</a>
       </div>
     </div>
   </section>

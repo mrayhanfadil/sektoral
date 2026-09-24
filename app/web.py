@@ -34,7 +34,7 @@ body{display:flex;flex-direction:column;min-height:100vh;background:var(--canvas
 .app .wrap>*,.run-grid>*,.intel-grid>*,#intel>*{min-width:0}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:32px;
   box-shadow:0 1px 2px rgba(16,24,40,.04)}
-.card h1,.card h2{font-size:26px;font-weight:900;letter-spacing:-.02em;margin:8px 0 8px}
+.card h1,.card h2{font-size:26px;font-weight:900;letter-spacing:-.02em;margin:0 0 8px}
 .muted{color:var(--ink-soft)}
 .run-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:start}
 
@@ -87,7 +87,7 @@ input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px var(--blu
 
 /* job status */
 .job-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
-.job-head h2{margin:6px 0 0}
+.job-head h2{margin:0}
 .job-pills{display:flex;gap:8px;flex-wrap:wrap}
 .status{font-size:14px;padding:5px 12px}
 .progress{list-style:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:28px 0 0;padding:0}
@@ -142,11 +142,11 @@ input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px var(--blu
 .cite-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .cite-row:empty{display:none}
 .cite{font-size:12.5px;background:var(--canvas);border:1px solid var(--rule-soft);border-radius:6px;padding:2px 8px}
-.table-scroll{overflow-x:auto}
+.table-scroll{overflow-x:auto;position:relative}
 .peer-table{width:100%;border-collapse:collapse;font-size:14px}
 .peer-table th,.peer-table td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--rule-soft);vertical-align:middle}
-.peer-table thead th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:700}
-.peer-table thead small{text-transform:none;letter-spacing:0;font-weight:400}
+.peer-table thead th{font-size:13px;color:var(--ink-soft);font-weight:700}
+.peer-table thead small{font-weight:400}
 .peer-table tbody th{font-weight:700;white-space:nowrap}
 .strip{display:flex;gap:3px;margin-bottom:2px}
 .strip span{width:10px;height:10px;border-radius:3px;background:var(--rule-soft)}
@@ -155,8 +155,9 @@ input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px var(--blu
 .flags li{border:1px solid var(--rule);border-radius:10px;padding:12px 14px;display:grid;gap:6px;align-content:start}
 .flag-top{display:flex;justify-content:space-between;gap:10px;font-size:14px}
 .flags .pill{justify-self:start}
-.findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
-.finding{border-left:3px solid var(--blue);padding:4px 0 4px 16px;display:grid;gap:8px;align-content:start}
+.findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:24px 32px;align-items:start}
+.finding p{font-size:15px}
+.finding{border-top:1px solid var(--rule);padding-top:16px;display:grid;gap:8px;align-content:start}
 .finding h3{font-size:16px}
 .changes{margin:8px 0 0;padding-left:18px;display:grid;gap:4px;font-size:14.5px}
 .chg-new_flag{color:var(--warn-ink)}
@@ -194,7 +195,13 @@ _MAX_EVENTS = 120
 
 
 def _text(value, limit=400):
-    return str(value)[:limit] if isinstance(value, (str, int, float)) and value is not None else None
+    if not isinstance(value, (str, int, float)) or value is None:
+        return None
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    cut = text[:limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return cut + "…"
 
 
 def _http_url(value):
@@ -227,8 +234,8 @@ def _public_intel(intel) -> dict | None:
     return {
         "ticker": _text(intel.get("ticker"), 12), "name": _text(intel.get("name"), 120),
         "market_date": _text(intel.get("market_date"), 20), "status": _text(intel.get("status"), 20),
-        "plan": {"question": _text(plan.get("question"), 300), "source": _text(plan.get("source"), 20),
-                 "hypotheses": [_text(h, 240) for h in (plan.get("hypotheses") or [])[:4]]},
+        "plan": {"question": _text(plan.get("question"), 500), "source": _text(plan.get("source"), 20),
+                 "hypotheses": [_text(h, 400) for h in (plan.get("hypotheses") or [])[:4]]},
         "steps": [{key: _text(step.get(key), 240) for key in ("tool", "why", "summary", "status", "origin")}
                   for step in (intel.get("steps") or [])[:10] if isinstance(step, dict)],
         "signals": signals[:30],
@@ -393,7 +400,7 @@ function renderIntel(intel){
     head.append(el('span','pill '+(s.origin==='agent_adaptive'?'live':''),s.origin==='agent'?'sesuai rencana':s.origin==='agent_adaptive'?'keputusan baru agent':'dilengkapi host'));
     li.append(head);
     if(s.why)li.append(el('p','small',s.why));
-    if(s.summary)li.append(el('p','muted small','→ '+s.summary));
+    if(s.summary)li.append(el('p','muted small',s.summary));
     return li;
   }));
 }
@@ -422,13 +429,10 @@ async function refreshJob(){
     document.getElementById('job-title').textContent='Riset '+job.ticker;
     document.title='Riset '+job.ticker+' | Sectoral';
     const labels={pending:'Menunggu',running:'Sedang diproses',completed:'Selesai',error:'Tidak selesai'};
-    stateEl.textContent=labels[job.state]||'Status';
-    stateEl.className='pill status '+(job.state==='error'?'err':job.state==='completed'?'ok':'live');
+    const partial=job.state==='completed'&&job.quality==='partial';
+    stateEl.textContent=partial?'Selesai, parsial':(labels[job.state]||'Status');
+    stateEl.className='pill status '+(job.state==='error'?'err':partial?'warn':job.state==='completed'?'ok':'live');
     setProgress(job);renderEvents(job);
-    const qualityEl=document.getElementById('job-quality');
-    qualityEl.hidden=job.state!=='completed';
-    qualityEl.textContent=job.quality==='partial'?'Parsial':'Lengkap';
-    qualityEl.className='pill status '+(job.quality==='partial'?'warn':'ok');
     const last=(job.events||[]).slice(-1)[0];
     document.getElementById('job-detail').textContent=job.state==='error'
       ?'Proses riset mengalami kendala. Periksa log lokal untuk detail.'
@@ -455,8 +459,8 @@ refreshJob();
 
 _JOB_MARKUP = """<section class="card" aria-labelledby="job-title">
   <div class="job-head">
-    <div><span class="eyebrow">Status riset</span><h2 id="job-title">Sedang menyiapkan riset</h2></div>
-    <div class="job-pills"><span id="job-quality" class="pill status" hidden></span><span id="job-state" class="pill status live">Menunggu</span></div>
+    <h2 id="job-title">Sedang menyiapkan riset</h2>
+    <div class="job-pills"><span id="job-state" class="pill status live">Menunggu</span></div>
   </div>
   <ol id="job-progress" class="progress" aria-label="Tahap riset">
     <li>Rencana<small>Pertanyaan &amp; hipotesis</small></li>
@@ -471,7 +475,7 @@ _JOB_MARKUP = """<section class="card" aria-labelledby="job-title">
 </section>
 <section id="intel" hidden aria-labelledby="intel-headline">
   <div class="card intel-head">
-    <span class="eyebrow">Intelijen pasar · <span id="intel-name"></span></span>
+    <p class="eyebrow">Intelijen pasar <span id="intel-name"></span></p>
     <h2 id="intel-headline"></h2>
     <div id="intel-meta" class="job-pills"></div>
   </div>
@@ -541,7 +545,6 @@ def _page(job_id: str | None = None, error: str | None = None, reports=None) -> 
 {page_heading}{job_markup}
 <div class="run-grid">
   <section class="card" aria-labelledby="form-title">
-    <span class="eyebrow">Riset baru</span>
     <{form_tag} id="form-title">{form_heading}</{form_tag}>
     <p class="muted">Masukkan kode emiten untuk menjalankan agent, memeriksa bukti, dan menyusun ringkasan riset.</p>
     <form id="run-form" action="/run" method="post">

@@ -9,8 +9,8 @@ CARD_CSS = """
 /* report cards */
 .rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
 .rcard{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--rule);
-  border-radius:var(--radius);overflow:hidden;transition:box-shadow .15s,transform .15s}
-.rcard:hover{box-shadow:var(--shadow);transform:translateY(-2px)}
+  border-radius:var(--radius);overflow:hidden;transition:border-color .15s}
+.rcard:hover{border-color:#B9BDC6}
 .rthumb{display:block;aspect-ratio:210/150;overflow:hidden;background:var(--canvas);
   border-bottom:1px solid var(--rule-soft)}
 .rthumb img{display:block;width:100%;height:auto;object-fit:cover;object-position:top}
@@ -30,7 +30,7 @@ CARD_CSS = """
 .rheadline{font-weight:700;font-size:15px;line-height:1.35}
 .rstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0}
 .rstats div{background:var(--canvas);border-radius:8px;padding:8px 10px}
-.rstats dt{font-size:11.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+.rstats dt{font-size:12.5px;color:var(--ink-soft)}
 .rstats dd{margin:0;font-weight:900;font-size:15px;font-variant-numeric:tabular-nums}
 .rstats dd.neg{color:var(--err-ink)}.rstats dd.pos{color:var(--ok-ink)}
 .rmethod{font-size:13px;color:var(--ink-soft)}
@@ -44,7 +44,7 @@ CARD_CSS = """
 _PAGE_CSS = CARD_CSS + """
 .gallery-head{padding:48px 0 28px;border-bottom:1px solid var(--rule-soft);
   background:radial-gradient(700px 300px at 90% -20%,var(--blue-50),transparent 70%)}
-.gallery-head h1{font-size:clamp(28px,3.4vw,40px);font-weight:900;letter-spacing:-.02em;margin:8px 0 10px}
+.gallery-head h1{font-size:clamp(28px,3.4vw,40px);font-weight:900;letter-spacing:-.02em;margin:0 0 10px}
 .gallery-head p{color:var(--ink-soft);max-width:70ch}
 .gallery-stats{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 .gallery-body{padding:32px 0 72px}
@@ -61,7 +61,10 @@ def rating_class(item) -> str:
 
 
 def rating_label(item) -> str:
-    return str(item["rating"]) if item.get("rating") else "Review"
+    """Published rating; a held report is a Draft unless Method Gate 5 held it."""
+    if item.get("rating"):
+        return str(item["rating"])
+    return "Review Required" if str(item.get("held_reason") or "").startswith("Method Gate 5") else "Draft"
 
 
 def _upside(item) -> tuple[str, str]:
@@ -115,10 +118,10 @@ def render_gallery(items) -> str:
         counts[item["rating"]] = counts.get(item["rating"], 0) + 1
     stats = "".join(
         f'<span class="pill {"ok" if k == "Buy" else "err" if k == "Sell" else "live"}">'
-        f'{html.escape(str(k))} · {v}</span>' for k, v in sorted(counts.items()))
+        f'{v} {html.escape(str(k))}</span>' for k, v in sorted(counts.items()))
     drafts = len(items) - len(published)
     if drafts:
-        stats += f'<span class="pill warn">Review · {drafts}</span>'
+        stats += f'<span class="pill warn">{drafts} Draft</span>'
     grid = ('<div class="rgrid">' + "".join(card(i) for i in items) + "</div>" if items else
             '<div class="empty"><strong>Belum ada laporan.</strong> Jalankan '
             '<code>python -m app.batch BBCA JPFA --out out/reports --pdf</code> lalu muat ulang '
@@ -127,7 +130,6 @@ def render_gallery(items) -> str:
 {ui.site_header("laporan")}
 <main id="konten">
   <section class="gallery-head" aria-labelledby="gallery-title"><div class="wrap">
-    <span class="eyebrow">Laporan</span>
     <h1 id="gallery-title">Company update yang sudah terbit</h1>
     <p>Setiap laporan memilih metode valuasi lewat gerbang framework, lalu menahan rating bila
     bukti belum cukup. Buka PDF, versi web, atau jejak audit untuk menelusuri tiap angka.</p>

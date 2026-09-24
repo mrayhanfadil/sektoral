@@ -57,7 +57,7 @@ def test_landing_features_a_real_report_and_lists_coverage(tmp_path):
     _report(tmp_path, "BBBB", published=False)
     page = landing.render_landing(gallery.load(tmp_path))
     assert "Hasil riset nyata" in page and 'href="/laporan/AAAA/pdf"' in page
-    assert "1 company update terbit, 1 ditahan untuk review." in page
+    assert "1 company update terbit, 1 ditahan sebagai draft." in page
     empty = landing.render_landing([])
     assert "Ilustrasi tampilan" in empty and 'id="laporan"' not in empty
 
