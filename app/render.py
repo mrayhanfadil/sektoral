@@ -179,6 +179,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".band-pair{display:grid;grid-template-columns:1fr 1fr;gap:3.4mm;"
        "break-inside:avoid-page;page-break-inside:avoid}"
        ".band-chart{display:block;width:100%;height:auto}"
+       ".panel-text{font-size:6.7pt;line-height:1.3;margin:1.2mm 0 0;text-align:left}"
        # Table styling follows sectors-hackathon's .fin-table: a solid header
        # band, horizontal hairlines only (no vertical grid), spec zebra fill
        # and a ruled total line. The old full grid made every figure read as a
@@ -612,6 +613,35 @@ def _combo_chart(ex):
     return "".join(parts)
 
 
+def _combo_panel(ex):
+    """Struktur Exhibits 4-7: one quadrant, its narrative directly under the
+    chart, and the source line."""
+    data = ex.get("data") or {}
+    series = (data.get("series") or [{}])[0]
+    labels = data.get("cols") or []
+    title = str(series.get("label") or "")
+    key = next((k for k in _LINE_LABELS if title.startswith(k)), "")
+    w, h = 360, 190
+    parts = [f"<div class='exhibit keep panel'><div class='chart-caption'>Exhibit {ex['n']}. "
+             f"{html.escape(ex['judul'])}</div>",
+             f"<svg class='combo-chart' viewBox='0 0 {w} {h + 16}' role='img' "
+             f"aria-label='{html.escape(ex['judul'])}' style='display:block;width:100%;height:auto'>",
+             _mini_chart(0, 0, w, h, title, labels, series.get("bars") or [],
+                         series.get("line") or [], series.get("is_forecast") or [],
+                         _LINE_LABELS.get(key, "rasio")),
+             f"<rect x='0' y='{h + 3}' width='8' height='8' fill='{PRIMARY}'/>"
+             f"<text x='12' y='{h + 10}' font-size='8' fill='{INK}'>Aktual</text>"
+             f"<rect x='62' y='{h + 3}' width='8' height='8' fill='{EVEN_ROW}'/>"
+             f"<text x='74' y='{h + 10}' font-size='8' fill='{INK}'>Proyeksi</text>"
+             f"<rect x='130' y='{h + 3}' width='8' height='8' fill='{SERIES[3]}'/>"
+             f"<text x='142' y='{h + 10}' font-size='8' fill='{INK}'>Garis (sumbu kanan)</text>",
+             "</svg>"]
+    if ex.get("narasi"):
+        parts.append(f"<p class='panel-text'>{html.escape(ex['narasi'])}</p>")
+    parts.append(f"<p class='src'>{html.escape(fmt.house_source_line(ex['catatan_sumber']))}</p></div>")
+    return "".join(parts)
+
+
 def _bar_chart(ex):
     data = ex["data"]
     rows = data["rows"]
@@ -709,8 +739,9 @@ def _exhibits_paired(exs):
     """Render exhibits in order; consecutive band charts share one row."""
     out, i = [], 0
     while i < len(exs):
-        if (exs[i].get("tipe") == "band_chart" and i + 1 < len(exs)
-                and exs[i + 1].get("tipe") == "band_chart"):
+        kind = exs[i].get("tipe")
+        if (kind in ("band_chart", "combo_panel") and i + 1 < len(exs)
+                and exs[i + 1].get("tipe") == kind):
             out.append(f"<div class='band-pair'>{_exhibit(exs[i])}{_exhibit(exs[i + 1])}</div>")
             i += 2
         else:
@@ -723,6 +754,8 @@ def _exhibit(ex):
     t = ex.get("tipe")
     if t == "band_chart":
         return _band_chart(ex)
+    if t == "combo_panel":
+        return _combo_panel(ex)
     if t == "bar_chart":
         return _bar_chart(ex)
     if t == "combo_chart":

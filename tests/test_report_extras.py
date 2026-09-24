@@ -196,3 +196,17 @@ def test_band_reports_its_real_window_and_implied_prices(tmp_path):
     assert [c["data"]["label"] for c in charts] == ["P/E", "P/BV"]
     html_out = render.render(doc)
     assert "class='band-pair'" in html_out and "class='band-chart'" in html_out
+
+
+def test_performance_charts_are_four_narrated_exhibits(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    panels = [e for e in doc["exhibits"] if e.get("tipe") == "combo_panel"]
+    assert [p["judul"].split(" (")[0] for p in panels] == [
+        "Pendapatan dan pertumbuhan", "EBITDA dan margin", "Laba bersih dan pertumbuhan",
+        "DER dan ROE"]
+    assert all(p["narasi"] and any(ch.isdigit() for ch in p["narasi"]) for p in panels)
+    assert [p["n"] for p in panels] == list(range(panels[0]["n"], panels[0]["n"] + 4))
+    bank = B.build("BBRI", tmp_path / "bank", as_of="2026-09-24")
+    fourth = [e for e in bank["exhibits"] if e.get("tipe") == "combo_panel"][3]
+    assert fourth["judul"].startswith("NIM dan biaya kredit")
+    assert "Rp-" not in " ".join(p for page in doc["bagian"] for p in page["paragraf"])
