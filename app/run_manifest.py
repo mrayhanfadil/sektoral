@@ -34,19 +34,23 @@ def assumption_plan_hash(plan):
         return "unhashable"
 
 
-def cache_snapshot_ids(tickers=()):
-    """Lightweight cache identity: endpoint + newest cache_key per feed."""
+def cache_snapshot_ids(ticker):
+    """Cache identity for one ticker: newest cache_key per endpoint naming it.
+
+    Scoped to the ticker so refreshing another issuer does not change this
+    run's snapshot, and reads only keys (no payload JSON).
+    """
     try:
         from . import cache as cache_mod
-        snapshot = {}
-        for endpoint in sorted(set(list(tickers) or cache_mod.endpoints())):
-            try:
-                rows = cache_mod.payloads(endpoint)
-            except Exception:
-                continue
-            if rows:
-                snapshot[endpoint] = rows[-1][0]
-        return snapshot
+        con = cache_mod.connect()
+        try:
+            rows = con.execute(
+                "SELECT endpoint, cache_key FROM sectors_cache"
+                " WHERE endpoint LIKE ? ORDER BY fetched_at",
+                (f"%/{str(ticker).upper()}/%",)).fetchall()
+        finally:
+            con.close()
+        return {endpoint: key for endpoint, key in rows}
     except Exception:
         return {}
 
@@ -91,6 +95,7 @@ def build_manifest(*, ticker, as_of, intake=None, forecast=None,
             "window": search.get("window"),
             "fetched_at": search.get("fetched_at"),
             "error": search.get("error"),
+            "partial_failures": list(search.get("partial_failures") or []),
         },
         "selected_news_urls": [str(r.get("source") or "") for r in rows
                                if isinstance(r, dict) and r.get("source")],
@@ -100,7 +105,8 @@ def build_manifest(*, ticker, as_of, intake=None, forecast=None,
         "target_method": valuation.get("method"),
         "target_price": valuation.get("tp"),
         "release_status": release.get("status"),
+        "engine_release_status": release.get("engine_status"),
         "blockers": list(release.get("blockers") or []),
         "spec_sha256": spec_sha,
-        "cache_snapshot": cache_snapshot_ids(),
+        "cache_snapshot": cache_snapshot_ids(ticker),
     }

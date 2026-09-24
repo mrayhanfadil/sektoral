@@ -272,34 +272,8 @@ def build(intake, n_years=5, assumption_plan=None):
             "screening proxy dan tidak layak menjadi forecast produksi.")
         forecast_basis, production_ready = "historical_screening_proxy", False
     else:
-        required = ("net_profit", "equity", "payout") if is_ddm else (
-            "revenue", "ebitda", "net_profit", "capex")
-        missing = []
-        if not isinstance(driver_evidence, dict):
-            missing = list(required)
-        else:
-            as_of_day = str(intake.get("as_of") or "")[:10]
-            for series in required:
-                lookup = series
-                if is_ddm and series == "net_profit" and series not in driver_evidence \
-                        and "profit" in driver_evidence:
-                    lookup = "profit"
-                row = driver_evidence.get(lookup)
-                if not isinstance(row, dict):
-                    missing.append(series)
-                    continue
-                if row.get("origin") == "official_actual_base":
-                    missing.append(f"{series}:base-actual-only")
-                    continue
-                src = str(row.get("source") or "")
-                has_https = "https://" in src.lower()
-                has_cache = "sectors_cache" in src.lower() or "sectors cache" in src.lower()
-                s_date = str(row.get("source_date") or "")[:10]
-                note = str(row.get("note") or row.get("claim") or row.get("status") or row.get("basis") or "")
-                if not (has_https or has_cache) or not s_date or not note.strip():
-                    missing.append(series)
-                elif as_of_day and s_date > as_of_day:
-                    missing.append(f"{series}:future-dated")
+        # Per-series driver provenance is judged once, by the release gate
+        # (release._check_driver_forecast); this screen cannot pass G2.9.
         # Interim reconciliation: a validated current-year anchor must be
         # consistent with the published FY row; otherwise the forecast year
         # does not reconcile to valuation.
@@ -325,10 +299,7 @@ def build(intake, n_years=5, assumption_plan=None):
                 "operating driver-to-FCFF bridge is not calculated; historical CAGR, "
                 "capex=D&A, flat debt and balancing cash remain screening inputs")
         g2["G2.9_driver_forecast"] = "gagal"
-        reasons = []
-        if missing:
-            reasons.append(f"driver {', '.join(missing)} belum bersumber")
-        reasons.extend(production_blockers)
+        reasons = list(production_blockers)
         if base_g2_failed:
             reasons.append(f"gate {', '.join(base_g2_failed)} gagal")
         g2["catatan"].append(

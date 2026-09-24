@@ -97,7 +97,10 @@ def test_news_register_stable_ids_and_rejections():
     reasons = " ".join(r["reason"] for r in register["rejected"])
     assert "no look-ahead" in reasons
     assert "issuer identity" in reasons
-    assert "duplicate URL" in reasons
+    # A merged duplicate is kept (origins combined), so it is not a rejection.
+    assert "duplicate URL" not in reasons
+    assert [m["url"] for m in register["merged"]] == ["https://bisnis.com/bbri-laba"]
+    assert register["stats"]["merged"] == 1
     assert any("tavily" in (a.get("origins") or []) for a in articles)
 
 
@@ -296,3 +299,58 @@ def test_validator_rejects_nested_forbidden_key_and_bad_change():
                           "uncertainty_range": [0, 1]}]},
         {"news": []}, require_news_coverage=False)
     assert any("target_price" in p for p in problems)
+
+
+# ---------------------------------------------------------- PR #3 review fixes
+
+def test_gate5_extreme_rule_is_framework_asymmetric():
+    from app import model_profiles
+    assert model_profiles.is_extreme_upside(1.2) and model_profiles.is_extreme_upside(-0.6)
+    assert not model_profiles.is_extreme_upside(0.7)   # +70% is not extreme
+    assert not model_profiles.is_extreme_upside(-0.4)
+    assert not model_profiles.is_extreme_upside(None)
+
+
+def test_bank_gate5_uses_ddm_upside_not_fcff_screen():
+    from app import forecast, intake, valuation
+    doc_in, _ = intake.load("BBCA")
+    fc = forecast.build(doc_in)
+    va = valuation.build(doc_in, fc)
+    tp_ddm = (va["ddm"] or {}).get("tp_gordon")
+    reasons = " ".join(va["gate_verdict"]["reasons"])
+    if tp_ddm:
+        ddm_up = (tp_ddm / doc_in["price"] - 1) * 100
+        assert ("5_upside_extreme" in va["gate_verdict"]["gates_failed"]) == (ddm_up > 100)
+    assert "terminal value" not in reasons  # DCF-only check skipped for banks
+
+
+def test_payout_provenance_follows_its_source():
+    from app.intake import _driver_evidence_inputs
+    official = {"latest_actual": {"source_url": "https://bank.example/1h26.pdf",
+                                  "published_at": "2026-08-20", "page": 3, "unit": "IDR",
+                                  "metrics": {"net_profit": 10.0}},
+                "balance_sheet": {"total_equity": 100.0}}
+    default = _driver_evidence_inputs(official, 0.25,
+                                      "asumsi analis 25% (tanpa payout historis di data Sectors)",
+                                      [100.0], "2026-09-24", "financial_ddm")["payout"]
+    assert default["source"].startswith("asumsi analis")
+    assert "official_actual_base" not in default.values()
+    sectors = _driver_evidence_inputs(official, 0.45, "payout ratio historis di data Sectors",
+                                      [], "2026-09-24", "financial_ddm")["payout"]
+    assert sectors["source"].startswith("sectors_cache") and "45.0%" in sectors["note"]
+    assert "bank.example" not in sectors["source"]
+
+
+def test_manifest_snapshot_is_ticker_scoped():
+    snapshot = run_manifest.cache_snapshot_ids("BBRI")
+    assert snapshot and all("/BBRI/" in endpoint for endpoint in snapshot)
+
+
+def test_build_manifest_records_forecast_status_and_final_release(tmp_path):
+    from app import build
+    doc = build.build("BBRI", tmp_path, as_of="2026-09-24", spec_sha="abc")
+    manifest = doc["run_manifest"]
+    assert manifest["forecast_basis"] == "historical_screening_proxy"
+    assert manifest["production_ready"] is False
+    assert manifest["release_status"] == doc["meta"]["status"]
+    assert manifest["spec_sha256"] == "abc"

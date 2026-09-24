@@ -19,7 +19,7 @@ OUT = Path(__file__).resolve().parent.parent / "out"
 def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
           illustrative_scenarios=False, assumption_plan=None,
           analyst_target=False, assumption_status=None, news_evidence=None,
-          method_override=None):
+          method_override=None, spec_sha=None):
     doc_in, g1 = intake.load(ticker, as_of=as_of)
     if news_evidence is not None:
         doc_in["news"] = news_evidence["rows"]
@@ -60,20 +60,6 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         "outyear_scenario": fc.get("outyear_scenario"),
         "product_sales_scenario": doc_in.get("analyst_scenario"),
     }
-    # Immutable run manifest: code revision, as_of, market close, official
-    # filing, Tavily query/status, selected URLs, plan hash, profile, release.
-    try:
-        doc["run_manifest"] = run_manifest.build_manifest(
-            ticker=ticker, as_of=doc["meta"].get("tanggal") or as_of,
-            intake=doc_in, forecast=fc, valuation=va,
-            news_evidence={"rows": doc_in.get("news") or [],
-                           "full": doc_in.get("news_full") or [],
-                           "search": doc_in.get("news_search") or {}},
-            assumption_plan=fc.get("assumption_plan"),
-            release=va.get("release"))
-    except Exception as e:
-        print(f"  run_manifest gagal: {e}", flush=True)
-        doc["run_manifest"] = {"ticker": str(ticker).upper(), "error": str(e)}
     try:
         doc["evidence_register"] = evidence_mod.build(
             ticker, doc["meta"].get("tanggal") or as_of, doc_in,
@@ -103,6 +89,25 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         doc["meta"].pop("rating", None)
         doc["meta"].pop("tp", None)
         doc["meta"].pop("upside_persen", None)
+    # Immutable run manifest, built once after the harness so it records the
+    # final release (not the engine's pre-harness status). research.run
+    # reuses this object instead of rebuilding it.
+    try:
+        doc["run_manifest"] = run_manifest.build_manifest(
+            ticker=ticker, as_of=doc["meta"].get("tanggal") or as_of,
+            intake=doc_in, forecast=fc,
+            valuation={"method": va.get("method"), "tp": doc["meta"].get("tp")},
+            news_evidence={"rows": doc_in.get("news") or [],
+                           "full": doc_in.get("news_full") or [],
+                           "search": doc_in.get("news_search") or {}},
+            assumption_plan=fc.get("assumption_plan"),
+            release={"status": doc["meta"].get("status"),
+                     "engine_status": (va.get("release") or {}).get("status"),
+                     "blockers": doc["harness"]["blockers"]},
+            spec_sha=spec_sha)
+    except Exception as e:
+        print(f"  run_manifest gagal: {e}", flush=True)
+        doc["run_manifest"] = {"ticker": str(ticker).upper(), "error": str(e)}
     report_contract.validate_or_raise(doc)
     outdir.mkdir(parents=True, exist_ok=True)
     t = doc["meta"]["ticker"]

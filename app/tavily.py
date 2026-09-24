@@ -57,7 +57,8 @@ PROFILE_QUERY_HINTS = {
 }
 
 # Tavily retrieval status vocabulary for the run manifest and trace.
-RETRIEVAL_STATUSES = ("searched", "no_relevant_results", "unavailable", "failed")
+RETRIEVAL_STATUSES = ("searched", "no_relevant_results", "partial_failure",
+                      "unavailable", "failed")
 _FAILOVER_STATUS = {401, 403, 429, 432, 433}
 _KEY_ENV = re.compile(r"^TAVILY_API_KEYS?(?:_\d+)?$")
 
