@@ -6,6 +6,7 @@ from . import method_chain
 from . import model_profiles
 from . import rnav
 from . import scenario_value
+from . import landbank as landbank_mod
 from . import lom as lom_mod
 from . import release
 from . import rating as rating_mod
@@ -165,6 +166,10 @@ def _earnings_candidate(intake, fc, assumption_status):
     return candidate
 
 
+def chain_candidate_detail(candidates, key):
+    return ((candidates or {}).get(key) or {}).get("detail") or {}
+
+
 def _pbv_roe_fy_candidate(intake, fc, assumption_status, coe, g):
     """Bank excess-return value on the validated earnings scenario:
     justified P/BV = (ROE - g) / (CoE - g) times BVPS, where ROE is FY
@@ -308,7 +313,7 @@ def _pbv_book_candidate(intake, fc, assumption_status):
     return candidate
 
 
-def _holding_sotp_candidate(intake):
+def _holding_sotp_candidate(intake, coe=None):
     """Holding SOTP inputs: stakes from the issuer pack (IDX register), each
     listed subsidiary's market cap and book equity from the Sectors peer
     table of the parent (or the subsidiary's own cached report)."""
@@ -342,7 +347,9 @@ def _holding_sotp_candidate(intake):
     equity = balance.get("equity_attributable")
     shares = (balance.get("shares_outstanding") or balance.get("shares_issued")
               or intake.get("shares"))
-    candidate = method_chain.holding_sotp(listed, equity * fx if equity and fx else None, shares)
+    land, _ = landbank_mod.value(intake, coe) if coe else (None, [])
+    candidate = method_chain.holding_sotp(listed, equity * fx if equity and fx else None, shares,
+                                          landbank=land)
     candidate["detail"]["balance_period"] = balance.get("period_end")
     return candidate
 
@@ -686,7 +693,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                 labels=gate["limitations"], detail=detail)
             inp = lom_result["inputs"]
             sotp_candidate["label"] = (
-                f"SOTP/LoM: Batu Hijau + Elang (risiko {inp['elang_risk'] * 100:.0f}%) sampai "
+                f"SOTP/LoM: Batu Hijau + Elang (probabilitas {inp['elang_risk'] * 100:.0f}%) sampai "
                 f"{int(inp['licence_end'])}, tanpa terminal perpetual")
             sotp_candidate["gate"] = gate
             candidates["sotp_lom"] = sotp_candidate
@@ -787,7 +794,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             intake.get("peers"), fwd.get("revenue"), shares, mcap)
     holding = None
     if "holding_sotp" in prelim_order or (nci_pct_val is not None and 15.0 < nci_pct_val <= 40.0):
-        holding = _holding_sotp_candidate(intake)
+        holding = _holding_sotp_candidate(intake, coe=re)
     if "holding_sotp" in prelim_order:
         # Primary for a holding with dissimilar lines: its own evidence gate
         # (official equity, listed stakes at market), not the forecast S2.9.
@@ -838,6 +845,21 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     chain = method_chain.run(profile, candidates, price, order=prelim_order,
                              override_key=override_key)
     selected = chain["selected"]
+    if selected == "sotp_lom" and fc.get("outyear_scenario"):
+        # The target is the LoM; the out-years shown beside it come from the
+        # same schedule, not from a separate earnings scenario.
+        lom_res = chain_candidate_detail(candidates, "sotp_lom").get("lom")
+        interim = fc.get("interim_scenario") or {}
+        rows = lom_mod.forward_rows(intake, lom_res, fc["outyear_scenario"]["anchor_year"],
+                                    interim.get("attributable_share") or 1.0) if lom_res else []
+        if len(rows) == 4:
+            first = rows[0]
+            anchor_revenue = (fc["outyear_scenario"].get("anchor") or {}).get("revenue")
+            if anchor_revenue:
+                first["revenue_growth_pct"] = (first["revenue"] / anchor_revenue - 1) * 100
+            fc["outyear_scenario"] = {**fc["outyear_scenario"], "rows": rows,
+                                      "status": "lom_schedule",
+                                      "agent_rows": fc["outyear_scenario"].get("rows")}
     sel = next((t for t in chain["trace"] if t["key"] == selected), None)
 
     # Method Gate 5 dinilai ulang pada metode terpilih, bukan DCF bila DCF di-skip.

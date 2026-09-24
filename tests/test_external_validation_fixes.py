@@ -148,3 +148,16 @@ def test_peer_snapshot_sums_the_last_four_quarters():
     assert snap["period"] == "TTM" and snap["ebitda"] == 645.0
     assert snap["total_debt"] == 800.0 and snap["period_end"] == "2026-06-30"
     assert snap["period_label"] == "12 bulan s.d. 2026-06-30"
+
+
+def test_history_multiples_on_a_voided_ebitda_are_dropped_or_rescaled():
+    annuals = [{"year": 2022, "da_implied_life": 60.0},
+               {"year": 2024, "da_invalid": True},
+               {"year": 2025, "ebitda_sectors": 6_525.0, "ebitda": 7_449.0}]
+    val = {"historical_valuation": [{"year": 2022, "enterprise_to_ebitda": 9.1},
+                                    {"year": 2024, "enterprise_to_ebitda": 15.3},
+                                    {"year": 2025, "enterprise_to_ebitda": 6.0},
+                                    {"year": 2026, "enterprise_to_ebitda": 5.9}]}
+    out = intake._historical_ev_ebitda(val, annuals)
+    assert [h["year"] for h in out] == [2025, 2026]
+    assert abs(out[0]["value"] - 6.0 * 6_525 / 7_449) < 1e-9 and out[1]["value"] == 5.9

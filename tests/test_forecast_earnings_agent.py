@@ -133,6 +133,24 @@ def test_non_mining_outyears_may_leave_ebitda_and_capex_empty():
     assert agent._validate_outyears(rows, _source(profile="finite_life_mining"))
 
 
+def test_outyear_growth_far_above_the_record_needs_a_dated_source():
+    # BBRI: revenue 165,6 -> 181,3 triliun and earnings 51,2 -> 56,7 triliun in 2022-2025.
+    annuals = [{"year": 2022, "revenue": 165.6, "earnings": 51.2},
+               {"year": 2023, "revenue": 183.3, "earnings": 60.1},
+               {"year": 2024, "revenue": 199.7, "earnings": 60.2},
+               {"year": 2025, "revenue": 181.3, "earnings": 56.7}]
+    source = dict(_source(), annuals=annuals)
+    rows = [{"year": 2027 + i, "revenue_growth_pct": g, "ebitda_margin_pct": None,
+             "net_income_margin_pct": 29.0, "capex_to_revenue_pct": None,
+             "rationale": "Asumsi analis melanjutkan momentum NII 1H26 dengan kredit tumbuh.",
+             "source_ids": ["official"]} for i, g in enumerate((10.5, 9.5, 9.0, 8.5))]
+    assert any("three-year record" in p for p in agent._validate_outyears(rows, source))
+    cited = [dict(r, source_ids=["official", "news:0"]) for r in rows]
+    assert agent._validate_outyears(cited, source) == []
+    near = [dict(r, revenue_growth_pct=7.0) for r in rows]
+    assert agent._validate_outyears(near, source) == []
+
+
 def test_llm_prose_dashes_are_normalized_but_titles_kept():
     fragment = {"earnings_scenario": {
         "rationale": "Volume naik di sebagian besar segmen — DOC +60% QoQ, rentang 5–7%.",

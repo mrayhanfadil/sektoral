@@ -321,7 +321,7 @@ def ps_peer(peers, revenue_fwd, shares, market_cap) -> dict:
 HOLDING_DISCOUNTS = (0.0, 0.2, 0.3)
 
 
-def holding_sotp(listed, parent_equity, shares) -> dict:
+def holding_sotp(listed, parent_equity, shares, landbank=None) -> dict:
     """Holding SOTP (framework Method Gate 2): listed subsidiaries at market value
     times the stake held, the rest of the group at book.
 
@@ -330,6 +330,8 @@ def holding_sotp(listed, parent_equity, shares) -> dict:
     equity less the stake's share of each listed subsidiary's book equity,
     so no asset is counted twice. Holding discounts are judgement and are
     shown as sensitivity only (base 0%, downside the deepest discount).
+    ``landbank`` (app.landbank.value) replaces the book value of undeveloped
+    land with its RNAV; only the owner's stake of the difference is added.
     """
     reasons = []
     if not listed:
@@ -348,12 +350,14 @@ def holding_sotp(listed, parent_equity, shares) -> dict:
     if reasons:
         return candidate("holding_sotp", reasons=reasons)
     remainder = parent_equity - sum(c["book_share"] for c in components)
-    total = sum(c["market_value"] for c in components) + remainder
+    uplift = (landbank or {}).get("uplift_attributable") or 0.0
+    total = sum(c["market_value"] for c in components) + remainder + uplift
     per_share = total / shares
     discounts = [{"discount": d, "per_share": per_share * (1 - d)} for d in HOLDING_DISCOUNTS]
     return candidate("holding_sotp", per_share=per_share,
                      per_share_down=discounts[-1]["per_share"],
                      detail={"components": components, "remainder_book": remainder,
+                             "landbank": landbank, "landbank_uplift": uplift,
                              "parent_equity": parent_equity, "total": total,
                              "shares": shares, "discounts": discounts})
 

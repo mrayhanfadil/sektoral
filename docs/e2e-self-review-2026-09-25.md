@@ -177,4 +177,57 @@ Rekonsiliasi (US$ juta; Rp/saham pada Rp17.803/USD dan 72,41 miliar saham):
 - **Inkonsistensi broker:** pertumbuhan FY26F +117% (US$4,0 miliar) di tabel dan +153% (US$4,7 miliar) di teks; SOTP Rp519.872 miliar sedangkan target dari Rp441.891 miliar sesudah diskon 15% yang hanya tampil di exhibit DCF; saham 72.412 juta di cover dan 72,52 miliar di valuasi.
 - **Yang ditunjukkan benchmark tentang model kami:** faktor risiko Elang 50% menentukan rating (0% memberi Rp4.780); cadangan Elang sesudah 2050 (sekitar separuh dari 2.526 Mt) tidak dinilai, bernilai sekitar Rp250/saham sesudah risiko; dan skenario laba FY27F di Key Financials (EBITDA US$2,7 miliar) masih berbeda dari jadwal LoM (US$3,9 miliar per tahun 2027–2032), sedangkan broker FY28F US$3,3 miliar.
 
+## Koherensi laporan (run `out/e2e-2026-09-25/all9-sense`)
+
+Tujuan putaran ini: setiap laporan harus masuk akal dibaca utuh. Angka di tabel, target, teks cover dan asumsi harus berasal dari satu model yang sama, tidak bertentangan dengan fakta bersumber, dan setiap penilaian analis diberi label beserta sensitivitasnya.
+
+| Emiten | Rating | Target | Harga 24 Sep | Potensi | Tingkat diskonto tersirat harga (kebijakan) | Penilaian yang menentukan |
+|---|---|---|---|---|---|---|
+| AMMN | Sell | Rp2.990 | Rp4.730 | −36,8% | – (USD 10%) | tanpa izin ekspor; probabilitas Elang 50% |
+| BBCA | Hold | Rp5.925 | Rp6.225 | −4,8% | CoE 10,5% (10,9%) | – |
+| BBRI | Buy | Rp5.075 | Rp3.140 | +61,6% | CoE 15,6% (10,9%) | kebijakan CoE |
+| GMFI | Buy | Rp111 | Rp56 | +98,2% | WACC 12,5% (9,3%) | kebijakan WACC; ekuitas tipis |
+| INET | Sell | Rp242 | Rp316 | −23,4% | – | multiple peer 12 bulan terakhir |
+| JPFA | Buy | Rp3.280 | Rp2.180 | +50,5% | WACC 11,7% (9,6%) | – |
+| POWR | Buy | Rp1.445 | Rp955 | +51,3% | WACC 12,9% (9,7%) | kebijakan WACC |
+| SIDO | Buy | Rp448 | Rp350 | +28,0% | WACC 13,0% (10,9%) | pemulihan margin ke 38% |
+| SSIA | Sell | Rp1.370 | Rp1.750 | −21,7% | – | laju penjualan landbank |
+
+Kesembilan laporan lolos pemeriksa otomatis, termasuk cek baru untuk kode templat yang tidak dirender dan kalimat cover yang bertentangan dengan valuasi; 590 tes lolos.
+
+**AMMN: satu model tambang dari target sampai Key Financials**
+
+1. **Tanpa izin ekspor sebagai kasus dasar.** Izin ekspor konsentrat sementara berakhir 30 April 2026; Paparan Publik 2026 menyebut konsentrat hanya dapat dijual dengan izin itu, dan IDN Times (6 Juni 2026) mengutip ESDM NTB bahwa AMNT tidak berencana mengajukan perpanjangan. Model sebelumnya tetap menjual kelebihan konsentrat dan sensitivitas "tanpa ekspor"-nya membuang logam itu. Kini umpan pabrik dibatasi pada bijih yang tembaganya dapat dilebur smelter (220 kt x utilisasi Juni 93%), sisa bijih diproses kemudian, dan konsentrat 2H26 di atas kapasitas dilebur pada 2027. Pit berjalan sampai 2033, stockpile sampai 2038, Elang mulai 2038; jadwal emiten dengan ekspor (pit 2031/2032, stockpile 2033/2034) menjadi sensitivitas Rp3.790.
+2. **Capex Elang mengikuti umpan Elang pertama.** Profil broker (2029–2030, untuk bijih pertama 2031) digeser agar berakhir setahun sebelum Elang pertama kali diumpan dalam jadwal ini; dulu capex dibelanjakan enam tahun sebelum bijihnya.
+3. **Faktor Elang adalah probabilitas pengembangan.** Karena Elang dimulai sesudah pit dan stockpile Batu Hijau (Laporan Tahunan 2025: sesudah umur tambang Batu Hijau), jadwal Batu Hijau sama dengan atau tanpa Elang; mengalikan NAV Elang (termasuk capex-nya) dengan 50% sama dengan rata-rata tertimbang kedua rencana tambang.
+4. **FY27F–FY30F dari jadwal LoM.** Key Financials, laba rugi dan multiple kini membaca jadwal yang sama dengan target: FY27F pendapatan US$5,04 miliar, EBITDA US$3,39 miliar, laba bersih US$1,77 miliar (sebelumnya skenario agen terpisah dengan EBITDA US$2,70 miliar). Sebagai pembanding, BRI Danareksa FY27F US$4,29 dan 2,67 miliar, FY28F US$4,87 dan 3,30 miliar.
+5. **Sensitivitas umur izin.** Emiten menyebut Elang berjalan "sekurangnya sampai 2050"; menambang sampai cadangan habis (2075) memberi Rp3.220.
+
+Rekonsiliasi dengan BRI Danareksa sesudah perubahan ini (US$ juta; Rp/saham pada Rp17.803/USD dan 72,41 miliar saham): Batu Hijau sesudah utang bersih 6.355 berbanding 9.546 (−Rp790), Elang 22.663 berbanding 2.559 (+Rp4.970), diskon holding broker −4.353 (−Rp1.080); total Rp6.093 berbanding Rp2.990.
+
+**SSIA: landbank dinilai dengan RNAV, bukan biaya perolehan**
+
+Klaim lama bahwa lahan pada biaya perolehan "konservatif" tidak diuji. Sumber resmi kini ada di paket bukti: Laporan Tahunan 2025 (catatan 15, diaudit: 1.683 ha tanah untuk pengembangan, nilai buku Rp4.255 miliar, sekitar Rp253 ribu/m²; penilai independen 126 ha pada Rp324 ribu/m²; kepemilikan SSIA di Suryacipta 63,5%) dan presentasi 1H26 (harga jual marketing, penjualan lahan 2021–1H26, margin segmen properti, sisa lahan Karawang 23,6 ha). RNAV = lahan bersih dapat dijual (65%, asumsi analis) x laju historis 50,3 ha/tahun x harga marketing 1H26 Rp2,08 juta/m² tumbuh 2,0%/tahun (CAGR 2021–2025) x margin kas 50,7%, didiskonto CoE 10,9%. RNAV Rp5,25 triliun berbanding nilai buku Rp4,25 triliun; porsi SSIA atas selisihnya menambah Rp134 per saham, sehingga target Rp1.370. Tabel sensitivitas memperlihatkan laju penjualan sebagai penentu: 25 ha/tahun memberi −Rp165, target emiten 135 ha/tahun +Rp545 (tanpa pertumbuhan harga lebih tinggi); 1H26 baru 9,4 ha.
+
+**BBRI: jalur laba harus dekat dengan rekam jejaknya**
+
+Agen forecast menulis pertumbuhan pendapatan 10,5%, 9,5%, 9,0% dan 8,5% untuk FY27F–FY30F dengan alasan "momentum NII 1H26", padahal pendapatan BBRI tumbuh 3,1% dan laba 3,5% per tahun pada 2022–2025. Validator agen kini menolak rata-rata pertumbuhan lebih dari 5pp di atas CAGR tiga tahun pendapatan atau laba emiten kecuali mengutip artikel bertanggal; aturan yang sama ada di instruksi agen. Jalur baru membawa laba dari Rp59,3 triliun (FY26F) ke Rp68,8 triliun pada FY30F (CAGR FY25–FY28F 5,0%) dan target turun dari Rp6.225 ke Rp5.075. Sisa selisih dengan konsensus adalah kebijakan CoE: harga menyiratkan CoE 15,6%.
+
+**Kelipatan historis dari EBITDA yang cacat tidak lagi dipakai**
+
+EV/EBITDA historis Sectors dibagi EBITDA Sectors yang sama. Tahun yang D&A-nya ditolak (umur aset tersirat lebih dari 40 tahun, atau EBITDA di bawah EBIT) kini tidak masuk cross-check exit; EBITDA yang diganti angka audit (JPFA 2025) diskalakan ulang. Cross-check exit GMFI sebelumnya "mengonfirmasi" DCF dengan multiple 13,3–15,3x yang dihitung atas EBITDA tanpa penyusutan; kini laporannya menyatakan multiple historis yang kredibel kurang dari tiga titik.
+
+**Teks cover yang bertentangan dengan angkanya**
+
+- "Target ini mengimplikasikan ..., didukung rilis earnings 3Q26" (BBRI) dan "didukung sertifikasi AS9100D" (GMFI) menyajikan katalis mendatang dari agen sebagai bukti; kini ditulis "Katalis positif terdekat: ...".
+- AMMN menulis "jembatan produksi ... belum lengkap untuk membangun proyeksi umur aset" di halaman yang targetnya justru proyeksi umur aset; kalimat itu kini menjelaskan dasar LoM.
+- Butir cover SSIA kini menyebut landbank pada RNAV.
+
+**Yang tetap merupakan penilaian dan diungkapkan di laporan**
+
+- Kebijakan ERP 4% (dipertahankan): setiap DDM dan DCF menampilkan tingkat diskonto tersirat harga. Selisih terbesar ada di BBRI, GMFI dan POWR; BBCA justru diperdagangkan pada CoE kebijakan.
+- AMMN: probabilitas Elang 50% (0% memberi Rp2.350, 100% Rp3.600) dan status izin ekspor.
+- SSIA: porsi lahan dapat dijual dan laju penjualan.
+- GMFI: upside +98,2% tepat di bawah ambang Review Required; ekuitas tipis sesudah konversi utang membuat nilai per saham sangat peka terhadap EV. Cross-check PER dan P/BV memakai grup peer Sectors "Airport Operators" (termasuk BREN) sehingga tidak bermakna.
+- INET: PER FY26F tidak bermakna selama laba masih ramping (harga setara 106x laba FY26F); target memakai EV/EBITDA peer.
 

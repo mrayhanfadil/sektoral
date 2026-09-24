@@ -206,7 +206,10 @@ def test_method_gate5_exit_range_is_own_ev_ebitda_history_not_peer_pe():
     from app import forecast, valuation
     va = valuation.build(doc_in, forecast.build(doc_in))
     gate = va["gate_inputs"]
-    assert (gate["peer_exit_low"], gate["peer_exit_high"]) == (min(values), max(values))
+    # Years whose Sectors D&A is not credible are dropped (their multiple sits on
+    # an EBITDA missing most depreciation); one point is not a range.
+    expected = (min(values), max(values)) if len(values) >= 2 else (None, None)
+    assert (gate["peer_exit_low"], gate["peer_exit_high"]) == expected
 
 
 def test_holding_sotp_values_listed_stakes_at_market_and_the_rest_at_book():
