@@ -42,7 +42,7 @@ function ResearchForm({ heading, level }: { heading: string; level: "h1" | "h2" 
           <input id="ticker" name="ticker" maxLength={10} placeholder="Contoh: AMMN" required autoComplete="off"
             list="ticker-list" aria-describedby="ticker-hint" value={ticker}
             onChange={(e) => { setTicker(e.target.value); setError(null); }}
-            className="h-[52px] min-w-0 flex-1 rounded-[10px] border border-rule bg-surface px-4 text-xl font-bold tracking-[.08em] uppercase text-ink transition placeholder:text-base placeholder:font-normal placeholder:tracking-[.02em] placeholder:normal-case placeholder:text-ink-faint hover:border-rule-strong focus:border-brand-ink focus:shadow-[0_0_0_4px_var(--color-brand-100)] focus:outline-none" />
+            className="h-[52px] min-w-0 rounded-[10px] max-sm:w-full sm:flex-1 border border-rule bg-surface px-4 text-xl font-bold tracking-[.08em] uppercase text-ink transition placeholder:text-base placeholder:font-normal placeholder:tracking-[.02em] placeholder:normal-case placeholder:text-ink-faint hover:border-rule-strong focus:border-brand-ink focus:shadow-[0_0_0_4px_var(--color-brand-100)] focus:outline-none" />
           <button type="submit" disabled={busy} className="btn btn-primary h-[52px] px-6 text-base max-sm:w-full">
             {busy ? "Memulai…" : "Mulai riset"}
           </button>

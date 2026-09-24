@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Job as JobState } from "../lib/api";
 import { PROGRESS_STEPS, progressStep } from "../lib/labels";
-import { IntelHeadline, IntelSections } from "../components/Intel";
+import { IntelPanel } from "../components/Intel";
 import { Notice } from "../components/State";
 import { Icon } from "../components/Icon";
 import { ResearchPanels } from "./Research";
@@ -139,8 +139,7 @@ export default function Job() {
         )}
         {job?.intel && (
           <section aria-label="Intelijen pasar" className="grid gap-6 [&>*]:min-w-0">
-            <IntelHeadline intel={job.intel} />
-            <IntelSections intel={job.intel} />
+            <IntelPanel intel={job.intel} />
             <p className="text-[13.5px] text-ink-soft">
               Sinyal dihitung deterministik dari data Sectors; agent memilih pemeriksaan dan menafsirkan hasilnya.
               Informasi dan analisis, bukan rekomendasi investasi.

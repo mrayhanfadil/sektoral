@@ -8,6 +8,11 @@ export function Logo({ className = "h-[30px]" }: { className?: string }) {
   return <span className={`logo block [&>svg]:h-full [&>svg]:w-auto ${className}`} dangerouslySetInnerHTML={{ __html: LOGO }} />;
 }
 
+/** On phones the five-stage diagram keeps a readable size and scrolls sideways. */
 export function ResearchFlow() {
-  return <div className="svg-block mx-auto max-w-[1060px]" dangerouslySetInnerHTML={{ __html: flowSource }} />;
+  return (
+    <div role="region" aria-label="Diagram alur riset" tabIndex={0} className="overflow-x-auto">
+      <div className="svg-block mx-auto max-w-[1060px] max-md:w-[860px]" dangerouslySetInnerHTML={{ __html: flowSource }} />
+    </div>
+  );
 }

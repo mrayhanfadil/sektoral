@@ -14,7 +14,7 @@ function useScrollToHash() {
   }, [pathname, hash]);
 }
 
-const navLink = "rounded-lg px-3 py-2 text-[15px] font-medium text-ink-soft no-underline hover:bg-canvas hover:text-ink max-md:hidden";
+const navLink = "rounded-lg px-3 py-2 text-[15px] font-medium text-ink-soft no-underline hover:bg-canvas hover:text-ink";
 
 function SiteHeader() {
   return (
@@ -28,14 +28,14 @@ function SiteHeader() {
             <Logo />
           </Link>
           <nav aria-label="Navigasi utama" className="flex items-center gap-1">
-            <Link to="/#cara-kerja" className={navLink}>Cara kerja</Link>
-            <Link to="/#framework" className={navLink}>Framework</Link>
-            <NavLink to="/laporan" end className={({ isActive }) => `${navLink} ${isActive ? "!text-brand-ink" : ""}`}>
+            <Link to="/#cara-kerja" className={`${navLink} max-md:hidden`}>Cara kerja</Link>
+            <Link to="/#framework" className={`${navLink} max-md:hidden`}>Framework</Link>
+            <NavLink to="/laporan" end className={({ isActive }) => `${navLink} max-sm:px-2 ${isActive ? "!text-brand-ink" : ""}`}>
               Laporan
             </NavLink>
             <ThemeToggle />
-            <Link to="/research" className="btn btn-primary ml-1 min-h-0 px-3 py-2 text-[15px] max-md:ml-0">
-              Coba riset emiten
+            <Link to="/research" className="btn btn-primary ml-1 min-h-0 px-3 py-2 text-[15px] whitespace-nowrap max-md:ml-0">
+              <span className="sm:hidden">Riset</span><span className="max-sm:hidden">Coba riset emiten</span>
             </Link>
           </nav>
         </div>

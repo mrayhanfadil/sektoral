@@ -3,10 +3,10 @@
   <desc id="flow-desc">Sumber bertanggal dibaca agen analis, agen asumsi menyusun skenario laba dan risiko, gerbang framework memilih rantai metode, harness memeriksa, lalu company update terbit atau rating ditahan.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-      <path d="M0 0 L10 5 L0 10 z" fill="#0928B1"/>
+      <path d="M0 0 L10 5 L0 10 z" fill="context-stroke"/>
     </marker>
     <marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-      <path d="M0 0 L10 5 L0 10 z" fill="#B7791F"/>
+      <path d="M0 0 L10 5 L0 10 z" fill="context-stroke"/>
     </marker>
   </defs>
   <rect x="0" y="0" width="1120" height="400" rx="16" fill="#FFFFFF"/>
@@ -15,8 +15,7 @@
   <g font-size="13" fill="#5B5F6B">
     <!-- 1 sources -->
     <rect x="20" y="40" width="190" height="236" rx="12" fill="#F2F5FF" stroke="#0928B1" stroke-width="1.5"/>
-    <text x="40" y="70" font-size="12" font-weight="700" fill="#0928B1" letter-spacing="1.5">01 SUMBER</text>
-    <text x="40" y="96" font-size="17" font-weight="700" fill="#333333">Bukti bertanggal</text>
+    <text x="40" y="78" font-size="17" font-weight="700" fill="#333333">Bukti bertanggal</text>
     <g font-size="13">
       <rect x="40" y="114" width="150" height="28" rx="6" fill="#FFFFFF" stroke="#D9D9D9"/><text x="52" y="133" fill="#0928B1" font-weight="700">Sectors (inti)</text>
       <rect x="40" y="148" width="150" height="28" rx="6" fill="#FFFFFF" stroke="#D9D9D9"/><text x="52" y="167">Rilis resmi emiten</text>
@@ -26,24 +25,21 @@
 
     <!-- 2 analyst agent -->
     <rect x="240" y="40" width="190" height="236" rx="12" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1.5"/>
-    <text x="260" y="70" font-size="12" font-weight="700" fill="#0928B1" letter-spacing="1.5">02 AGEN ANALIS</text>
-    <text x="260" y="96" font-size="17" font-weight="700" fill="#333333">Rencana &amp; sinyal</text>
+    <text x="260" y="78" font-size="17" font-weight="700" fill="#333333">Rencana &amp; sinyal</text>
     <text x="260" y="124">Hipotesis sesuai</text><text x="260" y="142">jenis usaha emiten</text>
     <text x="260" y="170">Peer, kuartalan, harga</text><text x="260" y="188">vs IHSG, arus asing</text>
     <text x="260" y="216">Sinyal dihitung kode,</text><text x="260" y="234">bukan oleh model</text>
 
     <!-- 3 assumption agent -->
     <rect x="460" y="40" width="190" height="236" rx="12" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1.5"/>
-    <text x="480" y="70" font-size="12" font-weight="700" fill="#1DCD9F" letter-spacing="1.5">03 AGEN ASUMSI</text>
-    <text x="480" y="96" font-size="17" font-weight="700" fill="#333333">Skenario laba</text>
+    <text x="480" y="78" font-size="17" font-weight="700" fill="#333333">Skenario laba</text>
     <text x="480" y="124">Aktual 1H resmi +</text><text x="480" y="142">asumsi semester kedua</text>
     <text x="480" y="170">Tesis, katalis, dan</text><text x="480" y="188">risiko utama bersumber</text>
     <text x="480" y="216">Asumsi tanpa sumber</text><text x="480" y="234">ditolak validator</text>
 
     <!-- 4 gates -->
     <rect x="680" y="40" width="190" height="236" rx="12" fill="#FFFFFF" stroke="#D9D9D9" stroke-width="1.5"/>
-    <text x="700" y="70" font-size="12" font-weight="700" fill="#0928B1" letter-spacing="1.5">04 GERBANG 0-5</text>
-    <text x="700" y="96" font-size="17" font-weight="700" fill="#333333">Rantai metode</text>
+    <text x="700" y="78" font-size="17" font-weight="700" fill="#333333">Rantai metode</text>
     <g font-size="12.5">
       <rect x="700" y="112" width="150" height="26" rx="13" fill="#0928B1"/><text x="775" y="129" text-anchor="middle" fill="#FFFFFF" font-weight="700">Metode utama</text>
       <path d="M775 140 v10" stroke="#0928B1" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -55,8 +51,7 @@
 
     <!-- 5 harness + report -->
     <rect x="900" y="40" width="200" height="236" rx="12" fill="#FFFFFF" stroke="#3ED628" stroke-width="1.5"/>
-    <text x="920" y="70" font-size="12" font-weight="700" fill="#2E9E1E" letter-spacing="1.5">05 HARNESS</text>
-    <text x="920" y="96" font-size="17" font-weight="700" fill="#333333">Terbit bila lolos</text>
+    <text x="920" y="78" font-size="17" font-weight="700" fill="#333333">Terbit bila lolos</text>
     <text x="920" y="124">Sumber, periode, dan</text><text x="920" y="142">kewajaran hasil diperiksa</text>
     <rect x="920" y="160" width="160" height="58" rx="8" fill="#F7F8FA" stroke="#ECEEF2"/>
     <text x="934" y="182" font-size="12.5" font-weight="700" fill="#333333">Company update</text>
