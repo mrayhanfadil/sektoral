@@ -44,7 +44,11 @@ _FOREIGN_SCRIPT = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\u
 
 
 def _clean(text, limit=200):
-    return re.sub(r"\s{2,}", " ", _FOREIGN_SCRIPT.sub(" ", str(text or ""))).strip()[:limit]
+    text = re.sub(r"\s{2,}", " ", _FOREIGN_SCRIPT.sub(" ", str(text or ""))).strip()
+    if len(text) <= limit:
+        return text
+    # Shown to readers: end on a whole word, never mid-word.
+    return text[:limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
 
 
 def _advice_terms(text):
