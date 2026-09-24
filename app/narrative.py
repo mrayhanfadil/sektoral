@@ -2975,6 +2975,10 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
             if unit == "oz":
                 return f"{fmt._id(value / 1000, 1)} koz"
             return _volume_text(value, unit)
+        # Net realized price per refined product comes from the official
+        # sales bridge (same source as the draft route's sales table).
+        actual_sales = ((intake.get("official_evidence") or {})
+                        .get("sales_production_bridge") or [])
         for row in bridge["rows"]:
             if row["key"] == "concentrate":
                 for component in row.get("price_components") or []:
@@ -3311,8 +3315,9 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     path = ""
     if forward:
         last = forward[-1]
-        amount = (f"US${money(last['net_profit'])} juta" if usd
-                  else f"Rp{money(last['net_profit'])} miliar")
+        # Parent's share, the basis of Key Financials and EPS (cover tie-out).
+        amount = (f"US${money(last['net_profit_attributable'])} juta" if usd
+                  else f"Rp{money(last['net_profit_attributable'])} miliar")
         path = (f" Skenario lanjutan membawa laba bersih ke {amount} pada {last['label']} "
                 f"dengan margin {fmt.pct(last['net_income_margin_pct'] / 100)}.")
     doc["cover"]["headline"] = _earnings_headline(va["rating"], label)
@@ -3321,20 +3326,69 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     doc["cover"]["bullets"][2] = _trim(
         f"{va['rating']}: target Rp{fmt.rp(va['tp'])} ({fmt.pct(va['upside'])}) dari "
         f"PER median peer {fmt.mult(d['median_pe'], 1)} atas EPS {label}.", 30)
-    fy_money = (f"US${money(fy['net_profit'])} juta" if usd else f"Rp{money(fy['net_profit'])} miliar")
+    fy_attr = fy["net_profit_attributable"]
+    fy_money = (f"US${money(fy_attr)} juta" if usd else f"Rp{money(fy_attr)} miliar")
+    from . import report_extras
+    eps_fy = eps_of(fy_attr)
+    pe_now = intake["price"] / eps_fy if eps_fy > 0 else None
+    # Struktur paragraph 1: how much of our FY estimate the latest half delivered.
+    h1_share = scenario["h1"]["net_profit"] / fy["net_profit"] if fy["net_profit"] > 0 else None
+    if h1_share and doc["cover"]["paragraf"]:
+        doc["cover"]["paragraf"][0]["isi"] = (
+            doc["cover"]["paragraf"][0]["isi"].rstrip() +
+            f" Laba 1H setara {fmt.pct(h1_share)} dari estimasi laba bersih {label} kami.")
+    # Struktur paragraph 2: is the story already in the price?
+    own_move, ihsg_move = report_extras.price_vs_ihsg(intake["ticker"])
+    priced = ""
+    if own_move and ihsg_move and pe_now:
+        relative = "di bawah" if pe_now < d["median_pe"] else "di atas"
+        priced = (f" Sejak {own_move[1]} saham {'naik' if own_move[0] >= 0 else 'turun'} "
+                  f"{fmt.pct(abs(own_move[0]))} (IHSG {'naik' if ihsg_move[0] >= 0 else 'turun'} "
+                  f"{fmt.pct(abs(ihsg_move[0]))}), namun PER {label} {fmt.mult(pe_now, 1)} masih "
+                  f"{relative} median peer {fmt.mult(d['median_pe'], 1)}; "
+                  + ("pasar belum sepenuhnya memasukkan skenario laba ini ke multiple."
+                     if pe_now < d["median_pe"] else
+                     "sebagian skenario laba sudah tercermin pada multiple."))
     doc["cover"]["paragraf"][1] = {
         "judul": "Pandangan Kami: driver laba ke depan",
-        "isi": (" ".join(thesis) + f" Laba bersih {label} kami perkirakan {fy_money}." + path)}
+        "isi": (" ".join(thesis) + f" Laba bersih {label} kami perkirakan {fy_money}." + path
+                + priced)}
     skipped = [t["short"] for t in va["method_chain"]["trace"] if t["decision"] == "skipped"]
+    # Struktur paragraph 3: method, forecast linkage, trading multiple (risk is
+    # appended by report_extras.attach_risks).
+    evidence_annuals = {r["year"]: r for r in
+                        (intake.get("official_evidence") or {}).get("annual_actuals") or []}
+    base_year = scenario["year"] - 1
+    base_attr = ((evidence_annuals.get(base_year) or {}).get("net_profit_attributable")
+                 or next((a["earnings"] / to_idr for a in intake.get("annuals") or []
+                          if a.get("year") == base_year and a.get("earnings")), None))
+    end_row = forward[1] if len(forward) >= 2 else None  # FY+2 closes a 3-year path
+    if base_attr and base_attr > 0 and end_row and end_row.get("net_profit_attributable"):
+        cagr = (end_row["net_profit_attributable"] / base_attr) ** (1 / 3) - 1
+        growth = (f"pertumbuhan laba bersih CAGR FY{base_year % 100:02d}-{end_row['label']} "
+                  f"{fmt.pct(cagr)}")
+    elif base_attr and base_attr > 0:
+        growth = f"laba bersih {label} {fmt.pct(fy_attr / base_attr - 1)} yoy"
+    else:
+        growth = None
+    driver = next((x["item"] for x in a.get("catalysts_risks") or []
+                   if isinstance(x, dict) and x.get("direction") == "Positif"), None)
+    band = (report_extras._band_data(intake) or {}).get("multiples", {}).get("P/E")
     valuation_text = (
-        f"EPS {label} Rp{fmt.rp(round(eps_of(fy['net_profit_attributable'])))} berasal dari "
-        f"laba 1H resmi dan asumsi semester kedua. PER median {d['peer_count']} peer "
-        f"{fmt.mult(d['median_pe'], 1)} menghasilkan target Rp{fmt.rp(va['tp'])}, dengan "
-        f"rentang kuartil Rp{fmt.rp(va['tp_down'])} sampai "
-        f"Rp{fmt.rp(fmt.tick(d['per_share_up']))}. "
+        f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai PER median {d['peer_count']} "
+        f"peer {fmt.mult(d['median_pe'], 1)} atas EPS {label} Rp{fmt.rp(round(eps_fy))} (laba "
+        f"1H resmi dan asumsi semester kedua), dengan rentang kuartil Rp{fmt.rp(va['tp_down'])} "
+        f"sampai Rp{fmt.rp(fmt.tick(d['per_share_up']))}. "
+        + (f"Target ini mengimplikasikan {growth}"
+           + (f", didukung {driver[:1].lower() + driver[1:] if driver[1:2].islower() else driver}"
+              if driver else "") + ". "
+           if growth else "")
+        + (f"Pada harga kini saham diperdagangkan pada PER {label} {fmt.mult(pe_now, 1)}, "
+           f"dibanding median peer {fmt.mult(d['median_pe'], 1)}"
+           + (f" dan rata-rata band P/E {fmt.mult(band['mean'], 1)}" if band else "") + ". "
+           if pe_now else "")
         + (f"{', '.join(skipped)} belum dipakai karena forecast driver belum "
-           "direkonsiliasi. " if skipped else "")
-        + "Arus kas, capex dan neraca sesudah periode interim belum dimodelkan.")
+           "direkonsiliasi." if skipped else ""))
     doc["cover"]["paragraf"][2] = {"judul": "Target harga berbasis laba FY",
                                    "isi": valuation_text}
 
@@ -3499,6 +3553,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         f"PER peer adalah TTM dari data Sectors ({peer_names}); peer dianggap sebanding, "
         "dan kuartil bawah/atas menjadi sensitivitas.",
         "Skenario tahun lanjutan adalah asumsi analis tahunan dan tidak mengubah tahun dasar target.",
+        "Arus kas, capex dan neraca sesudah periode interim belum dimodelkan.",
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
     ]
     return doc

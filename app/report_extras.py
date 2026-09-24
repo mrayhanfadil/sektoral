@@ -299,6 +299,21 @@ def _window_change(rows, key, start_day):
     return (points[-1][1] / points[0][1] - 1, points[0][0], points[-1][0]) if len(points) >= 2 else None
 
 
+def price_vs_ihsg(ticker):
+    """(issuer move, IHSG move) over the common window of the cached Sectors
+    daily closes; each is (change, start, end) or None."""
+    daily = (local_data.cache_get(ticker, f"/daily/{ticker}/") or {}).get("data") or []
+    index = cache.first("/index-daily/ihsg/")
+    index_rows = (index.get("data") if isinstance(index, dict) else index) or []
+    # Common window: the later of the two series' first dates.
+    firsts = [min((str(r.get("date"))[:10] for r in rows_ if isinstance(r, dict) and r.get("date")),
+                  default=None) for rows_ in (daily, index_rows)]
+    start = max(firsts) if all(firsts) else None
+    if not start:
+        return None, None
+    return _window_change(daily, "close", start), _window_change(index_rows, "price", start)
+
+
 def peer_industry_page(intake):
     """Struktur slide 2 for issuers without a cached Sectors sub-sector report:
     the sub-sector read from the issuer's Sectors peer table, the issuer's
@@ -356,15 +371,7 @@ def peer_industry_page(intake):
             f"{pct(stats['net_margin'][0])}); selisih ini menjelaskan posisi valuasinya terhadap "
             "peer, bukan tren industri yang terukur.")
     # Sentiment: price vs IHSG on common dates, and net foreign flow.
-    daily = (local_data.cache_get(ticker, f"/daily/{ticker}/") or {}).get("data") or []
-    index = cache.first("/index-daily/ihsg/")
-    index_rows = index.get("data") if isinstance(index, dict) else index
-    # Common window: the later of the two series' first dates.
-    firsts = [min((str(r.get("date"))[:10] for r in rows_ if isinstance(r, dict) and r.get("date")),
-                  default=None) for rows_ in (daily, index_rows or [])]
-    start = max(firsts) if all(firsts) else None
-    own_move = _window_change(daily, "close", start) if start else None
-    ihsg_move = _window_change(index_rows, "price", start) if start else None
+    own_move, ihsg_move = price_vs_ihsg(ticker)
     flows = (local_data.cache_get(ticker, f"/foreign-flow/{ticker}/") or {}).get("data") or []
     net_flow = sum(_num(r.get("net_foreign_inflow")) or 0 for r in flows if isinstance(r, dict))
     sentiment = []
