@@ -175,7 +175,10 @@ def execute(name, ticker, args, state):
         state["peers"] = peers
         if not peers["rows"]:
             raise ToolError("tidak ada grup peer untuk diperingkat")
-        metrics = [m for m in (args.get("metrics") or []) if m in S.PEER_METRICS]
+        requested = args.get("metrics")
+        requested = [requested] if isinstance(requested, str) else requested
+        metrics = [m for m in (requested if isinstance(requested, list) else [])
+                   if isinstance(m, str) and m in S.PEER_METRICS]
         if not metrics:
             raise ToolError("sebutkan minimal satu metrik valid: " + ", ".join(S.PEER_METRICS))
         ranked = S.rank_peers(peers["rows"], metrics[:6], peers["source"])

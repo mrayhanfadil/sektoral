@@ -100,14 +100,18 @@ def _plan_problems(plan, available):
         steps = []
     for index, step in enumerate(steps):
         name = step.get("tool") if isinstance(step, dict) else None
-        if name not in tools.TOOLS:
+        args = step.get("args", {}) if isinstance(step, dict) else None
+        if not isinstance(name, str) or name not in tools.TOOLS:
             problems.append(f"steps[{index}]: tool {name!r} tidak dikenal")
+        elif not isinstance(args, dict):
+            problems.append(f"steps[{index}]: args harus object")
         elif not available.get(name):
             problems.append(f"steps[{index}]: {name} tidak tersedia untuk emiten ini")
         elif name == "rank_peers":
-            metrics = ((step.get("args") or {}).get("metrics") or [])
-            if not metrics or any(m not in S.PEER_METRICS for m in metrics):
-                problems.append(f"steps[{index}]: metrics harus dari {list(S.PEER_METRICS)}")
+            metrics = args.get("metrics")
+            if not isinstance(metrics, list) or not metrics or any(
+                    not isinstance(m, str) or m not in S.PEER_METRICS for m in metrics):
+                problems.append(f"steps[{index}]: metrics harus list dari {list(S.PEER_METRICS)}")
     text = " ".join([str(plan.get("question") or "")] + [str(h) for h in hypotheses or []])
     if _advice_terms(text):
         problems.append("plan memuat bahasa rekomendasi investasi: " + ", ".join(_advice_terms(text)))
@@ -225,10 +229,13 @@ def _execute(chat, ticker, plan, messages, available, problems):
         for call in calls[:MAX_CALLS_PER_TURN]:
             if len(steps) >= MAX_TOOL_CALLS:
                 break
-            name = call.get("tool") if isinstance(call, dict) else None
-            args = call.get("args") if isinstance((call or {}).get("args"), dict) else {}
-            why = _clean((call or {}).get("why"))
-            if name not in tools.TOOLS or not available.get(name):
+            if not isinstance(call, dict):
+                results.append({"error": "setiap panggilan harus object {tool, args, why}"})
+                continue
+            name = call.get("tool")
+            args = call.get("args") if isinstance(call.get("args"), dict) else {}
+            why = _clean(call.get("why"))
+            if not isinstance(name, str) or name not in tools.TOOLS or not available.get(name):
                 results.append({"tool": name, "error": "tool tidak dikenal atau tidak tersedia"})
                 continue
             if key(name, args) in done:
@@ -254,6 +261,12 @@ def _execute(chat, ticker, plan, messages, available, problems):
 
 # ------------------------------------------------------------ synthesize
 
+def _known_ids(ids, signal_ids):
+    """A non-empty list of signal id strings that all exist."""
+    return (isinstance(ids, list) and bool(ids) and
+            all(isinstance(x, str) and x in signal_ids for x in ids))
+
+
 def _synthesis_problems(doc, signal_ids, n_hypotheses):
     problems = []
     if not isinstance(doc, dict):
@@ -268,8 +281,8 @@ def _synthesis_problems(doc, signal_ids, n_hypotheses):
             problems.append(f"findings[{i}] harus object")
             continue
         ids = item.get("signal_ids") or []
-        if not ids or any(x not in signal_ids for x in ids):
-            problems.append(f"findings[{i}].signal_ids harus id sinyal yang ada")
+        if not _known_ids(ids, signal_ids):
+            problems.append(f"findings[{i}].signal_ids harus list id sinyal yang ada")
         elif all(str(x).startswith("web.") for x in ids):
             problems.append(f"findings[{i}] wajib mengutip minimal satu sinyal Sectors; "
                             "berita web hanya konteks")
@@ -286,7 +299,9 @@ def _synthesis_problems(doc, signal_ids, n_hypotheses):
         if item.get("verdict") not in VERDICTS:
             problems.append(f"hypotheses[{i}].verdict harus salah satu {VERDICTS}")
         ids = item.get("signal_ids") or []
-        if item.get("verdict") != "belum terjawab" and (not ids or any(x not in signal_ids for x in ids)):
+        if ids and not _known_ids(ids, signal_ids):
+            problems.append(f"hypotheses[{i}].signal_ids harus list id sinyal yang ada")
+        elif item.get("verdict") != "belum terjawab" and not ids:
             problems.append(f"hypotheses[{i}] perlu signal_ids yang ada untuk verdict ini")
         elif item.get("verdict") != "belum terjawab" and all(str(x).startswith("web.") for x in ids):
             problems.append(f"hypotheses[{i}] wajib didukung sinyal Sectors, bukan hanya berita web")

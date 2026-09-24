@@ -183,13 +183,19 @@ def price_signals(ticker, daily_rows, index_rows):
                 "period": f"{first['date']} s.d. {last['date']}", "source": source, "flag": None}]
     index = sorted((r for r in index_rows if isinstance(r, dict) and _num(r.get("price"))),
                    key=lambda r: str(r.get("date")))
-    in_window = [r for r in index if str(first["date"]) <= str(r["date"]) <= str(last["date"])]
-    if len(in_window) >= 2:
-        index_return = _num(in_window[-1]["price"]) / _num(in_window[0]["price"]) - 1
-        relative = stock_return - index_return
+    # Compare both series over the dates they share; the index snapshot can
+    # start or end on different days than the stock's.
+    index_by_date = {str(r["date"]): r for r in index}
+    shared = [r for r in rows if str(r["date"]) in index_by_date]
+    if len(shared) >= 2:
+        start, end = shared[0], shared[-1]
+        matched_stock = _num(end["close"]) / _num(start["close"]) - 1
+        index_return = (_num(index_by_date[str(end["date"])]["price"]) /
+                        _num(index_by_date[str(start["date"])]["price"]) - 1)
+        relative = matched_stock - index_return
         signal = {"id": "price.vs_ihsg", "kind": "change", "label": "Selisih return vs IHSG",
                   "unit": "pct", "value": relative, "display": display(relative, "pct"),
-                  "period": f"{in_window[0]['date']} s.d. {in_window[-1]['date']}",
+                  "period": f"{start['date']} s.d. {end['date']}",
                   "source": source + " dan /index-daily/ihsg/", "flag": None}
         if abs(relative) >= 0.15:
             signal["flag"] = "jauh mengungguli IHSG" if relative > 0 else "jauh tertinggal dari IHSG"
