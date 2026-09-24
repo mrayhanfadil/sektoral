@@ -11,6 +11,7 @@ draft sampai ada tesis fundamental bersumber.
 from __future__ import annotations
 
 import math
+import statistics
 
 from . import gate_thresholds
 
@@ -118,9 +119,25 @@ def _median(xs):
 
 
 def pe_quartiles(pes) -> tuple[float, float, float]:
-    """(kuartil bawah, median, kuartil atas) dari PER peer terurut."""
-    half = max(1, len(pes) // 2)
-    return _median(pes[:half]), _median(pes), _median(pes[-half:])
+    """(kuartil bawah, median, kuartil atas) dari multiple peer.
+
+    Inclusive linear quartiles: with three peers the quartiles sit between
+    neighbours instead of collapsing onto the cheapest and dearest peer.
+    """
+    xs = sorted(pes)
+    if len(xs) == 1:
+        return xs[0], xs[0], xs[0]
+    q1, q2, q3 = statistics.quantiles(xs, n=4, method="inclusive")
+    return q1, q2, q3
+
+
+def with_reasons(c: dict, extra) -> dict:
+    """Copy of a candidate with more insufficiency reasons, all fields kept."""
+    extra = [r for r in extra or [] if r]
+    if not extra:
+        return c
+    out = dict(c, reasons=list(c.get("reasons") or []) + extra, status="insufficient")
+    return out
 
 
 def relative_pe(peers, eps_fwd, shares, market_cap) -> dict:

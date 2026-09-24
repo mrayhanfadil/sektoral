@@ -393,7 +393,8 @@ def _validate_earnings(scenario, source):
         problems.append("earnings_scenario needs a 40-1400 character rationale")
     elif re.search(r"[\u4e00-\u9fff]", rationale):
         problems.append("earnings_scenario rationale must use Indonesian text")
-    allowed = {"official"} | {f"news:{item['index']}" for item in source["news"]}
+    allowed = ({"official"} | {f"news:{item['index']}" for item in source["news"]}
+               | {f"guidance:{i}" for i, _ in enumerate(official.get("guidance") or [])})
     source_ids = scenario.get("source_ids")
     if (not isinstance(source_ids, list) or "official" not in source_ids or
             any(item not in allowed for item in source_ids)):
@@ -406,8 +407,9 @@ def _validate_earnings(scenario, source):
         not 0.8 <= scenario["h2_revenue_to_h1"] <= 1.25) or (
         _number(scenario.get("h2_net_margin_pct"), -1e9, 1e9) and
         abs(scenario["h2_net_margin_pct"] - h1_margin) > 5)
-    cites_driver = any(item.startswith("news:") for item in source_ids) or bool(
-        official.get("guidance"))
+    # A departure must cite the specific article or guidance item behind it;
+    # the mere existence of some guidance in the pack is not a reason.
+    cites_driver = any(item.startswith(("news:", "guidance:")) for item in source_ids)
     if departs and not cites_driver:
         problems.append("earnings_scenario departs from the 1H run-rate without a cited "
                         "news article or official guidance")
@@ -608,7 +610,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "evidence; issuer-specific risks beat generic ones. Never write a "
             "target price, valuation multiple, rating, buy/sell/hold/akumulasi, "
             "production_ready or forecast_basis; the engine applies peer PER. "
-            "Return null if the evidence cannot support a full-year view."
+            "Return null if the evidence cannot support a full-year view. Cite official guidance items as \"guidance:<index>\" (position in official.guidance) when they support a departure."
         )
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                    "model_profile": source["model_profile"],
@@ -750,6 +752,13 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     # Resolve cited ids to titles/URLs so the report never
                     # re-derives article positions from a different list.
                     by_id = {f"news:{item['index']}": item for item in source["news"]}
+                    for gi, item in enumerate(source["official"].get("guidance") or []):
+                        text = item.get("fact") or item.get("name") or item.get("claim") \
+                            if isinstance(item, dict) else str(item)
+                        by_id[f"guidance:{gi}"] = {
+                            "title": f"Panduan resmi: {str(text or '-')[:120]}",
+                            "url": source["official"]["source_url"],
+                            "timestamp": source["official"]["published_at"]}
                     cited = set(scenario.get("source_ids") or []) | {
                         x for item in scenario.get("catalysts_risks") or []
                         if isinstance(item, dict) for x in item.get("source_ids") or []}
@@ -984,8 +993,12 @@ def run_cached(intake, refresh=False, store_dir=None):
     result = run_live(intake)
     result["fingerprint"] = fingerprint
     result["reused"] = False
-    if result.get("plan") and result.get("interim_status") in ("validated", "not_run") and \
-            result.get("status") in ("validated", "partial"):
+    # Store only when every scenario subagent that ran succeeded; a failed
+    # earnings/interim/outyear/stage call must be retried next run, not frozen
+    # under the same evidence fingerprint.
+    scenario_ok = all(result.get(key) in ("validated", "not_run", None) for key in
+                      ("interim_status", "earnings_status", "outyears_status", "stage_status"))
+    if result.get("plan") and scenario_ok and result.get("status") in ("validated", "partial"):
         result["stored_at"] = date.today().isoformat()
         try:
             folder.mkdir(parents=True, exist_ok=True)

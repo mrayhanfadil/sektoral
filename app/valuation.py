@@ -476,14 +476,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "sotp_lom", per_share=sotp_result.get("target_price_idr"),
             reasons=release._check_sotp(sotp_result, intake) + mining_data,
             labels=["sensitivitas SOTP dilabeli"])
-        rnav_candidate = _rnav_candidate(intake, fc, lom, wacc)
-        if mining_data:
-            rnav_candidate = method_chain.candidate(
-                "rnav_lom", per_share=rnav_candidate["per_share"],
-                per_share_down=rnav_candidate["per_share_down"],
-                reasons=rnav_candidate["reasons"] + mining_data,
-                labels=rnav_candidate["labels"], detail=rnav_candidate["detail"])
-        candidates["rnav_lom"] = rnav_candidate
+        candidates["rnav_lom"] = method_chain.with_reasons(
+            _rnav_candidate(intake, fc, lom, wacc), mining_data)
         scenario_target = scenario_ev_ebitda_crosscheck(intake, fc)
         assumption_release = release.assess_assumption_led(
             intake, fc, scenario_target or {}, assumption_status,
@@ -569,12 +563,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         if forecast_data:
             for key in ("fcff_dcf", "dcf_reference", "ddm", "pbv_roe", "relative_pe",
                         "pbv_relative", "ev_ebitda_peer", "ev_sales_peer"):
-                c = candidates.get(key)
-                if c:
-                    candidates[key] = method_chain.candidate(
-                        key, per_share=c["per_share"], per_share_down=c["per_share_down"],
-                        reasons=c["reasons"] + forecast_data, labels=c["labels"],
-                        detail=c["detail"])
+                if key in candidates:
+                    candidates[key] = method_chain.with_reasons(candidates[key], forecast_data)
         candidates["pe_fy_scenario"] = _earnings_candidate(intake, fc, assumption_status)
 
     chain = method_chain.run(profile, candidates, price, order=prelim_order,

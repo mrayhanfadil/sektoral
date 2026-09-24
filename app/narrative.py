@@ -3245,13 +3245,10 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     path = ""
     if forward:
         last = forward[-1]
-        path = (f" Skenario lanjutan membawa laba bersih ke {money(last['net_profit'])} "
-                f"{unit.split()[-1] if usd else 'miliar'} pada {last['label']} dengan margin "
-                f"{fmt.pct(last['net_income_margin_pct'] / 100)}.")
-        if not usd:
-            path = (f" Skenario lanjutan membawa laba bersih ke Rp{money(last['net_profit'])} "
-                    f"miliar pada {last['label']} dengan margin "
-                    f"{fmt.pct(last['net_income_margin_pct'] / 100)}.")
+        amount = (f"US${money(last['net_profit'])} juta" if usd
+                  else f"Rp{money(last['net_profit'])} miliar")
+        path = (f" Skenario lanjutan membawa laba bersih ke {amount} pada {last['label']} "
+                f"dengan margin {fmt.pct(last['net_income_margin_pct'] / 100)}.")
     doc["cover"]["headline"] = _earnings_headline(va["rating"], label)
     if thesis:
         doc["cover"]["bullets"][1] = _trim(thesis[0], 30)

@@ -191,6 +191,9 @@ def _earnings_fixture(monkeypatch, h2_ratio=1.0, h2_margin=10.0, peers=(2.5, 2.8
               "metrics": {"revenue": 50e12, "net_profit": 5e12,
                           "net_profit_attributable": 4.5e12}}
     intake_.update(as_of="2026-09-24", price_date="2026-09-22",
+                   price_provenance={"source": "sectors_cache /company/report/UJI/ overview",
+                                     "date": "2026-09-22", "kind": "sectors_cache",
+                                     "verified": True},
                    latest_official_actual=actual,
                    official_evidence={"reporting_currency": "IDR",
                                       "balance_sheet": {"shares_outstanding": shares}},
@@ -219,12 +222,24 @@ def test_going_concern_reaches_earnings_led_route_and_releases():
     assert va["release"]["status"] == "distributable_assumption_led"
     eps = 9e12 / test_valtables.SHARES
     assert va["tp"] == round(2.8 * eps / 10) * 10  # median peer PER
-    assert va["tp_down"] == round(2.5 * eps / 10) * 10
+    assert va["tp_down"] == round(2.65 * eps / 10) * 10  # interpolated lower quartile
     assert va["method"].startswith("FY26F PER median peer x EPS skenario analis")
     assert abs(va["implied"]["per"] - va["tp"] / eps) < 1e-9
-    result = runner.run_all(intake_, fc, va)
+    result = runner.run_all(intake_, fc, va, assumption_status="validated")
     assert result["gates"]["engine_status"] == "distributable_assumption_led"
     assert result["log_gate"]["release"]["route"] == "analyst_target"
+    # The harness does not take the agent status from the engine's trace.
+    unvalidated = runner.run_all(intake_, fc, va)
+    assert unvalidated["log_gate"]["release"]["route"] != "analyst_target"
+
+
+def test_cache_close_needs_verified_provenance():
+    intake_, fc = _earnings_fixture(None)
+    unverified = dict(intake_, price_provenance=dict(intake_["price_provenance"], verified=False))
+    va = valuation.build(unverified, fc, assumption_status="validated")
+    assert va["method_chain"]["selected"] is None
+    assert any("fresh sourced close" in r for t in va["method_chain"]["trace"]
+               for r in t["reasons"])
 
 
 def test_earnings_led_needs_validated_agent_fresh_close_and_peers():
@@ -304,3 +319,68 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
     # Without the validated agent scenario the same issuer stays draft.
     draft = build.build("JPFA", tmp_path, as_of="2026-09-24")
     assert draft["meta"]["status"] == "draft_non_distributable"
+
+
+# --------------------------------------------- PR #4 review fixes (in PR #5)
+
+def test_quartiles_are_interpolated_not_min_max():
+    q1, med, q3 = MC.pe_quartiles([3.0, 7.0, 9.0])
+    assert (q1, med, q3) == (5.0, 7.0, 8.0)
+
+
+def test_with_reasons_keeps_every_candidate_field():
+    c = dict(MC.candidate("pe_fy_scenario", per_share=10, per_share_down=8),
+             gate={"status": "x"}, label="custom")
+    out = MC.with_reasons(c, ["data gate"])
+    assert out["status"] == "insufficient" and out["reasons"] == ["data gate"]
+    assert out["gate"] == {"status": "x"} and out["label"] == "custom"
+    assert MC.with_reasons(c, []) is c
+
+
+def test_skipped_method_value_is_dash_when_released():
+    from app import report_extras as R
+    va = {"release": {"status": "distributable_assumption_led"},
+          "method_chain": {"trace": [
+              dict(MC.candidate("fcff_dcf", per_share=100, reasons=["x"]), rank=1,
+                   role="primary", decision="skipped"),
+              dict(MC.candidate("pe_fy_scenario", per_share=120, per_share_down=90), rank=2,
+                   role="fallback", decision="selected")]}}
+    rows = R.method_chain_exhibit(va)["data"]["rows"]
+    assert rows[0][2] == "-" and rows[1][2].startswith("Rp")
+
+
+def test_guidance_departure_must_cite_the_guidance_item():
+    from agents.forecast_assumptions import run as agent
+    official = {"source_url": "https://issuer.example/1h26.pdf", "published_at": "2026-08-20",
+                "period": "1H26", "period_end": "2026-06-30",
+                "guidance": [{"fact": "capex plan"}],
+                "metrics": {"revenue": 100.0, "net_profit": 10.0}}
+    source = {"ticker": "UJI", "as_of": "2026-09-24", "model_profile": "going_concern_fcff",
+              "official": official, "news": []}
+    base = {"h2_revenue_to_h1": 1.6, "h2_net_margin_pct": 11.0,
+            "rationale": "Pendapatan H2 naik tajam karena kontrak baru yang sudah diumumkan.",
+            "source_url": official["source_url"], "published_at": official["published_at"],
+            "thesis_points": ["Kontrak baru menaikkan volume pendapatan H2 secara material.",
+                              "Margin laba bersih stabil karena biaya tetap terserap volume."],
+            "catalysts_risks": [
+                {"item": "Kontrak baru", "timing": "H2 2026",
+                 "driver_path": "Volume kontrak menaikkan pendapatan dan laba H2.",
+                 "direction": "Positif", "source_ids": ["official"]},
+                {"item": "Biaya bahan", "timing": "Sepanjang 2026",
+                 "driver_path": "Kenaikan biaya bahan menekan margin laba bersih.",
+                 "direction": "Negatif", "source_ids": ["official"]}]}
+    uncited = agent._validate_earnings(dict(base, source_ids=["official"]), source)
+    assert any("departs from the 1H run-rate" in p for p in uncited)
+    cited = agent._validate_earnings(dict(base, source_ids=["official", "guidance:0"]), source)
+    assert cited == []
+
+
+def test_failed_scenario_subagent_is_not_cached(tmp_path, monkeypatch):
+    from agents.forecast_assumptions import run as agent
+    failed = {"status": "partial", "plan": {"news_effects": []}, "interim_status": "not_run",
+              "earnings_status": "invalid", "outyears_status": "not_run", "stage_status": "validated"}
+    monkeypatch.setattr(agent, "run_live", lambda intake: dict(failed))
+    intake_ = {"ticker": "UJI", "as_of": "2026-09-24", "model_profile": "going_concern_fcff",
+               "latest_official_actual": {}, "official_evidence": {}, "news": []}
+    agent.run_cached(intake_, store_dir=tmp_path)
+    assert not list(tmp_path.glob("UJI-*.json"))

@@ -216,6 +216,24 @@ def _driver_evidence_inputs(official_evidence, payout, payout_basis,
     return evidence or None
 
 
+def _cache_close_provenance(ticker, price, price_date):
+    """Provenance of the Sectors overview close, cross-checked with the cached
+    daily series: the same date must carry the same close (0,5% tolerance)."""
+    verified = False
+    try:
+        for _, payload in cache.payloads(f"/daily/{ticker}/"):
+            for row in (payload or {}).get("data") or []:
+                if (isinstance(row, dict) and str(row.get("date"))[:10] == str(price_date)[:10]
+                        and isinstance(row.get("close"), (int, float)) and price
+                        and abs(row["close"] / price - 1) <= 0.005):
+                    verified = True
+    except (OSError, ValueError, FileNotFoundError):
+        verified = False
+    return {"source": f"sectors_cache /company/report/{ticker}/ overview; /daily/{ticker}/",
+            "date": str(price_date)[:10] if price_date else None,
+            "kind": "sectors_cache", "verified": verified}
+
+
 def load(ticker, as_of=None):
     """Build typed inputs from cache. Returns (intake, g1_log)."""
     t = ticker.upper()
@@ -247,9 +265,12 @@ def load(ticker, as_of=None):
     report_date = as_of or price_date
     if date.fromisoformat(str(report_date)[:10]) < date.fromisoformat(str(price_date)[:10]):
         raise ValueError("report date cannot precede the cached market price date")
+    price_provenance = _cache_close_provenance(t, price, price_date)
     quote = market_quote.load(t, report_date, price_date)
     if quote:
         price, price_date = float(quote["price"]), quote["date"]
+        price_provenance = {"source": quote.get("source_url"), "date": price_date,
+                            "kind": "quote_pack", "verified": True}
         notes.append(f"harga memakai {quote['source_title']} ({price_date}); "
                      f"{quote['source_url']}.")
     official_evidence = issuer_evidence.load(t, report_date) if report_date else None
@@ -431,6 +452,7 @@ def load(ticker, as_of=None):
         "fx_spot": fx_spot,
         "market_quote": quote,
         "price": price, "price_date": price_date, "as_of": report_date,
+        "price_provenance": price_provenance,
         "shares": shares, "market_cap": market_cap,
         "annuals": annuals, "base_year": base["year"],
         "payout": payout, "payout_basis": payout_basis,

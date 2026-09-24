@@ -58,7 +58,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # Engine + LLM call the same tools; critical blockers force draft.
     try:
         from .harness import run_all as _harness_run
-        harness = _harness_run(doc_in, fc, va, doc)
+        harness = _harness_run(doc_in, fc, va, doc, assumption_status=assumption_status)
     except Exception as e:  # fail closed
         harness = {"tool": "run_all", "status": "draft_non_distributable",
                    "blockers": [f"harness error: {e}"], "log_gate": {}}
