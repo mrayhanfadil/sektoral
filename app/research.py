@@ -7,10 +7,11 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import build, intake, news_fetch, news_sources, research_context, tavily, ui
+from . import build, fmt, intake, news_fetch, news_sources, research_context, tavily, ui
 from .progress import emit
 
 _TRACE_CSS = (
+    ".btn.ghost{background:var(--surface);color:var(--blue);border:1px solid var(--rule);margin-left:8px}"
     "*{box-sizing:border-box}body{margin:0;font:16px/1.6 var(--font);background:var(--canvas);"
     "color:var(--ink)}main{max-width:920px;margin:auto;padding:32px 20px 56px}"
     "header{background:var(--surface);border:1px solid var(--rule);border-top:4px solid var(--blue);"
@@ -82,7 +83,7 @@ def _analyst_html(intel, esc):
 
 
 def _trace_html(ticker, research, report_name, forecast_assumptions=None,
-                news_deepdive=None, analyst=None, news_sources=None):
+                news_deepdive=None, analyst=None, news_sources=None, report=None):
     """A small, readable audit view for the analyst and the judging demo."""
     brief = research.get("document") if isinstance(research, dict) else None
     brief = brief if isinstance(brief, dict) else {}
@@ -91,15 +92,29 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
     insights = brief.get("insights") or []
     esc = lambda value: html.escape(str(value or ""))
     short = lambda value: esc(str(value)[:180] + ("…" if len(str(value)) > 180 else ""))
+    # Header facts come from the built report; the research brief may have
+    # failed validation and then carries no date or status.
+    report = report or {}
+    as_of = report.get("as_of") or brief.get("as_of")
+    published = str(report.get("status") or "").startswith("distributable")
+    if published and report.get("rating"):
+        status = f"Terbit · {report['rating']} · TP Rp{fmt.rp(report.get('target_price'))}"
+    elif report:
+        status = "Draf · rating ditahan"
+    else:
+        status = brief.get("status")
+    method = str(report.get("target_method") or "").split(" [")[0]
     parts = [
         "<!doctype html><html lang='id'><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width,initial-scale=1'>",
         f"<title>{esc(ticker)} | Jejak riset Sektoral</title>",
-        f"<style>{ui.TOKENS}{_TRACE_CSS}</style><main>",
+        f"<style>{ui.font_faces()}{ui.TOKENS}{_TRACE_CSS}</style><main>",
         f"<header><div class='eyebrow'>Jejak agent</div><h1>Riset {esc(ticker)}</h1><div class='meta'>"
-        f"<span>Data: Sectors</span><span>As-of {esc(brief.get('as_of'))}</span>"
-        f"<span>Status {esc(brief.get('status'))}</span></div></header>",
-        f"<p><a class='btn' href='{esc(report_name)}'>Buka company update</a></p>",
+        f"<span>Data per {esc(as_of)}</span><span>{esc(status)}</span>"
+        + (f"<span>Metode: {esc(method)}</span>" if method and published else "")
+        + "</div></header>",
+        f"<p><a class='btn' href='{esc(report_name)}'>Buka company update</a> "
+        "<a class='btn ghost' href='/laporan'>Galeri laporan</a></p>",
         *_analyst_html(analyst, esc),
         "<h2>Ringkasan agent riset</h2>",
         f"<div class='card'>{esc(brief.get('summary') or research.get('error') or 'Belum ada briefing tervalidasi.')}</div>",
@@ -390,7 +405,8 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                                       assumption_result,
                                       forecast_intake.get("news_full"),
                                       analyst=intel,
-                                      news_sources=audit["news_sources"]), encoding="utf-8")
+                                      news_sources=audit["news_sources"],
+                                      report=audit["report"]), encoding="utf-8")
     try:
         (destination / f"{t}-manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
