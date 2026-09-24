@@ -280,6 +280,15 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         "peer_exit_low": peer_exit_low,
         "peer_exit_high": peer_exit_high,
     }
+    if is_bank:
+        # Gate 5 judges the method that sets the bank TP (DDM), never the
+        # illustrative FCFF screen; DCF-only terminal/exit checks do not apply.
+        tp_ddm = (ddm_result or {}).get("tp_gordon")
+        gate_inputs["upside_pct"] = ((tp_ddm / intake["price"] - 1) * 100.0
+                                     if isinstance(tp_ddm, (int, float)) and tp_ddm > 0
+                                     else None)
+        gate_inputs.pop("terminal_value_pct_of_ev", None)
+        gate_inputs.pop("implied_exit_ev_ebitda", None)
     verdict = model_profiles.evaluate(gate_inputs)
 
     if pv_tv / ev_g > 0.75:
@@ -319,7 +328,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
                 and ddm_result.get("tp_gordon"):
             tp = round(ddm_result["tp_gordon"] / 10) * 10
             upside = tp / intake["price"] - 1
-            if abs(upside) > 0.50:
+            if model_profiles.is_extreme_upside(upside):
                 release_result = {"status": "draft_non_distributable",
                                   "blockers": ["extreme DDM target needs a sourced fundamental thesis"]}
                 tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
@@ -349,7 +358,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
                 "G3.6_peer": "dilabeli" if not intake["peers"] else "lolos",
                 "G3.7_band": "dilabeli",
                 "G3.8_method_divergence": "dilabeli",
-                "G3.9_extreme_thesis": ("lolos" if (upside is not None and abs(upside) <= 0.50) else "gagal"),
+                "G3.9_extreme_thesis": ("lolos" if (upside is not None and
+                                                    not model_profiles.is_extreme_upside(upside))
+                                        else "gagal"),
             }
             impl = {"per": tp / (f_last["net"] / intake["shares"]) if (tp and f_last["net"] > 0) else None,
                     "ev_ebitda": None,

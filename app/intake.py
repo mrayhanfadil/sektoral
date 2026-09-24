@@ -175,18 +175,26 @@ def _driver_evidence_inputs(official_evidence, payout, payout_basis,
             evidence["equity"] = _row(
                 f"Sourced book equity {equity:,.0f} from official balance sheet; "
                 "base for BVPS/ROE/capital bridge.")
-        # Payout: only sourced when an official payout/DPS history exists;
-        # a bare analyst 25% assumption is labeled but cannot pass provenance.
-        has_official_payout = isinstance(dps_hist, list) and len(dps_hist) > 0
-        if has_official_payout:
-            evidence["payout"] = _row(
-                f"Sourced payout {payout*100:.1f}% ({payout_basis}); DPS history supports DDM.")
-        elif isinstance(payout, (int, float)):
-            evidence["payout"] = {"source": "analyst assumption 25% (tanpa payout historis di data Sectors)",
-                                  "source_date": source_date, "page": page,
-                                  "unit": "fraction",
-                                  "note": f"Unverified payout assumption {payout_basis}; "
-                                          "official payout evidence missing."}
+        # Payout provenance follows where the number came from: the 25%
+        # analyst default is never sourced; a Sectors payout ratio (with or
+        # without DPS history) is cache-sourced, not an interim-release fact.
+        if isinstance(payout, (int, float)):
+            if str(payout_basis or "").startswith("asumsi analis"):
+                evidence["payout"] = {
+                    "source": f"asumsi analis {payout*100:.0f}% (tanpa payout historis di data Sectors)",
+                    "source_date": source_date, "page": page, "unit": "fraction",
+                    "note": f"Unverified payout assumption ({payout_basis}); "
+                            "official payout evidence missing."}
+            else:
+                has_dps = isinstance(dps_hist, list) and len(dps_hist) > 0
+                evidence["payout"] = {
+                    "source": "sectors_cache dividend payout_ratio"
+                              + (" + historical_dividends" if has_dps else ""),
+                    "source_date": str(report_date or source_date)[:10],
+                    "page": None, "unit": "fraction",
+                    "note": f"Payout {payout*100:.1f}% ({payout_basis})"
+                            + ("; DPS history supports DDM." if has_dps else "."),
+                    "origin": "official_actual_base"}
         # Alias for release compatibility: profit == net_profit.
         if "net_profit" in evidence:
             evidence["profit"] = evidence["net_profit"]
