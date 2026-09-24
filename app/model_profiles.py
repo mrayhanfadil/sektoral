@@ -391,7 +391,7 @@ def _eval_gate5(inputs: dict, gates_passed: list[str], gates_failed: list[str], 
     if implied_exit is not None and peer_low is not None and peer_high is not None:
         if not (peer_low <= implied_exit <= peer_high):
             gates_failed.append("5_exit_multiple_out_of_range")
-            reasons.append(f"5 implied exit EV/EBITDA {implied_exit:.1f}× outside peer range {peer_low:.1f}-{peer_high:.1f}× → WACC/g out of sync with market pricing, cross-check vs EV/EBITDA relative valuation")
+            reasons.append(f"5 implied exit EV/EBITDA {implied_exit:.1f}× outside historical range {peer_low:.1f}-{peer_high:.1f}× → WACC/g out of sync with market pricing, cross-check vs EV/EBITDA relative valuation")
         else:
             gates_passed.append("5_exit_multiple_in_range")
 

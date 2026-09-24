@@ -196,3 +196,14 @@ def test_draft_method_note_uses_chain_label():
     from app import narrative
     assert narrative._method_label("relative_pe") == MC.LABELS["relative_pe"]
     assert narrative._method_label("rnav") == "RNAV LoM (Rp)"
+
+
+def test_gate5_exit_range_is_own_ev_ebitda_history_not_peer_pe():
+    from app import intake as I
+    doc_in, _ = I.load("SSIA", as_of="2026-09-24")
+    values = [h["value"] for h in doc_in["historical_ev_ebitda"]]
+    assert values and all(0 < v <= 100 for v in values) and len(values) <= 5
+    from app import forecast, valuation
+    va = valuation.build(doc_in, forecast.build(doc_in))
+    gate = va["gate_inputs"]
+    assert (gate["peer_exit_low"], gate["peer_exit_high"]) == (min(values), max(values))
