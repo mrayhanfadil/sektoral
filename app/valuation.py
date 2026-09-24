@@ -126,6 +126,40 @@ def _rnav_candidate(intake, fc, lom, wacc):
         detail={"discount": wacc})
 
 
+def _earnings_candidate(intake, fc, assumption_status):
+    """PER median peer x EPS FY dari skenario laba agen; gate sendiri."""
+    scenario = fc.get("earnings_scenario") or {}
+    evidence = intake.get("official_evidence") or {}
+    balance = evidence.get("balance_sheet") or {}
+    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    usd = evidence.get("reporting_currency") == "USD"
+    fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
+    pes = method_chain.peer_pes(intake.get("peers"))
+    detail = {"shares": shares, "peer_count": len(pes), "fx": fx if usd else None,
+              "year": scenario.get("year"),
+              "attributable_basis": scenario.get("attributable_basis")}
+    eps = None
+    net = (scenario.get("full_year") or {}).get("net_profit_attributable")
+    if isinstance(net, (int, float)) and isinstance(shares, (int, float)) and shares > 0 \
+            and isinstance(fx, (int, float)) and fx > 0:
+        eps = net * fx / shares
+        detail["eps_idr"] = eps
+    ps = down = None
+    if len(pes) >= method_chain.MIN_PEERS and eps and eps > 0:
+        q1, median, q3 = method_chain.pe_quartiles(pes)
+        detail.update(q1_pe=q1, median_pe=median, q3_pe=q3,
+                      per_share_up=q3 * eps)
+        ps, down = median * eps, q1 * eps
+    gate = release.assess_earnings_led(intake, fc, {"detail": detail}, assumption_status)
+    label_year = f"FY{scenario['year'] % 100:02d}F" if scenario.get("year") else "FY"
+    candidate = method_chain.candidate(
+        "pe_fy_scenario", per_share=ps, per_share_down=down,
+        reasons=gate["blockers"], labels=gate["limitations"], detail=detail)
+    candidate["label"] = (f"{label_year} PER median peer x EPS skenario analis")
+    candidate["gate"] = gate
+    return candidate
+
+
 def build(intake, fc, analyst_target=False, assumption_status=None):
     g3, notes = {}, []
     t = intake["ticker"]
@@ -382,6 +416,19 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
     if profile in ("going_concern_fcff", "financial_ddm"):
         candidates["relative_pe"] = method_chain.relative_pe(
             intake.get("peers"), fc["rows"][0].get("eps"), shares, mcap)
+        # DCF/DDM/P-BV/PER-forward all value the screening forecast. While
+        # its data gates fail they are insufficient, so the chain can reach
+        # the earnings-scenario route that carries its own evidence gate.
+        forecast_data = release.common_blockers(profile, intake, fc)
+        if forecast_data:
+            for key in ("fcff_dcf", "ddm", "pbv_roe", "relative_pe"):
+                c = candidates.get(key)
+                if c:
+                    candidates[key] = method_chain.candidate(
+                        key, per_share=c["per_share"], per_share_down=c["per_share_down"],
+                        reasons=c["reasons"] + forecast_data, labels=c["labels"],
+                        detail=c["detail"])
+        candidates["pe_fy_scenario"] = _earnings_candidate(intake, fc, assumption_status)
 
     chain = method_chain.run(profile, candidates, price)
     selected = chain["selected"]
@@ -402,6 +449,14 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         release_result["route"], release_result["method_key"] = chain["route"], selected
         extreme_blocker = method_chain.summary_blocker(chain)
         if extreme_blocker and release_result["status"] != "draft_non_distributable":
+            release_result.update(status="draft_non_distributable",
+                                  blockers=release_result["blockers"] + [extreme_blocker])
+    elif selected == "pe_fy_scenario":
+        release_result = dict(sel["gate"])
+        release_result["underlying_primary"] = release.common_blockers(profile, intake, fc)
+        release_result["route"], release_result["method_key"] = chain["route"], selected
+        extreme_blocker = method_chain.summary_blocker(chain)
+        if extreme_blocker:
             release_result.update(status="draft_non_distributable",
                                   blockers=release_result["blockers"] + [extreme_blocker])
     elif profile == "unsupported":
@@ -437,7 +492,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         upside = tp / price - 1
         if tp_down is None and sel["per_share_down"] is not None:
             tp_down = round(sel["per_share_down"] / 10) * 10
-        rating = (rating_mod.classify(upside) if selected == "ev_ebitda_fy"
+        rating = (rating_mod.classify(upside) if selected in ("ev_ebitda_fy", "pe_fy_scenario")
                   else verdict.rating_override or rating_mod.classify(upside))
         if selected == "ev_ebitda_fy":
             tp_down, grid = None, {}
@@ -449,6 +504,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
 
     if tp is not None and f_last["net"] > 0:
         impl["per"] = tp / (f_last["net"] / shares)
+    if selected == "pe_fy_scenario" and tp is not None:
+        impl["per"] = tp / sel["detail"]["eps_idr"]
     if selected not in (None, "fcff_dcf") and tp is not None:
         impl["ev_ebitda"] = ((tp * shares + net_debt) / f_last["ebitda"]
                              if f_last["ebitda"] > 0 and not is_bank else None)

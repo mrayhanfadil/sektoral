@@ -40,6 +40,40 @@ def _interim_scenario(intake, plan):
                 "capital_expenditure": metrics["capital_expenditure"] + h2_capex}}
 
 
+def _earnings_scenario(intake, plan):
+    """FY laba dari aktual 1H resmi + asumsi H2 agen (going concern/bank).
+
+    Hanya revenue dan laba yang dipakai; tanpa EBITDA/capex, jadi hasilnya
+    skenario laba berlabel, bukan forecast driver produksi.
+    """
+    scenario = (plan or {}).get("earnings_scenario")
+    actual = intake.get("latest_official_actual") or {}
+    metrics = actual.get("metrics") or {}
+    if (not isinstance(scenario, dict) or not actual or
+            not str(actual.get("period") or "").startswith("1H") or
+            any(not isinstance(metrics.get(key), (int, float)) for key in
+                ("revenue", "net_profit"))):
+        return None
+    h1_revenue, h1_net = metrics["revenue"], metrics["net_profit"]
+    h2_revenue = h1_revenue * scenario["h2_revenue_to_h1"]
+    h2_net = h2_revenue * scenario["h2_net_margin_pct"] / 100
+    attributable = metrics.get("net_profit_attributable")
+    if isinstance(attributable, (int, float)) and h1_net > 0 and attributable > 0:
+        share, basis = attributable / h1_net, "porsi induk 1H resmi"
+    else:
+        share, basis = 1.0, "laba konsolidasi (porsi induk tidak dilaporkan terpisah)"
+    full_net = h1_net + h2_net
+    return {"year": int(str(actual["period_end"])[:4]),
+            "unit": actual.get("unit"), "source_url": scenario.get("source_url"),
+            "published_at": scenario.get("published_at"),
+            "rationale": scenario.get("rationale"), "assumptions": scenario,
+            "h1": {"revenue": h1_revenue, "net_profit": h1_net},
+            "h2": {"revenue": h2_revenue, "net_profit": h2_net},
+            "full_year": {"revenue": h1_revenue + h2_revenue, "net_profit": full_net,
+                          "net_profit_attributable": full_net * share},
+            "attributable_share": share, "attributable_basis": basis}
+
+
 def _outyear_scenario(interim, plan):
     """Calculate earnings from four validated, explicit agent assumption rows."""
     assumptions = (plan or {}).get("outyear_scenario")
@@ -300,6 +334,8 @@ def build(intake, n_years=5, assumption_plan=None):
     return {"rows": rows, "assumptions": assumptions, "g2": g2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
+            "earnings_scenario": (None if is_mining else
+                                  _earnings_scenario(intake, normalized_plan)),
             "outyear_scenario": _outyear_scenario(interim_scenario, assumption_plan),
             "operating_bridge": operating_bridge,
             "driver_evidence": driver_evidence,

@@ -19,6 +19,19 @@ from .schema import check_output_schema
 from .profiles import normalize
 
 
+def _earnings_gate_passes(intake, forecast, valuation) -> bool:
+    from app import release as _release
+    trace = next((t for t in (valuation.get("method_chain") or {}).get("trace") or []
+                  if t.get("key") == "pe_fy_scenario"), None)
+    if not trace:
+        return False
+    status = (trace.get("gate") or {}).get("status")
+    again = _release.assess_earnings_led(
+        intake, forecast, {"detail": trace.get("detail") or {}},
+        "validated" if status == "distributable_assumption_led" else None)
+    return again["status"] == "distributable_assumption_led"
+
+
 def run_all(intake: dict | None = None, forecast: dict | None = None,
             valuation: dict | None = None, doc: dict | None = None) -> dict:
     intake, forecast, valuation = intake or {}, forecast or {}, valuation or {}
@@ -63,12 +76,19 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
     # findings in the gate trace without treating them as blockers for this
     # route. Every other harness check remains mandatory.
     assumption_release = valuation.get("release") if isinstance(valuation, dict) else None
+    selected_method = ((valuation.get("method_chain") or {}).get("selected")
+                       if isinstance(valuation, dict) else None)
     assumption_led = (
-        profile == "finite_life_mining" and
         isinstance(assumption_release, dict) and
         assumption_release.get("status") == "distributable_assumption_led" and
-        assumption_release.get("method") == "FY26F EV/EBITDA 8x" and
-        not (assumption_release.get("blockers") or [])
+        not (assumption_release.get("blockers") or []) and (
+            (profile == "finite_life_mining" and
+             assumption_release.get("method") == "FY26F EV/EBITDA 8x") or
+            # Going concern / bank: FY PER on a validated earnings scenario,
+            # re-assessed here from the same inputs (not trusted blindly).
+            (profile in ("going_concern_fcff", "financial_ddm") and
+             selected_method == "pe_fy_scenario" and
+             _earnings_gate_passes(intake, forecast, valuation)))
     )
     g2_blockers = list(r2["blockers"])
     if assumption_led:

@@ -325,8 +325,11 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                          news_evidence={"rows": combined_news, "full": combined_full,
                                         "search": web_search},
                          analyst_target=analyst_target,
-                         assumption_status=assumption_result.get(
-                             "interim_status", assumption_result.get("status")))
+                         assumption_status=next(
+                             (assumption_result[key] for key in
+                              ("earnings_status", "interim_status")
+                              if assumption_result.get(key) not in (None, "not_run")),
+                             assumption_result.get("status")))
     normalized_plan = (report.get("forecast_assumptions") or {}).get("plan")
     if isinstance(normalized_plan, dict) and isinstance(assumption_plan, dict):
         if normalized_plan != assumption_plan:

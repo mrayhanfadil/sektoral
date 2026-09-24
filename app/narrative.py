@@ -3186,6 +3186,121 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
     return doc
 
 
+def _earnings_headline(rating, label):
+    """Forward thesis with a verb, at most ten words (spec §5.2)."""
+    return {
+        "Buy": f"Laba {label} Menopang Ruang Kenaikan Harga",
+        "Hold": f"Laba {label} Sejalan, Harga Mendekati Nilai Wajar",
+        "Sell": f"Laba {label} Tidak Menopang Valuasi Saat Ini",
+    }.get(rating, f"Laba {label} Menunggu Konfirmasi")
+
+
+def _build_earnings_led(intake, fc, va, g1, method="auto"):
+    """Going concern / bank: FY PER peer on the validated earnings scenario."""
+    doc = _build_general_draft(intake, fc, va, g1, method=method)
+    scenario = fc["earnings_scenario"]
+    sel = next(t for t in va["method_chain"]["trace"] if t["key"] == "pe_fy_scenario")
+    d = sel["detail"]
+    label = f"FY{scenario['year'] % 100:02d}F"
+    usd = (intake.get("official_evidence") or {}).get("reporting_currency") == "USD"
+    scale, unit = (1e6, "US$ juta") if usd else (1e9, "Rp miliar")
+    money = lambda v: "-" if v is None else (
+        f"({fmt._id(abs(v) / scale, 1)})" if v < 0 else fmt._id(v / scale, 1))
+    meta = doc["meta"]
+    meta.update(status="distributable_assumption_led",
+                model_profile=intake.get("model_profile"), rating=va["rating"],
+                tp=va["tp"], upside_persen=va["upside"] * 100,
+                status_rating=va["rating"], illustrative_scenarios=False)
+    doc["method"] = va["method"]
+    doc["log_gate"]["G3"] = va["g3"]
+    doc["log_gate"]["release"] = va["release"]
+    doc["cover"]["headline"] = _earnings_headline(va["rating"], label)
+    doc["cover"]["bullets"][2] = _trim(
+        f"{va['rating']}: target Rp{fmt.rp(va['tp'])} ({fmt.pct(va['upside'])}) dari "
+        f"PER median peer {fmt.mult(d['median_pe'], 1)} atas EPS {label}.", 30)
+    skipped = [t["short"] for t in va["method_chain"]["trace"] if t["decision"] == "skipped"]
+    valuation_text = (
+        f"EPS {label} Rp{fmt.rp(round(d['eps_idr']))} berasal dari laba 1H resmi dan "
+        f"asumsi semester kedua; basis {scenario['attributable_basis']}. PER median "
+        f"{d['peer_count']} peer {fmt.mult(d['median_pe'], 1)} menghasilkan target "
+        f"Rp{fmt.rp(va['tp'])}, dengan rentang kuartil Rp{fmt.rp(va['tp_down'])} "
+        f"sampai Rp{fmt.rp(round(d['per_share_up'] / 10) * 10)}. "
+        + (f"{', '.join(skipped)} belum dipakai karena forecast driver belum "
+           "direkonsiliasi. " if skipped else "")
+        + "Arus kas, capex dan neraca sesudah periode interim belum dimodelkan.")
+    doc["cover"]["paragraf"][2] = {"judul": "Target harga berbasis laba FY",
+                                   "isi": valuation_text}
+    h1, h2, fy = scenario["h1"], scenario["h2"], scenario["full_year"]
+    a = scenario["assumptions"]
+    actual_title = ((intake.get("latest_official_actual") or {}).get("source_title")
+                    or "rilis interim resmi")
+    to_idr = d.get("fx") or 1.0
+    key_fin = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
+    if key_fin and label in key_fin["data"]["cols"]:
+        col = key_fin["data"]["cols"].index(label)
+        for row in key_fin["data"]["rows"]:
+            metric = ("revenue" if row[0].startswith("Pendapatan") else
+                      "net_profit" if row[0].startswith("Laba bersih") else None)
+            if metric and col < len(row) and "Rp miliar" in row[0]:
+                row[col] = fmt._id(fy[metric] * to_idr / 1e9, 1)
+        key_fin["catatan_sumber"] = (
+            (key_fin.get("catatan_sumber") or "") +
+            f" {label}: skenario laba analis (1H resmi + asumsi H2); EBITDA tidak dimodelkan.")
+    bridge = {
+        "n": 0, "judul": f"Skenario laba {label}: aktual 1H dan asumsi H2",
+        "tipe": "tabel",
+        "data": {"cols": [unit, "1H aktual", "H2 asumsi", label],
+                 "rows": [
+                     ["Pendapatan", money(h1["revenue"]), money(h2["revenue"]),
+                      money(fy["revenue"])],
+                     ["Laba bersih", money(h1["net_profit"]), money(h2["net_profit"]),
+                      money(fy["net_profit"])],
+                     ["Laba pemilik induk", "-", "-", money(fy["net_profit_attributable"])],
+                     ["Asumsi", "-",
+                      f"H2/H1 {fmt._id(a['h2_revenue_to_h1'], 2)}x; margin "
+                      f"{fmt.pct(a['h2_net_margin_pct'] / 100)}", "-"]]},
+        "catatan_sumber": (
+            f"Sumber: {actual_title} ({scenario['published_at']}); "
+            "H2 adalah asumsi analis dari rilis dan berita bertanggal, bukan panduan "
+            f"emiten. Dasar asumsi: {scenario.get('rationale') or '-'}")}
+    rows = []
+    for name, pe in (("Kuartil bawah", d["q1_pe"]), ("Median (basis)", d["median_pe"]),
+                     ("Kuartil atas", d["q3_pe"])):
+        value = round(pe * d["eps_idr"] / 10) * 10
+        rows.append([name, fmt.mult(pe, 1), f"Rp{fmt.rp(value)}",
+                     fmt.pct(value / intake["price"] - 1)])
+    sensitivity = {
+        "n": 0, "judul": f"Target harga: PER peer x EPS {label}", "tipe": "tabel",
+        "data": {"cols": ["PER peer", "Kelipatan", "Nilai per saham", "Terhadap harga"],
+                 "rows": rows},
+        "catatan_sumber": (
+            f"Sumber: PER TTM {d['peer_count']} peer dari data Sectors (0-50x); saham "
+            "dari neraca interim resmi" + (f"; kurs Rp{fmt.rp(d['fx'])}/USD" if d.get("fx") else "")
+            + f"; harga penutupan {intake['price_date']}.")}
+    doc["bagian"].append({"halaman": 0, "judul": f"Target harga berbasis laba {label}",
+                          "layout": "stack", "paragraf": [valuation_text],
+                          "exhibit": [bridge, sensitivity]})
+    for page in doc["bagian"]:
+        for exhibit in page.get("exhibit") or []:
+            if exhibit.get("judul") == "Pemeriksaan sebelum rating dan target harga":
+                exhibit["judul"] = "Bukti lanjutan untuk menguji target harga"
+                exhibit["data"]["rows"][-1][1] = (
+                    "Target berbasis PER peer atas skenario laba diterbitkan; forecast "
+                    "driver tetap perlu direkonsiliasi sebelum DCF/DDM dipakai.")
+    doc["exhibits"].extend([bridge, sensitivity])
+    doc["catatan_metodologi"] = [
+        f"Rating dan target harga memakai PER median peer atas EPS {label}; EPS adalah "
+        "skenario analis dari aktual 1H resmi dan asumsi H2, bukan forecast driver.",
+        f"Rantai metode: {', '.join(skipped) or '-'} dilewati karena forecast driver belum "
+        "direkonsiliasi; metode ini adalah langkah terakhir rantai.",
+        f"PER peer adalah TTM dari data Sectors dengan {d['peer_count']} peer valid; "
+        "peer dianggap sebanding, dan kuartil bawah/atas menjadi sensitivitas.",
+        f"EPS memakai {scenario['attributable_basis']}.",
+        "Tanda '-' berarti angka tidak tersedia, bukan nol.",
+    ]
+    return doc
+
+
 def _change_sentence(label, value, prior, period, prior_period, money_phrase):
     """One metric per sentence (spec §5.1: at most three figures per sentence).
 
@@ -3541,6 +3656,8 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
     if method == "rnav" and not intake.get("mineops"):
         raise ValueError("method rnav ditolak: tanpa overlay operasional di data Sectors")
     if (va.get("release") or {}).get("status") == "distributable_assumption_led":
+        if (va.get("method_chain") or {}).get("selected") == "pe_fy_scenario":
+            return _build_earnings_led(intake, fc, va, g1, method=method)
         return _build_assumption_led(intake, fc, va, g1, method=method)
     if (va.get("release") or {}).get("status") != "distributable":
         return _build_draft(intake, fc, va, g1, method=method,
