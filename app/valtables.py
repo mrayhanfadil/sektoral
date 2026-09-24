@@ -162,7 +162,7 @@ def sens_matrix_5x3(intake, fc, val):
 
     def _tp(dw, gg):
         c = _valuation._core(fc, sh, w0 + dw, gg, m, nd)
-        return round((c["ps_g"] + c["ps_x"]) / 2 / 10) * 10
+        return fmt.tick((c["ps_g"] + c["ps_x"]) / 2)
 
     cols = ["WACC / g terminal"] + [
         f"g {fmt.pct(gg)}" + (" (base)" if gg == g0 else "") for gg in ggs]

@@ -260,6 +260,23 @@ def _trim(s, cap=30):
     return " ".join(w[:cap]) if len(w) > cap else s
 
 
+def _bullet(s, cap=30):
+    """One complete sentence of at most ``cap`` words (spec §5.2 bullets).
+
+    Takes the first sentence; if it is still too long, ends at the last
+    clause break (comma/semicolon) inside the limit instead of mid-phrase.
+    """
+    first = re.split(r"(?<=[.!?])\s+", s.strip(), maxsplit=1)[0].rstrip(" .")
+    words = first.split()
+    if len(words) <= cap:
+        return first + "."
+    head = " ".join(words[:cap])
+    cut = max(head.rfind(","), head.rfind(";"))
+    if cut >= len(head) // 2:
+        head = head[:cut]
+    return head.rstrip(" ,;") + "."
+
+
 def _word_cut(s, cap=64):
     s = str(s).strip()
     if len(s) <= cap:
@@ -1880,7 +1897,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                      ["Ekuitas induk setelah utang dan minoritas"] +
                      [check_money(item["equity_usd"]) for item in crosscheck["values"]],
                      ["Nilai skenario (Rp/saham)"] +
-                     [f"Rp{fmt.rp(round(item['per_share_idr'] / 10) * 10)}"
+                     [f"Rp{fmt.rp(fmt.tick(item['per_share_idr']))}"
                       if item["per_share_idr"] is not None else "n.m."
                       for item in crosscheck["values"]]],
                     f"Sumber EBITDA skenario: {crosscheck['source_url']}; "
@@ -2057,9 +2074,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                 value_exhibit = add(
                     "Perbandingan nilai model lama, bukan target harga",
                     ["Perhitungan ilustratif", "Hasil", "Batas penggunaan"],
-                    [["Gordon perpetual", f"Rp{fmt.rp(round(gordon / 10) * 10)}/saham",
+                    [["Gordon perpetual", f"Rp{fmt.rp(fmt.tick(gordon))}/saham",
                       "Terminal perpetual tidak cocok untuk aset tambang berumur terbatas."],
-                     ["Exit EV/EBITDA", f"Rp{fmt.rp(round(exit_value / 10) * 10)}/saham",
+                     ["Exit EV/EBITDA", f"Rp{fmt.rp(fmt.tick(exit_value))}/saham",
                       "Kelipatan exit belum dijembatani ke LoM per aset."],
                      ["Selisih dua metode", fmt.pct(divergence),
                       "Tidak dirata-ratakan menjadi target harga."],
@@ -2078,7 +2095,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                     "Sensitivitas Gordon ilustratif (Rp/saham)",
                     ["WACC / g"] + [fmt.pct(rate) for rate in grid["growth_rates"]],
                     [[fmt.pct(rate)] + [
-                        f"Rp{fmt.rp(round(value / 10) * 10)}" if value is not None else "n.m."
+                        f"Rp{fmt.rp(fmt.tick(value))}" if value is not None else "n.m."
                         for value in values] for rate, values in grid["rows"]],
                     "Sumber: screen Gordon yang sama; bukan sensitivitas NAV tambang. "
                     "Basis pusat memakai asumsi lama dan bukan target harga.")
@@ -2484,10 +2501,10 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
         for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
             _cg_rows.append(
                 [f"CoE {fmt.pct(_re + _d)}" + (" (base)" if _d == 0 else "")] +
-                [fmt.rp(round(ddm.value_bank(
+                [fmt.rp(fmt.tick(ddm.value_bank(
                     _nets, None, intake.get("dps_hist") or [],
                     intake["shares"], _re + _d, _gg, _roae,
-                    _bvps)["tp_gordon"] / 10) * 10) +
+                    _bvps)["tp_gordon"])) +
                  (" *" if _d == 0 and _gg == _g else "")
                  for _gg in (_g - 0.01, _g, _g + 0.01)])
         add("Sensitivitas DDM (CoE x g)",
@@ -2500,7 +2517,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
         for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
             _cr_rows.append(
                 [f"CoE {fmt.pct(_re + _d)}" + (" (base)" if _d == 0 else "")] +
-                [fmt.rp(round(((_rr - _g) / (_re + _d - _g)) * _bvps / 10) * 10)
+                [fmt.rp(fmt.tick(((_rr - _g) / (_re + _d - _g)) * _bvps))
                  for _rr in (_roae - 0.04, _roae, _roae + 0.04)])
         add("Sensitivitas Inverse CoE (CoE x ROE)",
             ["CoE / ROE"] + [f"ROE {fmt.pct(_rr)}" for _rr in
@@ -2513,9 +2530,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
         p_ddm = (f"Driver utama valuasi bank ini adalah lintasan ROE, bukan arus kas: "
                  f"ROAE historis {fmt.pct(_roe_h[0]) if _roe_h else '-'} {_roe_tr} ke {fmt.pct(_roae)} "
                  f"forward bila laba {(F[0]['label'] if F else 'FY26F')} tercapai. DDM Gordon memberi "
-                 f"Rp{fmt.rp(round(_vb['tp_gordon'] / 10) * 10)}/saham pada payout "
+                 f"Rp{fmt.rp(fmt.tick(_vb['tp_gordon']))}/saham pada payout "
                  f"{fmt.pct(_vb['payout_used'])} ({intake.get('payout_basis')}); silang cek "
-                 f"Inverse CoE Rp{fmt.rp(round(_vb['tp_inverse'] / 10) * 10)}/saham "
+                 f"Inverse CoE Rp{fmt.rp(fmt.tick(_vb['tp_inverse']))}/saham "
                  f"(P/BV wajar {fmt.mult(_vb['fair_pbv'], 2)}x). Payout {fmt.pct(_vb['payout_used'])} "
                  f"dinilai sustain sepanjang kebutuhan modal pertumbuhan kredit/aset "
                  f"tidak menuntut retensi di atas level historis; "
@@ -3251,7 +3268,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
                 f"dengan margin {fmt.pct(last['net_income_margin_pct'] / 100)}.")
     doc["cover"]["headline"] = _earnings_headline(va["rating"], label)
     if thesis:
-        doc["cover"]["bullets"][1] = _trim(thesis[0], 30)
+        doc["cover"]["bullets"][1] = _bullet(thesis[0], 30)
     doc["cover"]["bullets"][2] = _trim(
         f"{va['rating']}: target Rp{fmt.rp(va['tp'])} ({fmt.pct(va['upside'])}) dari "
         f"PER median peer {fmt.mult(d['median_pe'], 1)} atas EPS {label}.", 30)
@@ -3265,7 +3282,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         f"laba 1H resmi dan asumsi semester kedua. PER median {d['peer_count']} peer "
         f"{fmt.mult(d['median_pe'], 1)} menghasilkan target Rp{fmt.rp(va['tp'])}, dengan "
         f"rentang kuartil Rp{fmt.rp(va['tp_down'])} sampai "
-        f"Rp{fmt.rp(round(d['per_share_up'] / 10) * 10)}. "
+        f"Rp{fmt.rp(fmt.tick(d['per_share_up']))}. "
         + (f"{', '.join(skipped)} belum dipakai karena forecast driver belum "
            "direkonsiliasi. " if skipped else "")
         + "Arus kas, capex dan neraca sesudah periode interim belum dimodelkan.")
@@ -3327,7 +3344,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     rows = []
     for name, pe in (("Kuartil bawah", d["q1_pe"]), ("Median (basis)", d["median_pe"]),
                      ("Kuartil atas", d["q3_pe"])):
-        value = round(pe * d["eps_idr"] / 10) * 10
+        value = fmt.tick(pe * d["eps_idr"])
         rows.append([name, fmt.mult(pe, 1), f"Rp{fmt.rp(value)}",
                      fmt.pct(value / intake["price"] - 1)])
     sensitivity = {
@@ -4130,10 +4147,10 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
         for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
             _cg_rows.append(
                 [f"CoE {fmt.pct(_re + _d)}" + (" (base)" if _d == 0 else "")] +
-                [fmt.rp(round(ddm.value_bank(
+                [fmt.rp(fmt.tick(ddm.value_bank(
                     _nets, None, intake.get("dps_hist") or [],
                     intake["shares"], _re + _d, _gg, _roae,
-                    _bvps)["tp_gordon"] / 10) * 10) +
+                    _bvps)["tp_gordon"])) +
                  (" *" if _d == 0 and _gg == _g else "")
                  for _gg in (_g - 0.01, _g, _g + 0.01)])
         E("Sensitivitas DDM (CoE x g)", "tabel",
@@ -4145,7 +4162,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
         for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
             _cr_rows.append(
                 [f"CoE {fmt.pct(_re + _d)}" + (" (base)" if _d == 0 else "")] +
-                [fmt.rp(round(((_rr - _g) / (_re + _d - _g)) * _bvps / 10) * 10)
+                [fmt.rp(fmt.tick(((_rr - _g) / (_re + _d - _g)) * _bvps))
                  for _rr in (_roae - 0.04, _roae, _roae + 0.04)])
         E("Sensitivitas Inverse CoE (CoE x ROE)", "tabel",
           {"cols": ["CoE / ROE"] + [f"ROE {fmt.pct(_rr)}" for _rr in
@@ -4157,9 +4174,9 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
         p_ddm = (f"Driver utama valuasi bank ini adalah lintasan ROE, bukan arus kas: "
                  f"ROAE historis {fmt.pct(_roe_h[0])} {_roe_tr} ke {fmt.pct(_roae)} "
                  f"forward bila laba {F[0]['label']} tercapai. DDM Gordon memberi "
-                 f"Rp{fmt.rp(round(_vb['tp_gordon'] / 10) * 10)}/saham pada payout "
+                 f"Rp{fmt.rp(fmt.tick(_vb['tp_gordon']))}/saham pada payout "
                  f"{fmt.pct(_vb['payout_used'])} ({intake.get('payout_basis')}); silang cek "
-                 f"Inverse CoE Rp{fmt.rp(round(_vb['tp_inverse'] / 10) * 10)}/saham "
+                 f"Inverse CoE Rp{fmt.rp(fmt.tick(_vb['tp_inverse']))}/saham "
                  f"(P/BV wajar {fmt.mult(_vb['fair_pbv'], 2)}x). Payout {fmt.pct(_vb['payout_used'])} "
                  f"dinilai sustain sepanjang kebutuhan modal pertumbuhan kredit/aset "
                  f"tidak menuntut retensi di atas level historis; "
@@ -4209,7 +4226,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
         for _dd in (0.0, 0.10, 0.20, 0.30):
             _dp_rows.append(
                 [f"Diskon {fmt.pct(_dd, 0)}"] +
-                [fmt.rp(round((_tn * _pm + _cb - _db) * 1e9 / _sh * (1 - _dd) / 10) * 10)
+                [fmt.rp(fmt.tick((_tn * _pm + _cb - _db) * 1e9 / _sh * (1 - _dd)))
                  for _pm in (0.8, 1.0, 1.2)])
         E("Sensitivitas RNAV (diskon x harga)", "tabel",
           {"cols": ["Diskon / harga"] + [f"Harga {p}" for p in

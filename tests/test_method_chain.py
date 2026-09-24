@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app import intake, forecast, method_chain as MC, release, valuation  # noqa: E402
+from app import fmt, intake, forecast, method_chain as MC, release, valuation  # noqa: E402
 from app.harness import runner  # noqa: E402
 
 import test_valtables  # noqa: E402
@@ -113,7 +113,7 @@ def test_dcf_failure_falls_back_to_relative_and_releases(monkeypatch):
     assert va["release"]["route"] == "fallback"
     assert va["method"].startswith(MC.LABELS["relative_pe"])
     assert "[fallback: DCF FCFF tidak memadai]" in va["method"]
-    assert va["tp"] == round(chain["trace"][1]["per_share"] / 10) * 10
+    assert va["tp"] == fmt.tick(chain["trace"][1]["per_share"])
     assert va["tp_down"] < va["tp"] and va["rating"] in {"Buy", "Hold", "Sell"}
     assert any(n.startswith("rantai metode: DCF FCFF dilewati") for n in va["notes"])
     # DCF screen stays available for exhibits without becoming the TP.
@@ -221,8 +221,8 @@ def test_going_concern_reaches_earnings_led_route_and_releases():
     assert [t["decision"] for t in chain["trace"]] == ["skipped", "skipped", "selected"]
     assert va["release"]["status"] == "distributable_assumption_led"
     eps = 9e12 / test_valtables.SHARES
-    assert va["tp"] == round(2.8 * eps / 10) * 10  # median peer PER
-    assert va["tp_down"] == round(2.65 * eps / 10) * 10  # interpolated lower quartile
+    assert va["tp"] == fmt.tick(2.8 * eps)  # median peer PER, IDX tick
+    assert va["tp_down"] == fmt.tick(2.65 * eps)  # interpolated lower quartile
     assert va["method"].startswith("FY26F PER median peer x EPS skenario analis")
     assert abs(va["implied"]["per"] - va["tp"] / eps) < 1e-9
     result = runner.run_all(intake_, fc, va, assumption_status="validated")
@@ -384,3 +384,28 @@ def test_failed_scenario_subagent_is_not_cached(tmp_path, monkeypatch):
                "latest_official_actual": {}, "official_evidence": {}, "news": []}
     agent.run_cached(intake_, store_dir=tmp_path)
     assert not list(tmp_path.glob("UJI-*.json"))
+
+
+def test_prices_round_to_idx_tick_not_flat_rp10():
+    from app import fmt
+    assert fmt.tick(56.4) == 56 and fmt.tick(30.6) == 31      # < Rp200: Rp1
+    assert fmt.tick(333) == 334 and fmt.tick(1234) == 1235   # Rp2 / Rp5 bands
+    assert fmt.tick(2533) == 2530 and fmt.tick(6312) == 6300  # Rp10 / Rp25 bands
+    assert fmt.tick(None) is None
+
+
+def test_low_priced_target_keeps_downside_below_base(monkeypatch):
+    intake_, fc = _earnings_fixture(None, peers=(0.028, 0.030, 0.033))
+    intake_ = dict(intake_, price=30.0, market_cap=30.0 * test_valtables.SHARES)
+    va = valuation.build(intake_, fc, assumption_status="validated")
+    assert va["tp"] is not None and va["tp_down"] < va["tp"]
+
+
+def test_cover_bullet_is_one_complete_sentence():
+    from app.narrative import _bullet
+    long = ("Pemulihan harga livebird dan DOC ke level tertinggi Agustus 2026 menopang ASP "
+            "segmen commercial farming, dengan risiko margin squeeze jika harga livebird gagal "
+            "menembus Rp 21.000/kg di tengah SBM yang sudah naik 18% sejak Juni.")
+    out = _bullet(long)
+    assert out.endswith("commercial farming.") and len(out.split()) <= 30
+    assert _bullet("Laba naik. Kalimat kedua.") == "Laba naik."

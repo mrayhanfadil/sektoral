@@ -607,7 +607,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "reasons. For Tavily articles rely on fetched full_text, not the headline. "
             "Separate reported facts from your judgment in the rationale. Also "
             "return thesis_points: 2-3 Indonesian sentences (40-280 characters "
-            "each), each a forward-looking claim tied to a measurable earnings "
+            "and at most 30 words each), each a forward-looking claim tied to a measurable earnings "
             "driver (claim -> number -> earnings implication). And "
             "catalysts_risks: 2-5 objects {item (short name), timing (date, "
             "window or condition), driver_path (driver -> revenue/margin/cost/"

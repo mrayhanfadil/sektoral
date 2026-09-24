@@ -1,4 +1,5 @@
 """Format angka Indonesia: 1.234,5. Nol em-dash, nol emoji di output."""
+import math
 
 
 def _id(x, dec=1):
@@ -10,6 +11,22 @@ def _id(x, dec=1):
         return "n.a."
     s = f"{val:,.{dec}f}"
     return s.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+# IDX price fractions (fraksi harga): tick size by price band.
+_TICKS = ((200, 1), (500, 2), (2000, 5), (5000, 10), (float("inf"), 25))
+
+
+def tick(v):
+    """Round a per-share value to the IDX tick for its price band.
+
+    A flat Rp10 rounding collapsed low-priced targets (Rp56 stock: base,
+    downside and upside all became Rp30)."""
+    if v is None:
+        return None
+    step = next(size for bound, size in _TICKS if abs(v) < bound)
+    units = math.floor(abs(v) / step + 0.5)  # half-up, not banker's rounding
+    return int(math.copysign(units * step, v)) if units else 0
 
 
 def rp(v):

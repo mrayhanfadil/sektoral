@@ -66,7 +66,7 @@ def test_fcff_bridge_ties():
         < max(val["ev_gordon"] * 1e-9, 1.0)
     assert by["(=) Nilai skenario per Saham Gordon (Rp)"][-1] == fmt.rp(
         val["ps_gordon"])
-    tp = round((val["ps_gordon"] + val["ps_exit"]) / 2 / 10) * 10
+    tp = fmt.tick((val["ps_gordon"] + val["ps_exit"]) / 2)
     assert tp == val["dcf_blend"]
     assert by["Nilai skenario gabungan per saham Gordon+exit (Rp)"][-1] == \
         fmt.rp(val["dcf_blend"])
