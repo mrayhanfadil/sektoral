@@ -3330,6 +3330,10 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
     h2_text = (f"Asumsi semester kedua: pendapatan {fmt._id(a['h2_revenue_to_h1'], 2)}x 1H "
                f"dengan margin laba bersih {fmt.pct(a['h2_net_margin_pct'] / 100)}. "
                + (a.get("rationale") or ""))
+    # Spec §5.4 'Risiko utama': the agent's sourced, quantified issuer risks.
+    doc["risks"] = [{"kategori": x["category"], "judul": x["headline"].strip(),
+                     "isi": x["explanation"].strip(), "sumber": cite(x.get("source_ids"))}
+                    for x in a.get("key_risks") or [] if isinstance(x, dict)]
     catalyst_rows = [[x["item"], f"{x['timing']}. Sumber: {cite(x.get('source_ids'))}",
                       x["driver_path"], x["direction"]]
                      for x in a.get("catalysts_risks") or [] if isinstance(x, dict)]

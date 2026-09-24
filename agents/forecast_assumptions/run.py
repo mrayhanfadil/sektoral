@@ -17,6 +17,9 @@ from agents.estimator.run import _chat, _response_text
 DRIVERS = {"revenue_growth_pp", "ebitda_margin_pp", "wacc_bps", "coe_bps", "none"}
 SPEC_PATH = Path(__file__).resolve().parents[2] / "spec" / "Instruksi-Report-v3.md"
 PLAN_STORE = Path(__file__).resolve().parents[2] / "data" / "forecast_plans"
+# Bump when a subagent's required output changes, so cached plans without the
+# new fields are not reused (2: earnings key_risks).
+PLAN_SCHEMA = 2
 
 
 def _spec_sections():
@@ -421,6 +424,9 @@ _RECOMMENDATION = re.compile(
     r"\b(?:rekomendasi|akumulasi|buy|sell|hold|overweight|underweight|"
     r"target\s+harga|(?:beli|jual|tahan|lepas)\s+(?:saham|posisi))\b", re.I)
 DIRECTIONS = {"Positif", "Negatif", "Dua arah"}
+# Spec §5.4 page 4: risks come from these areas when material for the issuer.
+RISK_CATEGORIES = {"Operasi", "Pendanaan", "Modal", "Komoditas", "Regulasi",
+                   "Tata kelola", "Proyek"}
 
 
 def _validate_thesis(scenario, allowed):
@@ -453,12 +459,43 @@ def _validate_thesis(scenario, allowed):
     if items and not any(isinstance(x, dict) and x.get("direction") in ("Negatif", "Dua arah")
                          for x in items):
         problems.append("catalysts_risks must include at least one downside risk")
+    risk_problems, risk_texts = _validate_key_risks(scenario.get("key_risks"), allowed)
+    problems += risk_problems
+    texts += risk_texts
     texts.append(str(scenario.get("rationale") or ""))
     if any(_RECOMMENDATION.search(t) for t in texts):
         problems.append("thesis/risks must not contain recommendation or target-price language")
     if any(re.search(r"[\u4e00-\u9fff]", t) for t in texts):
         problems.append("thesis/risks must use Indonesian text")
     return problems
+
+
+def _validate_key_risks(risks, allowed):
+    """Spec §5.4 'Risiko utama': 3-5 issuer risks, each named, categorised,
+    quantified from the evidence and cited."""
+    problems, texts = [], []
+    if not isinstance(risks, list) or not 3 <= len(risks) <= 5:
+        return ["key_risks must list 3-5 items"], texts
+    for i, risk in enumerate(risks):
+        if not isinstance(risk, dict):
+            problems.append(f"key_risks[{i}] must be an object")
+            continue
+        if risk.get("category") not in RISK_CATEGORIES:
+            problems.append(f"key_risks[{i}].category must be one of {sorted(RISK_CATEGORIES)}")
+        headline, explanation = risk.get("headline"), risk.get("explanation")
+        if not isinstance(headline, str) or not 8 <= len(headline.strip()) <= 70:
+            problems.append(f"key_risks[{i}].headline must be 8-70 characters")
+        elif not headline.strip()[0].isupper():
+            problems.append(f"key_risks[{i}].headline must start with a capital letter")
+        if not isinstance(explanation, str) or not 80 <= len(explanation.strip()) <= 450:
+            problems.append(f"key_risks[{i}].explanation must be 80-450 characters")
+        elif not re.search(r"\d", explanation):
+            problems.append(f"key_risks[{i}].explanation must quantify the risk with a sourced number")
+        ids = risk.get("source_ids")
+        if not isinstance(ids, list) or not ids or any(x not in allowed for x in ids):
+            problems.append(f"key_risks[{i}] must cite valid source_ids")
+        texts += [str(headline or ""), str(explanation or "")]
+    return problems, texts
 
 
 def _earnings_anchor(source, earnings):
@@ -612,7 +649,14 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "catalysts_risks: 2-5 objects {item (short name), timing (date, "
             "window or condition), driver_path (driver -> revenue/margin/cost/"
             "funding -> earnings effect), direction (Positif | Negatif | Dua arah), "
-            "source_ids}; include at least one downside risk. Use only supplied "
+            "source_ids}; include at least one downside risk. Also key_risks: 3-5 "
+            "objects {category (Operasi | Pendanaan | Modal | Komoditas | Regulasi | "
+            "Tata kelola | Proyek), headline (8-70 characters, a noun phrase that "
+            "starts with a common noun, e.g. \"Konsentrasi pelanggan Garuda\"), "
+            "explanation (Indonesian, 80-450 characters: what could go wrong, the "
+            "sourced number that sizes it, and the path to earnings or valuation), "
+            "source_ids}. These are the report's 'Risiko utama': material downside "
+            "risks for this issuer, not catalysts, not repeats of the thesis. Use only supplied "
             "evidence; issuer-specific risks beat generic ones. Never write a "
             "target price, valuation multiple, rating, buy/sell/hold/akumulasi, "
             "production_ready or forecast_basis; the engine applies peer PER. "
@@ -634,7 +678,10 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "catalysts_risks": [{"item": "text", "timing": "text",
                                             "driver_path": "text",
                                             "direction": "Negatif",
-                                            "source_ids": ["official"]}]}}}
+                                            "source_ids": ["official"]}],
+                       "key_risks": [{"category": "Pendanaan",
+                                      "headline": "text", "explanation": "text",
+                                      "source_ids": ["official"]}]}}}
     elif name == "stage":
         role = (
             "Role: STAGE CLASSIFIER. Return {\"stage_classification\": object}. "
@@ -748,7 +795,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                 else:
                     scenario = {key: scenario[key] for key in (
                         "h2_revenue_to_h1", "h2_net_margin_pct", "rationale",
-                        "source_ids", "thesis_points", "catalysts_risks")
+                        "source_ids", "thesis_points", "catalysts_risks", "key_risks")
                                 if key in scenario}
                     # Provenance is bound to the official release, not the model.
                     scenario["source_url"] = source["official"]["source_url"]
@@ -766,7 +813,8 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                             "url": source["official"]["source_url"],
                             "timestamp": source["official"]["published_at"]}
                     cited = set(scenario.get("source_ids") or []) | {
-                        x for item in scenario.get("catalysts_risks") or []
+                        x for item in (scenario.get("catalysts_risks") or []) +
+                        (scenario.get("key_risks") or [])
                         if isinstance(item, dict) for x in item.get("source_ids") or []}
                     scenario["source_refs"] = {
                         x: ({"title": source["official"].get("period") and
@@ -970,6 +1018,7 @@ def evidence_fingerprint(source, spec_sha256):
             for item in source.get("news") or []]
     material = {"ticker": source.get("ticker"), "profile": source.get("model_profile"),
                 "official": source.get("official"), "news": news, "spec": spec_sha256,
+                "plan_schema": PLAN_SCHEMA,
                 "model": os.environ.get("SEKTORAL_LLM_MODEL", "MiniMax-M3")}
     return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:20]
 

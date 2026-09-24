@@ -105,3 +105,22 @@ def test_renumber_keeps_key_financials_first():
     doc = {"exhibits": [other, key], "bagian": [{"exhibit": [other]}]}
     X.renumber(doc)
     assert (key["n"], other["n"]) == (1, 2)
+
+
+def test_draft_report_carries_quantified_fallback_risks(tmp_path):
+    doc = _doc(tmp_path)
+    assert 1 <= len(doc["risks"]) <= 5
+    assert all(r["kategori"] and any(ch.isdigit() for ch in r["isi"]) for r in doc["risks"])
+    page = next(p for p in doc["bagian"] if p["judul"] == "Katalis, risiko, dan kepemilikan")
+    assert page["risks"] == doc["risks"]
+    assert "Risiko utama:" in doc["cover"]["paragraf"][-1]["isi"]
+
+
+def test_published_report_without_risks_is_blocked():
+    from app.harness.narrative_tool import check_narrative
+    doc = {"meta": {"status": "distributable_assumption_led"},
+           "cover": {"headline": "Laba naik", "paragraf": [{"judul": "Valuasi", "isi": "Target."}]},
+           "risks": []}
+    assert any(b.startswith("N.risiko") for b in check_narrative(doc)["blockers"])
+    doc["meta"]["status"] = "draft_non_distributable"
+    assert not any(b.startswith("N.risiko") for b in check_narrative(doc)["blockers"])

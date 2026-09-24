@@ -168,6 +168,11 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".card-metric{flex:0 0 44mm;text-align:right;color:" + INK + "}"
        ".card-label{font-size:7.7pt;line-height:1.17}"
        ".card-value{font-size:17.3pt;font-weight:700;line-height:1.17}"
+       ".risks .card-title{margin-bottom:1.7mm}"
+       ".risk-tag{font-size:6pt;font-weight:900;letter-spacing:.04em;text-transform:uppercase;"
+       "color:" + PRIMARY + ";margin-bottom:1mm}"
+       ".risk-src{font-size:5.8pt;font-style:italic;line-height:1.3;margin-top:1.2mm}"
+       ".risk-head{margin-top:1.7mm}"
        ".exhibit{margin:0 0 3.4mm}"
        ".exhibit.keep{break-inside:avoid-page;page-break-inside:avoid}"
        # Table styling follows sectors-hackathon's .fin-table: a solid header
@@ -714,6 +719,21 @@ def _draft_banner(meta):
             "skenario nilai belum disajikan sampai data dan model tervalidasi.</div>")
 
 
+def _risk_block(risks):
+    """Spec §5.4 'Risiko utama': named, categorised risks in the thesis-card
+    style, each with the source of its number."""
+    res = ["<h3 class='sub risk-head'>Risiko utama</h3><div class='cards risks'>"]
+    for risk in risks:
+        res.append("<div class='card'><div class='card-body'>"
+                   f"<div class='risk-tag'>{html.escape(str(risk.get('kategori') or ''))}</div>"
+                   f"<div class='card-title'>{html.escape(str(risk.get('judul') or ''))}</div>"
+                   f"<div class='card-text'>{html.escape(str(risk.get('isi') or ''))}</div>"
+                   f"<div class='risk-src'>Sumber: {html.escape(str(risk.get('sumber') or '-'))}</div>"
+                   "</div></div>")
+    res.append("</div>")
+    return "".join(res)
+
+
 def _render_page_content(b):
     halaman = b.get("halaman")
     exs = b.get("exhibit") or []
@@ -755,7 +775,12 @@ def _render_page_content(b):
     elif b.get("layout") == "stack":
         for p in paras:
             res.append(f"<p>{html.escape(p)}</p>")
-        for e in exs:
+        split = b.get("risks_after", 0) if b.get("risks") else len(exs)
+        for e in exs[:split]:
+            res.append(_exhibit(e))
+        if b.get("risks"):
+            res.append(_risk_block(b["risks"]))
+        for e in exs[split:]:
             res.append(_exhibit(e))
 
     elif halaman == 2:

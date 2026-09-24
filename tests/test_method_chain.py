@@ -289,7 +289,20 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
              "direction": "Negatif", "source_ids": ["official"]},
             {"item": "Permintaan unggas", "timing": "Akhir tahun",
              "driver_path": "Permintaan musiman menaikkan volume dan pendapatan kuartal empat.",
-             "direction": "Positif", "source_ids": ["official"]}]},
+             "direction": "Positif", "source_ids": ["official"]}],
+        "key_risks": [
+            {"category": "Komoditas", "headline": "Harga jagung dan bungkil kedelai",
+             "explanation": "Bahan baku pakan setara 60% beban pokok; kenaikan harga jagung "
+                            "10% menekan margin kotor sekitar 2pp tanpa kenaikan harga jual.",
+             "source_ids": ["official"]},
+            {"category": "Operasi", "headline": "Oversupply ayam pedaging",
+             "explanation": "Populasi DOC naik 8% yoy; kelebihan pasokan menurunkan harga "
+                            "livebird dan margin segmen peternakan komersial.",
+             "source_ids": ["official"]},
+            {"category": "Pendanaan", "headline": "Utang bank jangka pendek",
+             "explanation": "Utang jangka pendek Rp5.000 miliar jatuh tempo dalam 12 bulan; "
+                            "kenaikan bunga 100bp menambah beban bunga sekitar Rp50 miliar.",
+             "source_ids": ["official"]}]},
         "outyear_scenario": [
             {"year": 2027 + i, "revenue_growth_pct": 6.0, "ebitda_margin_pct": None,
              "net_income_margin_pct": 7.0, "capex_to_revenue_pct": None,
@@ -311,6 +324,11 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path):
     assert doc["exhibits"][0]["tipe"] == "price_chart"
     key_fin = doc["exhibits"][1]
     assert key_fin["judul"] == "Key Financials"
+    assert [r["judul"] for r in doc["risks"]][0] == "Harga jagung dan bungkil kedelai"
+    assert "Risiko utama: harga jagung dan bungkil kedelai, oversupply ayam pedaging, dan " \
+        "utang bank jangka pendek." in doc["cover"]["paragraf"][-1]["isi"]
+    risk_page = next(p for p in doc["bagian"] if p["judul"].startswith("Katalis"))
+    assert risk_page["risks"] == doc["risks"] and risk_page["risks_after"] == 1
     labels = [row[0] for row in key_fin["data"]["rows"]]
     assert labels.count("EPS (Rp)") == 1 and labels.count("PER (x)") == 1
     assert not any(all(cell in ("-", "NA") for cell in row[1:])
@@ -373,7 +391,20 @@ def test_guidance_departure_must_cite_the_guidance_item():
                  "direction": "Positif", "source_ids": ["official"]},
                 {"item": "Biaya bahan", "timing": "Sepanjang 2026",
                  "driver_path": "Kenaikan biaya bahan menekan margin laba bersih.",
-                 "direction": "Negatif", "source_ids": ["official"]}]}
+                 "direction": "Negatif", "source_ids": ["official"]}],
+            "key_risks": [
+                {"category": "Komoditas", "headline": "Harga jagung dan bungkil kedelai",
+                 "explanation": "Bahan baku pakan setara 60% beban pokok; kenaikan harga jagung "
+                                "10% menekan margin kotor sekitar 2pp tanpa kenaikan harga jual.",
+                 "source_ids": ["official"]},
+                {"category": "Operasi", "headline": "Oversupply ayam pedaging",
+                 "explanation": "Populasi DOC naik 8% yoy; kelebihan pasokan menurunkan harga "
+                                "livebird dan margin segmen peternakan komersial.",
+                 "source_ids": ["official"]},
+                {"category": "Pendanaan", "headline": "Utang bank jangka pendek",
+                 "explanation": "Utang jangka pendek Rp5.000 miliar jatuh tempo dalam 12 bulan; "
+                                "kenaikan bunga 100bp menambah beban bunga sekitar Rp50 miliar.",
+                 "source_ids": ["official"]}]}
     uncited = agent._validate_earnings(dict(base, source_ids=["official"]), source)
     assert any("departs from the 1H run-rate" in p for p in uncited)
     cited = agent._validate_earnings(dict(base, source_ids=["official", "guidance:0"]), source)
