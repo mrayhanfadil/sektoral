@@ -47,8 +47,12 @@ def _event_key(title):
     return " ".join(words)
 
 
+# Articles handed to the agents; each carries fetched full text.
+ARTICLE_LIMIT = 12
+
+
 def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
-                   limit=6):
+                   limit=ARTICLE_LIMIT):
     """Normalized evidence register with stable IDs and explicit rejections.
 
     Returns {"articles": [...], "rejected": [...], "stats": {...}} where each
@@ -167,7 +171,7 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
     return {"articles": chosen, "rejected": rejected, "merged": merged, "stats": stats}
 
 
-def combine(ticker, company_name, as_of, sectors_rows, tavily_items, limit=6):
+def combine(ticker, company_name, as_of, sectors_rows, tavily_items, limit=ARTICLE_LIMIT):
     """Return a bounded, source-balanced register with stable article indices."""
     return build_register(ticker, company_name, as_of, sectors_rows,
                           tavily_items, limit=limit)["articles"]
