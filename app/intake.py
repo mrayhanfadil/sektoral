@@ -1,5 +1,6 @@
 """TAHAP 1: intake data pasar dari cache dan fakta emiten dari rilis resmi lokal."""
 import re
+import sqlite3
 import time
 from datetime import date
 from . import cache
@@ -546,6 +547,39 @@ def _borrowed_peer_report(t):
     return None, None
 
 
+def _peer_ev(symbol, market_cap):
+    """Peer EV from Sectors only: the peer-table market cap plus total debt
+    less cash from the peer's own cached /company/report/<peer>/, with
+    EBITDA from the same latest FY row. A missing part leaves the multiple
+    None with a named status; no older year or other source fills the gap."""
+    ticker = str(symbol or "").replace(".JK", "").strip().upper()
+    try:
+        report = cache.company_report(ticker) if ticker else None
+    except (OSError, ValueError, sqlite3.Error):
+        # One unreadable peer report must not drop the peer's PER/PBV row.
+        return {"ev_status": "report_unreadable"}
+    if not isinstance(report, dict):
+        return {"ev_status": "report_not_cached"}
+    row = max((r for r in (report.get("financials") or {}).get("historical_financials") or []
+               if isinstance(r, dict) and isinstance(r.get("year"), (int, float))),
+              key=lambda r: r["year"], default=None)
+    if row is None or market_cap is None:
+        return {"ev_status": "balance_incomplete" if row is None else "market_cap_missing"}
+    debt, ebitda = _num(row.get("total_debt")), _num(row.get("ebitda"))
+    cash = _num(row.get("cash_and_equivalents"))
+    if cash is None:
+        cash = _num(row.get("cash_only"))
+    year = int(row["year"])
+    if None in (debt, cash, ebitda):
+        return {"ev_status": "balance_incomplete", "ev_year": year}
+    ev = market_cap + debt - cash
+    meaningful = ev > 0 and ebitda > 0
+    return {"ev": ev, "ev_year": year, "ev_status": "ok" if meaningful else "not_meaningful",
+            "ev_ebitda": ev / ebitda if meaningful else None,
+            "ev_source": (f"Sectors: market cap tabel peer + total_debt, kas, EBITDA "
+                          f"FY{year} /company/report/{ticker}/")}
+
+
 def _peers(rep, t):
     out = []
     try:
@@ -563,7 +597,8 @@ def _peers(rep, t):
                                 "pb": _num(c.get("pb_mrq")),
                                 "mcap": mcap, "revenue": revenue,
                                 # P/S from the same Sectors row: market cap / revenue.
-                                "ps": mcap / revenue if mcap and revenue and revenue > 0 else None})
+                                "ps": mcap / revenue if mcap and revenue and revenue > 0 else None,
+                                **_peer_ev(c.get("symbol"), mcap)})
     except Exception:
         pass
     pes = sorted(p for p in (c["pe"] for c in out) if p and p > 0)
