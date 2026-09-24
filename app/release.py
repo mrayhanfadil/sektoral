@@ -546,6 +546,38 @@ def assess_earnings_led(intake, forecast, valuation, assumption_status):
     }
 
 
+def assess_pbv_roe_fy(intake, forecast, valuation, assumption_status):
+    """Justified P/BV release for a bank on the validated earnings scenario.
+
+    Framework Gate 0: banks are valued on equity (DDM / excess return). Same
+    evidence as :func:`assess_earnings_led` (official 1H actual, validated
+    scenario, fresh close, official shares) without the peer PER set, plus
+    the excess-return inputs: positive equity, CoE above g, ROE above g.
+    """
+    base = assess_earnings_led(intake, forecast, valuation, assumption_status)
+    blockers = [b for b in base["blockers"]
+                if not b.startswith(("peer PER", "FY earnings per share"))]
+    if (intake or {}).get("model_profile") != "financial_ddm":
+        blockers.append("justified P/BV on the earnings scenario is a bank method")
+    detail = (valuation or {}).get("detail") or {}
+    if not _number(detail.get("equity")) or detail["equity"] <= 0:
+        blockers.append("parent equity is missing or not positive")
+    coe, g, roe = detail.get("coe"), detail.get("g"), detail.get("roe")
+    if not (_number(coe) and _number(g)) or coe <= g:
+        blockers.append("cost of equity must exceed long-term growth")
+    if not _number(roe) or (_number(g) and roe <= g):
+        blockers.append("FY ROE does not exceed long-term growth; justified P/BV undefined")
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "Justified P/BV (ROE FY earnings scenario)",
+        "blockers": blockers,
+        "limitations": ["ROE FY dari skenario laba analis (aktual 1H + asumsi H2) atas "
+                        "ekuitas pemilik induk terakhir, bukan forecast driver terekonsiliasi",
+                        "CoE CAPM dan pertumbuhan jangka panjang adalah parameter kebijakan "
+                        "analis yang diuji di tabel sensitivitas"],
+    }
+
+
 def assess_release(profile, intake, forecast, sotp_result):
     """Assess whether a model may be published as a production report.
 
