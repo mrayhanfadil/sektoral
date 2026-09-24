@@ -28,8 +28,9 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 ENDPOINT = "https://api.tavily.com/search"
 STORE_DIR = ROOT / "data" / "web_news"
-WINDOW_DAYS = 60
-MAX_RESULTS = 6
+# Deep dive: a window that reaches back past the 1H release, 10 hits per query.
+WINDOW_DAYS = 120
+MAX_RESULTS = 10
 # Indonesian business press and wire services; keeps results on-topic.
 NEWS_DOMAINS = [
     "kontan.co.id", "bisnis.com", "cnbcindonesia.com", "investor.id", "katadata.co.id",
@@ -210,6 +211,8 @@ def build_queries(ticker, company_name, profile=None, industry=None):
         queries.append(f'"{ticker}" {name} {hint}'.strip())
     if industry and str(profile or "").strip().lower() == "going_concern_fcff":
         queries.append(f"{brand} {industry} harga jual volume biaya bahan baku")
+    # Downside evidence for 'Risiko utama': funding, disputes, regulation, customers.
+    queries.append(f"{brand} risiko utang gugatan regulasi pelanggan kerugian")
     # Deduplicate while preserving order.
     return list(dict.fromkeys(q for q in queries if q))
 
@@ -293,11 +296,11 @@ def news_context(ticker, company_name, end_date, *, ring=None, post=None,
         if qi == 0 and legacy_items:
             batch = legacy_items
         else:
-            body = {"query": query, "topic": "news", "search_depth": "basic",
+            body = {"query": query, "topic": "news", "search_depth": "advanced",
                     "max_results": MAX_RESULTS, "start_date": start.isoformat(),
                     "end_date": end.isoformat(), "filter_by_published_date": True,
                     "include_domains": NEWS_DOMAINS, "include_answer": False,
-                    "include_raw_content": False, "chunks_per_source": 1}
+                    "include_raw_content": False, "chunks_per_source": 3}
             try:
                 payload, _index = _search(body, ring=ring, post=post)
             except TavilyError as error:

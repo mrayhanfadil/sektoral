@@ -30,14 +30,16 @@ def test_tavily_builds_profile_queries():
     base = tavily.build_queries("BBRI", "Bank Rakyat Indonesia", None)
     # Issuer query plus a brand query: Indonesian press often omits the ticker.
     assert base == ['"BBRI" Bank Rakyat Indonesia saham emiten berita',
-                    "Bank Rakyat kinerja laba pendapatan semester"]
+                    "Bank Rakyat kinerja laba pendapatan semester",
+                    "Bank Rakyat risiko utang gugatan regulasi pelanggan kerugian"]
     bank = tavily.build_queries("BBRI", "Bank Rakyat Indonesia", "financial_ddm",
                                 industry="Banks")
-    assert len(bank) == 4  # industry driver query is for going concern only
+    assert len(bank) == 5  # industry driver query is for going concern only
     assert bank[0] == base[0]
     feed = tavily.build_queries("JPFA", "PT JAPFA Comfeed Indonesia Tbk",
                                 "going_concern_fcff", industry="Agricultural Products")
-    assert feed[-1] == "JAPFA Comfeed Agricultural Products harga jual volume biaya bahan baku"
+    assert feed[-2] == "JAPFA Comfeed Agricultural Products harga jual volume biaya bahan baku"
+    assert feed[-1] == "JAPFA Comfeed risiko utang gugatan regulasi pelanggan kerugian"
     assert any("kredit" in q for q in bank[1:])
     mining = tavily.build_queries("AMMN", "Amman Mineral", "finite_life_mining")
     assert any("produksi" in q or "komoditas" in q for q in mining[1:])
