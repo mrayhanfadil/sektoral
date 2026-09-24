@@ -275,7 +275,7 @@ def check_narrative(doc: dict | None) -> dict:
             v("N.keyfin_belum", True, "tanpa Key Financials; dilabeli", False, "dilabeli")
         # Combo chart tie-out: labels overlap Key Financials periods when both present.
         combo = next((e for e in _exhibits(doc)
-                      if (e.get("tipe") or "") == "combo_chart"), None)
+                      if (e.get("tipe") or "") in ("combo_chart", "combo_panel")), None)
         if combo and kf:
             ccols = ((combo.get("data") or {}).get("cols") or [])
             kcols = ((kf.get("data") or {}).get("cols") or [])[1:]

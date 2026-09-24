@@ -349,7 +349,8 @@ def peer_industry_page(intake):
     exhibit = _exhibit(
         f"Kondisi sub-sektor {group}: peer dibanding {ticker}",
         ["Metrik", f"Peer ({len(others)} emiten, tanpa {ticker})", ticker], table,
-        f"Sumber: {peers['source']} ({peers['basis']}), tahun buku {own.get('year') or '-'}; "
+        f"Sumber: {peers['source']} ({peers['basis']}), tahun buku "
+        f"{subject.get('year') or own.get('year') or '-'}; "
         "perubahan kapitalisasi peer ditimbang kapitalisasi pasar; median P/E dan P/B memakai "
         "rentang yang sama dengan valuasi.")
     paragraphs = []
@@ -649,9 +650,15 @@ def ownership_exhibits(intake):
             f"Sumber: Sectors, foreign-flow/{intake['ticker']}; konteks pasar, bukan driver laba."))
         net = next(s for s in flows if s["id"] == "flow.net_20d")
         window = next(s for s in flows if s["id"] == "flow.net_window")
+        def flow(signal):
+            value = signal.get("value")
+            if not isinstance(value, (int, float)):
+                return f"arus bersih {signal['display']}"
+            return (f"{'beli' if value >= 0 else 'jual'} bersih "
+                    f"{signal['display'].replace('Rp-', 'Rp').replace('-', '', 1) if value < 0 else signal['display']}")
         paragraphs.append(
-            f"Investor asing mencatat arus bersih {net['display']} dalam 20 sesi terakhir, "
-            f"dibanding {window['display']} sepanjang jendela data.")
+            f"Investor asing mencatat {flow(net)} dalam 20 sesi terakhir, dibanding "
+            f"{flow(window)} sepanjang jendela data.")
     return exhibits, paragraphs
 
 
@@ -1188,30 +1195,117 @@ def combo_charts_page(intake, fc=None):
     else:
         series.insert(1, {"label": "EBITDA belum dimodelkan", "bars": [None] * len(labels),
                           "line": [None] * len(labels), "is_forecast": is_fc})
-    # DER vs ROE placeholder: leverage from annuals liab/equity; ROE from earnings/equity.
-    der = []
-    roe = []
-    for a in annuals:
-        liab, eq = a.get("liab") or 0, a.get("equity") or 0
-        earn = a.get("earnings") or 0
-        der.append(liab / eq if eq else None)
-        roe.append(earn / eq * 100 if eq else None)
-    der += [None] * min(3, len(frows))
-    roe += [None] * min(3, len(frows))
-    series.append({"label": "DER (x) & ROE", "bars": der,
-                   "line": roe, "is_forecast": is_fc})
-    exhibit = {"n": 0, "judul": "Kinerja keuangan: pendapatan, profitabilitas, leverage",
-               "tipe": "combo_chart",
-               "data": {"cols": labels, "series": series},
-               "catatan_sumber": f"Source: Company, Sektoral Estimates; periode {labels[0]}-{labels[-1]}; "
-                                 "actual solid, forecast lighter; EBITDA hanya bila dimodelkan; "
-                                 "tie-out dengan Key Financials periode sama."}
-    paras = ["Pendapatan dan laba actual menjadi basis; forecast hanya bila driver bersumber.",
-             "Margin dan leverage dibaca bersama capex dan modal kerja di catatan metodologi."]
-    if (intake.get("model_profile") == "financial_ddm"):
-        paras.append("Bank: NIM dan cost-of-credit dibaca dari driver laba/ekuitas; "
-                     "rincian NIM historis tidak dibawa cache Sectors.")
-    return _page("Kinerja keuangan dan profitabilitas", paras, [exhibit])
+    bank = intake.get("model_profile") == "financial_ddm"
+    n_act = len(annuals)
+    if bank:
+        # Bank switch (struktur Exhibit 7): NIM bars and cost of credit line.
+        report = cache.company_report(intake["ticker"]) or {}
+        fin = report.get("financials") or {}
+        ratio_by_year = {int(r["year"]): r for r in fin.get("historical_financial_ratio") or []
+                         if isinstance(r, dict) and r.get("year")}
+        hist = {int(r["year"]): r for r in fin.get("historical_financials") or []
+                if isinstance(r, dict) and r.get("year")}
+        nim, coc = [], []
+        for a in annuals:
+            year = int(a["year"])
+            value = _num(((ratio_by_year.get(year) or {}).get("profitability") or {})
+                         .get("net_interest_margin"))
+            nim.append(value * 100 if value is not None else None)
+            now, before = hist.get(year) or {}, hist.get(year - 1) or {}
+            loans = [_num(r.get("gross_loan")) for r in (now, before) if _num(r.get("gross_loan"))]
+            provision = _num(now.get("provision"))
+            coc.append(provision / (sum(loans) / len(loans)) * 100
+                       if provision is not None and loans else None)
+        fourth = {"label": "NIM (%) & biaya kredit", "bars": nim + [None] * min(3, len(frows)),
+                  "line": coc + [None] * min(3, len(frows)), "is_forecast": is_fc,
+                  "bar_unit": "%"}
+    else:
+        der, roe = [], []
+        for a in annuals:
+            liab, eq = a.get("liab") or 0, a.get("equity") or 0
+            earn = a.get("earnings") or 0
+            der.append(liab / eq if eq else None)
+            roe.append(earn / eq * 100 if eq else None)
+        fourth = {"label": "DER (x) & ROE", "bars": der + [None] * min(3, len(frows)),
+                  "line": roe + [None] * min(3, len(frows)), "is_forecast": is_fc}
+    series.append(fourth)
+
+    def cagr(values):
+        vals = [v for v in values if isinstance(v, (int, float))]
+        return ((vals[-1] / vals[0]) ** (1 / (len(vals) - 1)) - 1
+                if len(vals) >= 2 and vals[0] > 0 and vals[-1] > 0 else None)
+
+    actual_rev, fc_rev = rev_bars[:n_act], rev_bars[n_act:]
+    notes = []
+    hist_cagr = cagr(actual_rev)
+    fc_cagr = cagr(actual_rev[-1:] + fc_rev) if fc_rev and any(v for v in fc_rev) else None
+    text = (f"Pendapatan tumbuh CAGR {fmt.pct(hist_cagr)} pada {labels[0]}-{labels[n_act - 1]}"
+            if hist_cagr is not None else "Pendapatan historis belum cukup untuk CAGR")
+    if fc_cagr is not None:
+        pace = ("lebih lambat dari" if fc_cagr < hist_cagr - 0.05 else
+                "lebih cepat dari" if fc_cagr > hist_cagr + 0.05 else "sejalan dengan") \
+            if hist_cagr is not None else "dibanding"
+        text += (f"; skenario {labels[n_act]}-{labels[-1]} memberi CAGR {fmt.pct(fc_cagr)}, "
+                 f"{pace} laju historis")
+    notes.append(text + ".")
+    margins = [m for m in ebitda_m[:n_act] if m is not None]
+    if margins:
+        notes.append(
+            f"Margin EBITDA {labels[n_act - 1]} {fmt.pct(margins[-1] / 100)} dibanding rata-rata "
+            f"{len(margins)} tahun {fmt.pct(sum(margins) / len(margins) / 100)}"
+            + ("; skenario belum memodelkan EBITDA, sehingga margin historis menjadi acuan."
+               if not any(ebitda_bars[n_act:]) else "."))
+    else:
+        notes.append("EBITDA tidak dilaporkan pada data Sectors untuk periode ini; margin "
+                     "EBITDA tidak ditampilkan.")
+    last_rev_g = rev_g[n_act - 1] if n_act >= 2 else None
+    last_net_g = net_g[n_act - 1] if n_act >= 2 else None
+    if last_rev_g is not None and last_net_g is not None:
+        gap = last_net_g - last_rev_g
+        text = (f"Laba bersih {labels[n_act - 1]} {'naik' if last_net_g >= 0 else 'turun'} "
+                f"{fmt.pct(abs(last_net_g) / 100)} dibanding pendapatan "
+                f"{'naik' if last_rev_g >= 0 else 'turun'} {fmt.pct(abs(last_rev_g) / 100)}")
+        if abs(gap) > 5:
+            now, before = annuals[n_act - 1], annuals[n_act - 2]
+            items = []
+            for key, name in (("interest", "beban bunga"), ("tax", "pajak")):
+                a_now, a_before = _num(now.get(key)), _num(before.get(key))
+                if a_now is not None and a_before:
+                    items.append(f"{name} {'naik' if a_now >= a_before else 'turun'} "
+                                 f"{fmt.pct(abs(a_now / a_before - 1))}")
+            text += ("; selisihnya berasal dari pos di bawah laba usaha (" + ", ".join(items) + ")"
+                     if items else "; selisihnya berasal dari pos di bawah laba usaha")
+        notes.append(text + ".")
+    else:
+        notes.append("Pertumbuhan laba bersih belum dapat dibandingkan dengan pendapatan.")
+    bars4, line4 = fourth["bars"][:n_act], fourth["line"][:n_act]
+    if bank and bars4[-1] is not None:
+        notes.append(f"NIM {labels[n_act - 1]} {fmt.pct(bars4[-1] / 100)}"
+                     + (f" dengan biaya kredit {fmt.pct(line4[-1] / 100)}" if line4[-1] is not None
+                        else "") + "; keduanya driver utama laba bank, bukan leverage.")
+    elif not bank and bars4[-1] is not None and line4[-1] is not None:
+        notes.append(f"DER {labels[n_act - 1]} {fmt.mult(bars4[-1])} dengan ROE "
+                     f"{fmt.pct(line4[-1] / 100)}: " +
+                     ("pertumbuhan didanai leverage yang meningkat."
+                      if len(bars4) >= 2 and bars4[-2] and bars4[-1] > bars4[-2] * 1.1
+                      else "leverage tidak naik material."))
+    else:
+        notes.append("Data leverage/ROE belum lengkap untuk periode ini.")
+
+    titles = [f"Pendapatan dan pertumbuhan ({labels[0]}-{labels[-1]})",
+              f"EBITDA dan margin ({labels[0]}-{labels[-1]})",
+              f"Laba bersih dan pertumbuhan ({labels[0]}-{labels[-1]})",
+              (f"NIM dan biaya kredit ({labels[0]}-{labels[n_act - 1]})" if bank else
+               f"DER dan ROE ({labels[0]}-{labels[n_act - 1]})")]
+    source = (f"Source: Company, Sektoral Estimates; periode {labels[0]}-{labels[-1]}; aktual "
+              "solid, proyeksi lebih terang; tie-out dengan Key Financials periode sama.")
+    exhibits = [{"n": 0, "judul": title, "tipe": "combo_panel",
+                 "data": {"cols": labels, "series": [panel]}, "narasi": note,
+                 "catatan_sumber": source}
+                for title, panel, note in zip(titles, series[:4], notes)]
+    return _page("Kinerja keuangan dan profitabilitas",
+                 ["Empat grafik berikut memakai periode yang sama dengan Key Financials; "
+                  "proyeksi hanya tampil bila skenario tervalidasi."], exhibits)
 
 
 def price_chart_exhibit(intake):
