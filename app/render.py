@@ -12,6 +12,7 @@ from datetime import date
 from pathlib import Path
 from . import cache as cache_mod
 from . import fmt
+from . import idx_history
 
 FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 BRAND_DIR = Path(__file__).resolve().parent / "assets" / "brand"
@@ -287,6 +288,42 @@ def _comparison_series(ticker, as_of):
             [100 * ihsg[day] / ihsg_base for day in dates])
 
 
+PRICE_WINDOW_DAYS = 730  # struktur: 18-24 months of price history
+
+
+def _price_window(ticker, as_of):
+    """Price and relative-to-IHSG series for the cover chart.
+
+    IDX trading summaries (data/idx_history) give up to 24 months of closes;
+    the relative line covers the dates IHSG is also available and is rebased
+    at its first common date. Without IDX files the Sectors cache is used,
+    both lines on common dates.
+    """
+    own, index = idx_history.load(ticker, as_of), idx_history.load("IHSG", as_of)
+    if own and index:
+        end = own["points"][-1][0]
+        prices = [(d, c) for d, c in own["points"] if (end - d).days <= PRICE_WINDOW_DAYS]
+        ihsg = dict(index["points"])
+        common = [(d, c) for d, c in prices if d in ihsg]
+        if len(prices) >= 2 and len(common) >= 2:
+            first, ihsg_first = common[0][1], ihsg[common[0][0]]
+            issuer = [100 * c / first for _, c in common]
+            index_line = [100 * ihsg[d] / ihsg_first for d, _ in common]
+            return {"price_dates": [d for d, _ in prices], "closes": [c for _, c in prices],
+                    "rel_dates": [d for d, _ in common],
+                    "relative": [a - b for a, b in zip(issuer, index_line)],
+                    "issuer_return": issuer[-1] - 100, "ihsg_return": index_line[-1] - 100,
+                    "source": "harga harian dan IHSG: IDX (ringkasan perdagangan)"}
+    series = _comparison_series(ticker, as_of)
+    if series is None:
+        return None
+    dates, closes, issuer, ihsg = series
+    return {"price_dates": dates, "closes": closes, "rel_dates": dates,
+            "relative": [a - b for a, b in zip(issuer, ihsg)],
+            "issuer_return": issuer[-1] - 100, "ihsg_return": ihsg[-1] - 100,
+            "source": None}
+
+
 # Round tick steps per axis, so the four gridlines land on figures a reader can
 # hold in their head instead of on thirds of the raw range.
 PRICE_STEPS = (5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500,
@@ -329,13 +366,13 @@ def _price_chart(ticker, as_of, number=None, source=None):
     The relative line is read against its own zero: above it the issuer beat
     the index, a reading a shared rebased scale would flatten.
     """
-    series = _comparison_series(ticker, as_of)
-    if series is None:
+    window = _price_window(ticker, as_of)
+    if window is None:
         return ("<p class='small'>Perbandingan harga belum tersedia: "
                 "kurang dari dua tanggal perdagangan yang sama di data Sectors.</p>")
 
-    dates, closes, issuer, ihsg = series
-    relative = [a - b for a, b in zip(issuer, ihsg)]
+    dates, closes = window["price_dates"], window["closes"]
+    rel_dates, relative = window["rel_dates"], window["relative"]
     p_lo, p_hi = _axis_scale(closes, PRICE_STEPS)
     r_lo, r_hi = _axis_scale(relative, REL_STEPS)
     # Figma frame 2611:333 (360 x 320): plot 48..292 x 24..223.
@@ -348,9 +385,9 @@ def _price_chart(ticker, as_of, number=None, source=None):
     def y_of(value, lo, hi):
         return y1 - (value - lo) / (hi - lo) * (y1 - y0)
 
-    def points(values, lo, hi):
+    def points(values, lo, hi, on=None):
         return " ".join(f"{x_of(day):.1f},{y_of(value, lo, hi):.1f}"
-                        for day, value in zip(dates, values))
+                        for day, value in zip(on or dates, values))
 
     label = "font-size='12' font-weight='700'"
     parts = []
@@ -370,7 +407,7 @@ def _price_chart(ticker, as_of, number=None, source=None):
         zero_y = y_of(0, r_lo, r_hi)
         parts.append(f"<line x1='{x0}' x2='{x1}' y1='{zero_y:.1f}' y2='{zero_y:.1f}' "
                      f"stroke='#000000' stroke-width='1.2'/>")
-    parts.append(f"<polyline points='{points(relative, r_lo, r_hi)}' fill='none' "
+    parts.append(f"<polyline points='{points(relative, r_lo, r_hi, rel_dates)}' fill='none' "
                  f"stroke='{INDEX_COLOR}' stroke-width='2' stroke-linejoin='round'/>")
     parts.append(f"<polyline points='{points(closes, p_lo, p_hi)}' fill='none' "
                  f"stroke='{ISSUER_COLOR}' stroke-width='2' stroke-linejoin='round'/>")
@@ -392,8 +429,10 @@ def _price_chart(ticker, as_of, number=None, source=None):
     title = (f"{'Exhibit ' + str(number) + '. ' if number else ''}{html.escape(ticker)} "
              f"relative to IHSG ({span_months}M, {dates[0]:%b-%y} - {dates[-1]:%b-%y})")
     safe_ticker = html.escape(ticker)
-    issuer_return = issuer[-1] - 100
-    ihsg_return = ihsg[-1] - 100
+    issuer_return, ihsg_return = window["issuer_return"], window["ihsg_return"]
+    detail = (f"; {window['source']}" if window["source"] else "")
+    if rel_dates[0] != dates[0]:
+        detail += f"; garis relatif sejak {rel_dates[0].isoformat()} (cakupan IHSG)"
 
     def pct(value):
         return f"{value:+.1f}".replace(".", ",")
@@ -404,10 +443,11 @@ def _price_chart(ticker, as_of, number=None, source=None):
         f"<title id='price-chart-title'>Harga penutupan {safe_ticker} dan kinerja "
         f"relatif terhadap IHSG, {dates[0].isoformat()} sampai {dates[-1].isoformat()}</title>"
         + "".join(parts) + "</svg>"
-        f"<div class='info-src'>{html.escape(fmt.house_source_line(source or 'Sectors'))}; "
+        # The data source is the one actually plotted: IDX when its files exist.
+        f"<div class='info-src'>{html.escape((fmt.DEFAULT_SOURCE if window['source'] else fmt.house_source_line(source or 'Sectors')) + detail)}; "
         f"{safe_ticker} {pct(issuer_return)}%, IHSG {pct(ihsg_return)}%. "
         f"Selisih {pct(issuer_return - ihsg_return)} poin persentase; "
-        f"{len(dates)} tanggal sama, tidak termasuk dividen</div>")
+        f"{len(rel_dates)} tanggal sama, tidak termasuk dividen</div>")
 
 
 def _column_widths(cols):
