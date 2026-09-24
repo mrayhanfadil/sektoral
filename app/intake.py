@@ -238,9 +238,9 @@ def _cache_close_provenance(ticker, price, price_date):
 
 
 def load(ticker, as_of=None):
-    """Build typed inputs from cache. Returns (intake, g1_log)."""
+    """Build typed inputs from cache. Returns (intake, s1_log)."""
     t = ticker.upper()
-    g1 = {}
+    s1 = {}
     notes = []
 
     rep_rows = cache.payloads(f"/company/report/{t}/")
@@ -380,30 +380,30 @@ def load(ticker, as_of=None):
     if base.get("cash") is None:
         notes.append(f"posisi kas tahun dasar {base['year']} tidak tersedia di data Sectors; kas berstatus n.a.")
 
-    # G1: scale sanity - revenue per share vs price must be same order of magnitude
+    # S1: scale sanity - revenue per share vs price must be same order of magnitude
     rps = base["revenue"] / shares
-    g1["G1_skala"] = "lolos" if 0.01 <= rps / price <= 100 else "gagal"
-    if g1["G1_skala"] == "gagal":
+    s1["S1_skala"] = "lolos" if 0.01 <= rps / price <= 100 else "gagal"
+    if s1["S1_skala"] == "gagal":
         notes.append("skala satuan tidak konsisten antara laporan dan harga; lanjut dengan label.")
 
-    # G1: cash reconciliation where CF legs exist
+    # S1: cash reconciliation where CF legs exist
     recon_ok, recon_n = True, 0
     for a in annuals:
         if a["ocf"] is not None and a["fcf"] is not None and a["capex_out"] is not None:
             recon_n += 1
             if abs((a["ocf"] - a["capex_out"]) - a["fcf"]) > 0.01 * max(abs(a["fcf"]), 1):
                 recon_ok = False
-    g1["G1_kas"] = "lolos" if (recon_n == 0 or recon_ok) else "gagal-dilabeli"
+    s1["S1_kas"] = "lolos" if (recon_n == 0 or recon_ok) else "gagal-dilabeli"
     if recon_n == 0:
         notes.append("kaki arus kas tidak lengkap di data Sectors; rekonsiliasi kas tidak diuji.")
 
-    # G1: interim freshness - structured interim not required by spec; label only
-    g1["G1_periode"] = "dilabeli"
+    # S1: interim freshness - structured interim not required by spec; label only
+    s1["S1_periode"] = "dilabeli"
     notes.append(f"basis tahunan terakhir {base['year']} dipakai sebagai tahun dasar; "
                  "rilis interim hanya konteks narasi.")
 
-    # G1: non-recurring - not detectable from cache granularity
-    g1["G1_nonrecurring"] = "dilabeli"
+    # S1: non-recurring - not detectable from cache granularity
+    s1["S1_nonrecurring"] = "dilabeli"
     notes.append("tidak ada item non-recurring teridentifikasi dari granularitas data Sectors; "
                  "laba dilaporkan = laba inti.")
 
@@ -487,7 +487,7 @@ def load(ticker, as_of=None):
         "foreign_flow": (flow.get("data") or []) if isinstance(flow, dict) else [],
         "peers": peers, "peer_median_pe": peer_median_pe, "peer_basis": peer_basis,
         # Own-history EV/EBITDA (Sectors valuation.historical_valuation) for the
-        # Gate 5 implied-exit check; the Sectors peer tables carry no EV.
+        # Method Gate 5 implied-exit check; the Sectors peer tables carry no EV.
         "historical_ev_ebitda": [
             {"year": h.get("year"), "value": _num(h.get("enterprise_to_ebitda"))}
             for h in (val.get("historical_valuation") or [])
@@ -526,7 +526,7 @@ def load(ticker, as_of=None):
         "driver_evidence": _driver_evidence_inputs(
             official_evidence, payout, payout_basis, dps_hist, report_date, profile),
     }
-    return intake, {"G1": g1, "catatan": notes, "fetched_at": time.time()}
+    return intake, {"S1": s1, "catatan": notes, "fetched_at": time.time()}
 
 
 def _borrowed_peer_report(t):

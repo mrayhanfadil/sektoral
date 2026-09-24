@@ -37,7 +37,7 @@ def test_insufficient_primary_falls_back_in_fixed_order():
 
 
 def test_extreme_result_stops_chain_instead_of_shopping_for_a_nicer_method():
-    # Gate 5: upside > +100% stops chain (framework thresholds, shared constant).
+    # Method Gate 5: upside > +100% stops chain (framework thresholds, shared constant).
     chain = MC.run("going_concern_fcff", {"fcff_dcf": _ok("fcff_dcf", 2200),
                                           "relative_pe": _ok("relative_pe", 1050)}, PRICE)
     assert chain["selected"] == "fcff_dcf" and chain["extreme"] is True
@@ -127,7 +127,7 @@ def test_harness_follows_chain_not_skipped_primary(monkeypatch):
     assert result["gates"]["engine_status"] == "distributable"
     assert result["log_gate"]["release"]["route"] == "fallback"
     assert result["log_gate"]["release"]["method_key"] == "relative_pe"
-    assert not any("G3.8" in b for b in result["blockers"])
+    assert not any("S3.8" in b for b in result["blockers"])
 
 
 def test_data_gates_make_screening_methods_yield():
@@ -263,9 +263,9 @@ def test_earnings_led_extreme_result_stays_draft():
     assert va["method_chain"]["extreme"] is True
     assert va["release"]["status"] == "draft_non_distributable"
     assert va["tp"] is None
-    # Gate 5 points to relative valuation: the peer P/S cross-check is recorded.
+    # Method Gate 5 points to relative valuation: the peer P/S cross-check is recorded.
     checks = va["method_chain"].get("cross_checks") or []
-    assert [x["key"] for x in checks] == ["ps_peer"] and checks[0]["why"].startswith("Gate 5")
+    assert [x["key"] for x in checks] == ["ps_peer"] and checks[0]["why"].startswith("Method Gate 5")
 
 
 def test_mining_profile_never_gets_earnings_scenario():

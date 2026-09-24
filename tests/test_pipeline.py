@@ -81,7 +81,7 @@ def test_forecast_accounting_identity(tmp_path):
     doc = B.build("BBCA", tmp_path)
     assert doc["meta"]["ticker"] == "BBCA"
     raw = json.loads((tmp_path / "BBCA.json").read_text())
-    assert raw["log_gate"]["G2"]["G2.5_neraca"] == "lolos"
+    assert raw["log_gate"]["S2"]["S2.5_neraca"] == "lolos"
 
 
 def test_cli_ok(tmp_path):

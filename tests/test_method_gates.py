@@ -1,4 +1,4 @@
-"""Tests for Method Routing & Valuation Gates 0-5.
+"""Tests for Method Routing & Valuation Method Gates 0-5.
 
 Covers:
 - RATU: full-pass DCF (FCFF/WACC DCF)
@@ -8,8 +8,8 @@ Covers:
 - ADRO: finite-reserves / extractive NAV primary
 - Unknown / missing metadata -> unsupported fail-closed
 - Holding dissimilar subsidiaries with multiple segments -> SOTP primary
-- Gate 1-4 boundary conditions (EBIT profitability, leverage breach, negative equity, decline, pre-revenue)
-- Gate 5 output sanity (extreme upside/downside override, terminal share flag, peer exit range check)
+- Method Gate 1-4 boundary conditions (EBIT profitability, leverage breach, negative equity, decline, pre-revenue)
+- Method Gate 5 output sanity (extreme upside/downside override, terminal share flag, peer exit range check)
 - Valuation engine integration (valuation.build carries gate_verdict)
 """
 from __future__ import annotations
@@ -124,7 +124,7 @@ def test_holding_dissimilar_segments():
     assert verdict_multi.primary == "SOTP"
     assert any("dissimilar" in r.lower() for r in verdict_multi.reasons)
 
-    # Dissimilar with single segment -> candidates proceed to Gate 1 (DCF)
+    # Dissimilar with single segment -> candidates proceed to Method Gate 1 (DCF)
     verdict_single = evaluate({
         "domain": "holding_dissimilar",
         "segments_count": 1,
@@ -136,9 +136,9 @@ def test_holding_dissimilar_segments():
     assert verdict_single.primary == "FCFF/WACC DCF"
 
 
-def test_gate1_subgates():
-    """Gate 1: profitability, leverage breach, and negative equity edge cases."""
-    # Gate 1b: EBIT < 2/3y -> Relative only
+def test_method_gate1_subgates():
+    """Method Gate 1: profitability, leverage breach, and negative equity edge cases."""
+    # Method Gate 1b: EBIT < 2/3y -> Relative only
     v_ebit = evaluate({
         "domain": "single_business",
         "filing_history_years": 5,
@@ -148,7 +148,7 @@ def test_gate1_subgates():
     assert v_ebit.primary == "Relative Valuation"
     assert "1b_profitability" in v_ebit.gates_failed
 
-    # Gate 1c: Leverage breach -> DCF + mandatory Relative cross-check
+    # Method Gate 1c: Leverage breach -> DCF + mandatory Relative cross-check
     v_lev = evaluate({
         "domain": "single_business",
         "filing_history_years": 5,
@@ -160,7 +160,7 @@ def test_gate1_subgates():
     assert v_lev.secondary == "Relative Valuation"
     assert "1c_capital_structure" in v_lev.gates_failed
 
-    # Gate 1d: Negative equity -> Relative Valuation (EV multiples only)
+    # Method Gate 1d: Negative equity -> Relative Valuation (EV multiples only)
     v_neg_eq = evaluate({
         "domain": "single_business",
         "filing_history_years": 5,
@@ -171,8 +171,8 @@ def test_gate1_subgates():
     assert "1d_equity_base" in v_neg_eq.gates_failed
 
 
-def test_gate2_high_nci():
-    """Gate 2: NCI > 40% makes SOTP primary."""
+def test_method_gate2_high_nci():
+    """Method Gate 2: NCI > 40% makes SOTP primary."""
     v = evaluate({
         "domain": "single_business",
         "nci_pct": 45.0,
@@ -184,8 +184,8 @@ def test_gate2_high_nci():
     assert "2_nci" in v.gates_failed
 
 
-def test_gate4_lifecycle_stages():
-    """Gate 4: decline -> P/BV; pre-revenue/high growth -> EV/Sales."""
+def test_method_gate4_lifecycle_stages():
+    """Method Gate 4: decline -> P/BV; pre-revenue/high growth -> EV/Sales."""
     v_dec = evaluate({"domain": "single_business", "life_cycle_stage": "decline"})
     assert v_dec.primary == "P/BV"
 
@@ -196,8 +196,8 @@ def test_gate4_lifecycle_stages():
     assert v_hg.primary == "EV/Sales"
 
 
-def test_gate5_output_sanity():
-    """Gate 5: upside extremes trigger Review Required; tv_share > 80% flags warning without override."""
+def test_method_gate5_output_sanity():
+    """Method Gate 5: upside extremes trigger Review Required; tv_share > 80% flags warning without override."""
     # Extreme upside > 100%
     v_up = evaluate({"domain": "single_business", "upside_pct": 115.0})
     assert v_up.rating_override == "Review Required"

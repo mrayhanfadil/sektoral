@@ -1,11 +1,11 @@
-"""Harness G1/G2/G3 + runner compliance with Instruksi-Report-v3."""
+"""Harness S1/S2/S3 + runner compliance with Instruksi-Report-v3."""
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app.harness import check_g1, check_g2, check_g3, run_all  # noqa: E402
+from app.harness import check_s1, check_s2, check_s3, run_all  # noqa: E402
 
 
 def _intake_fcff():
@@ -39,7 +39,7 @@ def _intake_fcff():
              "ebit": 8.5e11, "interest": 1e11, "tax": 1.6e11,
              "net": 5.9e11, "ebitda": 1.5e12},
         ],
-        "g2": {"G2.4_konsistensi": "lolos", "G2.5_neraca": "lolos"},
+        "s2": {"S2.4_konsistensi": "lolos", "S2.5_neraca": "lolos"},
         "forecast_basis": "driver_forecast",
         "production_ready": True,
         "driver_evidence": {
@@ -50,51 +50,51 @@ def _intake_fcff():
     return intake, fc
 
 
-def test_g1_passes_with_valid_actual():
+def test_s1_passes_with_valid_actual():
     intake, _ = _intake_fcff()
-    r = check_g1(intake)
+    r = check_s1(intake)
     assert r["status"] == "lolos", r
     assert r["blockers"] == []
 
 
-def test_g1_blocks_without_actual():
-    r = check_g1({"model_profile": "going_concern_fcff"})
+def test_s1_blocks_without_actual():
+    r = check_s1({"model_profile": "going_concern_fcff"})
     assert r["status"] == "gagal"
-    assert any("G1.periode" in b for b in r["blockers"])
+    assert any("S1.periode" in b for b in r["blockers"])
 
 
-def test_g2_screening_proxy_fails_g29():
+def test_s2_screening_proxy_fails_s29():
     intake, fc = _intake_fcff()
     fc["forecast_basis"] = "historical_screening_proxy"
     fc["production_ready"] = False
-    r = check_g2(intake, fc)
+    r = check_s2(intake, fc)
     assert r["status"] == "gagal"
-    assert any("G2.9" in b for b in r["blockers"])
+    assert any("S2.9" in b for b in r["blockers"])
 
 
-def test_g2_driver_forecast_passes():
+def test_s2_driver_forecast_passes():
     intake, fc = _intake_fcff()
-    r = check_g2(intake, fc)
+    r = check_s2(intake, fc)
     assert r["status"] == "lolos", r
 
 
-def test_g3_extreme_upside_blocks():
+def test_s3_extreme_upside_blocks():
     intake, fc = _intake_fcff()
     va = {"tp": 3000.0, "tp_down": 2500.0, "upside": 2.0,
           "tv_share": 0.4, "net_debt": 1e12,
           "implied": {"per": 10.0, "ev_ebitda": 6.0},
-          "g3": {"G3.5_keyfin": "lolos"}}
+          "s3": {"S3.5_keyfin": "lolos"}}
     intake["peers"] = []
-    r = check_g3(intake, fc, va)
+    r = check_s3(intake, fc, va)
     assert r["status"] == "gagal"
     assert any("extreme" in b for b in r["blockers"])
 
 
 def test_runner_fails_closed_on_engine_release():
-    # valid G1/G2/G3 math but engine release has no driver evidence provenance → draft
+    # valid S1/S2/S3 math but engine release has no driver evidence provenance → draft
     intake, fc = _intake_fcff()
     del intake["latest_official_actual"]
-    va = {"tp": None, "g3": {}}
+    va = {"tp": None, "s3": {}}
     r = run_all(intake, fc, va, None)
     assert r["status"] == "draft_non_distributable"
     assert r["blockers"]

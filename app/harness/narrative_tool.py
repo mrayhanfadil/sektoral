@@ -246,7 +246,7 @@ def check_narrative(doc: dict | None) -> dict:
                                       else "; cover tidak menyebut risiko"),
       published, None if ok or published else "peringatan")
 
-    # N-TP consistency + extreme + downside are cross-checked in G3; re-assert presence.
+    # N-TP consistency + extreme + downside are cross-checked in S3; re-assert presence.
     meta = doc.get("meta") or {}
     if meta.get("tp") is not None and meta.get("status") == "draft_non_distributable":
         v("N.tp_draft", False, "draft memuat TP; tahan sampai release lolos", True)

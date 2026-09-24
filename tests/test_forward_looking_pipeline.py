@@ -198,7 +198,7 @@ def test_sourced_driver_metadata_does_not_promote_screening_rows():
     fc = forecast_mod.build(complete)
     assert fc["forecast_basis"] == "historical_screening_proxy"
     assert fc["production_ready"] is False
-    assert fc["g2"]["G2.9_driver_forecast"] == "gagal"
+    assert fc["s2"]["S2.9_driver_forecast"] == "gagal"
     assert all(row["capex"] == row["da"] for row in fc["rows"])
     assert any("driver-to-FCFF bridge is not calculated" in reason
                for reason in fc["production_blockers"])
@@ -209,7 +209,7 @@ def test_sourced_driver_metadata_does_not_promote_screening_rows():
     fc2 = forecast_mod.build(partial)
     assert fc2["forecast_basis"] == "historical_screening_proxy"
     assert fc2["production_ready"] is False
-    assert fc2["g2"]["G2.9_driver_forecast"] == "gagal"
+    assert fc2["s2"]["S2.9_driver_forecast"] == "gagal"
 
 
 def test_bank_source_metadata_does_not_promote_screening_rows():
@@ -218,7 +218,7 @@ def test_bank_source_metadata_does_not_promote_screening_rows():
     fc = forecast_mod.build(intake)
     assert fc["forecast_basis"] == "historical_screening_proxy"
     assert fc["production_ready"] is False
-    assert fc["g2"]["G2.9_driver_forecast"] == "gagal"
+    assert fc["s2"]["S2.9_driver_forecast"] == "gagal"
     assert any("driver-to-earnings/capital bridge is not calculated" in reason
                for reason in fc["production_blockers"])
 
@@ -305,7 +305,7 @@ def test_validator_rejects_nested_forbidden_key_and_bad_change():
 
 # ---------------------------------------------------------- PR #3 review fixes
 
-def test_gate5_extreme_rule_is_framework_asymmetric():
+def test_method_gate5_extreme_rule_is_framework_asymmetric():
     from app import model_profiles
     assert model_profiles.is_extreme_upside(1.2) and model_profiles.is_extreme_upside(-0.6)
     assert not model_profiles.is_extreme_upside(0.7)   # +70% is not extreme
@@ -313,7 +313,7 @@ def test_gate5_extreme_rule_is_framework_asymmetric():
     assert not model_profiles.is_extreme_upside(None)
 
 
-def test_bank_gate5_uses_ddm_upside_not_fcff_screen():
+def test_bank_method_gate5_uses_ddm_upside_not_fcff_screen():
     from app import forecast, intake, valuation
     doc_in, _ = intake.load("BBCA")
     fc = forecast.build(doc_in)

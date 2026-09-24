@@ -2,14 +2,14 @@
 
 > Seluruh instruksi dan seluruh output laporan wajib dalam Bahasa Indonesia. Istilah keuangan tetap dalam Bahasa Inggris sesuai konvensi pasar (EBITDA, FCFF, WACC, top line, capex, dan sejenisnya).
 
-> Revisi v3.7: rantai metode dari verdict Gates 0-5 (§4.1a gate-outcome table);
+> Revisi v3.7: rantai metode dari verdict Method Gates 0-5 (§4.1a gate-outcome table);
 > input gate nyata (ekuitas/NCI resmi, klasifikasi tahap LLM + override analis);
-> satu aturan Gate 5 (upside > +100% atau downside < -50% → Review Required;
+> satu aturan Method Gate 5 (upside > +100% atau downside < -50% → Review Required;
 > TV > 80% flag, bukan blocker); override analis tercatat. Revisi v3.6: rantai
 > metode valuasi otomatis (§4.1a). Metode utama yang tidak
 > memadai digantikan metode fallback berikutnya dalam urutan yang dikunci per
 > profile; gate data tetap berlaku untuk semua metode dan hasil ekstrem
-> menghentikan rantai. Revisi v3.5: tiap `MODEL_PROFILE` memiliki forecast driver, valuasi, Gate 2/3,
+> menghentikan rantai. Revisi v3.5: tiap `MODEL_PROFILE` memiliki forecast driver, valuasi, Stage Check S2/S3,
 > metrik laporan, dan release gate yang berlaku untuk bisnisnya. Status production
 > dihitung dari bukti dan rekonsiliasi; historical screening proxy tidak otomatis
 > menjadi forecast produksi. Revisi v3.4: metode finite-life mining, FCFF DCF,
@@ -71,7 +71,7 @@ Fakta, nama proyek, angka, dan asumsi issuer hanya boleh berada di input bersumb
 
 ---
 
-## 2. TAHAP 1: INTAKE & VALIDASI DATA (GATE 1)
+## 2. TAHAP 1: INTAKE & VALIDASI DATA (STAGE CHECK S1)
 
 | Cek | Aturan | Jika gagal |
 |---|---|---|
@@ -85,11 +85,11 @@ Fakta, nama proyek, angka, dan asumsi issuer hanya boleh berada di input bersumb
 
 ---
 
-## 3. TAHAP 2: FORECAST ENGINE (GATE 2)
+## 3. TAHAP 2: FORECAST ENGINE (STAGE CHECK S2)
 
 ### 3.1 Prinsip
 
-Forecast dipilih menurut `MODEL_PROFILE` dan dibangun dari driver bisnis material yang punya sumber, periode, satuan, dan hubungan terukur ke laba/valuasi. Historical CAGR, rata-rata tiga tahun, capex = D&A, utang flat, dan angka nol karena data hilang adalah screening atau asumsi yang harus dijustifikasi, bukan bukti otomatis bahwa forecast siap produksi. `production_ready` dan G2.9 ditentukan dari cakupan bukti serta hasil rekonsiliasi model.
+Forecast dipilih menurut `MODEL_PROFILE` dan dibangun dari driver bisnis material yang punya sumber, periode, satuan, dan hubungan terukur ke laba/valuasi. Historical CAGR, rata-rata tiga tahun, capex = D&A, utang flat, dan angka nol karena data hilang adalah screening atau asumsi yang harus dijustifikasi, bukan bukti otomatis bahwa forecast siap produksi. `production_ready` dan S2.9 ditentukan dari cakupan bukti serta hasil rekonsiliasi model.
 
 **Going concern non-keuangan (`going_concern_fcff`):** pilih driver pendapatan yang relevan seperti volume × harga, mix, kapasitas/utilisasi, kontrak/backlog, atau unit economics. Turunkan margin dan biaya dari driver tersebut; modelkan tarif pajak, D&A, capex proyek dan sustaining, modal kerja operasi tanpa kas/utang, jadwal utang, serta bunga. `FCFF = NOPAT + D&A - capex - ΔNWC` harus sama di forecast, DCF, dan exhibit. Driver yang tidak tersedia dan material menjadi blocker, bukan asumsi nol.
 
@@ -104,26 +104,26 @@ Pisahkan output tambang, produk antara, dan produk hilir agar tidak dihitung gan
 Berita atau guidance masuk ke forecast hanya bila mengubah driver terukur. Agen boleh memilih perubahan numerik sebagai *asumsi skenario analis* dengan menyimpan tanggal, URL/judul yang persis cocok ke sumber, driver, tahun, besaran, mekanisme, dan batas ketidakpastian. Pisahkan fakta berita dari besaran judgment agen. Berita yang hanya melaporkan harga saham, indeks, atau sentimen tanpa katalis operasi/biaya/komoditas mendapat dampak laba nol; risiko makro boleh diuji pada discount rate skenario jika hubungan sebab-akibat dan usianya dijelaskan. Catat `fakta/sumber → driver dan tahun → dampak laba/arus kas → valuasi`. Hasil interim dan guidance yang bersumber boleh dipakai untuk skenario sisa tahun, tetapi penjualan tidak otomatis sama dengan produksi, dan skenario dalam mata uang pelaporan tidak otomatis menjadi TP rupiah tanpa bridge FX/asset life/utang yang konsisten. Input kritis yang masih hilang dicatat sebagai gap eksplisit.
 
 
-### 3.2 GATE 2: cek kewajaran forecast sesuai profile
+### 3.2 STAGE CHECK S2: cek kewajaran forecast sesuai profile
 
 | # | Berlaku untuk | Cek dan tindakan bila gagal |
 |---|---|---|
-| G2.1 | Semua profile dengan hasil interim | Bandingkan realisasi periode terbaru dengan forecast tahun berjalan pada basis periode yang sama; selisih > 10pp dijelaskan atau forecast direvisi. |
-| G2.2 | Profile yang memakai EBITDA | Margin EBITDA proyeksi di luar rentang historis memerlukan driver dan sumber eksplisit. |
-| G2.3 | Profile dengan driver volume/harga/permintaan | Skenario driver mengubah laba sesuai unit economics model, bukan persentase laba flat tanpa perhitungan. |
-| G2.4 | Semua profile | Asumsi dan angka yang sama harus konsisten di forecast, laporan keuangan, valuasi, dan exhibit yang berlaku. |
-| G2.5 | Profile dengan neraca proyeksi | Neraca, ekuitas, kas atau modal direkonsiliasi; plug hanya boleh sesuai mekanika model yang dijelaskan. |
-| G2.6 | Semua profile | Angka dua tahun berturut-turut yang identik memerlukan alasan driver eksplisit. |
-| G2.7 | Semua profile | Label dan angka tahun fiskal sama di seluruh tabel dan valuasi. |
-| G2.8 | `financial_ddm` bila relevan | Laba, laba ditahan, dividen, ekuitas, ROE, dan kebutuhan modal/payout harus konsisten. |
-| G2.9 | Semua profile | Rantai driver-ke-laba/arus kas dan metode valuasi yang dipilih lengkap, bersumber, dan direkonsiliasi. Gagal bila hanya historical screening proxy. |
+| S2.1 | Semua profile dengan hasil interim | Bandingkan realisasi periode terbaru dengan forecast tahun berjalan pada basis periode yang sama; selisih > 10pp dijelaskan atau forecast direvisi. |
+| S2.2 | Profile yang memakai EBITDA | Margin EBITDA proyeksi di luar rentang historis memerlukan driver dan sumber eksplisit. |
+| S2.3 | Profile dengan driver volume/harga/permintaan | Skenario driver mengubah laba sesuai unit economics model, bukan persentase laba flat tanpa perhitungan. |
+| S2.4 | Semua profile | Asumsi dan angka yang sama harus konsisten di forecast, laporan keuangan, valuasi, dan exhibit yang berlaku. |
+| S2.5 | Profile dengan neraca proyeksi | Neraca, ekuitas, kas atau modal direkonsiliasi; plug hanya boleh sesuai mekanika model yang dijelaskan. |
+| S2.6 | Semua profile | Angka dua tahun berturut-turut yang identik memerlukan alasan driver eksplisit. |
+| S2.7 | Semua profile | Label dan angka tahun fiskal sama di seluruh tabel dan valuasi. |
+| S2.8 | `financial_ddm` bila relevan | Laba, laba ditahan, dividen, ekuitas, ROE, dan kebutuhan modal/payout harus konsisten. |
+| S2.9 | Semua profile | Rantai driver-ke-laba/arus kas dan metode valuasi yang dipilih lengkap, bersumber, dan direkonsiliasi. Gagal bila hanya historical screening proxy. |
 
 ---
 
-## 4. TAHAP 3: VALUATION ENGINE (GATE 3)
+## 4. TAHAP 3: VALUATION ENGINE (STAGE CHECK S3)
 
 ### 4.1 Pemilihan metode
-Pilih forecast dan valuasi dari verdict Gates 0-5 (`app/model_profiles.evaluate`), bukan dari ticker. Tabel gate di `app/gate_thresholds.py` adalah satu-satunya sumber ambang Gate 5. Nyatakan sekali metode utama dan alasannya.
+Pilih forecast dan valuasi dari verdict Method Gates 0-5 (`app/model_profiles.evaluate`), bukan dari ticker. Tabel gate di `app/gate_thresholds.py` adalah satu-satunya sumber ambang Method Gate 5. Nyatakan sekali metode utama dan alasannya.
 - **Klasifikasi tahap (stage):** LLM mengklasifikasi `life_cycle_stage`, `has_steady_state_3y`, `commodity_price_driven`, `dissimilar_segments` dari bukti bersumber (`app/stage.py`); analis boleh mengoreksi via `data/method_overrides/<TICKER>.json` (`field`, `value`, `reason`, `analyst`, `date`). Tanpa klasifikasi tervalidasi, gate memakai default konservatif dan melabelinya belum terverifikasi. Input gate yang hilang tetap `None` dan gate mencatat "tidak dapat dinilai", bukan lolos default.
 - **Override analis:** `--method <key>` pada `app.build`/`app.research` atau file override memilih metode; rantai mencatat `route: "override"`, menyimpan urutan usulan sistem di trace, tetap menerapkan semua data gate. Laporan menampilkan "Usulan sistem: X; dipilih analis: Y (alasan)".
 - **Finite-life / mining:** metode aset utama tetap forecast driver fisik dan LoM DCF/RNAV sampai akhir umur ekonomis/cadangan yang didukung data, tanpa terminal value perpetual. Untuk grup multi-aset gunakan SOTP, downstream secara inkremental, proyek pengembangan secara risk-adjusted, lalu bridge kas/aset non-operasi, utang, minoritas dan corporate items. Jika LoM/SOTP belum lengkap, metode aset tetap incomplete. Metode alternatif FY forecast EV/EBITDA menjadi langkah terakhir rantai tambang (§4.1a) dan dipakai untuk target harga dan rating bila actual interim resmi, skenario agen tervalidasi, harga penutupan setelah rilis, kurs, neraca, saham, serta sensitivitas multiple tersedia. Label metode, tahun dasar, dan status `distributable_assumption_led` harus tampil konsisten; multiple adalah asumsi analis kecuali peer tervalidasi. Jelaskan risiko umur tambang, capex, dan perubahan neraca yang belum dihitung. Tanpa bukti alternatif tersebut, jangan terbitkan TP.
@@ -133,7 +133,7 @@ Pilih forecast dan valuasi dari verdict Gates 0-5 (`app/model_profiles.evaluate`
 - **Historical-relative multiples:** P/E, P/BV, EV/EBITDA, atau EV/Sales versus sejarah emiten sendiri boleh menjadi cross-check jika denominator dan struktur modal dapat dibandingkan. Jelaskan bahwa driver dianggap tetap dan history bisa berubah rezim. Ini bukan peer valuation, tidak otomatis menjadi metode utama, dan tidak dirata-ratakan mekanis dengan DCF/DDM/LoM-SOTP.
 
 ### 4.1a Rantai metode (fallback otomatis)
-Urutan metode dikunci dari verdict Gates 0-5 (`app/method_chain.chain_for`) sebelum nilai dihitung:
+Urutan metode dikunci dari verdict Method Gates 0-5 (`app/method_chain.chain_for`) sebelum nilai dihitung:
 
 | Gate outcome | Chain (primary → fallbacks → last step) |
 |---|---|
@@ -147,12 +147,12 @@ Urutan metode dikunci dari verdict Gates 0-5 (`app/method_chain.chain_for`) sebe
 | Decline / turnaround | P/BV relatif (or NAV if asset base substantial) → DCF (reference) |
 | Passes all gates | DCF FCFF → PER relatif → PER FY skenario |
 
-- Metode dinyatakan *tidak memadai* hanya karena input wajibnya hilang atau cek struktural gagal: skala ekuitas di luar 20-300% market cap (G3.2), downside tidak lebih rendah dari base (G3.4), divergensi Gordon vs exit > 30% (§4.4), NAV/umur cadangan tidak terhitung, peer PER valid (0-50x) kurang dari tiga, atau peer EV/EBITDA, EV/Sales, P/BV belum tersedia di cache Sectors (tampil sebagai "belum dimodelkan", bukan nol). Hasil yang tidak disukai bukan alasan turun rantai.
+- Metode dinyatakan *tidak memadai* hanya karena input wajibnya hilang atau cek struktural gagal: skala ekuitas di luar 20-300% market cap (S3.2), downside tidak lebih rendah dari base (S3.4), divergensi Gordon vs exit > 30% (§4.4), NAV/umur cadangan tidak terhitung, peer PER valid (0-50x) kurang dari tiga, atau peer EV/EBITDA, EV/Sales, P/BV belum tersedia di cache Sectors (tampil sebagai "belum dimodelkan", bukan nol). Hasil yang tidak disukai bukan alasan turun rantai.
 - Metode pertama yang memadai menjadi dasar TP. Bila upside > +100% atau downside < -50%, rantai berhenti di metode itu dan laporan tetap draft sampai ada tesis fundamental bersumber; jangan mencari metode lain yang hasilnya lebih nyaman. Satu modul konstanta `app/gate_thresholds.py` dipakai rantai, gate, harness dan spec.
 - Tambang tidak pernah jatuh ke DCF perpetual-growth; FCFF DCF hanya screen.
-- Metode yang menilai forecast driver (SOTP/LoM, RNAV, DCF, DDM, P/BV, PER forward) dinyatakan tidak memadai selama gate data profile (actual terbaru, forecast driver, G2.9) gagal, agar rantai dapat mencapai langkah terakhir.
+- Metode yang menilai forecast driver (SOTP/LoM, RNAV, DCF, DDM, P/BV, PER forward) dinyatakan tidak memadai selama gate data profile (actual terbaru, forecast driver, S2.9) gagal, agar rantai dapat mencapai langkah terakhir.
 - Metode utama atas skenario tervalidasi: DDM bank dan FCFF DCF going concern boleh menilai jalur FY skenario analis (aktual 1H resmi + asumsi H2 + empat tahun lanjutan tervalidasi) alih-alih forecast screening. Gate-nya sama dengan langkah terakhir berbasis asumsi (tanpa set PER peer), ditambah horizon eksplisit lima tahun; DDM wajib payout historis Sectors dengan riwayat dividen minimal tiga tahun dan CoE > g; DCF wajib pendapatan, margin EBITDA dan capex tiap tahun, jembatan kas/utang/minoritas/saham bersumber, WACC > g, FCFF terminal dan ekuitas positif. D&A, tarif pajak efektif dan intensitas modal kerja diambil dari sejarah bersumber; modal kerja negatif tidak dihitung sebagai sumber kas. TP DCF memakai terminal Gordon; exit EV/EBITDA historis emiten tampil berdampingan sebagai cross-check dan selisihnya diungkapkan (§4.4). Status tetap `distributable_assumption_led`; forecast tidak pernah ditandai production-ready.
-- Langkah terakhir berbasis asumsi memakai gate sendiri, bukan G2.9: actual 1H resmi, skenario agen tervalidasi yang terikat ke rilis itu, harga penutupan bersumber sesudah rilis (maksimal lima hari sebelum laporan), kurs bertanggal bila mata uang pelaporan USD, jumlah saham dari neraca resmi, dan sensitivitas multiple yang berurutan. Untuk going concern dan bank, agen memilih rasio pendapatan H2/H1 dan margin laba bersih H2 (going concern juga margin EBITDA dan intensitas capex FY serta tiap tahun lanjutan sebagai input DCF skenario, dijangkarkan ke EBITDA/laba usaha 1H resmi dan riwayat EBITDA/capex Sectors); penyimpangan material dari run-rate 1H (rasio di luar 0,8-1,25 atau margin berbeda lebih dari 5pp) wajib mengutip artikel bertanggal atau panduan resmi. Mesin menghitung EPS FY (porsi induk dari 1H bila dilaporkan) dan menerapkan PER median minimal tiga peer valid; kuartil bawah dan atas menjadi sensitivitas. Label metode dan status `distributable_assumption_led` wajib tampil konsisten.
+- Langkah terakhir berbasis asumsi memakai gate sendiri, bukan S2.9: actual 1H resmi, skenario agen tervalidasi yang terikat ke rilis itu, harga penutupan bersumber sesudah rilis (maksimal lima hari sebelum laporan), kurs bertanggal bila mata uang pelaporan USD, jumlah saham dari neraca resmi, dan sensitivitas multiple yang berurutan. Untuk going concern dan bank, agen memilih rasio pendapatan H2/H1 dan margin laba bersih H2 (going concern juga margin EBITDA dan intensitas capex FY serta tiap tahun lanjutan sebagai input DCF skenario, dijangkarkan ke EBITDA/laba usaha 1H resmi dan riwayat EBITDA/capex Sectors); penyimpangan material dari run-rate 1H (rasio di luar 0,8-1,25 atau margin berbeda lebih dari 5pp) wajib mengutip artikel bertanggal atau panduan resmi. Mesin menghitung EPS FY (porsi induk dari 1H bila dilaporkan) dan menerapkan PER median minimal tiga peer valid; kuartil bawah dan atas menjadi sensitivitas. Label metode dan status `distributable_assumption_led` wajib tampil konsisten.
 - Label metode di halaman 1 menyebut metode terpilih dan metode yang dilewati. Halaman valuasi memuat exhibit rantai metode: urutan, keputusan (dipakai, dilewati, silang cek), dan alasan tiap metode. Nilai per saham hanya ditampilkan bila rilis lolos. Metode yang memadai tetapi tidak terpilih hanya silang cek dan tidak dirata-ratakan dengan TP.
 - Fallback membawa proksi yang wajib dilabeli: RNAV anuitas memakai produksi flat dan margin EBITDA forecast sebagai proksi margin kas; PER relatif memakai PER peer TTM atas EPS forward dan menganggap peer sebanding.
 
@@ -272,17 +272,17 @@ perpetual-growth DCF tidak defensible untuk cadangan terbatas (finite
 reserve life, prinsip established §4.1); didiskusikan terpisah bila ada
 emiten E&P yang memakai template ini.
 
-### 4.6 GATE 3: cek kewajaran valuasi sesuai profile
+### 4.6 STAGE CHECK S3: cek kewajaran valuasi sesuai profile
 
 | # | Berlaku untuk | Cek dan tindakan bila gagal |
 |---|---|---|
-| G3.1 | Metode dengan terminal value | Hitung porsi terminal terhadap nilai; > 80% wajib diberi catatan dan diuji (flag, bukan blocker). Tidak berlaku untuk LoM tanpa terminal. |
-| G3.2 | Semua metode utama | Bandingkan equity value/TP dengan kapitalisasi pasar pada satuan dan tanggal yang sama; < 20% atau > 300% memerlukan penelusuran dan tesis fundamental sebelum publikasi. |
-| G3.3 | Multiple yang relevan | Hitung ulang implied PER/PBV/EV multiple langsung dari forecast; EV multiple tidak dipakai sebagai gate bank. |
-| G3.4 | Semua metode utama | Sensitivitas dihitung ulang dari basis TP yang sama dan downside menghasilkan TP lebih rendah dari base case. |
-| G3.5 | Metrik valuasi di Key Financials | Gunakan BVPS, saham, kas/utang bersih, dan tahun forecast yang benar menurut metodenya; hanya tampilkan EV bila applicable. |
-| G3.6 | Peer set bila digunakan | Bandingkan model bisnis dan eksposur sebanding; jelaskan rentang market cap dan outlier. |
-| G3.7 | Band historis bila digunakan | Rata-rata berada di dalam band yang ditampilkan dan struktur bisnis/denominator masih sebanding. |
+| S3.1 | Metode dengan terminal value | Hitung porsi terminal terhadap nilai; > 80% wajib diberi catatan dan diuji (flag, bukan blocker). Tidak berlaku untuk LoM tanpa terminal. |
+| S3.2 | Semua metode utama | Bandingkan equity value/TP dengan kapitalisasi pasar pada satuan dan tanggal yang sama; < 20% atau > 300% memerlukan penelusuran dan tesis fundamental sebelum publikasi. |
+| S3.3 | Multiple yang relevan | Hitung ulang implied PER/PBV/EV multiple langsung dari forecast; EV multiple tidak dipakai sebagai gate bank. |
+| S3.4 | Semua metode utama | Sensitivitas dihitung ulang dari basis TP yang sama dan downside menghasilkan TP lebih rendah dari base case. |
+| S3.5 | Metrik valuasi di Key Financials | Gunakan BVPS, saham, kas/utang bersih, dan tahun forecast yang benar menurut metodenya; hanya tampilkan EV bila applicable. |
+| S3.6 | Peer set bila digunakan | Bandingkan model bisnis dan eksposur sebanding; jelaskan rentang market cap dan outlier. |
+| S3.7 | Band historis bila digunakan | Rata-rata berada di dalam band yang ditampilkan dan struktur bisnis/denominator masih sebanding. |
 
 ---
 
@@ -366,7 +366,7 @@ Ringkasan riset berbantuan AI tetap tersedia di HTML/trace untuk audit, tetapi t
 1. Apakah headline berupa tesis forward dengan kata kerja?
 2. Apakah paragraf 1 memakai periode rilis paling baru yang tersedia?
 3. Apakah semua angka di halaman 1 cocok dengan tabel Key Financials dan halaman valuasi?
-4. Apakah semua cek Gate 2 dan Gate 3 yang berlaku untuk `MODEL_PROFILE` lolos, dan apakah blocker release ditampilkan bila gagal?
+4. Apakah semua Stage Check S2 dan S3 yang berlaku untuk `MODEL_PROFILE` lolos, dan apakah blocker release ditampilkan bila gagal?
 5. Apakah metode TP, tahun dasar, dan multiple sama persis di halaman 1 dan halaman valuasi?
 6. Apakah skenario "downside" benar-benar menghasilkan TP lebih rendah dari base case?
 7. Apakah nol istilah pipeline/sumber data muncul di body text?
@@ -403,7 +403,7 @@ Kembalikan objek JSON untuk renderer:
     {"halaman": 2, "judul": "", "paragraf": [""], "exhibit": [{"n": 1, "judul": "", "tipe": "tabel|chart|placeholder", "data": [], "catatan_sumber": ""}]}
   ],
   "tabel_asumsi": [],
-  "log_gate": {"G1": {}, "G2": {}, "G3": {}, "release": {"status": "draft_non_distributable", "blockers": ["profile.required_input: missing"]}},
+  "log_gate": {"S1": {}, "S2": {}, "S3": {}, "release": {"status": "draft_non_distributable", "blockers": ["profile.required_input: missing"]}},
   "catatan_metodologi": ["", ""]
 }
 ```

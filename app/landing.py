@@ -383,12 +383,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         siklus, dan tahap usaha, lalu mengurutkan metode utama, fallback, dan silang cek.</p>
       </div>
       <ol class="gates">
-        <li><b>Gate 0</b><strong>Model bisnis</strong><span>Bank ke DDM/P/BV, tambang ke NAV, holding ke SOTP</span></li>
-        <li><b>Gate 1</b><strong>Kelayakan data</strong><span>Riwayat, laba usaha, leverage, ekuitas</span></li>
-        <li><b>Gate 2</b><strong>Kepemilikan</strong><span>Minoritas 15-40% wajib silang cek SOTP</span></li>
-        <li><b>Gate 3</b><strong>Siklus</strong><span>Komoditas atau aset yang baru ramp-up</span></li>
-        <li><b>Gate 4</b><strong>Tahap usaha</strong><span>Tumbuh, matang, atau turnaround</span></li>
-        <li><b>Gate 5</b><strong>Kewajaran hasil</strong><span>Potensi &gt;100% atau &lt;-50%: Review Required</span></li>
+        <li><b>Method Gate 0</b><strong>Model bisnis</strong><span>Bank ke DDM/P/BV, tambang ke NAV, holding ke SOTP</span></li>
+        <li><b>Method Gate 1</b><strong>Kelayakan data</strong><span>Riwayat, laba usaha, leverage, ekuitas</span></li>
+        <li><b>Method Gate 2</b><strong>Kepemilikan</strong><span>Minoritas 15-40% wajib silang cek SOTP</span></li>
+        <li><b>Method Gate 3</b><strong>Siklus</strong><span>Komoditas atau aset yang baru ramp-up</span></li>
+        <li><b>Method Gate 4</b><strong>Tahap usaha</strong><span>Tumbuh, matang, atau turnaround</span></li>
+        <li><b>Method Gate 5</b><strong>Kewajaran hasil</strong><span>Potensi &gt;100% atau &lt;-50%: Review Required</span></li>
       </ol>
       <div class="chain-demo">
         <div class="chain-steps">

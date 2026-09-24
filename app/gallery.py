@@ -39,12 +39,12 @@ def _held_reason(blockers) -> str:
     """Short reader label for why a draft holds its rating."""
     text = " ".join(str(b) for b in blockers).lower()
     if "extreme" in text:
-        return "Gate 5, hasil ekstrem (Review Required)"
+        return "Method Gate 5, hasil ekstrem (Review Required)"
     if "peer" in text and "fewer than three" in text:
         return "peer valid kurang dari tiga"
-    if "forecast" in text or "g2.9" in text:
+    if "forecast" in text or "s2.9" in text:
         return "forecast belum tervalidasi"
-    if "interim" in text or "g1" in text:
+    if "interim" in text or "s1" in text:
         return "rilis resmi terbaru belum lengkap"
     return "bukti belum lengkap"
 

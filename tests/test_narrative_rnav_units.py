@@ -9,7 +9,7 @@ from app import forecast, fmt, intake, narrative, valuation  # noqa: E402
 
 
 def test_ammn_rnav_exhibit_uses_rupiah_consistently():
-    doc_in, g1 = intake.load("AMMN")
+    doc_in, s1 = intake.load("AMMN")
     fc = forecast.build(doc_in)
     va = valuation.build(doc_in, fc)
     exhibit = narrative._rnav_exhibit(
