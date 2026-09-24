@@ -1751,5 +1751,28 @@
         "No shipment-level provisional balance, forward curve, final price schedule or subsequent settlement reconciliation is disclosed."
       ]
     }
+  },
+  "elang_development_economics": {
+    "status": "not_disclosed",
+    "fact": "Studi kelayakan definitif Elang selesai pada 2025; FID ditargetkan 2027, bijih pertama 2031/2032, dan penambangan dimulai sesudah umur tambang Batu Hijau dan berlanjut hingga sekurangnya 2050. Capex pengembangan, jadwal produksi tahunan dan NPV studi kelayakan tidak diungkapkan.",
+    "checked_sources": [
+      {
+        "source_title": "AMMAN FY 2025 Earnings Presentation",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk3OCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--50df1975317d5d37d39e6c868f5b05f51f29bb1d/FY%202025%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+        "source_page": 20
+      },
+      {
+        "source_title": "AMMAN H1 2026 Earnings Presentation",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+        "source_page": 20
+      },
+      {
+        "source_title": "AMMAN 2025 Annual Report",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NTEzNywicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--8894e69222f3c75d05cccfe4d7b692e23e5b362a/Annual%20Report%202025%20-%20PT%20Amman%20Mineral%20Internasional%20Tbk.pdf?disposition=inline",
+        "source_page": 91
+      }
+    ],
+    "checked_at": "2026-09-24",
+    "valuation_consequence": "Tanpa capex dan jadwal produksi, NAV Elang tidak dapat dihitung secara risk-adjusted; SOTP/LoM tetap tidak lengkap."
   }
 }

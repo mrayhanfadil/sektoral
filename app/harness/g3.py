@@ -145,7 +145,14 @@ def check_g3(intake: dict | None, forecast: dict | None, valuation: dict | None)
     ps_g, ps_x = _num(valuation.get("ps_gordon")), _num(valuation.get("ps_exit"))
     if dcf_selected and ps_g is not None and ps_x is not None:
         div = abs(ps_g - ps_x) / max(abs(ps_g), abs(ps_x), 1)
-        if div > 0.30:
+        if div > 0.30 and valuation.get("dcf_basis") == "gordon":
+            # §4.4: the primary (Gordon) stays the TP basis; the exit value is a
+            # disclosed cross-check, not averaged, so the gap is labeled.
+            checks.append(_v("G3.8_divergence", True,
+                             f"selisih Gordon vs exit {div*100:.1f}%: TP memakai Gordon, "
+                             "exit hanya cross-check dan selisih diungkapkan",
+                             False, "dilabeli"))
+        elif div > 0.30:
             checks.append(_v("G3.8_divergence", False,
                              f"selisih Gordon vs exit {div*100:.1f}%: jangan dirata-rata diam-diam",
                              True))

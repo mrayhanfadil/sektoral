@@ -44,8 +44,9 @@ def _interim_scenario(intake, plan):
 def _earnings_scenario(intake, plan):
     """FY laba dari aktual 1H resmi + asumsi H2 agen (going concern/bank).
 
-    Hanya revenue dan laba yang dipakai; tanpa EBITDA/capex, jadi hasilnya
-    skenario laba berlabel, bukan forecast driver produksi.
+    Revenue dan laba dari 1H + H2; going concern juga membawa margin EBITDA
+    dan intensitas capex FY dari agen untuk DCF skenario. Hasilnya skenario
+    analis berlabel, bukan forecast driver produksi.
     """
     scenario = (plan or {}).get("earnings_scenario")
     actual = intake.get("latest_official_actual") or {}
@@ -64,14 +65,22 @@ def _earnings_scenario(intake, plan):
     else:
         share, basis = 1.0, "laba konsolidasi (porsi induk tidak dilaporkan terpisah)"
     full_net = h1_net + h2_net
+    full_revenue = h1_revenue + h2_revenue
+    full_year = {"revenue": full_revenue, "net_profit": full_net,
+                 "net_profit_attributable": full_net * share}
+    # Going concern: FY EBITDA margin and capex intensity feed the scenario
+    # FCFF DCF. They are the agent's validated FY assumptions, not 1H actuals.
+    for key, field in (("ebitda", "fy_ebitda_margin_pct"),
+                       ("capex", "fy_capex_to_revenue_pct")):
+        if isinstance(scenario.get(field), (int, float)):
+            full_year[key] = full_revenue * scenario[field] / 100
     return {"year": int(str(actual["period_end"])[:4]),
             "unit": actual.get("unit"), "source_url": scenario.get("source_url"),
             "published_at": scenario.get("published_at"),
             "rationale": scenario.get("rationale"), "assumptions": scenario,
             "h1": {"revenue": h1_revenue, "net_profit": h1_net},
             "h2": {"revenue": h2_revenue, "net_profit": h2_net},
-            "full_year": {"revenue": h1_revenue + h2_revenue, "net_profit": full_net,
-                          "net_profit_attributable": full_net * share},
+            "full_year": full_year,
             "attributable_share": share, "attributable_basis": basis}
 
 

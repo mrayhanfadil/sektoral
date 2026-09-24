@@ -181,6 +181,11 @@ def evaluate(inputs: dict) -> GateVerdict:
     else:
         gates_passed.append("0_business_model")
 
+    # Gate 0 is the structural business-model call (holding SOTP, reserve
+    # NAV, bank DDM). Gates 3-4 describe how each line is valued and never
+    # replace it; data-eligibility gates (1) and NCI > 40% (2) still can.
+    structural = primary in ("SOTP", "NAV / Reserve-based")
+
     # Gate 1: Data eligibility (missing stays None -> tidak dapat dinilai)
     filing_history_years = inputs.get("filing_history_years")
     ebit_positive_count = inputs.get("ebit_positive_count")
@@ -303,6 +308,9 @@ def evaluate(inputs: dict) -> GateVerdict:
         gates_failed.append("3_cyclicality")
         reasons.append("3 tahap operasi tidak dapat dinilai (klasifikasi steady-state belum tervalidasi)")
         gates_unassessed.append("3_cyclicality")
+    elif not has_steady_state_3y and structural:
+        gates_passed.append("3_cyclicality")
+        reasons.append(f"3 no 3y steady state noted; Gate 0 {primary} primary retained (structural)")
     elif not has_steady_state_3y:
         gates_passed.append("3_cyclicality")
         primary = "Relative Valuation"
@@ -320,7 +328,10 @@ def evaluate(inputs: dict) -> GateVerdict:
     else:
         life_cycle_stage = str(_lc_raw).lower()
         gates_passed.append("4_life_cycle")
-        if life_cycle_stage == "decline":
+        if structural and life_cycle_stage in ("decline", "pre_revenue",
+                                               "high_growth_pre_profit", "high_growth"):
+            reasons.append(f"4 {life_cycle_stage}; Gate 0 {primary} primary retained (structural)")
+        elif life_cycle_stage == "decline":
             primary = "P/BV"
             reasons.append("4 decline / turnaround → P/BV (or NAV if asset base is substantial), DCF too speculative")
         elif life_cycle_stage in ("pre_revenue", "high_growth_pre_profit", "high_growth"):

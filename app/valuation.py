@@ -5,6 +5,7 @@ from . import gate_thresholds
 from . import method_chain
 from . import model_profiles
 from . import rnav
+from . import scenario_value
 from . import release
 from . import rating as rating_mod
 from . import sotp as sotp_mod
@@ -202,6 +203,56 @@ def _pbv_roe_fy_candidate(intake, fc, assumption_status, coe, g):
     candidate["label"] = f"P/BV wajar dari ROE {label_year} skenario analis"
     candidate["gate"] = gate
     return candidate
+
+
+# A scenario that cannot be valued carries only its own reasons.
+_NO_GATE = {"status": "draft_non_distributable", "blockers": [], "limitations": []}
+
+
+def _scenario_candidate(key, detail, reasons, gate, label):
+    """Primary method valued on the validated scenario, with its own gate."""
+    candidate = method_chain.candidate(
+        key, per_share=(detail or {}).get("per_share"),
+        per_share_down=(detail or {}).get("per_share_down"),
+        reasons=list(reasons) + gate["blockers"], labels=gate["limitations"],
+        detail=detail or {"basis": "scenario"})
+    candidate["label"] = label
+    candidate["gate"] = gate
+    return candidate
+
+
+def _ddm_scenario_candidate(intake, fc, assumption_status, coe, g):
+    """Bank primary: DDM on the validated FY path (None without a scenario)."""
+    if not fc.get("earnings_scenario"):
+        return None
+    detail, reasons = scenario_value.ddm(intake, fc, coe, g)
+    gate = (release.assess_ddm_scenario(intake, fc, {"detail": detail}, assumption_status)
+            if detail else _NO_GATE)
+    if detail:
+        reasons = reasons + method_chain.scale_reasons(
+            detail["per_share"], detail["shares"], intake["price"] * detail["shares"])
+    year = fc["earnings_scenario"]["year"]
+    return _scenario_candidate(
+        "ddm", detail, reasons, gate,
+        f"DDM dividen skenario FY{year % 100:02d}F-FY{(year + 4) % 100:02d}F "
+        "+ terminal Gordon (CoE, bukan WACC)")
+
+
+def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wacc_bps):
+    """Going-concern primary: FCFF DCF on the validated FY path."""
+    if not fc.get("earnings_scenario"):
+        return None
+    detail, reasons = scenario_value.fcff(intake, fc, rf, erp, beta, g, wacc_bps)
+    gate = (release.assess_fcff_scenario(intake, fc, {"detail": detail}, assumption_status)
+            if detail else _NO_GATE)
+    if detail:
+        reasons = reasons + method_chain.scale_reasons(
+            detail["per_share"], detail["shares"], intake["price"] * detail["shares"])
+    year = fc["earnings_scenario"]["year"]
+    return _scenario_candidate(
+        "fcff_dcf", detail, reasons, gate,
+        f"DCF FCFF skenario FY{year % 100:02d}F-FY{(year + 4) % 100:02d}F + terminal Gordon; "
+        "exit EV/EBITDA historis sebagai cross-check")
 
 
 def _pbv_book_candidate(intake, fc, assumption_status):
@@ -525,8 +576,16 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # Conservative defaults, gates will still record unverified via notes.
         pass
 
+    # Gate 0 holding with dissimilar lines: a validated count of dissimilar
+    # segments plus a holding signal (listed subsidiaries or NCI > 15%).
+    listed_subs = (official_ev.get("listed_subsidiaries") or [])
+    holding_signal = bool(listed_subs) or (nci_pct_val is not None and nci_pct_val > 15.0)
+    domain = profile
+    if (profile == "going_concern_fcff" and isinstance(segs_val, int) and segs_val >= 2
+            and holding_signal and stage_info.get("source") in ("llm", "override")):
+        domain = "holding_dissimilar"
     gate_inputs = {
-        "domain": profile,
+        "domain": domain,
         "model_profile": profile,
         "filing_history_years": len(annuals) if annuals else None,
         "ebit_positive_count": ebit_pos if annuals else None,
@@ -589,9 +648,15 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # proxy they are insufficient, so the chain can still reach the
         # assumption-led multiple route that has its own evidence gate.
         mining_data = release.common_blockers(profile, intake, fc)
+        # A development asset whose economics are not disclosed cannot be
+        # valued risk-adjusted; that named gap leads the SOTP reasons.
+        undisclosed = [
+            f"aset pengembangan Elang: {item.get('valuation_consequence') or 'belum dinilai'}"
+            for item in [official_ev.get("elang_development_economics")]
+            if isinstance(item, dict) and item.get("status") == "not_disclosed"]
         candidates["sotp_lom"] = method_chain.candidate(
             "sotp_lom", per_share=sotp_result.get("target_price_idr"),
-            reasons=release._check_sotp(sotp_result, intake) + mining_data,
+            reasons=undisclosed + release._check_sotp(sotp_result, intake) + mining_data,
             labels=["sensitivitas SOTP dilabeli"])
         candidates["rnav_lom"] = method_chain.with_reasons(
             _rnav_candidate(intake, fc, lom, wacc), mining_data)
@@ -672,20 +737,43 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     if "holding_sotp" in prelim_order or (nci_pct_val is not None and 15.0 < nci_pct_val <= 40.0):
         holding = _holding_sotp_candidate(intake)
     if "holding_sotp" in prelim_order:
+        # Primary for a holding with dissimilar lines: its own evidence gate
+        # (official equity, listed stakes at market), not the forecast G2.9.
+        gate = release.assess_holding_sotp(intake, fc, holding, assumption_status)
+        holding = method_chain.with_reasons(holding, gate["blockers"])
+        holding.update(gate=gate, labels=list(holding.get("labels") or []) + gate["limitations"])
+        holding["detail"] = {**(holding.get("detail") or {}), "basis": "official"}
         candidates["holding_sotp"] = holding
     if "property_nav" in prelim_order:
         candidates["property_nav"] = method_chain.unavailable(
             "property_nav",
             "Property NAV memerlukan evidence pack per aset; belum tersedia")
+    # Primary DDM / FCFF DCF on the validated analyst scenario (spec Opsi A/B):
+    # the same method, valued on the agents' FY path instead of the screen.
+    if is_bank and "ddm" in candidates:
+        scenario_ddm = _ddm_scenario_candidate(intake, fc, assumption_status, re, g)
+        if scenario_ddm:
+            candidates["ddm"] = scenario_ddm
+    if profile == "going_concern_fcff" and "fcff_dcf" in candidates:
+        scenario_dcf = _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta,
+                                                g, news_wacc_bps)
+        if scenario_dcf:
+            candidates["fcff_dcf"] = scenario_dcf
+            if "dcf_reference" in candidates:
+                # The consolidated DCF reference values the same scenario.
+                candidates["dcf_reference"] = dict(
+                    scenario_dcf, key="dcf_reference",
+                    short=method_chain.SHORT["dcf_reference"],
+                    label=scenario_dcf["label"] + " [referensi]")
     if profile in ("going_concern_fcff", "financial_ddm"):
-        # DCF/DDM/P-BV/PER-forward all value the screening forecast. While
-        # its data gates fail they are insufficient, so the chain can reach
-        # the earnings-scenario route that carries its own evidence gate.
+        # DCF/DDM/P-BV/PER-forward on the screening forecast are insufficient
+        # while its data gates fail, so the chain can reach a scenario-based
+        # method that carries its own evidence gate.
         forecast_data = release.common_blockers(profile, intake, fc)
         if forecast_data:
             for key in ("fcff_dcf", "dcf_reference", "ddm", "pbv_roe", "relative_pe",
                         "pbv_relative", "ev_ebitda_peer", "ev_sales_peer"):
-                if key in candidates:
+                if key in candidates and not candidates[key].get("gate"):
                     candidates[key] = method_chain.with_reasons(candidates[key], forecast_data)
         candidates["pe_fy_scenario"] = _earnings_candidate(intake, fc, assumption_status)
 
@@ -697,7 +785,12 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     # Gate 5 dinilai ulang pada metode terpilih, bukan DCF bila DCF di-skip.
     if sel and sel["upside"] is not None:
         gate_inputs["upside_pct"] = sel["upside"] * 100.0
-    if selected != "fcff_dcf":
+    scenario_sel = bool(sel and sel.get("gate") and
+                        (sel.get("detail") or {}).get("basis") == "scenario")
+    if scenario_sel and selected in ("fcff_dcf", "dcf_reference"):
+        gate_inputs["terminal_value_pct_of_ev"] = (sel["detail"]["tv_share"] or 0) * 100.0
+        gate_inputs["implied_exit_ev_ebitda"] = sel["detail"]["implied_exit"]
+    elif selected != "fcff_dcf":
         gate_inputs.pop("terminal_value_pct_of_ev", None)
         gate_inputs.pop("implied_exit_ev_ebitda", None)
     verdict = model_profiles.evaluate(gate_inputs)
@@ -783,7 +876,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         if extreme_blocker and release_result["status"] != "draft_non_distributable":
             release_result.update(status="draft_non_distributable",
                                   blockers=release_result["blockers"] + [extreme_blocker])
-    elif selected in ("pe_fy_scenario", "pbv_roe_fy", "pbv_book"):
+    elif sel is not None and sel.get("gate"):
         release_result = dict(sel["gate"])
         release_result["underlying_primary"] = release.common_blockers(profile, intake, fc)
         release_result["route"], release_result["method_key"] = chain["route"], selected
@@ -817,7 +910,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
 
     if selected:
         # Keep DCF label for dcf_reference (reference) but show reference suffix.
-        if selected in ("fcff_dcf", "ddm"):
+        if selected in ("fcff_dcf", "ddm") and not scenario_sel:
             pass
         elif selected == "dcf_reference":
             method = sel["label"] + " [referensi]"
@@ -843,7 +936,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
 
     dcf_grid, dcf_down = grid, tp_down
     tp_down, grid = None, {}
-    if selected == "fcff_dcf":
+    if scenario_sel:
+        grid = {key: fmt.tick(v) if v else None for key, v in sel["detail"]["grid"].items()}
+    elif selected == "fcff_dcf":
         grid, tp_down = dcf_grid, dcf_down
     elif selected == "ddm":
         grid = ddm_grid
@@ -854,13 +949,14 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             tp_down = fmt.tick(sel["per_share_down"])
         rating = (rating_mod.classify(upside) if selected in ("ev_ebitda_fy", "pe_fy_scenario",
                                                               "pbv_roe_fy", "pbv_book")
+                  or scenario_sel
                   else verdict.rating_override or rating_mod.classify(upside))
         if selected == "ev_ebitda_fy":
             tp_down, grid = None, {}
             notes.append("8x EV/EBITDA FY26F adalah asumsi analis; LoM/SOTP belum lengkap.")
     else:
         rating = "DRAFT NON-DISTRIBUTABLE"
-        if profile != "going_concern_fcff" or selected != "fcff_dcf":
+        if profile != "going_concern_fcff" or selected != "fcff_dcf" or scenario_sel:
             tp, upside, tp_down, grid = None, None, None, {}
 
     if tp is not None and f_last["net"] > 0:
@@ -876,8 +972,20 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         impl.update(ev_ebitda=None,
                     pbv=(ddm_result or {}).get("fair_pbv"),
                     tp_inverse=(ddm_result or {}).get("tp_inverse"))
+    if scenario_sel and tp is not None:
+        # Implied multiples on the same FY path the target values.
+        detail = sel["detail"]
+        first = detail["lines"][0]
+        eps_fy = (first["net_attr"] / detail["shares"]) if first.get("net_attr") else None
+        impl["per"] = tp / eps_fy if eps_fy and eps_fy > 0 else None
+        if selected == "ddm":
+            impl["pbv"] = tp / detail["bvps"] if detail.get("bvps") else None
+        else:
+            ev_at_tp = (tp * detail["shares"] - detail["cash"] + detail["debt"]
+                        + (detail.get("nci") or 0.0))
+            impl["ev_ebitda"] = ev_at_tp / first["ebitda"] if first["ebitda"] > 0 else None
 
-    if selected != "fcff_dcf":
+    if selected != "fcff_dcf" or scenario_sel:
         g3 = {
             "G3.1_method": "lolos" if selected else "gagal",
             "G3.2_skala": "lolos" if tp is not None else "dilabeli",
@@ -896,14 +1004,35 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             g3["G3.2_sotp"] = ("lolos" if sotp_result["status"] == "complete" else
                                "dilabeli" if selected else "gagal")
             g3["G3.5_release"] = release_result["status"]
+        if scenario_sel:
+            detail = sel["detail"]
+            g3["G3.3_implied"] = "lolos" if impl.get("per") or impl.get("ev_ebitda") else "dilabeli"
+            g3["G3.7_band"] = "lolos"
+            if detail.get("tv_share") is not None:
+                g3["G3.1_terminal"] = (
+                    "peringatan" if gate_thresholds.tv_flagged(detail["tv_share"]) else "lolos",
+                    f"porsi terminal {detail['tv_share'] * 100:.0f}% dari "
+                    + ("nilai DDM" if selected == "ddm" else "EV"))
+            if selected in ("fcff_dcf", "dcf_reference"):
+                gap = detail.get("exit_gap")
+                g3["G3.8_method_divergence"] = (
+                    "dilabeli",
+                    f"TP memakai Gordon; selisih dengan exit EV/EBITDA historis "
+                    f"{gap * 100:.0f}% diungkapkan, tidak dirata-rata" if gap is not None
+                    else "exit EV/EBITDA historis kurang dari tiga titik; Gordon saja")
     else:
         g3["G3.10_method_chain"] = f"{chain['route']}:{selected}"
 
     valuation_asset = sotp_result if is_miner else (ddm_result if is_bank else None)
     if isinstance(valuation_asset, dict):
         valuation_asset["gate_verdict"] = verdict.to_dict()
-    if gate_thresholds.tv_flagged(pv_tv / ev_g if ev_g else None) and selected == "fcff_dcf":
-        notes.append(f"peringatan terminal: porsi terminal {pv_tv/ev_g*100:.0f}% > {gate_thresholds.TV_SHARE_PCT:.0f}% dari EV")
+    # Terminal share of the DCF the target is built on (scenario or screen).
+    tv_selected = (sel["detail"].get("tv_share") if scenario_sel else
+                   pv_tv / ev_g if ev_g and selected == "fcff_dcf" else None)
+    if gate_thresholds.tv_flagged(tv_selected):
+        notes.append(f"peringatan terminal: porsi terminal {tv_selected*100:.0f}% > "
+                     f"{gate_thresholds.TV_SHARE_PCT:.0f}% dari "
+                     + ("nilai DDM" if selected == "ddm" else "EV"))
     if "5_exit_multiple_out_of_range" in verdict.gates_failed:
         notes.append("implied exit EV/EBITDA di luar rentang EV/EBITDA historis emiten; "
                      "periksa cross-check valuasi relatif")
@@ -912,7 +1041,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     elif stage_info.get("source") == "override":
         notes.append("klasifikasi tahap operasi dari override analis.")
 
-    return {"method": method, "model_profile": profile,
+    out = {"method": method, "model_profile": profile,
             "release": release_result, "sotp": sotp_result,
             "scenario_target": (scenario_target if analyst_target or
                                 selected == "ev_ebitda_fy" else None),
@@ -930,3 +1059,14 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "upside": upside, "rating": rating,
             "implied": impl, "lom": lom, "g3": g3, "notes": notes,
             "method_chain": chain}
+    if scenario_sel and selected in ("fcff_dcf", "dcf_reference"):
+        # The report, harness G3.1/G3.8 and Gate 5 read the DCF the target
+        # was built on; the screening DCF stays in wacc_inputs/trace only.
+        d = sel["detail"]
+        out.update(wacc=d["wacc"], pv_explicit=d["pv_explicit"], pv_terminal=d["pv_tv"],
+                   tv_share=d["tv_share"], ev_gordon=d["ev"], net_debt=d["debt"] - d["cash"],
+                   ps_gordon=d["per_share"], ps_exit=d.get("per_share_exit"),
+                   dcf_blend=None, dcf_basis="gordon")
+    elif scenario_sel and selected == "ddm":
+        out.update(ev_gordon=None, ps_gordon=None, ps_exit=None, dcf_blend=None)
+    return out

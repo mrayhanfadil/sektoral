@@ -19,7 +19,7 @@ SPEC_PATH = Path(__file__).resolve().parents[2] / "spec" / "Instruksi-Report-v3.
 PLAN_STORE = Path(__file__).resolve().parents[2] / "data" / "forecast_plans"
 # Bump when a subagent's required output changes, so cached plans without the
 # new fields are not reused (2: earnings key_risks; 3: thesis_titles).
-PLAN_SCHEMA = 3
+PLAN_SCHEMA = 4
 
 
 def _spec_sections():
@@ -97,7 +97,8 @@ def _source_payload(intake):
         "ticker": intake["ticker"], "as_of": intake["as_of"],
         "model_profile": intake.get("model_profile"),
         "annuals": [{"year": a.get("year"), "revenue": a.get("revenue"),
-                     "earnings": a.get("earnings")}
+                     "earnings": a.get("earnings"), "ebitda": a.get("ebitda"),
+                     "capex": a.get("capex_out")}
                     for a in (intake.get("annuals") or []) if isinstance(a, dict)][-6:],
         "tavily_search": {"status": search.get("status"),
                           "queries": search.get("queries") or ([search.get("query")] if search.get("query") else []),
@@ -360,6 +361,53 @@ def _validate_outyears(rows, source):
 
 EARNINGS_PROFILES = {"going_concern_fcff", "financial_ddm"}
 EARNINGS_LIMITS = {"h2_revenue_to_h1": (0.4, 2.5), "h2_net_margin_pct": (-30, 60)}
+# FCFF drivers for the going-concern scenario DCF. A problem with these only
+# removes the DCF inputs; the earnings scenario itself stays valid.
+DCF_SOFT = " (dcf)"
+FY_DCF_FIELDS = {"fy_ebitda_margin_pct": (0, 85), "fy_capex_to_revenue_pct": (0, 60)}
+
+
+def _outyear_dcf_problems(rows, source):
+    """Going concern: EBITDA margin and capex intensity on every out-year row."""
+    if source.get("model_profile") != "going_concern_fcff" or not isinstance(rows, list):
+        return []
+    problems = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        year = row.get("year")
+        for field, (lower, upper) in (("ebitda_margin_pct", (0, 85)),
+                                      ("capex_to_revenue_pct", (0, 60))):
+            if not _number(row.get(field), lower, upper):
+                problems.append(f"outyear_scenario[{year}].{field} outside bounds" + DCF_SOFT)
+        if (_number(row.get("ebitda_margin_pct"), 0, 85) and
+                _number(row.get("net_income_margin_pct"), -30, 60) and
+                row["ebitda_margin_pct"] < row["net_income_margin_pct"]):
+            problems.append(f"outyear_scenario[{year}].ebitda_margin_pct is below the net "
+                            "margin" + DCF_SOFT)
+    return problems
+
+
+def _dcf_field_problems(scenario, source):
+    """Going concern: FY EBITDA margin and capex intensity for the scenario DCF."""
+    if source.get("model_profile") != "going_concern_fcff":
+        return []
+    problems = []
+    for field, (lower, upper) in FY_DCF_FIELDS.items():
+        if not _number(scenario.get(field), lower, upper):
+            problems.append(f"earnings_scenario.{field} outside bounds" + DCF_SOFT)
+    metrics = (source.get("official") or {}).get("metrics") or {}
+    if (not problems and _number(metrics.get("revenue"), 1e-9, float("inf")) and
+            _number(scenario.get("h2_revenue_to_h1"), 0, float("inf")) and
+            _number(scenario.get("h2_net_margin_pct"), -1e9, 1e9) and
+            _number(metrics.get("net_profit"), float("-inf"), float("inf"))):
+        revenue_h2 = metrics["revenue"] * scenario["h2_revenue_to_h1"]
+        net = metrics["net_profit"] + revenue_h2 * scenario["h2_net_margin_pct"] / 100
+        net_margin = net / (metrics["revenue"] + revenue_h2) * 100
+        if scenario["fy_ebitda_margin_pct"] < net_margin:
+            problems.append("earnings_scenario.fy_ebitda_margin_pct is below the FY net "
+                            "margin" + DCF_SOFT)
+    return problems
 
 
 def _earnings_eligible(source):
@@ -544,11 +592,15 @@ def _earnings_anchor(source, earnings):
     official = source["official"]
     metrics = official["metrics"]
     revenue_h2 = metrics["revenue"] * earnings["h2_revenue_to_h1"]
+    revenue = metrics["revenue"] + revenue_h2
+    full_year = {"revenue": revenue,
+                 "net_profit": metrics["net_profit"] +
+                 revenue_h2 * earnings["h2_net_margin_pct"] / 100}
+    for key, field in (("ebitda", "fy_ebitda_margin_pct"), ("capex", "fy_capex_to_revenue_pct")):
+        if _number(earnings.get(field), float("-inf"), float("inf")):
+            full_year[key] = revenue * earnings[field] / 100
     return {"year": int(str(official["period_end"])[:4]), "unit": official.get("unit"),
-            "source_url": official.get("source_url"),
-            "full_year": {"revenue": metrics["revenue"] + revenue_h2,
-                          "net_profit": metrics["net_profit"] +
-                          revenue_h2 * earnings["h2_net_margin_pct"] / 100}}
+            "source_url": official.get("source_url"), "full_year": full_year}
 
 
 def _interim_anchor(source, interim):
@@ -579,6 +631,9 @@ def _validate_stage(payload, source):
     allowed = {f"news:{item['index']}" for item in source.get("news") or []}
     if source.get("official"):
         allowed.add("official")
+    if annuals:
+        # The Sectors annual history is supplied and the decline rule reads it.
+        allowed.add("annuals")
     ok, errors, _ = _stage.validate(payload, annuals, allowed_sources=allowed)
     return errors
 
@@ -587,6 +642,20 @@ def _normalize_prose(value, key=None):
     """Deterministic style fix after validation (see app.scrub.normalize_plan)."""
     from app.scrub import normalize_plan
     return normalize_plan(value, key)
+
+
+def _drop_dcf_fields(name, fragment, problems):
+    """Keep a valid earnings path when only its DCF drivers failed validation."""
+    if name == "earnings":
+        scenario = fragment.get("earnings_scenario") or {}
+        for field in FY_DCF_FIELDS:
+            scenario.pop(field, None)
+        scenario["dcf_fields_dropped"] = list(problems)
+    elif name == "outyears":
+        for row in fragment.get("outyear_scenario") or []:
+            if isinstance(row, dict):
+                row["ebitda_margin_pct"] = row["capex_to_revenue_pct"] = None
+        fragment["outyear_dcf_fields_dropped"] = list(problems)
 
 
 def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
@@ -707,17 +776,31 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "production_ready or forecast_basis; the engine applies peer PER. "
             "Return null if the evidence cannot support a full-year view. Cite official guidance items as \"guidance:<index>\" (position in official.guidance) when they support a departure."
         )
+        if source.get("model_profile") == "going_concern_fcff":
+            role += (
+                " This issuer is valued with an FCFF DCF on your scenario, so also return "
+                "fy_ebitda_margin_pct [0,85] (FY EBITDA / FY revenue, percent, never below "
+                "the FY net margin) and fy_capex_to_revenue_pct [0,60] (FY capex / FY "
+                "revenue, percent). Anchor them on the official 1H EBITDA or operating "
+                "profit when reported and on the EBITDA and capex history in "
+                "sectors_annuals; a dated capex plan, new capacity or guidance may move "
+                "capex and should be named in the rationale. They are analyst "
+                "assumptions, not reported facts.")
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                    "model_profile": source["model_profile"],
                    "official": {key: source["official"].get(key) for key in (
                        "source_url", "published_at", "period", "period_end", "unit",
                        "metrics", "guidance", "operating_context", "revenue_breakdown",
                        "annual_actuals")},
+                   "sectors_annuals": source.get("annuals") or [],
                    "news": [{key: item.get(key) for key in (
                        "index", "title", "timestamp", "url", "origin", "body",
                        "full_text", "full_text_status")} for item in source["news"]],
                    "json_shape": {"earnings_scenario": {
                        "h2_revenue_to_h1": "number", "h2_net_margin_pct": "number",
+                       **({"fy_ebitda_margin_pct": "number",
+                           "fy_capex_to_revenue_pct": "number"}
+                          if source.get("model_profile") == "going_concern_fcff" else {}),
                        "rationale": "Indonesian text", "source_ids": ["official"],
                        "thesis_points": ["Indonesian sentence"],
                        "thesis_titles": ["short title"],
@@ -735,7 +818,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "(pre_revenue | high_growth_pre_profit | mature | decline), "
             "has_steady_state_3y (boolean), commodity_price_driven (boolean, true ONLY for extractive finite-reserve: coal/nickel/CPO/oil/gold/copper; poultry/food input sensitivity is false), "
             "dissimilar_segments (int 1-10), rationale (Bahasa Indonesia 40-600 karakter), "
-            "source_ids ([\"official\", \"news:0\", ...]). Default konservatif mature/true/false/1; "
+            "source_ids ([\"official\", \"annuals\", \"news:0\", ...]). Default konservatif mature/true/false/1; "
             "non-default wajib mengutip official atau artikel bertanggal. "
             "Decline butuh revenue annuals turun atau restrukturisasi bersumber. "
             "Return null bila bukti tidak cukup."
@@ -778,14 +861,26 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "simply repeat one flat value every year without a causal explanation. "
             "Return compact JSON only; rationale must be at most two short sentences."
         )
-        if source.get("model_profile") != "finite_life_mining":
+        if source.get("model_profile") == "going_concern_fcff":
+            role += (
+                " This issuer is not a miner: ignore mine-life wording. The anchor "
+                "is an FY earnings scenario (revenue, net profit, EBITDA and capex). "
+                "The engine values your path with an FCFF DCF, so set "
+                "ebitda_margin_pct and capex_to_revenue_pct for every year as analyst "
+                "assumptions: start from the anchor's EBITDA margin and capex "
+                "intensity and the EBITDA/capex history in annuals (Sectors), keep "
+                "EBITDA margin at or above the net margin, and separate maintenance "
+                "from expansion capex in the rationale, citing a source when a capex "
+                "plan moves it. Drive revenue growth and net margin from demand, "
+                "pricing, capacity, costs or funding as the evidence supports.")
+        elif source.get("model_profile") != "finite_life_mining":
             role += (
                 " This issuer is not a miner: ignore mine-life wording. The anchor "
                 "is an FY earnings scenario (revenue and net profit). Set "
-                "ebitda_margin_pct and capex_to_revenue_pct to null unless the "
-                "official release reports EBITDA/capex; never invent them. Drive "
-                "revenue growth and net margin from demand, pricing, capacity, "
-                "costs, funding or credit quality as the evidence supports.")
+                "ebitda_margin_pct and capex_to_revenue_pct to null; a bank is valued "
+                "on equity, not EBITDA or capex. Drive revenue growth and net margin "
+                "from loans, funding, margins and credit quality as the evidence "
+                "supports.")
         news_by_id = {f"news:{item['article_index']}": {
             "title": item["title"], "timestamp": item["timestamp"],
             "url": item["source_url"], "driver": item.get("driver"),
@@ -799,6 +894,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "metrics", "guidance", "operating_metrics", "operating_context",
                        "mine_life_context", "annual_actuals")},
                    "anchor": interim_anchor, "news_effects": news_by_id,
+                   "annuals": source.get("annuals") or [],
                    "required_years": list(range(interim_anchor["year"] + 1,
                                                  interim_anchor["year"] + 5)),
                    "json_shape": {"outyear_scenario": [{
@@ -847,7 +943,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     scenario = {key: scenario[key] for key in (
                         "h2_revenue_to_h1", "h2_net_margin_pct", "rationale",
                         "source_ids", "thesis_points", "thesis_titles", "catalysts_risks",
-                        "key_risks")
+                        "key_risks", *FY_DCF_FIELDS)
                                 if key in scenario}
                     # Provenance is bound to the official release, not the model.
                     scenario["source_url"] = source["official"]["source_url"]
@@ -858,6 +954,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     salvaged = _salvage_key_risks(scenario, allowed_ids)
                     salvaged += _salvage_titles(scenario)
                     problems = _validate_earnings(scenario, source)
+                    problems += _dcf_field_problems(scenario, source)
                     if salvaged and not problems:
                         scenario["salvage_notes"] = salvaged
                     # Resolve cited ids to titles/URLs so the report never
@@ -903,7 +1000,8 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                 if set(fragment) != {"outyear_scenario"}:
                     problems = ["outyear agent must return only outyear_scenario"]
                 else:
-                    problems = _validate_outyears(fragment["outyear_scenario"], source)
+                    problems = (_validate_outyears(fragment["outyear_scenario"], source) +
+                                _outyear_dcf_problems(fragment["outyear_scenario"], source))
             else:
                 if "interim_scenario" in fragment:
                     fragment = {"interim_scenario": fragment["interim_scenario"]}
@@ -952,6 +1050,9 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                           "Do not invent sources.")
             messages.append({"role": "user", "content":
                              repair})
+    if problems and fragment and all(str(p).endswith(DCF_SOFT) for p in problems):
+        _drop_dcf_fields(name, fragment, problems)
+        problems = []
     if problems:
         return {"status": "invalid", "fragment": None, "problems": problems}
     binding = ("official_evidence" if name == "interim" else

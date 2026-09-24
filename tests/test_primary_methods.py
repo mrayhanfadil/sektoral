@@ -1,0 +1,154 @@
+"""Primary methods on the validated scenario: bank DDM, going-concern FCFF DCF,
+holding SOTP under Gate 0, and the agent's soft DCF drivers."""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from agents.forecast_assumptions import run as agent  # noqa: E402
+from app import method_chain as MC, model_profiles as MP, release  # noqa: E402
+from app import scenario_value as SV  # noqa: E402
+
+
+def _fc(net=50.0, growth=0.1, ebitda=None, capex=None):
+    full = {"revenue": 100.0, "net_profit": net, "net_profit_attributable": net}
+    if ebitda is not None:
+        full.update(ebitda=100.0 * ebitda, capex=100.0 * capex)
+    rows, revenue = [], 100.0
+    for i in range(4):
+        revenue *= 1 + growth
+        row = {"year": 2027 + i, "label": f"FY{27 + i}F", "revenue": revenue,
+               "net_profit": revenue * net / 100, "net_profit_attributable": revenue * net / 100}
+        if ebitda is not None:
+            row.update(ebitda=revenue * ebitda, capex=revenue * capex)
+        rows.append(row)
+    return {"earnings_scenario": {"year": 2026, "full_year": full,
+                                  "h1": {"revenue": 50.0, "net_profit": net / 2},
+                                  "h2": {"revenue": 50.0, "net_profit": net / 2},
+                                  "attributable_share": 1.0, "assumptions": {}},
+            "outyear_scenario": {"rows": rows}}
+
+
+def _bank(**extra):
+    base = {"model_profile": "financial_ddm", "price": 40.0, "payout": 0.5,
+            "payout_basis": "payout ratio historis di data Sectors", "dps_hist": [1, 2, 3],
+            "official_evidence": {"balance_sheet": {
+                "period_end": "2026-06-30", "shares_outstanding": 10.0,
+                "equity_attributable": 200.0}},
+            "annuals": [{"year": 2025, "revenue": 90.0}]}
+    base.update(extra)
+    return base
+
+
+def test_scenario_ddm_discounts_dividends_at_cost_of_equity():
+    detail, reasons = SV.ddm(_bank(), _fc(), 0.109, 0.035)
+    assert reasons == [] and detail["basis"] == "scenario"
+    first = detail["lines"][0]
+    assert abs(first["dps"] - 50.0 * 0.5 / 10) < 1e-9
+    assert abs(first["t"] - (0.5 + 0.25)) < 0.01      # paid a quarter after FY26 closes
+    assert detail["per_share"] > 0 and detail["per_share_down"] < detail["per_share"]
+    grid = detail["grid"]
+    assert grid[(-0.01, 0.035)] > grid[(0.0, 0.035)] > grid[(0.01, 0.035)]
+    assert grid[(0.0, 0.045)] > grid[(0.0, 0.025)]
+
+
+def test_scenario_ddm_needs_a_sourced_payout_and_five_years():
+    _, reasons = SV.ddm(_bank(payout_basis="asumsi analis 25%"), _fc(), 0.109, 0.035)
+    assert any("payout" in r for r in reasons)
+    short = _fc()
+    short["outyear_scenario"]["rows"] = short["outyear_scenario"]["rows"][:2]
+    assert SV.ddm(_bank(), short, 0.109, 0.035)[0] is None
+
+
+def test_ddm_release_gate_checks_dividend_evidence():
+    gate = release.assess_ddm_scenario(_bank(dps_hist=[1]), _fc(), {"detail": {
+        "payout": 0.5, "coe": 0.03, "g": 0.035, "lines": [{"dps": 1.0}] * 5}}, "validated")
+    assert any("dividend history" in b for b in gate["blockers"])
+    assert any("cost of equity must exceed" in b for b in gate["blockers"])
+    assert not any(b.startswith("peer PER") for b in gate["blockers"])
+
+
+def _going_concern(**extra):
+    base = {"model_profile": "going_concern_fcff", "price": 40.0, "as_of": "2026-09-24",
+            "official_evidence": {"balance_sheet": {"period_end": "2026-06-30",
+                                                    "cash": 30.0, "shares_issued": 10.0}},
+            "quarterly_actuals": [
+                {"date": "2026-03-31", "total_debt": 80.0, "cash_only": 20.0},
+                {"date": "2026-06-30", "total_debt": 60.0, "cash_and_short_term_investments": 45.0,
+                 "cash_only": 30.0, "total_equity": 300.0, "stockholders_equity": 280.0}],
+            "annuals": [{"year": 2025, "revenue": 90.0, "ebitda": 20.0, "da": 5.0, "ebit": 15.0,
+                         "interest": 1.0, "tax": 3.5, "cash": 10.0, "total_debt": 70.0,
+                         "current_assets": 40.0, "current_liabilities": 30.0,
+                         "short_term_debt": 10.0}],
+            "historical_ev_ebitda": [{"value": 6.0}, {"value": 7.0}, {"value": 8.0}]}
+    base.update(extra)
+    return base
+
+
+def test_bridge_takes_cash_and_debt_from_one_balance_sheet():
+    # Share count unchanged since FY25: fiscal year-end, so seasonal
+    # working capital in an interim balance sheet cannot distort net debt.
+    link = SV.bridge(_going_concern(shares=10.0))
+    assert (link["cash"], link["debt"]) == (10.0, 70.0)
+    assert str(link["valuation_date"]) == "2025-12-31"
+    # Shares moved > 5% since year-end (rights issue): latest interim. The
+    # official pack has cash but no debt, so both come from the Sectors quarter.
+    link = SV.bridge(_going_concern(shares=5.0))
+    assert (link["cash"], link["debt"]) == (45.0, 60.0)
+    assert str(link["valuation_date"]) == "2026-06-30"
+    assert link["nci"] == 20.0 and "2026-06-30" in link["nci_basis"]
+    # Official cash and debt together win over the quarter.
+    official = _going_concern(shares=5.0)
+    official["official_evidence"]["balance_sheet"]["total_debt"] = 55.0
+    link = SV.bridge(official)
+    assert (link["cash"], link["debt"]) == (30.0, 55.0)
+
+
+def test_scenario_dcf_keeps_terminal_capex_at_least_depreciation():
+    intake = _going_concern(shares=5.0)
+    detail, reasons = SV.fcff(intake, _fc(net=8.0, ebitda=0.25, capex=0.02), 0.065, 0.04, 1.1,
+                              0.035)
+    assert reasons == []
+    last = detail["lines"][-1]
+    assert last["capex"] < last["da"]               # scenario capex below D&A...
+    assert abs(detail["terminal_base"] - (last["fcff"] + last["capex"] - last["da"])) < 1e-9
+    assert detail["terminal_fcff"] < last["fcff"] * 1.035   # ...is not capitalised
+    assert detail["per_share_down"] < detail["per_share"]
+    assert detail["exit_multiple"] == 7.0 and detail["per_share_exit"] is not None
+    assert detail["lines"][0]["share"] == 0.5        # H2 only after the 1H balance sheet
+
+
+def test_scenario_dcf_without_ebitda_or_capex_names_the_gap():
+    detail, reasons = SV.fcff(_going_concern(), _fc(), 0.065, 0.04, 1.1, 0.035)
+    assert detail is None and "margin EBITDA dan capex" in reasons[0]
+
+
+def test_gate0_holding_primary_survives_the_ramping_gate():
+    verdict = MP.evaluate({"domain": "holding_dissimilar", "segments_count": 3,
+                           "has_steady_state_3y": False, "life_cycle_stage": "mature"})
+    assert verdict.primary == "SOTP"
+    assert MC.chain_for(verdict, "going_concern_fcff")[0] == "holding_sotp"
+    ramping = MP.evaluate({"domain": "going_concern_fcff", "has_steady_state_3y": False})
+    assert ramping.primary == "Relative Valuation"
+
+
+def test_agent_dcf_drivers_are_soft_for_going_concerns_only():
+    source = {"model_profile": "going_concern_fcff",
+              "official": {"metrics": {"revenue": 100.0, "net_profit": 5.0}}}
+    problems = agent._dcf_field_problems({"h2_revenue_to_h1": 1.0, "h2_net_margin_pct": 5.0},
+                                         source)
+    assert problems and all(p.endswith(agent.DCF_SOFT) for p in problems)
+    below = agent._dcf_field_problems({"h2_revenue_to_h1": 1.0, "h2_net_margin_pct": 5.0,
+                                       "fy_ebitda_margin_pct": 2.0,
+                                       "fy_capex_to_revenue_pct": 5.0}, source)
+    assert any("below the FY net margin" in p for p in below)
+    assert agent._dcf_field_problems({}, {"model_profile": "financial_ddm"}) == []
+    fragment = {"earnings_scenario": {"h2_revenue_to_h1": 1.0, "fy_ebitda_margin_pct": 90.0,
+                                      "fy_capex_to_revenue_pct": 5.0}}
+    agent._drop_dcf_fields("earnings", fragment, ["x (dcf)"])
+    scenario = fragment["earnings_scenario"]
+    assert "fy_ebitda_margin_pct" not in scenario and scenario["h2_revenue_to_h1"] == 1.0
+    rows = [{"year": 2027, "ebitda_margin_pct": 3.0, "net_income_margin_pct": 6.0,
+             "capex_to_revenue_pct": 5.0}]
+    assert any("below the net margin" in p for p in agent._outyear_dcf_problems(rows, source))

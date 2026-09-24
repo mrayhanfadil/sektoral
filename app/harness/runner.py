@@ -29,7 +29,13 @@ def _earnings_gate_passes(intake, forecast, valuation, assumption_status,
     # The agent status comes from the caller (the agent run), never from the
     # engine's recorded gate result, so the harness re-checks it independently.
     assess = {"pbv_roe_fy": _release.assess_pbv_roe_fy,
-              "pbv_book": _release.assess_pbv_book}.get(key, _release.assess_earnings_led)
+              "pbv_book": _release.assess_pbv_book,
+              "holding_sotp": _release.assess_holding_sotp}.get(key, _release.assess_earnings_led)
+    if (trace.get("detail") or {}).get("basis") == "scenario":
+        # Primary DDM / FCFF DCF valued on the validated scenario.
+        assess = _release.SCENARIO_ASSESSORS.get(key)
+        if assess is None:
+            return False
     again = assess(intake, forecast, {"detail": trace.get("detail") or {}}, assumption_status)
     return again["status"] == "distributable_assumption_led"
 
@@ -81,26 +87,29 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
     assumption_release = valuation.get("release") if isinstance(valuation, dict) else None
     selected_method = ((valuation.get("method_chain") or {}).get("selected")
                        if isinstance(valuation, dict) else None)
-    assumption_led = (
-        isinstance(assumption_release, dict) and
-        assumption_release.get("status") == "distributable_assumption_led" and
-        not (assumption_release.get("blockers") or []) and (
+    # The selected method carries its own evidence gate, re-assessed here from
+    # the same inputs (not trusted blindly). Its release then replaces the
+    # screening-forecast gate (G2.9); a Gate 5 extreme stop stays a blocker.
+    own_gate = (
+        isinstance(assumption_release, dict) and (
             (profile == "finite_life_mining" and
              assumption_release.get("method") == "FY26F EV/EBITDA 8x") or
-            # Going concern / bank: FY PER on a validated earnings scenario,
-            # re-assessed here from the same inputs (not trusted blindly).
             (profile in ("going_concern_fcff", "financial_ddm") and
-             selected_method in ("pe_fy_scenario", "pbv_roe_fy", "pbv_book") and
+             selected_method in ("pe_fy_scenario", "pbv_roe_fy", "pbv_book", "ddm",
+                                 "fcff_dcf", "dcf_reference", "holding_sotp") and
              _earnings_gate_passes(intake, forecast, valuation, assumption_status,
                                    selected_method)))
     )
+    assumption_led = (
+        own_gate and
+        assumption_release.get("status") == "distributable_assumption_led" and
+        not (assumption_release.get("blockers") or []))
     g2_blockers = list(r2["blockers"])
-    if assumption_led:
+    if own_gate:
         g2_blockers = [b for b in g2_blockers if not b.startswith("G2.9:")]
-        # The selected method has a separately validated release assessment;
-        # the incomplete SOTP assessment remains attached as audit context.
+        # The incomplete SOTP/screening assessment remains attached as audit context.
         engine_status = assumption_release["status"]
-        engine_blockers = []
+        engine_blockers = list(assumption_release.get("blockers") or [])
 
     blockers = ([f"G1.{b}" for b in r1["blockers"]] + [f"G2.{b}" for b in g2_blockers] +
                 [f"G3.{b}" for b in r3["blockers"]] + [f"N.{b}" for b in rn["blockers"]] +
