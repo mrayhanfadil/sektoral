@@ -470,6 +470,32 @@ def _validate_thesis(scenario, allowed):
     return problems
 
 
+def _trim_sentences(text, limit):
+    """Cut prose to whole sentences within ``limit`` characters (length only)."""
+    text = str(text or "").strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    end = max(cut.rfind(". "), cut.rfind("; "))
+    return cut[:end + 1].strip() if end >= limit // 3 else cut.rsplit(" ", 1)[0].rstrip(",;") + "."
+
+
+def _salvage_key_risks(scenario, allowed):
+    """Keep the valid risks when at least three survive; one malformed risk
+    must not discard a validated earnings scenario. Dropped items are logged."""
+    risks = scenario.get("key_risks")
+    if not isinstance(risks, list):
+        return []
+    kept, dropped = [], []
+    for risk in risks:
+        problems, _ = _validate_key_risks([risk] * 3, allowed)
+        (dropped if problems else kept).append((risk, problems))
+    if dropped and len(kept) >= 3:
+        scenario["key_risks"] = [risk for risk, _ in kept][:5]
+        return [f"dropped key_risk: {problems[0]}" for _, problems in dropped]
+    return []
+
+
 def _validate_key_risks(risks, allowed):
     """Spec §5.4 'Risiko utama': 3-5 issuer risks, each named, categorised,
     quantified from the evidence and cited."""
@@ -762,14 +788,19 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "rationale": "Indonesian text, 40-450 characters",
                        "source_ids": ["official"]}]}}
         attempts = 3
-    if name != "outyears":
+    # Earnings carries thesis, catalysts and risks on the longest news input.
+    if name not in ("outyears", "earnings"):
         attempts = 2
+    elif name == "earnings":
+        attempts = 3
     messages = [{"role": "system", "content": common + "\n\n" + role},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
     raw = ""
     for attempt in range(attempts):
         try:
-            raw, _ = _response_text(_chat(messages, max_tokens=8192,
+            # High-effort reasoning shares the completion budget; 8192 cut the
+            # earnings JSON off mid-string on the 12-article input.
+            raw, _ = _response_text(_chat(messages, max_tokens=16384,
                                           reasoning_effort="high"))
             fragment = _decode_response(raw)
         except Exception as error:  # noqa: BLE001 — failure is explicit in audit trace
@@ -801,7 +832,12 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     scenario["source_url"] = source["official"]["source_url"]
                     scenario["published_at"] = source["official"]["published_at"]
                     fragment = {"earnings_scenario": scenario}
+                    allowed_ids = {"official"} | {f"news:{item['index']}" for item in source["news"]} | {
+                        f"guidance:{gi}" for gi, _ in enumerate(source["official"].get("guidance") or [])}
+                    salvaged = _salvage_key_risks(scenario, allowed_ids)
                     problems = _validate_earnings(scenario, source)
+                    if salvaged and not problems:
+                        scenario["salvage_notes"] = salvaged
                     # Resolve cited ids to titles/URLs so the report never
                     # re-derives article positions from a different list.
                     by_id = {f"news:{item['index']}": item for item in source["news"]}
@@ -837,6 +873,8 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                         "life_cycle_stage", "has_steady_state_3y",
                         "commodity_price_driven", "dissimilar_segments",
                         "rationale", "source_ids") if k in sc}
+                    if isinstance(sc.get("rationale"), str):
+                        sc["rationale"] = _trim_sentences(sc["rationale"], 600)
                     fragment = {"stage_classification": sc}
                     problems = _validate_stage(sc, source)
             elif name == "outyears":
@@ -919,7 +957,7 @@ def run_live(intake):
                 "subagents": {},
                 "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
                 "spec_sha256": spec_sha256,
-                "model_effort": "high; 8192 completion tokens per subagent"}
+                "model_effort": "high; 16384 completion tokens per subagent"}
     tasks = []
     if source["news"]:
         tasks.append("news")
@@ -1005,7 +1043,7 @@ def run_live(intake):
                           for name, result in results.items()},
             "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
             "spec_sha256": spec_sha256,
-            "model_effort": "high; 8192 completion tokens per subagent"}
+            "model_effort": "high; 16384 completion tokens per subagent"}
 
 
 def evidence_fingerprint(source, spec_sha256):

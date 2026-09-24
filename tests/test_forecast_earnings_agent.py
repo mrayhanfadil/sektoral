@@ -149,3 +149,26 @@ def test_prose_periods_and_pipeline_word_are_normalized():
     out = scrub.normalize_plan(plan)["earnings_scenario"]
     assert out["rationale"] == "2Q26, kuat"
     assert out["source_refs"]["news:0"]["title"] == "Q2 2026 — judul asli"
+
+
+def test_one_unquantified_risk_is_dropped_when_three_valid_remain():
+    risks = _scenario()["key_risks"]
+    vague = dict(risks[0], explanation="Harga bahan baku bisa naik dan menekan margin kotor "
+                                       "serta laba bersih perusahaan ke depan secara umum.")
+    scenario = _scenario(key_risks=risks + [vague])
+    notes = agent._salvage_key_risks(scenario, {"official"})
+    assert scenario["key_risks"] == risks
+    assert notes == ["dropped key_risk: key_risks[0].explanation must quantify the risk "
+                     "with a sourced number"]
+    assert agent._validate_earnings(scenario, _source()) == []
+    # With only two valid risks left the scenario still fails validation.
+    short = _scenario(key_risks=risks[:2] + [vague])
+    assert agent._salvage_key_risks(short, {"official"}) == []
+    assert any("key_risks" in p for p in agent._validate_earnings(short, _source()))
+
+
+def test_stage_rationale_is_trimmed_to_whole_sentences():
+    text = "Kalimat pertama cukup panjang untuk contoh. " * 20
+    trimmed = agent._trim_sentences(text, 600)
+    assert len(trimmed) <= 600 and trimmed.endswith(".")
+    assert agent._trim_sentences("Pendek.", 600) == "Pendek."
