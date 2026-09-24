@@ -2,6 +2,33 @@
   "schema_version": 1,
   "ticker": "JPFA",
   "reporting_currency": "IDR",
+  "annual_actuals_source": {
+    "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian 31 Desember 2025 (diaudit)",
+    "url": "https://d1be5sn7lppxuh.cloudfront.net/assets/files/files/financial_report/01-2026/pt-japfa-tbk-cfs-as-of-31-december-2025-audited.pdf",
+    "published_at": "2026-02-28",
+    "pages": "16 (laba rugi), 148-149 (informasi segmen: penyusutan)",
+    "unit": "IDR; dilaporkan dalam jutaan Rupiah"
+  },
+  "annual_actuals": [
+    {
+      "year": 2024,
+      "revenue": 55800849000000,
+      "operating_profit": 5061875000000,
+      "depreciation": 1165404000000,
+      "ebitda": 6227279000000,
+      "net_profit": 3212338000000,
+      "net_profit_attributable": 3018892000000
+    },
+    {
+      "year": 2025,
+      "revenue": 60715806000000,
+      "operating_profit": 6183584000000,
+      "depreciation": 1265023000000,
+      "ebitda": 7448607000000,
+      "net_profit": 4281329000000,
+      "net_profit_attributable": 4003999000000
+    }
+  ],
   "latest_actual": {
     "period": "1H26",
     "period_end": "2026-06-30",
@@ -26,7 +53,11 @@
   },
   "balance_sheet": {
     "period_end": "2026-06-30",
-    "source_pages": [1, 2, 3],
+    "source_pages": [
+      1,
+      2,
+      3
+    ],
     "total_assets": 45145132000000,
     "total_liabilities": 23811080000000,
     "total_equity": 21334052000000,

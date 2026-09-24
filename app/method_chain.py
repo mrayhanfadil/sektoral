@@ -243,7 +243,7 @@ def ev_ebitda_peer(peers, ebitda_fwd, shares, market_cap, net_debt=0.0,
         "ev_ebitda_peer", per_share=ps, per_share_down=down,
         reasons=scale_reasons(ps, shares, market_cap) if _finite(ps) else [],
         labels=[f"EV/EBITDA peer dari {peer_ev_sources(peers)} (market cap tabel peer Sectors "
-                "+ utang - kas, EBITDA FY terakhir laporan peer) diterapkan ke EBITDA forward; "
+                "+ utang - kas, EBITDA terakhir laporan peer, 12 bulan terakhir bila tersedia) diterapkan ke EBITDA forward; "
                 "peer dianggap sebanding", _bridge_label(net_debt_source)],
         detail={"median_ev_ebitda": median, "q1_ev_ebitda": q1,
                 "peer_count": len(mults), "ebitda_fwd": ebitda_fwd, "net_debt": nd,

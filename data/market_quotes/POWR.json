@@ -1,50 +1,50 @@
 {
-  "ticker": "BBCA",
+  "ticker": "POWR",
   "currency": "IDR",
-  "price": 6225,
+  "price": 955,
   "date": "2026-09-24",
-  "source_title": "Yahoo Finance BBCA.JK daily close",
-  "source_url": "https://finance.yahoo.com/quote/BBCA.JK/history/",
+  "source_title": "Yahoo Finance POWR.JK daily close",
+  "source_url": "https://finance.yahoo.com/quote/POWR.JK/history/",
   "closes": [
     {
       "date": "2026-09-11",
-      "price": 6325
+      "price": 995
     },
     {
       "date": "2026-09-14",
-      "price": 6500
+      "price": 1020
     },
     {
       "date": "2026-09-15",
-      "price": 6400
+      "price": 970
     },
     {
       "date": "2026-09-16",
-      "price": 6325
+      "price": 985
     },
     {
       "date": "2026-09-17",
-      "price": 6350
+      "price": 1015
     },
     {
       "date": "2026-09-18",
-      "price": 6300
+      "price": 1025
     },
     {
       "date": "2026-09-21",
-      "price": 6225
+      "price": 975
     },
     {
       "date": "2026-09-22",
-      "price": 6200
+      "price": 980
     },
     {
       "date": "2026-09-23",
-      "price": 6300
+      "price": 965
     },
     {
       "date": "2026-09-24",
-      "price": 6225
+      "price": 955
     }
   ]
 }

@@ -27,6 +27,11 @@ def fetch_usd_idr(ticker_factory: Callable | None = None) -> dict:
     if history is None or history.empty or "Close" not in history:
         raise ValueError("Yahoo Finance returned no USD/IDR close")
     close = history["Close"].dropna()
+    # FX trades around the clock: today's bar is a live quote, not a close
+    # (the 23 Sep 2026 bar fetched intraday read 17.878; its close was 17.805).
+    today = date.today().isoformat()
+    close = close[[(s.date().isoformat() if hasattr(s, "date") else str(s)[:10]) < today
+                   for s in close.index]]
     if close.empty:
         raise ValueError("Yahoo Finance returned no valid USD/IDR close")
     rate = float(close.iloc[-1])

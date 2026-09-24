@@ -1,50 +1,50 @@
 {
-  "ticker": "BBCA",
+  "ticker": "SIDO",
   "currency": "IDR",
-  "price": 6225,
+  "price": 350,
   "date": "2026-09-24",
-  "source_title": "Yahoo Finance BBCA.JK daily close",
-  "source_url": "https://finance.yahoo.com/quote/BBCA.JK/history/",
+  "source_title": "Yahoo Finance SIDO.JK daily close",
+  "source_url": "https://finance.yahoo.com/quote/SIDO.JK/history/",
   "closes": [
     {
       "date": "2026-09-11",
-      "price": 6325
+      "price": 348
     },
     {
       "date": "2026-09-14",
-      "price": 6500
+      "price": 348
     },
     {
       "date": "2026-09-15",
-      "price": 6400
+      "price": 352
     },
     {
       "date": "2026-09-16",
-      "price": 6325
+      "price": 348
     },
     {
       "date": "2026-09-17",
-      "price": 6350
+      "price": 352
     },
     {
       "date": "2026-09-18",
-      "price": 6300
+      "price": 354
     },
     {
       "date": "2026-09-21",
-      "price": 6225
+      "price": 356
     },
     {
       "date": "2026-09-22",
-      "price": 6200
+      "price": 352
     },
     {
       "date": "2026-09-23",
-      "price": 6300
+      "price": 354
     },
     {
       "date": "2026-09-24",
-      "price": 6225
+      "price": 350
     }
   ]
 }

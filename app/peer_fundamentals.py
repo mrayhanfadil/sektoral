@@ -38,12 +38,58 @@ def _num(value):
     return out if math.isfinite(out) else None
 
 
-def fetch(symbol: str, ticker_factory: Callable | None = None) -> dict:
-    """Latest fiscal-year debt, cash, EBITDA and revenue for one Yahoo symbol.
+def _ttm(ticker, yahoo, info_of):
+    """Trailing four quarters of EBITDA and revenue with the latest quarter's
+    debt and cash, or None when any of the four quarters is missing."""
+    try:
+        balance, income = ticker.quarterly_balance_sheet, ticker.quarterly_income_stmt
+    except Exception:  # quarterly statements are optional; annual is the fallback
+        return None
+    if balance is None or income is None or balance.empty or income.empty:
+        return None
+    if ROWS["ebitda"] not in income.index:
+        return None
+    quarters = sorted(income.columns, reverse=True)[:4]
+    ebitda = [_num(income.loc[ROWS["ebitda"], q]) for q in quarters]
+    if len(quarters) < 4 or None in ebitda:
+        return None
+    end = quarters[0]
+    if end not in balance.columns:
+        return None
+    debt = _num(balance.loc[ROWS["total_debt"], end]) if ROWS["total_debt"] in balance.index else None
+    cash = (_num(balance.loc[ROWS["cash_and_equivalents"], end])
+            if ROWS["cash_and_equivalents"] in balance.index else None)
+    if debt is None or cash is None:
+        return None
+    revenue = ([_num(income.loc[ROWS["revenue"], q]) for q in quarters]
+               if ROWS["revenue"] in income.index else [None])
+    info = info_of()
+    period_end = str(end)[:10]
+    return {
+        "symbol": yahoo.replace(".JK", ""), "yahoo_symbol": yahoo,
+        "fiscal_year": int(period_end[:4]), "period_end": period_end,
+        "period": "TTM", "period_label": f"12 bulan s.d. {period_end}",
+        "currency": info.get("financialCurrency") or info.get("currency"),
+        "market_cap": _num(info.get("marketCap")),
+        "total_debt": debt, "cash_and_equivalents": cash, "ebitda": sum(ebitda),
+        "revenue": sum(revenue) if None not in revenue else None,
+        "source": f"{SOURCE} {yahoo} quarterly statements, 12 months to {period_end}",
+        "fetched_at": date.today().isoformat(),
+    }
 
-    The year is the latest statement column that carries all of debt, cash
-    and EBITDA; a later year missing one of them is not used, and no value
-    is taken from a different year than the others.
+
+def fetch(symbol: str, ticker_factory: Callable | None = None) -> dict:
+    """Latest twelve months of EBITDA (four quarters) with the latest quarter's
+    debt and cash for one Yahoo symbol; the latest fiscal year when the
+    quarters are incomplete.
+
+    The peer multiple is applied to the issuer's forward EBITDA, so the most
+    recent twelve months are the closer basis: a fiscal year that ended nine
+    months ago can carry one-offs the market has already looked past (LINK
+    FY2025 EBITDA Rp795 miliar against Rp2,3 triliun over the last four
+    quarters). In the fiscal-year fallback the year is the latest statement
+    column that carries all of debt, cash and EBITDA; no value is taken from
+    a different year than the others.
     """
     if ticker_factory is None:
         import yfinance as yf
@@ -52,6 +98,16 @@ def fetch(symbol: str, ticker_factory: Callable | None = None) -> dict:
     if not yahoo.endswith(".JK"):
         yahoo += ".JK"
     ticker = ticker_factory(yahoo)
+
+    def info_of():
+        try:
+            return ticker.info or {}
+        except Exception:  # info is optional context; statements are the data
+            return {}
+
+    trailing = _ttm(ticker, yahoo, info_of)
+    if trailing:
+        return trailing
     balance, income = ticker.balance_sheet, ticker.income_stmt
     if balance is None or income is None or balance.empty or income.empty:
         raise ValueError(f"{SOURCE} returned no annual statements for {yahoo}")
@@ -63,15 +119,12 @@ def fetch(symbol: str, ticker_factory: Callable | None = None) -> dict:
             values[field] = _num(frame.loc[row, column]) if row in frame.index else None
         if None in (values["total_debt"], values["cash_and_equivalents"], values["ebitda"]):
             continue
-        info = {}
-        try:
-            info = ticker.info or {}
-        except Exception:  # info is optional context; statements are the data
-            info = {}
+        info = info_of()
         year = column.year if hasattr(column, "year") else int(str(column)[:4])
         return {
             "symbol": yahoo.replace(".JK", ""), "yahoo_symbol": yahoo,
             "fiscal_year": year, "period_end": str(column)[:10],
+            "period": "FY", "period_label": f"FY{year}",
             "currency": info.get("financialCurrency") or info.get("currency"),
             "market_cap": _num(info.get("marketCap")),
             **values,
@@ -132,7 +185,7 @@ def main(argv=None) -> int:
         parser.error("no symbols given")
     result = refresh(symbols)
     for symbol, data in result["stored"].items():
-        print(f"{symbol}: FY{data['fiscal_year']} EBITDA {data['ebitda']:.3e} "
+        print(f"{symbol}: {data.get('period_label') or data['fiscal_year']} EBITDA {data['ebitda']:.3e} "
               f"debt {data['total_debt']:.3e} cash {data['cash_and_equivalents']:.3e} "
               f"[{data['source']}]")
     for symbol, why in result["failed"].items():

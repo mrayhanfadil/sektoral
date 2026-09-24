@@ -744,7 +744,7 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
         "method": "SOTP/LoM (asset NAV, no perpetual terminal)",
         "blockers": blockers,
         "limitations": [
-            "harga rata-rata 12 bulan data Sectors dianggap datar sepanjang umur tambang; "
+            "dek harga rata-rata 12 bulan kalender terakhir dianggap datar sepanjang umur tambang; "
             "harga cadangan JORC emiten ditampilkan sebagai sensitivitas",
             "capex dan jadwal Elang tidak diungkapkan emiten; capex dari riset broker dan "
             "faktor risiko 50% adalah asumsi analis",
@@ -788,7 +788,7 @@ def assess_ev_ebitda_scenario(intake, forecast, valuation, assumption_status):
         "blockers": blockers,
         "limitations": ["EBITDA FY adalah skenario analis (aktual 1H resmi + margin EBITDA "
                         "asumsi agen), bukan forecast driver terekonsiliasi",
-                        f"EV/EBITDA peer FY terakhir dari {detail.get('peer_source') or 'sumber peer'} "
+                        f"EV/EBITDA peer terakhir (12 bulan terakhir bila tersedia) dari {detail.get('peer_source') or 'sumber peer'} "
                         "(market cap tabel peer Sectors + utang - kas laporan peer) diterapkan "
                         "ke EBITDA forward; peer dianggap sebanding",
                         "kas, utang dan minoritas dari satu neraca; arus kas dan neraca "
