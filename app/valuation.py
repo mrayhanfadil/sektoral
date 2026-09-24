@@ -80,6 +80,25 @@ def scenario_ev_ebitda_crosscheck(intake, fc, multiples=(6.0, 8.0, 10.0)):
             "status": "illustrative_crosscheck_only"}
 
 
+def _ddm_grid(nets, payout_used, dps_hist, shares, re, g, roae, bvps):
+    """CoE±1pp x g {2.5,3.5,4.5}% sensitivity on the DDM Gordon TP."""
+    from . import ddm as _ddm
+    out = {}
+    for dw in (-0.01, 0.0, 0.01):
+        for gg in (0.025, 0.035, 0.045):
+            try:
+                coe = re + dw
+                if coe <= gg:
+                    out[(round(dw, 3), gg)] = None
+                    continue
+                r = _ddm.value_bank(nets, [payout_used], dps_hist or [],
+                                    shares, coe, gg, roae, bvps)
+                out[(round(dw, 3), gg)] = round(r["tp_gordon"] / 10) * 10
+            except Exception:
+                out[(round(dw, 3), gg)] = None
+    return out
+
+
 def build(intake, fc, analyst_target=False, assumption_status=None):
     g3, notes = {}, []
     t = intake["ticker"]
@@ -90,9 +109,10 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
               "exit EV/EBITDA")
     is_bank = profile == "financial_ddm"
     if is_bank:
-        notes.append("keterbatasan model: bank idealnya pendekatan GGM ekuitas atau "
-                     "residual income dengan silang cek P/BV vs ROE; proksi FCFF "
-                     "dipakai karena kerangka ringan generic.")
+        method = (f"DDM {n_fc} tahun dividen eksplisit + terminal Gordon "
+                  f"(CoE, bukan WACC); FCFF {n_fc} tahun hanya screen ilustratif")
+        notes.append("metode utama bank: DDM ekuitas langsung (CoE, bukan WACC); "
+                     "FCFF/EV/WACC hanya screen ilustratif dan bukan syarat release.")
     if is_miner:
         notes.append("keterbatasan model: emiten tambang idealnya DCF sampai akhir umur "
                      "aset tanpa terminal perpetual; rilis resmi dapat memuat jadwal "
@@ -209,6 +229,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         sotp_result["customer_advance_excluded_usd_thousand"] = bridge.get(
             "customer_advance_excluded_usd_thousand")
     ddm_result = None
+    nets, bvps, roae = None, 0, 0.12
     if is_bank and intake.get("payout") is not None:
         nets = [r["net"] for r in fc["rows"]]
         bvps = (intake["annuals"][-1].get("equity") or 0) / intake["shares"] if intake.get("annuals") and intake.get("shares") else 0
@@ -291,7 +312,56 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
 
     # Mining's primary method is finite-life SOTP, never the legacy Gordon /
     # exit blend. A screening forecast or incomplete SOTP cannot publish a TP.
-    if is_miner:
+    # Banks' primary method is DDM (CoE), never FCFF; a screening forecast or
+    # incomplete DDM bridge cannot publish a TP.
+    if is_bank:
+        if release_result["status"] == "distributable" and isinstance(ddm_result, dict) \
+                and ddm_result.get("tp_gordon"):
+            tp = round(ddm_result["tp_gordon"] / 10) * 10
+            upside = tp / intake["price"] - 1
+            if abs(upside) > 0.50:
+                release_result = {"status": "draft_non_distributable",
+                                  "blockers": ["extreme DDM target needs a sourced fundamental thesis"]}
+                tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
+                tp_down, grid = None, {}
+            else:
+                rating = verdict.rating_override or rating_mod.classify(upside)
+                try:
+                    down = _ddm_grid(nets, ddm_result.get("payout_used"),
+                                     intake.get("dps_hist") or [], intake["shares"],
+                                     re, g, roae, bvps)
+                    tp_down = down.get((0.01, 0.025))
+                    grid = down
+                except Exception:
+                    tp_down, grid = None, {}
+                if tp_down is None or not (tp_down < tp):
+                    # Downside must be lower than base; otherwise hold the TP.
+                    release_result = {"status": "draft_non_distributable",
+                                      "blockers": ["DDM sensitivity downside is not below base TP"]}
+                    tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
+                    tp_down, grid = None, {}
+            g3 = {
+                "G3.1_method": "dilabeli",
+                "G3.2_skala": "lolos" if tp is not None else "gagal",
+                "G3.3_implied": "lolos",
+                "G3.4_downside": "lolos" if (tp_down is not None and tp is not None and tp_down < tp) else "gagal",
+                "G3.5_keyfin": "lolos",
+                "G3.6_peer": "dilabeli" if not intake["peers"] else "lolos",
+                "G3.7_band": "lolos",
+                "G3.8_method_divergence": "dilabeli",
+                "G3.9_extreme_thesis": ("lolos" if (upside is not None and abs(upside) <= 0.50) else "gagal"),
+            }
+            impl = {"per": tp / (f_last["net"] / intake["shares"]) if (tp and f_last["net"] > 0) else None,
+                    "ev_ebitda": None,
+                    "pbv": (ddm_result.get("fair_pbv") if isinstance(ddm_result, dict) else None),
+                    "tp_inverse": (ddm_result.get("tp_inverse") if isinstance(ddm_result, dict) else None)}
+        elif is_draft:
+            tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
+            tp_down, grid = None, {}
+        else:
+            tp, upside, rating = None, None, "DRAFT NON-DISTRIBUTABLE"
+            tp_down, grid = None, {}
+    elif is_miner:
         method = ("FY26F EV/EBITDA 8x (asumsi analis)"
                   if release_result["status"] == "distributable_assumption_led"
                   else "SOTP/LoM (asset-based, no perpetual terminal)")

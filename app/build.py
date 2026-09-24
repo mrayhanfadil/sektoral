@@ -5,7 +5,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import forecast, intake, narrative, render, report_contract, report_extras, valuation
+from . import evidence as evidence_mod, forecast, intake, narrative, render, report_contract, report_extras, run_manifest, valuation
 
 PDF_OK = True
 try:
@@ -37,6 +37,26 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         "outyear_scenario": fc.get("outyear_scenario"),
         "product_sales_scenario": doc_in.get("analyst_scenario"),
     }
+    # Immutable run manifest: code revision, as_of, market close, official
+    # filing, Tavily query/status, selected URLs, plan hash, profile, release.
+    try:
+        doc["run_manifest"] = run_manifest.build_manifest(
+            ticker=ticker, as_of=doc["meta"].get("tanggal") or as_of,
+            intake=doc_in, forecast=fc, valuation=va,
+            news_evidence={"rows": doc_in.get("news") or [],
+                           "full": doc_in.get("news_full") or [],
+                           "search": doc_in.get("news_search") or {}},
+            assumption_plan=fc.get("assumption_plan"),
+            release=va.get("release"))
+    except Exception:
+        doc["run_manifest"] = {"ticker": str(ticker).upper()}
+    try:
+        doc["evidence_register"] = evidence_mod.build(
+            ticker, doc["meta"].get("tanggal") or as_of, doc_in,
+            doc_in.get("news") or [], doc_in.get("news_full") or [],
+            fc.get("assumption_plan"))
+    except Exception:
+        doc["evidence_register"] = {"ticker": str(ticker).upper(), "rows": []}
     # Harness: single source of truth for Instruksi-Report-v3 compliance.
     # Engine + LLM call the same tools; critical blockers force draft.
     try:

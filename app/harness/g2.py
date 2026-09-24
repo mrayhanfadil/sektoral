@@ -143,6 +143,17 @@ def check_g2(intake: dict | None, forecast: dict | None) -> dict:
                              "rantai fisik-ke-keuangan direkonsiliasi" if ok
                              else "forecast fisik-ke-keuangan belum dihitung; CAGR hanya screening",
                              True))
+        elif profile == "financial_ddm":
+            ok = basis in ("driver_forecast", "financial_driver_forecast") and ready
+            g2log = (forecast.get("g2") or {})
+            failed_g2 = [k for k, v in g2log.items()
+                         if k != "catatan" and (v == "gagal" or (isinstance(v, tuple) and v[0] == "gagal"))]
+            if failed_g2:
+                ok = False
+            checks.append(_v("G2.9", ok,
+                             "driver forecast keuangan bersumber + direkonsiliasi" if ok
+                             else "driver laba/modal/payout belum rekonsiliasi; screen bukan forecast produksi",
+                             True))
         else:
             ok = basis == "driver_forecast" and ready
             g2log = (forecast.get("g2") or {})

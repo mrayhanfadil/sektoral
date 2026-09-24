@@ -64,6 +64,7 @@ def _source_payload(intake):
     deepdive = {str(item.get("source_url") or ""): item
                 for item in (intake.get("news_full") or [])
                 if isinstance(item, dict)}
+    search = intake.get("news_search") or {}
     selected_news = []
     for row in news:
         if not isinstance(row, dict):
@@ -80,6 +81,9 @@ def _source_payload(intake):
                               "origin": row.get("origin") or "sectors",
                               "origins": row.get("origins") or ["sectors"],
                               "publisher": row.get("publisher"),
+                              "register_id": row.get("register_id") or f"src-{len(selected_news)}",
+                              "event_key": row.get("event_key"),
+                              "tavily_query": row.get("tavily_query") or search.get("query"),
                               "body": str(row.get("body") or "")[:1400],
                               "full_text": full_text,
                               "full_text_status": str(full.get("fetch_status") or "unavailable_unknown"),
@@ -89,6 +93,9 @@ def _source_payload(intake):
     return {
         "ticker": intake["ticker"], "as_of": intake["as_of"],
         "model_profile": intake.get("model_profile"),
+        "tavily_search": {"status": search.get("status"),
+                          "queries": search.get("queries") or ([search.get("query")] if search.get("query") else []),
+                          "window": search.get("window")},
         "official": {
             "source_url": actual.get("source_url"),
             "published_at": actual.get("published_at"),
@@ -116,6 +123,12 @@ def _validate(plan, source, require_news_coverage=True):
     problems = []
     if not isinstance(plan, dict):
         return ["response is not an object"]
+    # The agent proposes magnitudes; the engine calculates TP/valuation.
+    # Any direct TP/valuation/readiness write is rejected.
+    for forbidden in ("target_price", "valuation", "production_ready",
+                      "forecast_basis", "tp", "rating"):
+        if forbidden in plan:
+            problems.append(f"agent must not write {forbidden}; the engine calculates it")
     effects = plan.get("news_effects")
     if not isinstance(effects, list):
         problems.append("news_effects must be a list")
@@ -172,6 +185,39 @@ def _validate(plan, source, require_news_coverage=True):
                 not isinstance(item.get(field), str) or len(item[field].strip()) < 12
                 for field in ("factual_basis", "mechanism", "uncertainty")):
             problems.append(f"news_effects[{i}] needs fact, mechanism, and uncertainty")
+        # Forward-looking event chain (optional but validated when present):
+        # published fact -> timing/condition -> driver -> annual assumption.
+        # Publication date (timestamp) must be <= as_of; the expected event
+        # date may lie in the future when the announcement was already public.
+        event_date = item.get("event_date") or item.get("event_window")
+        if event_date is not None:
+            try:
+                date.fromisoformat(str(event_date)[:10])
+            except ValueError:
+                problems.append(f"news_effects[{i}] event_date must be YYYY-MM-DD")
+        conditions = item.get("conditions") or item.get("probability")
+        if conditions is not None and not isinstance(conditions, str):
+            problems.append(f"news_effects[{i}] conditions must be text")
+        base_value = item.get("base_value")
+        if base_value is not None and not _number(base_value, -1e18, 1e18):
+            problems.append(f"news_effects[{i}] base_value must be numeric")
+        uncertainty_range = item.get("uncertainty_range")
+        if uncertainty_range is not None:
+            if (not isinstance(uncertainty_range, list) or len(uncertainty_range) != 2
+                    or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                               for v in uncertainty_range)):
+                problems.append(f"news_effects[{i}] uncertainty_range must be [low, high] numbers")
+            elif driver in bounds:
+                lower, upper = bounds[driver]
+                span = upper - lower
+                if not (uncertainty_range[0] <= change <= uncertainty_range[1]
+                        and lower - span <= uncertainty_range[0] <= upper + span
+                        and lower - span <= uncertainty_range[1] <= upper + span):
+                    problems.append(f"news_effects[{i}] uncertainty_range inconsistent with change/bounds")
+        assumption_type = item.get("assumption_type")
+        if assumption_type is not None and assumption_type not in (
+                "issuer_guidance", "analyst_judgment"):
+            problems.append(f"news_effects[{i}] assumption_type must be issuer_guidance or analyst_judgment")
         quote = item.get("full_text_quote")
         if row.get("origin") == "tavily" and driver != "none" and not quote:
             problems.append(
@@ -337,7 +383,15 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "one item per supplied article, including irrelevant articles. Each item "
             "requires article_index, exact "
             "source_url, exact title, exact timestamp, driver, change, years, "
-            "factual_basis, mechanism, uncertainty, rationale. Drivers: "
+            "factual_basis, mechanism, uncertainty, rationale. Chain each nonzero "
+            "item as published fact -> expected timing/condition -> profile driver "
+            "-> annual assumption: optionally add event_date (YYYY-MM-DD expected "
+            "milestone date, may be future when the announcement was already public), "
+            "conditions/probability text, base_value (counterfactual base), "
+            "uncertainty_range [low, high], and assumption_type "
+            "(issuer_guidance or analyst_judgment). Never write target_price, "
+            "valuation, production_ready, forecast_basis, tp, or rating; the engine "
+            "calculates financial effects. Drivers: "
             "revenue_growth_pp [-15,15], ebitda_margin_pp [-10,10], wacc_bps "
             "[-100,100], coe_bps [-100,100], none (change 0, years []). "
             "For financial_ddm, only coe_bps or none apply; do not use revenue, "

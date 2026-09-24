@@ -121,6 +121,89 @@ def _sotp_bridge_inputs(evidence, as_of):
     }
 
 
+def _driver_evidence_inputs(official_evidence, payout, payout_basis,
+                             dps_hist, report_date, profile):
+    """Synthesize release-gate driver evidence from the official actual.
+
+    Each series carries an HTTPS source, source_date <= as_of, page, unit,
+    and explanatory note. A missing metric yields a missing series (explicit
+    blocker) rather than a zero assumption. An analyst payout assumption
+    without an HTTPS source stays a blocker: media/assumptions motivate
+    bounds but do not become issuer guidance.
+    """
+    if not isinstance(official_evidence, dict):
+        return None
+    actual = official_evidence.get("latest_actual") or {}
+    source_url = actual.get("source_url")
+    published_at = actual.get("published_at")
+    if not source_url or not published_at:
+        return None
+    title = actual.get("source_title") or "official issuer release"
+    source_ref = f"{title}: {source_url}"
+    source_date = str(published_at)[:10]
+    page = actual.get("page")
+    unit = actual.get("unit")
+    metrics = actual.get("metrics") or {}
+
+    def _row(note):
+        return {"source": source_ref, "source_date": source_date,
+                "page": page, "unit": unit or "as reported",
+                "note": note}
+
+    if profile == "financial_ddm":
+        evidence = {}
+        if isinstance(metrics.get("revenue"), (int, float)):
+            evidence["revenue"] = _row(
+                "Sourced operating income trajectory from official interim release; "
+                "base for earnings/dividend bridge.")
+        if isinstance(metrics.get("net_profit"), (int, float)):
+            evidence["net_profit"] = _row(
+                "Sourced net profit from official interim release; "
+                "anchor for retained earnings and payout.")
+        # Equity/book: prefer official balance sheet, fall back to latest actual context.
+        balance = official_evidence.get("balance_sheet") or {}
+        equity = None
+        for key in ("total_equity", "equity_attributable", "equity"):
+            if isinstance(balance.get(key), (int, float)):
+                equity = balance[key]
+                break
+        if equity is not None:
+            evidence["equity"] = _row(
+                f"Sourced book equity {equity:,.0f} from official balance sheet; "
+                "base for BVPS/ROE/capital bridge.")
+        # Payout: only sourced when an official payout/DPS history exists;
+        # a bare analyst 25% assumption is labeled but cannot pass provenance.
+        has_official_payout = isinstance(dps_hist, list) and len(dps_hist) > 0
+        if has_official_payout:
+            evidence["payout"] = _row(
+                f"Sourced payout {payout*100:.1f}% ({payout_basis}); DPS history supports DDM.")
+        elif isinstance(payout, (int, float)):
+            evidence["payout"] = {"source": "analyst assumption 25% (tanpa payout historis di data Sectors)",
+                                  "source_date": source_date, "page": page,
+                                  "unit": "fraction",
+                                  "note": f"Unverified payout assumption {payout_basis}; "
+                                          "official payout evidence missing."}
+        # Alias for release compatibility: profit == net_profit.
+        if "net_profit" in evidence:
+            evidence["profit"] = evidence["net_profit"]
+        return evidence or None
+
+    # going_concern_fcff (+ default): revenue/ebitda/net_profit/capex.
+    evidence = {}
+    labels = {
+        "revenue": "Sourced revenue trajectory from official interim release.",
+        "ebitda": "Sourced EBITDA from official interim release; anchors margin bridge.",
+        "net_profit": "Sourced net profit from official interim release; anchors earnings.",
+        "capex": "Sourced capex from official interim release; anchors investment bridge.",
+    }
+    metric_keys = {"revenue": "revenue", "ebitda": "ebitda",
+                   "net_profit": "net_profit", "capex": "capital_expenditure"}
+    for series, key in metric_keys.items():
+        if isinstance(metrics.get(key), (int, float)):
+            evidence[series] = _row(labels[series])
+    return evidence or None
+
+
 def load(ticker, as_of=None):
     """Build typed inputs from cache. Returns (intake, g1_log)."""
     t = ticker.upper()
@@ -384,6 +467,8 @@ def load(ticker, as_of=None):
         "sotp_assets": None,
         "sotp_bridge": (_sotp_bridge_inputs(official_evidence, report_date)
                         if profile == "finite_life_mining" else None),
+        "driver_evidence": _driver_evidence_inputs(
+            official_evidence, payout, payout_basis, dps_hist, report_date, profile),
     }
     return intake, {"G1": g1, "catatan": notes, "fetched_at": time.time()}
 

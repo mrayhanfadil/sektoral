@@ -37,6 +37,27 @@ NEWS_DOMAINS = [
     "tempo.co", "antaranews.com", "thejakartapost.com", "reuters.com", "bloomberg.com",
     "bloombergtechnoz.com", "idnfinancials.com", "marketeers.com",
 ]
+
+# Profile-relevant future-driver query suffixes (Workstream 1). The base
+# issuer query always runs; profile queries add discovery of forward
+# catalysts without replacing the base result set.
+PROFILE_QUERY_HINTS = {
+    "going_concern_fcff": [
+        "kontrak kapasitas order belanja modal",
+        "target produksi penjualan guidance",
+    ],
+    "financial_ddm": [
+        "kredit suku bunga modal dividen",
+        "laba bersih payout capital",
+    ],
+    "finite_life_mining": [
+        "produksi commissioning smelter tambang",
+        "harga komoditas izin ekspor royalti",
+    ],
+}
+
+# Tavily retrieval status vocabulary for the run manifest and trace.
+RETRIEVAL_STATUSES = ("searched", "no_relevant_results", "unavailable", "failed")
 _FAILOVER_STATUS = {401, 403, 429, 432, 433}
 _KEY_ENV = re.compile(r"^TAVILY_API_KEYS?(?:_\d+)?$")
 
@@ -165,29 +186,37 @@ def _safe_url(value):
     return str(value) if parts.scheme in ("http", "https") and parts.netloc else None
 
 
-def news_context(ticker, company_name, end_date, *, ring=None, post=None, store_dir=None):
-    """Dated headlines about one issuer, published within the window ending ``end_date``.
+def build_queries(ticker, company_name, profile=None):
+    """Base issuer query plus profile-relevant future-driver queries.
 
-    Returns {"items": [...], "fetched_at", "query", "window", "from_store"}.
+    Base covers the issuer name/ticker; profile hints add orders/capacity
+    (operating), credit/rates/capital (financials), and production/
+    commissioning/commodity/permits (mining), plus announced milestones.
     """
-    end = date.fromisoformat(str(end_date)[:10]) if end_date else date.today()
-    start = end - timedelta(days=WINDOW_DAYS)
     name = re.sub(r"\b(PT|Tbk\.?)\b", "", str(company_name or "")).strip(" .,")
-    query = f'"{ticker}" {name} saham emiten berita'.strip()
-    folder = Path(store_dir or STORE_DIR)
-    key = hashlib.sha1(f"{query}|{start}|{end}".encode()).hexdigest()[:16]
-    stored = folder / f"{ticker}-{end.isoformat()}-{key}.json"
-    try:
-        cached = json.loads(stored.read_text(encoding="utf-8"))
-        return dict(cached, from_store=True)
-    except (OSError, ValueError):
-        pass
-    body = {"query": query, "topic": "news", "search_depth": "basic",
-            "max_results": MAX_RESULTS, "start_date": start.isoformat(),
-            "end_date": end.isoformat(), "filter_by_published_date": True,
-            "include_domains": NEWS_DOMAINS, "include_answer": False,
-            "include_raw_content": False, "chunks_per_source": 1}
-    payload, _index = _search(body, ring=ring, post=post)
+    base = f'"{ticker}" {name} saham emiten berita'.strip()
+    queries = [base]
+    hints = PROFILE_QUERY_HINTS.get(str(profile or "").strip().lower()) or []
+    for hint in hints:
+        queries.append(f'"{ticker}" {name} {hint}'.strip())
+    # Deduplicate while preserving order.
+    return list(dict.fromkeys(q for q in queries if q))
+
+
+def _canon_url_key(value):
+    from urllib.parse import parse_qsl, urlencode
+    parts = urlsplit(str(value or ""))
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return str(value or "").strip().rstrip("/").lower()
+    host = parts.netloc.lower().removeprefix("www.")
+    path = parts.path.rstrip("/") or "/"
+    query = urlencode(sorted((k, v) for k, v in parse_qsl(parts.query)
+                             if not k.lower().startswith("utm_")
+                             and k.lower() not in {"fbclid", "gclid"}))
+    return f"{host}{path}?{query}" if query else f"{host}{path}"
+
+
+def _items_from_payload(payload, start, end):
     items = []
     for row in payload.get("results") or []:
         if not isinstance(row, dict):
@@ -201,8 +230,83 @@ def news_context(ticker, company_name, end_date, *, ring=None, post=None, store_
                       "url": url, "domain": urlsplit(url).netloc.removeprefix("www."),
                       "date": published.isoformat(),
                       "snippet": re.sub(r"\s+", " ", str(row.get("content") or ""))[:320]})
-    result = {"items": items, "query": query,
+    return items
+
+
+def news_context(ticker, company_name, end_date, *, ring=None, post=None,
+                 store_dir=None, profile=None, max_queries=None):
+    """Dated headlines about one issuer, published within the window ending ``end_date``.
+
+    Runs the base issuer query plus profile-relevant future-driver queries
+    (orders/capacity, credit/rates/capital, production/commissioning/
+    commodity/permits, milestones). Merges and dedups by URL across queries.
+
+    Returns {"items": [...], "fetched_at", "query", "queries", "window",
+    "from_store", "profile"}. ``query`` is the base query for backwards
+    compatibility; ``queries`` lists every executed query.
+    """
+    ticker = str(ticker or "").strip().upper()
+    end = date.fromisoformat(str(end_date)[:10]) if end_date else date.today()
+    start = end - timedelta(days=WINDOW_DAYS)
+    queries = build_queries(ticker, company_name, profile)
+    if max_queries is not None:
+        queries = queries[:max(1, int(max_queries))]
+    folder = Path(store_dir or STORE_DIR)
+    key = hashlib.sha1(f"{'|'.join(queries)}|{start}|{end}".encode()).hexdigest()[:16]
+    stored = folder / f"{ticker}-{end.isoformat()}-{key}.json"
+    try:
+        cached = json.loads(stored.read_text(encoding="utf-8"))
+        # Backfill newer fields for caches written by the single-query version.
+        cached.setdefault("queries", [cached.get("query")] if cached.get("query") else queries)
+        cached.setdefault("profile", profile)
+        return dict(cached, from_store=True)
+    except (OSError, ValueError):
+        pass
+    # Reuse the legacy single-query cache for the base query so enabling
+    # profile hints does not re-spend credits for the base result set.
+    legacy_items, legacy_from_store = [], False
+    if len(queries) > 1:
+        base_key = hashlib.sha1(f"{queries[0]}|{start}|{end}".encode()).hexdigest()[:16]
+        legacy_path = folder / f"{ticker}-{end.isoformat()}-{base_key}.json"
+        try:
+            legacy_cached = json.loads(legacy_path.read_text(encoding="utf-8"))
+            for row in legacy_cached.get("items") or []:
+                if isinstance(row, dict) and row.get("url") and row.get("date"):
+                    legacy_items.append({**row, "query": queries[0]})
+            legacy_from_store = bool(legacy_items)
+        except (OSError, ValueError):
+            pass
+    merged, seen_urls = [], set()
+    query_meta = []
+    for qi, query in enumerate(queries):
+        if qi == 0 and legacy_items:
+            batch = legacy_items
+        else:
+            body = {"query": query, "topic": "news", "search_depth": "basic",
+                    "max_results": MAX_RESULTS, "start_date": start.isoformat(),
+                    "end_date": end.isoformat(), "filter_by_published_date": True,
+                    "include_domains": NEWS_DOMAINS, "include_answer": False,
+                    "include_raw_content": False, "chunks_per_source": 1}
+            payload, _index = _search(body, ring=ring, post=post)
+            batch = _items_from_payload(payload, start, end)
+            for item in batch:
+                item["query"] = query
+        fresh = 0
+        for item in batch:
+            url_key = _canon_url_key(item.get("url"))
+            if url_key in seen_urls:
+                continue
+            seen_urls.add(url_key)
+            merged.append(item)
+            fresh += 1
+        query_meta.append({"query": query, "returned": len(batch), "kept": fresh,
+                           **({"from_store": True} if qi == 0 and legacy_items else {})})
+    # Newest first; stable sort keeps base-query priority on ties.
+    merged.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
+    result = {"items": merged, "query": queries[0] if queries else "",
+              "queries": query_meta,
               "window": f"{start.isoformat()} s.d. {end.isoformat()}",
+              "profile": profile,
               "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     try:
         folder.mkdir(parents=True, exist_ok=True)

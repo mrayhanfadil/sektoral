@@ -66,6 +66,10 @@ def _date(value):
 
 _FINANCIAL_METRICS = ("revenue", "ebitda", "net_profit", "capex")
 _REQUIRED_DRIVER_SERIES = ("revenue", "ebitda", "net_profit", "capex")
+# Financial DDM never inherits FCFF/capex/NWC/EV/WACC as a release
+# requirement (§3.1, §4.5). Its production bridge is profit/equity/payout.
+_REQUIRED_DRIVER_SERIES_DDM = ("net_profit", "equity", "payout")
+_DDM_PROFIT_ALIASES = {"net_profit", "profit"}
 _EVIDENCE_FIELDS = (
     "claim", "value", "unit", "period", "status", "source",
     "source_date", "page",
@@ -232,12 +236,22 @@ def _check_operating_bridge(forecast: object) -> list[str]:
     return blockers
 
 
-def _check_driver_forecast(forecast: object, intake: object) -> list[str]:
+def _check_driver_forecast(forecast: object, intake: object,
+                           profile: object = None) -> list[str]:
     if not isinstance(forecast, Mapping):
         return ["sourced operating and cash-flow forecast is incomplete"]
     blockers = []
-    if forecast.get("forecast_basis") != "driver_forecast":
-        blockers.append("sourced operating and cash-flow forecast is incomplete")
+    normalized = str(profile or "").strip().lower() if isinstance(profile, str) else ""
+    if not normalized and isinstance(intake, Mapping):
+        normalized = str(intake.get("model_profile") or "").strip().lower()
+    is_ddm = normalized == "financial_ddm"
+    required_series = _REQUIRED_DRIVER_SERIES_DDM if is_ddm else _REQUIRED_DRIVER_SERIES
+    expected_basis = "driver_forecast"
+    if forecast.get("forecast_basis") != expected_basis:
+        if is_ddm and forecast.get("forecast_basis") == "financial_driver_forecast":
+            pass
+        else:
+            blockers.append("sourced operating and cash-flow forecast is incomplete")
     if forecast.get("production_ready") is not True:
         blockers.append("forecast is not verified as production-ready")
 
@@ -258,11 +272,24 @@ def _check_driver_forecast(forecast: object, intake: object) -> list[str]:
         return blockers
 
     as_of = intake.get("as_of") or intake.get("price_date") if isinstance(intake, Mapping) else None
-    for series in _REQUIRED_DRIVER_SERIES:
-        if series not in driver_evidence:
-            blockers.append(f"driver forecast missing required series: {series}")
-            continue
-        row = driver_evidence[series]
+    for series in required_series:
+        # DDM profit alias: net_profit satisfies profit and vice versa.
+        lookup = series
+        if is_ddm and series == "net_profit" and series not in driver_evidence:
+            if "profit" in driver_evidence:
+                lookup = "profit"
+        if lookup not in driver_evidence:
+            if is_ddm and series in _DDM_PROFIT_ALIASES:
+                sibling = "profit" if series == "net_profit" else "net_profit"
+                if sibling in driver_evidence:
+                    lookup = sibling
+                else:
+                    blockers.append(f"driver forecast missing required series: {series}")
+                    continue
+            else:
+                blockers.append(f"driver forecast missing required series: {series}")
+                continue
+        row = driver_evidence[lookup]
         prefix = f"driver forecast {series}"
         if not isinstance(row, Mapping):
             blockers.append(f"{prefix}: must be a driver evidence object")
@@ -411,7 +438,7 @@ def assess_release(profile, intake, forecast, sotp_result):
                     any(not isinstance(metrics.get(key), (int, float)) for key in
                         ("revenue", "net_profit"))):
                 blockers.append("latest official interim revenue/net profit are missing")
-        blockers.extend(_check_driver_forecast(forecast, intake))
+        blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile))
         if normalized_profile == "financial_ddm":
             has_ddm = (
                 isinstance(sotp_result, Mapping)
