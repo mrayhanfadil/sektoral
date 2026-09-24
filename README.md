@@ -18,17 +18,29 @@ The builder shows Buy, Hold or Sell and a target price only when the selected me
 
 From the repository root, copy `.env.example` to `.env` and set `MINIMAX_API_KEY` (or `SEKTORAL_LLM_API_KEY`) for the research agent. Never commit `.env` or share it in a recording. The workflow uses the local Sectors cache and does not need a Sectors API key at run time.
 
+The quickest start is Docker, which builds the React app and runs it with the Python API and Chromium for PDFs in one image:
+
 ```bash
-python3 -m app.web
+docker compose up --build
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten**, enter a ticker, and select **Mulai riset**. Follow the status page, then open **Buka company update** or **Lihat jejak agent** when the run finishes. If evidence is incomplete, the UI says the analysis is partial. The browser server binds to localhost by default. The agent needs network access to its configured LLM endpoint, but market data comes only from the local Sectors cache. The BBCA CLI and browser workflows have been end-to-end tested on this working checkout; rerun QA on the frozen submission checkout before recording or submitting.
+Without Docker, build the frontend once and run the Python server (Python 3.12, Node 22):
 
-**Report gallery.** `/laporan` lists every finished company update in a reports folder (rating, target, method, status, cover thumbnail, PDF, web version and audit trace), and the landing page features one real report with its method chain. Fill the folder with a batch run, then point the server at it; add `--pdf` so runs started in the browser also produce a PDF and appear in the gallery when they finish:
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/playwright install chromium
+npm --prefix web ci && npm --prefix web run build
+.venv/bin/python -m app.server
+```
+
+For frontend work, run `npm --prefix web run dev` next to the server; Vite serves the app on port 5173 and proxies `/api` and `/files` to it.
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten**, enter a ticker, and select **Mulai riset**. Follow the status page, then open **Buka company update** or **Lihat jejak agent** when the run finishes. If evidence is incomplete, the UI says the analysis is partial. The server binds to localhost by default (the Docker port is published on localhost only). The agent needs network access to its configured LLM endpoint, but market data comes only from the local Sectors cache. The BBCA CLI and browser workflows have been end-to-end tested on this working checkout; rerun QA on the frozen submission checkout before recording or submitting.
+
+**Report gallery.** `/laporan` lists every finished company update in a reports folder (rating, target, method, status, cover thumbnail, PDF, web version and audit trace), and the landing page features one real report with its method chain. Fill the folder with a batch run, then point the server at it; add `--pdf` so runs started in the browser also produce a PDF and appear in the gallery when they finish. In Docker the gallery reads `out/reports`, so a batch run there shows up without flags:
 
 ```bash
 python3 -m app.batch BBCA BBRI AMMN SSIA INET POWR JPFA GMFI --jobs 2 --out out/reports --pdf
-python3 -m app.web --reports out/reports --pdf
+.venv/bin/python -m app.server --reports out/reports --pdf
 ```
 
 For a terminal-only run, use the one-command CLI below. It writes the HTML report and trace to `out/demo/`; `--pdf` is optional and requires PDF support. Omit it to use HTML only.
@@ -62,7 +74,9 @@ Every report also carries sections built directly from the local Sectors snapsho
 
 | Path | Purpose |
 |---|---|
-| `app/` | Deterministic report intake, forecast, valuation, narrative, and rendering |
+| `app/` | Deterministic report intake, forecast, valuation, narrative, and rendering; `app/server.py` is the FastAPI web server |
+| `web/` | React + TypeScript + Tailwind web app (landing, research, run status, gallery, audit trace) |
+| `Dockerfile`, `compose.yaml` | One image with the built web app, the Python API and Chromium for PDFs |
 | `agents/analyst/` | Planning analyst agent: local-data tools, peer/anomaly signals, hypothesis verdicts, run memory |
 | `agents/research/` | Cache-constrained research agent, evidence checks, and trace data |
 | `data/sectors_cache.db` | Local Sectors cache used as the only market-data source |

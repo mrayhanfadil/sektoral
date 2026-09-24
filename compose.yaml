@@ -1,0 +1,22 @@
+# Local Sectoral: `docker compose up --build`, then open http://localhost:8765
+services:
+  sectoral:
+    build: .
+    image: sectoral:local
+    ports:
+      - "127.0.0.1:${SECTORAL_PORT:-8765}:8765"
+    # LLM and Tavily keys (see .env.example); the app runs without the file,
+    # but research runs need an LLM key.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SECTORAL_PDF: "1"
+    # Run as your user so caches and reports written to the mounts stay yours.
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      # Sectors snapshot plus the caches runs write (plans, memory, news).
+      - ./data:/app/data
+      # Research runs (out/web) and the report gallery (out/reports).
+      - ./out:/app/out
+    restart: unless-stopped

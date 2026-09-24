@@ -4,7 +4,7 @@ The submission needs two real product recordings: a public teaser of up to 60 se
 
 ## Before recording
 
-1. From the repository root, start the local UI with `python3 -m app.web`, then open `http://127.0.0.1:8765`. The server binds to localhost by default.
+1. From the repository root, start the app with `docker compose up --build` (or `.venv/bin/python -m app.server` after building `web/`), then open `http://127.0.0.1:8765`. The server is reachable on localhost only.
 2. Confirm `.env` has the configured LLM key and that the selected ticker has useful rows in `data/sectors_cache.db`. Do not show `.env` or the key. The run needs network access to the LLM endpoint, while market data comes only from the local Sectors cache; the workflow does not call Sectors upstream.
 3. On the landing page, select **Coba riset emiten**, enter the ticker on `/research`, and click **Mulai riset**. Keep the actual status visible, including a partial result or error. When completed, open **Buka company update** and **Lihat jejak agent**.
 4. Check the actual report and trace for the selected run. The generated files are in `out/demo/<job-id>/` as `<TICKER>.html`, `<TICKER>-trace.html`, and `<TICKER>-trace.json`. Explain only sources, claims, and evidence gaps visible in those artifacts.

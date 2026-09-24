@@ -1,10 +1,11 @@
 """Report gallery: finished company updates in a local reports folder.
 
 A batch run (``python -m app.batch ... --out out/reports --pdf``) writes
-``{T}.json``, ``{T}.html``, ``{T}.pdf`` and ``{T}-trace.html`` per ticker.
-The gallery reads a small public summary from each JSON (rating, target,
-method, status, headline, method chain) and serves only those four files per
-ticker, plus a cover thumbnail rendered from the PDF.
+``{T}.json``, ``{T}.html``, ``{T}.pdf``, ``{T}-trace.html`` and ``{T}-trace.json``
+per ticker. The gallery reads a small public summary from each JSON (rating,
+target, method, status, headline, method chain); the server serves the HTML, PDF
+and trace HTML as files, the trace JSON only through its public view, and a
+cover thumbnail rendered from the PDF.
 """
 from __future__ import annotations
 
@@ -19,7 +20,8 @@ PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
                  "going_concern_fcff": "Korporasi"}
 FILES = {"pdf": ("{t}.pdf", "application/pdf"),
          "html": ("{t}.html", "text/html; charset=utf-8"),
-         "trace": ("{t}-trace.html", "text/html; charset=utf-8")}
+         "trace": ("{t}-trace.html", "text/html; charset=utf-8"),
+         "trace_json": ("{t}-trace.json", "application/json")}
 
 
 def _chain(doc):

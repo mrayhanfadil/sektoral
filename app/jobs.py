@@ -1,0 +1,255 @@
+"""Research jobs for the web app: a bounded registry and what it may expose.
+
+The API server submits a ticker here, a worker thread runs the full research
+pipeline into its own directory, and the browser polls a snapshot. Snapshots
+carry only whitelisted fields: pipeline results and exceptions can contain
+source data or credentials, so they stay in the local log.
+"""
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+import json
+import logging
+import re
+import shutil
+import threading
+from pathlib import Path
+from urllib.parse import urlsplit
+import uuid
+
+from . import cache, gallery, progress, research
+
+LOG = logging.getLogger(__name__)
+TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
+JOB_ID = re.compile(r"^[0-9a-f]{32}$")
+_SAFE_STATUS = re.compile(r"^[A-Za-z0-9_.-]{1,48}$")
+_MAX_EVENTS = 120
+
+
+def text(value, limit=400):
+    """A display string, cut at a word boundary with an ellipsis when too long."""
+    if not isinstance(value, (str, int, float)) or value is None:
+        return None
+    value = str(value)
+    if len(value) <= limit:
+        return value
+    return value[:limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+
+
+def http_url(value):
+    parts = urlsplit(str(value or ""))
+    return str(value)[:500] if parts.scheme in ("http", "https") and parts.netloc else None
+
+
+def public_intel(intel) -> dict | None:
+    """Whitelist the analyst result fields the web app renders."""
+    if not isinstance(intel, dict) or not isinstance(intel.get("plan"), dict):
+        return None
+    plan, synthesis = intel["plan"], intel.get("synthesis") or {}
+    changes = intel.get("changes") or {}
+    signals = []
+    for signal in intel.get("signals") or []:
+        if not isinstance(signal, dict):
+            continue
+        row = {key: text(signal.get(key), 200) for key in
+               ("id", "kind", "label", "display", "note", "flag", "period", "median_display")}
+        for key in ("rank", "n"):
+            row[key] = signal.get(key) if isinstance(signal.get(key), int) else None
+        if signal.get("kind") == "web":
+            row["url"] = http_url(signal.get("url"))
+        if signal.get("kind") == "peer":
+            row["peers"] = [{"symbol": text(p.get("symbol"), 12), "display": text(p.get("display"), 40)}
+                            for p in (signal.get("peers") or [])[:15] if isinstance(p, dict)]
+        signals.append(row)
+
+    def ids(values):
+        return [text(x, 60) for x in (values or []) if isinstance(x, str)][:8]
+
+    return {
+        "ticker": text(intel.get("ticker"), 12), "name": text(intel.get("name"), 120),
+        "market_date": text(intel.get("market_date"), 20), "status": text(intel.get("status"), 20),
+        "plan": {"question": text(plan.get("question"), 500), "source": text(plan.get("source"), 20),
+                 "hypotheses": [text(h, 400) for h in (plan.get("hypotheses") or [])[:4]]},
+        "steps": [{key: text(step.get(key), 240) for key in ("tool", "why", "summary", "status", "origin")}
+                  for step in (intel.get("steps") or [])[:10] if isinstance(step, dict)],
+        "signals": signals[:30],
+        "peers": {key: text((intel.get("peers") or {}).get(key), 160) for key in ("basis", "group")},
+        "web_news": {"window": text(((intel.get("web_news") or {}).get("window")), 40),
+                     "items": [{"title": text(i.get("title"), 200), "url": http_url(i.get("url")),
+                                "domain": text(i.get("domain"), 80), "date": text(i.get("date"), 12)}
+                               for i in ((intel.get("web_news") or {}).get("items") or [])[:8]
+                               if isinstance(i, dict) and http_url(i.get("url"))]},
+        "synthesis": {
+            "headline": text(synthesis.get("headline"), 400), "source": text(synthesis.get("source"), 20),
+            "findings": [{"title": text(f.get("title"), 200), "interpretation": text(f.get("interpretation"), 900),
+                          "caveat": text(f.get("caveat"), 400), "signal_ids": ids(f.get("signal_ids"))}
+                         for f in (synthesis.get("findings") or [])[:4] if isinstance(f, dict)],
+            "hypotheses": [{"index": h.get("index") if isinstance(h.get("index"), int) else None,
+                            "verdict": text(h.get("verdict"), 30), "reason": text(h.get("reason"), 400),
+                            "signal_ids": ids(h.get("signal_ids"))}
+                           for h in (synthesis.get("hypotheses") or [])[:4] if isinstance(h, dict)],
+            "next_checks": [text(x, 200) for x in (synthesis.get("next_checks") or [])[:3]],
+        },
+        "changes": {"first_run": bool(changes.get("first_run")),
+                    "same_market_date": bool(changes.get("same_market_date")),
+                    "previous_run_at": text(changes.get("previous_run_at"), 40),
+                    "previous_market_date": text(changes.get("previous_market_date"), 20),
+                    "items": [{"kind": text(i.get("kind"), 20), "text": text(i.get("text"), 240)}
+                              for i in (changes.get("items") or [])[:12] if isinstance(i, dict)]},
+    }
+
+
+def available_tickers() -> list[str]:
+    """Tickers with a company report in the local Sectors data, for suggestions."""
+    try:
+        endpoints = cache.endpoints()
+    except Exception:  # the form still works without suggestions
+        LOG.warning("Ticker suggestions unavailable", exc_info=True)
+        return []
+    return sorted({
+        match.group(1)
+        for endpoint in endpoints
+        if (match := re.fullmatch(r"/company/report/([A-Z0-9.-]{1,10})/", endpoint))
+    })
+
+
+class ResearchJobs:
+    """Job registry and bounded artifact access for one server instance."""
+
+    def __init__(self, outdir: str | Path, reports: str | Path | None = None, want_pdf: bool = False):
+        self.outdir = Path(outdir).resolve()
+        self.outdir.mkdir(parents=True, exist_ok=True)
+        # Finished reports shown in the gallery and on the landing page.
+        self.reports = Path(reports).resolve() if reports else self.outdir / "reports"
+        self.want_pdf = want_pdf
+        self._jobs: dict[str, dict] = {}
+        self._lock = threading.Lock()
+        # A single worker keeps generated output writes predictable. Each run
+        # also receives its own directory so repeated ticker runs stay stable.
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sektoral-research")
+
+    def submit(self, ticker: str) -> str:
+        ticker = ticker.strip().upper()
+        if not TICKER.fullmatch(ticker):
+            raise ValueError("Kode emiten tidak valid.")
+        job_id = uuid.uuid4().hex
+        with self._lock:
+            self._jobs[job_id] = {"ticker": ticker, "state": "pending"}
+        self._executor.submit(self._run, job_id, ticker)
+        return job_id
+
+    def _run(self, job_id: str, ticker: str) -> None:
+        with self._lock:
+            self._jobs[job_id]["state"] = "running"
+        try:
+            job_outdir = self.outdir / job_id
+            job_outdir.mkdir(parents=True, exist_ok=True)
+
+            def record(event):
+                with self._lock:
+                    events = self._jobs[job_id].setdefault("events", [])
+                    if len(events) < _MAX_EVENTS:
+                        events.append(event)
+
+            with progress.capture(record):
+                result = research.run(ticker, job_outdir, want_pdf=self.want_pdf)
+            if self.artifact(job_id, f"{ticker}.html", require_done=False) is None or \
+                    self.artifact(job_id, f"{ticker}-trace.html", require_done=False) is None:
+                raise FileNotFoundError("research run did not produce expected HTML artifacts")
+            is_partial = not bool(result.get("research_ok")) or "draft" in str(
+                result.get("report_status", "")).lower()
+            status = result.get("report_status")
+            safe_status = status if isinstance(status, str) and _SAFE_STATUS.fullmatch(status) else None
+            self._publish(job_outdir, ticker)
+            with self._lock:
+                self._jobs[job_id].update({
+                    "state": "completed",
+                    "quality": "partial" if is_partial else "complete",
+                    "report_status": safe_status,
+                    "intel": public_intel(result.get("intel")),
+                })
+        except Exception:
+            # Details may contain credentials or source data: keep them in
+            # the local server log and return only a generic state.
+            LOG.exception("Local research job failed for %s", ticker)
+            with self._lock:
+                self._jobs[job_id].update({"state": "error", "quality": "partial"})
+
+    def _publish(self, job_outdir: Path, ticker: str) -> None:
+        """Copy a finished run into the reports folder so the gallery lists it."""
+        try:
+            self.reports.mkdir(parents=True, exist_ok=True)
+            for name in (f"{ticker}.json", f"{ticker}.html", f"{ticker}.pdf",
+                         f"{ticker}-trace.html", f"{ticker}-trace.json"):
+                source = job_outdir / name
+                if source.is_file():
+                    shutil.copy2(source, self.reports / name)
+        except OSError:
+            LOG.exception("Could not publish %s to the reports folder", ticker)
+
+    def snapshot(self, job_id: str) -> dict | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return None
+            ticker = job["ticker"]
+            result = {"id": job_id, "ticker": ticker, "state": job["state"],
+                      "events": list(job.get("events") or [])}
+            if job["state"] in ("completed", "error"):
+                result["quality"] = job.get("quality", "partial")
+            if job["state"] == "completed":
+                result["report_url"] = f"/files/jobs/{job_id}/{ticker}.html"
+                result["trace_url"] = f"/jobs/{job_id}/jejak"
+                if gallery.artifact(self.reports, ticker, "pdf"):
+                    result["pdf_url"] = f"/files/reports/{ticker}.pdf"
+                result["gallery_url"] = "/laporan"
+                if job.get("report_status"):
+                    result["report_status"] = job["report_status"]
+                if job.get("intel"):
+                    result["intel"] = job["intel"]
+            return result
+
+    def artifact(self, job_id: str, name: str, require_done: bool = True) -> Path | None:
+        """``TICKER.html``, ``TICKER-trace.html`` or ``TICKER-trace.json`` of one job.
+
+        Paths are resolved (symlinks included) and must stay inside the job's
+        own directory; anything else is None.
+        """
+        if not JOB_ID.fullmatch(job_id):
+            return None
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job or (require_done and job.get("state") != "completed"):
+                return None
+            ticker = job["ticker"]
+        if name not in (f"{ticker}.html", f"{ticker}-trace.html", f"{ticker}-trace.json"):
+            return None
+        expected_dir = (self.outdir / job_id).resolve()
+        try:
+            resolved = (self.outdir / job_id / name).resolve(strict=True)
+        except (FileNotFoundError, OSError):
+            return None
+        if resolved.parent != expected_dir or not resolved.is_file():
+            return None
+        return resolved
+
+    def trace(self, job_id: str) -> dict | None:
+        path = self.artifact(job_id, f"{self._ticker(job_id)}-trace.json")
+        return _read_json(path)
+
+    def _ticker(self, job_id: str) -> str:
+        with self._lock:
+            return (self._jobs.get(job_id) or {}).get("ticker", "")
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _read_json(path: Path | None) -> dict | None:
+    if path is None:
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None

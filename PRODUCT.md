@@ -6,6 +6,10 @@
 
 web
 
+## Stack
+
+A React + TypeScript single-page app (Vite, Tailwind) served with a JSON API by FastAPI, shipped as one Docker image (`docker compose up`). The research pipeline, report and PDF generation stay in Python. See `docs/adr/0007-react-frontend-fastapi-backend-one-docker-image.md`.
+
 ## Users
 
 Indonesian equity analysts who need company updates assembled from fragmented company data with visible sources and explicit evidence limits.
@@ -51,7 +55,8 @@ The supplied Sectoral Design System sets primary blue `#0928B1`, white `#FFFFFF`
 - Product overview, workflow, cache boundaries, and disclaimers: `README.md`.
 - Local cache: `data/sectors_cache.db`.
 - Report renderer and generated HTML/PDF: `app/render.py`, `app/build.py`.
-- Browser workflow: `app/web.py`; landing page `app/landing.py`; report gallery `app/gallery_page.py`, `app/gallery.py`; shared web shell and tokens `app/ui.py`.
+- Web app: React + TypeScript + Tailwind in `web/` (pages in `web/src/pages/`, brand theme in `web/src/index.css`); API server `app/server.py`, jobs `app/jobs.py`, trace view `app/trace_view.py`, report summaries `app/gallery.py`.
+- Docker: `Dockerfile`, `compose.yaml`.
 - Batch runner for gallery reports: `app/batch.py`.
 - Domain glossary and decisions: `CONTEXT.md`, `docs/adr/`.
 - Brand SVG and embedded Roboto assets: `app/assets/brand/sectoral-logo.svg`, `app/assets/fonts/`.
