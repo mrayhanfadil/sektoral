@@ -1603,7 +1603,9 @@ def valuation_inputs(intake, fc, va):
     if usd and fx_rate and shares and full.get("net_profit") and prior.get("net_profit"):
         share = (prior.get("net_profit_attributable") or prior["net_profit"]) / prior["net_profit"]
         inputs["eps_idr"] = full["net_profit"] * share / shares * fx_rate
-    if va.get("rating") and target.get("ebitda_usd") and fx_rate:
+    # The multiple-based sensitivity page only describes an EV/EBITDA target.
+    if (va.get("rating") and target.get("ebitda_usd") and fx_rate and
+            (va.get("method_chain") or {}).get("selected") != "sotp_lom"):
         inputs.update({
             "ebitda_usd": target["ebitda_usd"], "net_profit_usd": full.get("net_profit"),
             "h2_revenue": (scenario.get("h2") or {}).get("revenue"),

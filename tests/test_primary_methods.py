@@ -152,3 +152,66 @@ def test_agent_dcf_drivers_are_soft_for_going_concerns_only():
     rows = [{"year": 2027, "ebitda_margin_pct": 3.0, "net_income_margin_pct": 6.0,
              "capex_to_revenue_pct": 5.0}]
     assert any("below the net margin" in p for p in agent._outyear_dcf_problems(rows, source))
+
+
+def _ammn_lom():
+    import glob
+    import json
+    import os
+    from app import forecast, intake, lom
+    doc_in, _ = intake.load("AMMN", as_of="2026-09-24")
+    plans = sorted(glob.glob(str(ROOT / "data" / "forecast_plans" / "AMMN-*.json")),
+                   key=os.path.getmtime)
+    plan = json.load(open(plans[-1]))["plan"] if plans else None
+    fc = forecast.build(doc_in, assumption_plan=plan)
+    return doc_in, fc, lom.build(doc_in, fc)
+
+
+def test_lom_stays_inside_official_reserves_and_capacities():
+    import pytest
+    doc_in, _, (res, gaps) = _ammn_lom()
+    if res is None:
+        pytest.skip(f"AMMN LoM inputs unavailable: {gaps}")
+    inp, rows = res["inputs"], res["base"]["rows"]
+    bh_mt = sum(r["feed_mt"] for r in rows if r["asset"] == "bh")
+    assert bh_mt <= inp["pit_mt"] + inp["stock_mt"] + 1e-6
+    assert sum(r["feed_mt"] for r in rows if r["asset"] == "elang") <= inp["elang_mt"]
+    for year in {r["year"] for r in rows}:
+        cathode = sum(r["cathode_t"] for r in rows if r["year"] == year)
+        share = 0.5 if year == 2026 else 1.0
+        assert cathode <= inp["smelter_t"] * inp["utilization"] * share + 1e-6
+        assert year <= inp["licence_end"]
+    assert 0.8 < inp["recovery_cu"] < 1.0 and 0.6 < inp["recovery_au"] < 1.0
+
+
+def test_lom_value_ties_to_the_sotp_bridge_and_moves_the_right_way():
+    import pytest
+    from app import lom
+    doc_in, _, (res, gaps) = _ammn_lom()
+    if res is None:
+        pytest.skip(f"AMMN LoM inputs unavailable: {gaps}")
+    sotp = lom.sotp_result(doc_in, res)
+    assert sotp["status"] == "complete"
+    assert abs(sotp["target_price_idr"] - res["per_share"]) < 1e-6
+    grid, rate = res["grid"], res["inputs"]["discount"]
+    assert grid[(round(rate - 0.02, 3), "base")] > grid[(rate, "base")] > \
+        grid[(round(rate + 0.02, 3), "base")]
+    assert grid[(rate, "reserve")] < grid[(rate, "down20")] < grid[(rate, "base")] < \
+        grid[(rate, "up20")]
+    assert res["no_export"] < res["per_share"]
+    assert res["per_share_down"] < res["per_share"]
+    bridge = lom.operating_bridge(doc_in, res)
+    assert not release._check_operating_bridge({"operating_bridge": bridge})
+
+
+def test_lom_gate_needs_sourced_analyst_assumptions():
+    import pytest
+    doc_in, fc, (res, gaps) = _ammn_lom()
+    if res is None:
+        pytest.skip(f"AMMN LoM inputs unavailable: {gaps}")
+    stripped = dict(doc_in, analyst_scenario={
+        **(doc_in.get("analyst_scenario") or {}),
+        "lom_assumptions": {**doc_in["analyst_scenario"]["lom_assumptions"],
+                            "broker_source_url": None}})
+    gate = release.assess_sotp_lom_scenario(stripped, fc, {"detail": {}}, "validated")
+    assert any("dated, traceable source" in b for b in gate["blockers"])

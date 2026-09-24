@@ -6,6 +6,7 @@ from . import method_chain
 from . import model_profiles
 from . import rnav
 from . import scenario_value
+from . import lom as lom_mod
 from . import release
 from . import rating as rating_mod
 from . import sotp as sotp_mod
@@ -648,16 +649,44 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # proxy they are insufficient, so the chain can still reach the
         # assumption-led multiple route that has its own evidence gate.
         mining_data = release.common_blockers(profile, intake, fc)
-        # A development asset whose economics are not disclosed cannot be
-        # valued risk-adjusted; that named gap leads the SOTP reasons.
-        undisclosed = [
-            f"aset pengembangan Elang: {item.get('valuation_consequence') or 'belum dinilai'}"
-            for item in [official_ev.get("elang_development_economics")]
-            if isinstance(item, dict) and item.get("status") == "not_disclosed"]
-        candidates["sotp_lom"] = method_chain.candidate(
-            "sotp_lom", per_share=sotp_result.get("target_price_idr"),
-            reasons=undisclosed + release._check_sotp(sotp_result, intake) + mining_data,
-            labels=["sensitivitas SOTP dilabeli"])
+        # SOTP/LoM on the physical chain: official reserves, capacities, unit
+        # costs and royalties; undisclosed inputs are labelled analyst
+        # assumptions. Its own gate replaces the production-forecast gate.
+        lom_result, lom_gaps = lom_mod.build(intake, fc)
+        if lom_result:
+            sotp_result = lom_mod.sotp_result(intake, lom_result)
+            detail = {"basis": "scenario", "sotp": sotp_result,
+                      "operating_bridge": lom_mod.operating_bridge(intake, lom_result),
+                      "lom": lom_result, "grid": lom_result["grid"], "gaps": []}
+            gate = release.assess_sotp_lom_scenario(intake, fc, {"detail": detail},
+                                                    assumption_status)
+            per_share = sotp_result.get("target_price_idr")
+            sotp_shares = sotp_result.get("shares")
+            sotp_candidate = method_chain.candidate(
+                "sotp_lom", per_share=per_share,
+                per_share_down=lom_result["per_share_down"],
+                reasons=gate["blockers"] + method_chain.scale_reasons(
+                    per_share, sotp_shares, price * sotp_shares if sotp_shares else None),
+                labels=gate["limitations"], detail=detail)
+            inp = lom_result["inputs"]
+            sotp_candidate["label"] = (
+                f"SOTP/LoM: Batu Hijau + Elang (risiko {inp['elang_risk'] * 100:.0f}%) sampai "
+                f"{int(inp['licence_end'])}, tanpa terminal perpetual")
+            sotp_candidate["gate"] = gate
+            candidates["sotp_lom"] = sotp_candidate
+        else:
+            # A development asset whose economics are not disclosed cannot be
+            # valued risk-adjusted; that named gap leads the SOTP reasons.
+            undisclosed = [
+                f"aset pengembangan Elang: {item.get('valuation_consequence') or 'belum dinilai'}"
+                for item in [official_ev.get("elang_development_economics")]
+                if isinstance(item, dict) and item.get("status") == "not_disclosed"
+                and "elang_capex" in lom_gaps]
+            candidates["sotp_lom"] = method_chain.candidate(
+                "sotp_lom", per_share=sotp_result.get("target_price_idr"),
+                reasons=undisclosed + [f"input LoM belum lengkap: {', '.join(lom_gaps)}"]
+                + release._check_sotp(sotp_result, intake) + mining_data,
+                labels=["sensitivitas SOTP dilabeli"])
         candidates["rnav_lom"] = method_chain.with_reasons(
             _rnav_candidate(intake, fc, lom, wacc), mining_data)
         scenario_target = scenario_ev_ebitda_crosscheck(intake, fc)
@@ -972,7 +1001,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         impl.update(ev_ebitda=None,
                     pbv=(ddm_result or {}).get("fair_pbv"),
                     tp_inverse=(ddm_result or {}).get("tp_inverse"))
-    if scenario_sel and tp is not None:
+    if scenario_sel and tp is not None and selected in ("ddm", "fcff_dcf", "dcf_reference"):
         # Implied multiples on the same FY path the target values.
         detail = sel["detail"]
         first = detail["lines"][0]
@@ -1043,8 +1072,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
 
     out = {"method": method, "model_profile": profile,
             "release": release_result, "sotp": sotp_result,
+            # The FY EV/EBITDA value stays attached as the mining cross-check.
             "scenario_target": (scenario_target if analyst_target or
-                                selected == "ev_ebitda_fy" else None),
+                                selected in ("ev_ebitda_fy", "sotp_lom") else None),
             "ddm": ddm_result, "gate_verdict": verdict.to_dict(),
             "stage_classification": {"values": stage_vals, "source": stage_info.get("source"),
                                      "override": stage_info.get("override")},
