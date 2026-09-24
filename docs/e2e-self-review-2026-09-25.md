@@ -122,7 +122,7 @@ Konsensus dan pemberitaan dipakai sebagai pembanding, bukan kebenaran: perbedaan
 | Emiten | Status | Rating | Target | Harga 24 Sep | Potensi | Sebelumnya |
 |---|---|---|---|---|---|---|
 | AMMN | assumption-led | Sell | Rp3.750 | Rp4.730 | −20,7% | Sell Rp3.140 |
-| BBCA | draft | – | – | Rp6.225 | – | draft |
+| BBCA | assumption-led | Hold | Rp5.925 | Rp6.225 | −4,8% | draft |
 | BBRI | assumption-led | Buy | Rp6.225 | Rp3.140 | +98,2% | Buy Rp5.625 |
 | GMFI | assumption-led | Buy | Rp111 | Rp56 | +98,2% | Buy Rp111 |
 | INET | assumption-led | Sell | Rp242 | Rp316 | −23,4% | Sell Rp250 |
@@ -142,13 +142,13 @@ Pemeriksa otomatis (cacat run pertama ditambah cek baru di bawah) bersih untuk k
 5. **EV/EBITDA peer dari 12 bulan terakhir.** Snapshot Yahoo memakai empat kuartal terakhir dan neraca kuartal terakhir bila tersedia, selain itu tahun buku terakhir; periodenya tertulis di catatan sumber.
 6. **Harga penutupan terbaru.** `python -m app.market_quote --as-of <tanggal> <ticker>...` menulis paket harga Yahoo dengan sepuluh penutupan terakhir; run memakai penutupan terakhir pada atau sebelum tanggal laporan (kesembilan laporan kini 24 September). Kurs Yahoo tidak lagi mengambil batang hari berjalan (Rp17.893, 24 September).
 7. **Tingkat diskonto tersirat harga.** Sesuai keputusan untuk mempertahankan ERP 4%, setiap DDM dan DCF kini menampilkan CoE/WACC yang membuat nilai model sama dengan harga: BBRI CoE 18,1%, POWR WACC 12,9% (CoE 15,3%), JPFA WACC 11,7%, GMFI 12,5%, SIDO 13,0%. Label "Beta (Bloomberg)" dan "ERP (Damodaran)" di tabel CoE bank diganti "kebijakan analis", karena beta 1,1 dan ERP 4% bukan data vendor.
-8. **SIDO dibuka.** Tanggal terbit memakai batas atas terverifikasi (pemberitaan 3 Agustus 2026 dengan angka yang sama); dasar tanggal dan tautan pembandingnya tercatat di paket.
+8. **BBCA tidak lagi ditolak karena "net sell asing".** Draft BBCA bukan kekurangan data: agen forecast menulis risiko arus asing ("net sell asing berlanjut"), dan filter bahasa rekomendasi menolak kata "sell" sehingga seluruh skenario gugur dua kali. Filter kini membuang frasa arus pasar lebih dahulu, aturan yang sama dengan agen analis; saran yang sungguhan tetap ditolak. BBCA kini Hold Rp5.925 dengan CoE tersirat harga 10,5%, hampir sama dengan CoE kebijakan 10,9%.
+9. **SIDO dibuka.** Tanggal terbit memakai batas atas terverifikasi (pemberitaan 3 Agustus 2026 dengan angka yang sama); dasar tanggal dan tautan pembandingnya tercatat di paket.
 
 **Belum diperbaiki**
 
 - **SSIA:** lahan industri tetap pada biaya perolehan. Menilainya butuh sisa landbank bersih dan ASP dari dokumen emiten (public expose di IDX tidak dapat diunduh); rilis 1H26 hanya memberi ASP tersirat Rp1,66 juta/m² (64,7 ha, Rp1.075,9 miliar).
 - **BBRI dan POWR** tetap jauh di atas konsensus karena kebijakan CoE; kini diungkapkan dengan tingkat tersirat harga.
-- **BBCA** tetap draft: skenario forecast belum tervalidasi (6 blocker), sama dengan run sebelumnya.
 
 ## Benchmark AMMN: BRI Danareksa, 29 Juni 2026 (`spec/20260629-AMMN.pdf`)
 
