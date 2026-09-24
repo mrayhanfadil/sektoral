@@ -1,6 +1,7 @@
 # Official Rules — Sectors Hackathon 2026
 
 > Source: <https://hackathon.sectors.app/rules>
+> Dates re-checked against the live page on 24 Sep 2026 (deadline moved to 8 Oct, winners 17 Oct).
 > Copied here for offline reading and quick reference. If the official page changes after 19 Aug 2026, organizers will announce updates through their official channels and won't disadvantage participants who started under the prior rules.
 
 ---
@@ -19,10 +20,10 @@ Sectors Hackathon is not a typical coding competition. We don't judge how sophis
 | --- | --- |
 | Registration opens | 19 August 2026 |
 | Build period opens | 19 August 2026 |
-| Registration closes | 22 September 2026, 23:59 WIB |
-| Build period and submissions close | 30 September 2026, 23:59 WIB |
-| Judging period | 1–8 October 2026 |
-| Winners announced | 9 October 2026 |
+| Registration closes | 7 October 2026, 23:59 WIB |
+| Build period and submissions close | 8 October 2026, 23:59 WIB |
+| Judging period | 9–16 October 2026 |
+| Winners announced | 17 October 2026 |
 
 Registration closes before the submission deadline so onboarding and credit grants can be verified. A team registering on the final day still has a full week to build.
 
@@ -60,13 +61,13 @@ Each registered team receives **1,000 Sectors API credits**, which can be claime
 
 ## 05. Build period & work restrictions
 
-Build period runs from **19 Aug 2026** through **30 Sep 2026, 23:59 WIB**. Teams may start whenever they are ready during that window; there is no separate fixed build week.
+Build period runs from **19 Aug 2026** through **8 Oct 2026, 23:59 WIB**. Teams may start whenever they are ready during that window; there is no separate fixed build week.
 
 - **Before the build period**: ideas, research, sketches, designs, and planning are allowed. **No project code may be written before 19 August 2026.**
 - **Repo creation**: The project repository must be created during the build period. Judges may inspect commit history. Repositories created before 19 August 2026, or code migrated from previous projects, may result in disqualification. Multiple repositories are allowed if all were created within the build period.
 - **Templates & OSS**: Starting from a public template or boilerplate is allowed, as long as the first commit falls within the build period. Boilerplate, templates, frameworks, libraries, and public open-source code may be used, provided they are not a finished product. Open-sourcing your own prior project before the event solely to reuse its code during the event is prohibited.
 - **Single competition**: Projects must be exclusive to Sectors Hackathon. No work from previous projects, no submission to other competitions or hackathons.
-- **Freeze**: A team's repository and application freeze on submit, or at the 30 Sep deadline — whichever first. After freezing, **no commits, pushes, edits, or changes of any kind are allowed, including bug fixes**. Violation → disqualification.
+- **Freeze**: A team's repository and application freeze on submit, or at the 8 Oct deadline — whichever first. After freezing, **no commits, pushes, edits, or changes of any kind are allowed, including bug fixes**. Violation → disqualification.
 - **Freeze exception (only)**: a leaked API key / credential — notify organizers on Slack `#support`, revoke + rotate the credential first, then push a commit containing only its removal.
 
 ---
@@ -106,7 +107,7 @@ The use of AI coding tools (code generation, completion, agents, similar) is **f
 
 ## 08. Submission requirements
 
-Submissions must be made through the [hackathon portal](https://hackathon.sectors.app/portal/submit) before **30 Sep 2026, 23:59 WIB**. Submissions must include:
+Submissions must be made through the [hackathon portal](https://hackathon.sectors.app/portal/submit) before **8 Oct 2026, 23:59 WIB**. Submissions must include:
 
 - **A public repository link.** Must remain public for **≥90 days after winners are announced**. Making it private before then forfeits prize eligibility, and a replacement winner may be selected. **Remove all API keys before submitting.**
 - **A one-minute teaser video**: screen recording of the product working, published publicly on YouTube or social media.
@@ -121,7 +122,7 @@ Submissions and videos may be in Bahasa Indonesia or English. Neither language i
 
 ## 09. Judging
 
-Judging is **fully asynchronous from 1–8 Oct 2026**, based on submission materials. **No live presentation sessions.** Make sure video and repo speak for themselves.
+Judging is **fully asynchronous from 9–16 Oct 2026**, based on submission materials. **No live presentation sessions.** Make sure video and repo speak for themselves.
 
 ### Eligibility check — pass or fail
 

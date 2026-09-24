@@ -115,6 +115,11 @@ def test_run_returns_partial_status_and_only_known_html_artifacts(monkeypatch, t
         assert report_headers.get_content_type() == "text/html"
         assert b"Validated company update" in report
         assert b"Agent trace" in trace
+        # The trace's relative "TICKER.html" report link resolves to the same report.
+        linked_status, _, linked = request(server, f"/artifact/{job_id}/AMMN.html")
+        assert linked_status == 200 and linked == report
+        assert request(server, f"/artifact/{job_id}/BBCA.html")[0] == 404
+        assert request(server, f"/artifact/{job_id}/AMMN-trace.html")[0] == 404
         assert request(server, f"/artifact/{job_id}/trace-json")[0] == 404
         assert request(server, f"/artifact/{job_id}/../../etc/passwd")[0] == 404
         assert request(server, "/api/jobs/../../etc/passwd")[0] == 404
@@ -193,3 +198,54 @@ def test_symlink_artifact_outside_output_directory_is_not_served(monkeypatch, tm
         assert request(server, f"/artifact/{job_id}/report")[0] == 404
     finally:
         server.close()
+
+
+def test_job_api_streams_progress_and_exposes_only_whitelisted_intel(monkeypatch, tmp_path):
+    from app.progress import emit
+
+    intel = {
+        "ticker": "SIDO", "name": "Sido", "status": "ok", "secret_payload": "must-not-appear",
+        "plan": {"question": "Q?", "hypotheses": ["H1"], "source": "agent", "raw": "must-not-appear"},
+        "steps": [{"tool": "rank_peers", "why": "posisi", "summary": "5 sinyal", "status": "ok",
+                   "origin": "agent", "args": {"metrics": ["roe"]}}],
+        "signals": [{"id": "peer.roe", "kind": "peer", "label": "ROE", "display": "39,4%", "rank": 1,
+                     "n": 10, "value": 0.394, "source": "internal-path", "peers": [{"symbol": "KLBF",
+                     "display": "14,6%", "value": 0.146}]}],
+        "synthesis": {"headline": "H", "source": "agent", "findings": [{"title": "T", "interpretation": "I",
+                      "caveat": "C", "signal_ids": ["peer.roe"]}], "hypotheses": [], "next_checks": []},
+        "changes": {"first_run": True, "items": []},
+    }
+
+    def fake_run(ticker, outdir, want_pdf=False):
+        emit("plan", "Rencana siap", "Q?")
+        emit("tool", "rank_peers selesai", "5 sinyal", tool="rank_peers")
+        (outdir / "SIDO.html").write_text("report", encoding="utf-8")
+        (outdir / "SIDO-trace.html").write_text("trace", encoding="utf-8")
+        return {"research_ok": True, "report_status": "draft", "intel": intel}
+
+    monkeypatch.setattr(web.research, "run", fake_run)
+    server = RunningServer(tmp_path)
+    try:
+        _, headers, _ = request(server, "/run", "POST", urlencode({"ticker": "SIDO"}).encode())
+        state = wait_for_job(server, headers["Location"].split("/")[-1])
+        assert [e["label"] for e in state["events"]] == ["Rencana siap", "rank_peers selesai"]
+        assert state["events"][1]["tool"] == "rank_peers"
+        public = state["intel"]
+        assert public["signals"][0]["rank"] == 1 and public["signals"][0]["peers"][0]["symbol"] == "KLBF"
+        assert public["synthesis"]["findings"][0]["signal_ids"] == ["peer.roe"]
+        dumped = json.dumps(state)
+        for hidden in ("must-not-appear", "internal-path", "secret_payload", "0.146"):
+            assert hidden not in dumped
+    finally:
+        server.close()
+
+
+def test_research_page_lists_remembered_runs(monkeypatch, tmp_path):
+    from agents.analyst import memory
+
+    memory.save("SIDO", {"run_at": "2026-09-24T01:00:00+00:00", "market_date": "2026-09-22",
+                         "signals": [{"id": "peer.roe", "label": "ROE", "flag": "tertinggi di grup"}],
+                         "headlines": []})
+    page = web._page().decode("utf-8")
+    assert "Riwayat riset" in page and 'data-ticker="SIDO"' in page
+    assert "1 sinyal bertanda" in page

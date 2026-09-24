@@ -102,7 +102,7 @@ def test_intake_ebitda_zero_with_positive_ebit_preserves_none_and_discloses(monk
 
     # Must be disclosed in notes
     notes = log.get("catatan", [])
-    assert any("D&A tahun 2024 tidak valid di cache" in note for note in notes)
+    assert any("D&A tahun 2024 tidak valid di data Sectors" in note for note in notes)
 
 
 def test_intake_uses_sourced_depreciation_metric_if_present(monkeypatch):
@@ -166,7 +166,7 @@ def test_intake_missing_cash_preserves_none_and_discloses(monkeypatch):
     assert annuals[2]["cash"] is None
 
     notes = log.get("catatan", [])
-    assert any("posisi kas tahun dasar 2024 tidak tersedia di cache" in note for note in notes)
+    assert any("posisi kas tahun dasar 2024 tidak tersedia di data Sectors" in note for note in notes)
 
 
 def test_render_no_long_dashes_u2013_u2014():

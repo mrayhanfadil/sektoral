@@ -61,7 +61,7 @@ def test_report_includes_only_agent_news_matched_to_current_cache(monkeypatch, t
     doc = build.build("AMMN", tmp_path / "report")
 
     news_exhibit = next(item for item in doc["exhibits"]
-                        if item["judul"] == "Konteks berita dari cache dan implikasi")
+                        if item["judul"] == "Konteks berita dari Sectors dan implikasi")
     section = next(item for item in doc["bagian"]
                    if item["judul"] == "Konteks berita dan kaitannya ke tesis")
     assert news_exhibit["data"]["rows"][0][1].startswith("A jump in copper")

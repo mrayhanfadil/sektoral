@@ -200,7 +200,7 @@ def _price_chart(ticker, as_of):
     series = _comparison_series(ticker, as_of)
     if series is None:
         return ("<p class='small'>Perbandingan harga belum tersedia: "
-                "kurang dari dua tanggal perdagangan yang sama di cache.</p>")
+                "kurang dari dua tanggal perdagangan yang sama di data Sectors.</p>")
 
     dates, issuer, ihsg = series
     all_values = issuer + ihsg
@@ -262,7 +262,7 @@ def _price_chart(ticker, as_of):
         f"<text x='151' y='123' font-size='8' fill='{INK}'>IHSG {pct(ihsg_return)}%</text>"
         f"<text x='32' y='140' font-size='7.8' fill='{MUT}'>Selisih {pct(spread)} poin persentase</text>"
         "</svg>"
-        f"<p class='src'>Sumber: Sectors cache; {len(dates)} tanggal sama "
+        f"<p class='src'>Sumber: Sectors; {len(dates)} tanggal sama "
         f"({dates[0].isoformat()} - {dates[-1].isoformat()}). "
         "Kinerja harga, awal = 100; tidak termasuk dividen.</p>")
 
@@ -465,7 +465,7 @@ def _render_page_content(b):
                        f"<p><b>Observasi.</b> {html.escape(card['observation'])}</p>"
                        f"<p><b>Kaitan.</b> {html.escape(card['implication'])}</p>"
                        f"<p><b>Batasan.</b> {html.escape(card['caveat'])}</p>"
-                       f"<p class='research-cite'><b>Rujukan cache:</b> {html.escape(refs)}</p>"
+                       f"<p class='research-cite'><b>Rujukan data:</b> {html.escape(refs)}</p>"
                        "</article>")
 
     elif b.get("layout") == "stack":

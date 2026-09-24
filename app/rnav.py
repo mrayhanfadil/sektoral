@@ -73,7 +73,7 @@ def build(mo, margin, discount, cash_bn, debt_bn, reported_rev_bn):
     return {
         "streams": streams,
         "margin_basis": ("proksi margin kas = margin EBITDA forecast "
-                         "(bukan C1 cash cost, tidak ada di cache)"),
+                         "(bukan C1 cash cost, tidak ada di data Sectors)"),
         "fx": FX_USDIDR, "fx_basis": FX_BASIS,
         "price_basis": ("rata-rata 12 bulan: Cu USD/ton per "
                         f"{(cup.get('date') or '-')} (n={(cup.get('n') or 0)}), Au "

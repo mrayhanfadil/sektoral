@@ -64,7 +64,7 @@ def main():
     p.add_argument("--method", default="auto",
                    help="opsi valuasi analis: auto|dcf|ddm|rnav")
     p.add_argument("--as-of", default=date.today().isoformat(),
-                   help="tanggal laporan YYYY-MM-DD (default: hari ini); harga tetap bertanggal sesuai cache")
+                   help="tanggal laporan YYYY-MM-DD (default: hari ini); harga tetap bertanggal sesuai data Sectors")
     p.add_argument("--illustrative-scenarios", action="store_true",
                    help="tambahkan screen historis dan valuasi ilustratif ke draft; bukan target harga")
     a = p.parse_args()

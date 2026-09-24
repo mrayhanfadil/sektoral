@@ -143,7 +143,7 @@ def build(intake, n_years=5, assumption_plan=None):
     nc0 = (base["assets"] or (liab0 + eq0)) - cash0  # aset non-kas
     oth_liab = liab0 - debt0
     assumptions.append(("utang", "Rp", *([debt0] * n_years),
-                        "flat; tanpa jadwal pelunasan di cache"))
+                        "flat; tanpa jadwal pelunasan di data Sectors"))
     assumptions.append(("dividen payout", "%", *([intake["payout"] * 100] * n_years),
                         intake["payout_basis"]))
 
@@ -186,7 +186,7 @@ def build(intake, n_years=5, assumption_plan=None):
     g2["G2.3_leverage"] = "lolos"
     bridge = None
     mo = intake.get("mineops")
-    g2["catatan"] = ["G2.1: tanpa interim terstruktur di cache; diuji saat rilis tersedia."]
+    g2["catatan"] = ["G2.1: tanpa interim terstruktur di data Sectors; diuji saat rilis tersedia."]
     if mo:
         # rows revenue dalam Rupiah → konversi ke USD via FX asumsi.
         gross = rnav.metal_gross_usd(mo)

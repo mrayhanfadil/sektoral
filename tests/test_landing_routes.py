@@ -1,6 +1,7 @@
 """HTTP routing checks for the public landing page and research form."""
 from __future__ import annotations
 
+import re
 import sys
 import threading
 from pathlib import Path
@@ -54,6 +55,10 @@ def test_root_is_showcase_and_research_form_has_its_own_route(tmp_path):
         assert 'name="ticker"' in form
         assert "Mulai riset" in form
         assert "bukan rekomendasi investasi" in form
+        for html in (page, form):
+            visible = re.sub(r"<(script|style)[^>]*>[\s\S]*?</\1>", " ", html, flags=re.IGNORECASE)
+            visible = re.sub(r"<!--[\s\S]*?-->|<[^>]+>", " ", visible).lower()
+            assert "cache" not in visible
     finally:
         server.close()
 
