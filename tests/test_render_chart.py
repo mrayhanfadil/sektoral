@@ -27,8 +27,9 @@ def test_issuer_vs_ihsg_uses_common_dates_and_latest_cached_values(monkeypatch):
 
     monkeypatch.setattr(render.cache_mod, "payloads", payloads)
 
-    dates, issuer, ihsg = render._comparison_series("TEST", "2026-01-04")
+    dates, closes, issuer, ihsg = render._comparison_series("TEST", "2026-01-04")
     assert dates == [date(2026, 1, 2), date(2026, 1, 4)]
+    assert closes == pytest.approx([100, 400])
     assert issuer == pytest.approx([100, 400])
     assert ihsg == pytest.approx([100, 110])
 
@@ -37,6 +38,9 @@ def test_issuer_vs_ihsg_uses_common_dates_and_latest_cached_values(monkeypatch):
     assert "IHSG +10,0%" in chart
     assert "Selisih +290,0 poin persentase" in chart
     assert "2026-01-02 - 2026-01-04" in chart
+    # Dual axis: price on the left, performance relative to IHSG on the right.
+    assert "Relatif vs IHSG +290,0 pp" in chart
+    assert "harga Rp, sumbu kiri" in chart
 
 
 def test_comparison_requires_two_shared_trading_dates(monkeypatch):
