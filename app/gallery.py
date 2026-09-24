@@ -75,7 +75,9 @@ def summary(path: Path) -> dict | None:
         "tp": meta.get("tp") if published else None,
         "upside": meta.get("upside_persen") if published else None,
         "method": method.split(" [")[0],
-        "profile": PROFILE_LABEL.get(str(meta.get("model_profile") or ""), "Emiten"),
+        # Drafts carry no model_profile in meta; the run manifest still records it.
+        "profile": PROFILE_LABEL.get(str(meta.get("model_profile")
+                                         or (doc.get("run_manifest") or {}).get("profile") or ""), "Emiten"),
         "headline": str((doc.get("cover") or {}).get("headline") or ""),
         "risks": [str(r.get("judul")) for r in doc.get("risks") or [] if isinstance(r, dict)][:3],
         "chain": _chain(doc),

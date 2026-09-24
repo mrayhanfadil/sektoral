@@ -98,11 +98,7 @@ img{max-width:100%;height:auto}
 .btn-primary:disabled{opacity:.6;cursor:progress}
 .btn-ghost{background:var(--surface);color:var(--blue);border-color:var(--rule)}
 .btn-ghost:hover{border-color:var(--blue);background:var(--blue-50)}
-.btn .arrow{transition:transform .15s}
-.btn:hover .arrow{transform:translateX(3px)}
-
-.eyebrow{display:inline-block;color:var(--blue);font-size:12px;font-weight:700;
-  letter-spacing:.12em;text-transform:uppercase}
+.eyebrow{display:block;color:var(--blue);font-size:14px;font-weight:700;line-height:1.4}
 .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;
   font-size:13px;font-weight:700;line-height:1.5;background:var(--canvas);color:var(--ink-soft)}
 .pill.ok{background:var(--ok-bg);color:var(--ok-ink)}
@@ -170,7 +166,7 @@ def site_footer() -> str:
       <a href="/research">Aplikasi riset</a><a href="/laporan">Laporan</a><a href="/#cara-kerja">Cara kerja</a>
       <a href="/#pemeriksaan">Pemeriksaan bukti</a><a href="/#batasan">Batasan</a>
     </nav>
-    <span>© 2026 Sektoral · Sectors Hackathon 2026</span>
+    <span>© 2026 Sectoral, dibuat untuk Sectors Hackathon 2026</span>
   </div>
 </div></footer>"""
 
