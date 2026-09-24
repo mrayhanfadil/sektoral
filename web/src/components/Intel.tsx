@@ -21,7 +21,7 @@ function Citations({ ids, signals }: { ids: string[]; signals: Record<string, Si
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {cited.map((s) => (
-        <span key={s.id} className={`rounded-md border px-2 py-0.5 text-[12.5px] ${s.kind === "web" ? "border-[#F3E3B5] bg-[#FFFBF0]" : "border-rule-soft bg-canvas"}`}>
+        <span key={s.id} className={`rounded-md border px-2 py-0.5 text-[12.5px] ${s.kind === "web" ? "border-warn-rule/40 bg-warn-bg" : "border-rule-soft bg-canvas"}`}>
           {s.kind === "web" ? `Web: ${(s.label ?? "").slice(0, 70)}` : `${s.label}: ${s.display}`}
         </span>
       ))}
@@ -33,7 +33,7 @@ export function IntelHeadline({ intel }: { intel: Intel }) {
   const synthesis = intel.synthesis;
   return (
     <div className="card">
-      <p className="text-sm font-bold text-brand">Intelijen pasar {intel.name ?? intel.ticker}</p>
+      <p className="text-sm font-bold text-brand-ink">Intelijen pasar {intel.name ?? intel.ticker}</p>
       <h2 className="mt-2 mb-3.5 max-w-[70ch] text-[22px] leading-snug font-black">{synthesis.headline}</h2>
       <div className="flex flex-wrap gap-2">
         {intel.peers.group && <span className="pill pill-live">Grup: {intel.peers.group}</span>}
@@ -190,7 +190,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
               return (
                 <li key={i}>
                   <div className="flex flex-wrap items-baseline gap-2">
-                    <code className="rounded-[5px] bg-brand-50 px-1.5 py-px font-mono text-xs text-brand">{s.tool}</code>
+                    <code className="rounded-[5px] bg-brand-50 px-1.5 py-px font-mono text-xs text-brand-ink">{s.tool}</code>
                     <span className={`pill px-2 py-px text-xs ${cls}`}>{label}</span>
                   </div>
                   {s.why && <p className="text-[13.5px]">{s.why}</p>}

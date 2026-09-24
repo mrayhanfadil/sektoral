@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useLoad } from "../components/State";
+import { Icon } from "../components/Icon";
 
 const TICKER = /^[A-Za-z0-9][A-Za-z0-9.-]{0,9}$/;
 
@@ -41,7 +42,7 @@ function ResearchForm({ heading, level }: { heading: string; level: "h1" | "h2" 
           <input id="ticker" name="ticker" maxLength={10} placeholder="Contoh: AMMN" required autoComplete="off"
             list="ticker-list" aria-describedby="ticker-hint" value={ticker}
             onChange={(e) => { setTicker(e.target.value); setError(null); }}
-            className="h-[52px] min-w-0 flex-1 rounded-[10px] border border-rule bg-white px-4 text-xl font-bold tracking-[.08em] uppercase text-ink transition placeholder:text-base placeholder:font-normal placeholder:tracking-[.02em] placeholder:normal-case placeholder:text-ink-faint hover:border-[#A9AEB8] focus:border-brand focus:shadow-[0_0_0_4px_var(--color-brand-100)] focus:outline-none" />
+            className="h-[52px] min-w-0 flex-1 rounded-[10px] border border-rule bg-surface px-4 text-xl font-bold tracking-[.08em] uppercase text-ink transition placeholder:text-base placeholder:font-normal placeholder:tracking-[.02em] placeholder:normal-case placeholder:text-ink-faint hover:border-rule-strong focus:border-brand-ink focus:shadow-[0_0_0_4px_var(--color-brand-100)] focus:outline-none" />
           <button type="submit" disabled={busy} className="btn btn-primary h-[52px] px-6 text-base max-sm:w-full">
             {busy ? "Memulai…" : "Mulai riset"}
           </button>
@@ -50,7 +51,7 @@ function ResearchForm({ heading, level }: { heading: string; level: "h1" | "h2" 
         <p id="ticker-hint" className="mt-2 text-[13px] text-ink-soft">Kode saham BEI, misalnya AMMN atau BBRI.</p>
         {error && (
           <div role="alert" className="mt-4 flex items-start gap-2.5 rounded-[10px] bg-err-bg px-3.5 py-3 text-[15px] font-medium text-err-ink">
-            <span aria-hidden>!</span><span>{error}</span>
+            <Icon name="alert" className="mt-0.5 size-4 flex-none" /><span>{error}</span>
           </div>
         )}
       </form>
@@ -76,7 +77,7 @@ function Chip({ ticker, pressed, onPick }: { ticker: string; pressed: boolean; o
   return (
     <button type="button" aria-pressed={pressed}
       onClick={() => { onPick(ticker); document.getElementById("ticker")?.focus(); }}
-      className="cursor-pointer rounded-lg border border-rule bg-white px-[11px] py-1.5 text-[13px] font-bold tracking-[.04em] text-ink transition-colors hover:border-brand hover:bg-brand-50 hover:text-brand aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-white">
+      className="cursor-pointer rounded-lg border border-rule bg-surface px-[11px] py-1.5 text-[13px] font-bold tracking-[.04em] text-ink transition-colors hover:border-brand-ink hover:bg-brand-50 hover:text-brand-ink aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-white">
       {ticker}
     </button>
   );
@@ -112,7 +113,7 @@ function SideExplainer() {
           ["Skenario, valuasi, pemeriksaan", "Agen asumsi menyusun skenario laba dan risiko; gerbang memilih rantai metode; harness memutuskan terbit atau tahan."],
         ].map(([title, body], i, all) => (
           <li key={title} className="relative pb-[18px] pl-10 last:pb-0">
-            <span aria-hidden className="absolute top-0 left-0 grid size-[26px] place-items-center rounded-full bg-brand-50 text-[13px] font-black text-brand">{i + 1}</span>
+            <span aria-hidden className="absolute top-0 left-0 grid size-[26px] place-items-center rounded-full bg-brand-50 text-[13px] font-black text-brand-ink">{i + 1}</span>
             {i < all.length - 1 && <span aria-hidden className="absolute top-[30px] bottom-1 left-[12.5px] w-px bg-rule" />}
             <strong className="block text-[15px]">{title}</strong>
             <span className="text-sm text-ink-soft">{body}</span>

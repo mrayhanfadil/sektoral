@@ -4,16 +4,22 @@ import { rp } from "../lib/format";
 import { IntelHeadline, IntelSections } from "../components/Intel";
 import { Notice, useLoad } from "../components/State";
 
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
+// The trace runs to many screens; this index is its table of contents.
+const SECTIONS: [string, string][] = [
+  ["agen-analis", "Agent analis"], ["ringkasan", "Ringkasan agent riset"], ["endpoint", "Endpoint yang dibaca"],
+  ["temuan", "Temuan"], ["berita", "Berita untuk asumsi"], ["asumsi", "Asumsi forecast"], ["deep-dive", "Deep-dive berita"],
+];
+
+function Block({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="grid gap-3">
-      <h2 className="mt-4 text-xl">{title}</h2>
+    <section id={id} aria-labelledby={`${id}-title`} className="grid scroll-mt-20 gap-3">
+      <h2 id={`${id}-title`} className="mt-4 text-xl">{title}</h2>
       {children}
     </section>
   );
 }
 
-const box = "rounded-xl border border-rule bg-white px-5 py-[18px]";
+const box = "rounded-xl border border-rule bg-surface px-5 py-[18px]";
 
 /** The agent records news without a measurable transmission as driver "none", change 0. */
 const isNoEffect = (e: { driver: string | null; change: string | null }) =>
@@ -27,6 +33,15 @@ function statusLabel(report: TraceView["report"]) {
 function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: string; pdfUrl?: string }) {
   const { report, research, news, forecast } = trace;
   return (
+    <div className="grid items-start gap-10 lg:grid-cols-[180px_1fr]">
+    <nav aria-label="Bagian jejak riset" className="sticky top-24 max-lg:hidden">
+      <p className="mb-2 text-[13px] font-bold text-ink-faint">Di halaman ini</p>
+      <ul className="m-0 grid list-none gap-0.5 border-l border-rule p-0">
+        {SECTIONS.map(([id, label]) => (
+          <li key={id}><a href={`#${id}`} className="-ml-px block border-l-2 border-transparent py-1 pl-3 text-[13.5px] text-ink-soft no-underline hover:border-brand-ink hover:text-ink">{label}</a></li>
+        ))}
+      </ul>
+    </nav>
     <div className="grid gap-6 [&>*]:min-w-0">
       <header className="card border-t-4 border-t-brand">
         <h1 className="mb-2.5 text-[28px] font-black">Jejak riset {trace.ticker}</h1>
@@ -43,29 +58,29 @@ function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: 
       </header>
 
       {trace.analyst ? (
-        <>
+        <div id="agen-analis" className="grid scroll-mt-20 gap-6 [&>*]:min-w-0">
           <IntelHeadline intel={trace.analyst} />
           <IntelSections intel={trace.analyst} />
-        </>
+        </div>
       ) : (
-        <Block title="Agent analis">
+        <Block id="agen-analis" title="Agent analis">
           <div className={`${box} text-ink-soft`}>{trace.analyst_problems.join("; ") || "Agent analis tidak dijalankan untuk riset ini."}</div>
         </Block>
       )}
 
-      <Block title="Ringkasan agent riset">
+      <Block id="ringkasan" title="Ringkasan agent riset">
         <div className={box}>{research.summary || "Belum ada briefing tervalidasi."}</div>
       </Block>
 
-      <Block title="Endpoint data Sectors yang dibaca">
+      <Block id="endpoint" title="Endpoint data Sectors yang dibaca">
         <div className={box}>
           {research.endpoints.length ? research.endpoints.map((e) => (
-            <span key={e} className="m-[3px] inline-block rounded-md bg-brand-50 px-[9px] py-[3px] font-mono text-[13px] text-brand">{e}</span>
+            <span key={e} className="m-[3px] inline-block rounded-md bg-brand-50 px-[9px] py-[3px] font-mono text-[13px] text-brand-ink">{e}</span>
           )) : <span className="text-ink-soft">Tidak ada endpoint tercatat.</span>}
         </div>
       </Block>
 
-      <Block title="Temuan dan hubungan sebab-akibat">
+      <Block id="temuan" title="Temuan dan hubungan sebab-akibat">
         {research.insights.length ? research.insights.map((insight, i) => (
           <article key={i} className={`${box} grid gap-2`}>
             <h3 className="text-[17px]">{insight.title || "Temuan"}</h3>
@@ -81,7 +96,7 @@ function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: 
         )) : <div className={`${box} text-ink-soft`}>Belum ada temuan yang lolos validasi sitasi.</div>}
       </Block>
 
-      <Block title="Berita untuk asumsi forecast">
+      <Block id="berita" title="Berita untuk asumsi forecast">
         <p className="text-ink-soft">
           Pencarian berita web: {news.search.status ?? "tidak dijalankan"}{news.search.as_of ? `, per ${news.search.as_of}` : ""}.
           {news.search.queries.length > 0 && <> Kueri: {news.search.queries.join("; ")}.</>}
@@ -107,7 +122,7 @@ function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: 
         )}
       </Block>
 
-      <Block title="Asumsi forecast oleh agent">
+      <Block id="asumsi" title="Asumsi forecast oleh agent">
         <p className="text-ink-soft">Status: {forecast.status ?? "tidak tercatat"}</p>
         {forecast.news_effects.map((e, i) => (
           <article key={i} className={`${box} grid gap-1.5`}>
@@ -154,7 +169,7 @@ function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: 
         {forecast.problems.length > 0 && <div className={`${box} text-ink-soft`}>{forecast.problems.join("; ")}</div>}
       </Block>
 
-      <Block title="Deep-dive berita">
+      <Block id="deep-dive" title="Deep-dive berita">
         {trace.deepdive.length ? trace.deepdive.map((item, i) => (
           <article key={i} className={`${box} grid gap-1.5`}>
             <strong>{item.title || "(tanpa judul)"}</strong>
@@ -169,11 +184,12 @@ function TraceBody({ trace, reportUrl, pdfUrl }: { trace: TraceView; reportUrl: 
       </Block>
 
       {research.limitations.length > 0 && (
-        <Block title="Bukti yang masih kurang">
+        <Block id="kurang" title="Bukti yang masih kurang">
           <ul className={`${box} m-0 pl-9`}>{research.limitations.map((l) => <li key={l}>{l}</li>)}</ul>
         </Block>
       )}
       <p className="text-[13px] text-ink-soft">Materi informasi dan analisis; bukan rekomendasi investasi.</p>
+    </div>
     </div>
   );
 }
@@ -195,7 +211,7 @@ export function JobTrace() {
 function TracePage({ state, reportUrl, pdfUrl }: { state: ReturnType<typeof useLoad<TraceView>>; reportUrl: string; pdfUrl?: string }) {
   return (
     <div className="min-h-full bg-canvas py-10 max-sm:py-5">
-      <div className="wrap max-w-[1000px]">
+      <div className="wrap">
         {state.loading && <p className="text-ink-soft">Memuat jejak riset…</p>}
         {state.error && <Notice tone="error">Jejak riset tidak ditemukan. Buka dari galeri laporan atau halaman riset.</Notice>}
         {state.data && <TraceBody trace={state.data} reportUrl={reportUrl} pdfUrl={pdfUrl} />}

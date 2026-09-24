@@ -1,7 +1,11 @@
 # Local Sectoral: `docker compose up --build`, then open http://localhost:8765
 services:
   sectoral:
-    build: .
+    build:
+      context: .
+      # Reuse the layers of the last local build (dependency layers rarely change).
+      cache_from:
+        - sectoral:local
     image: sectoral:local
     ports:
       - "127.0.0.1:${SECTORAL_PORT:-8765}:8765"

@@ -5,7 +5,7 @@ import flowSource from "../../../app/assets/brand/research-flow.svg?raw";
 const LOGO = logoSource.replace("Roboto, Arial, sans-serif", "Roboto, sans-serif");
 
 export function Logo({ className = "h-[30px]" }: { className?: string }) {
-  return <span className={`block [&>svg]:h-full [&>svg]:w-auto ${className}`} dangerouslySetInnerHTML={{ __html: LOGO }} />;
+  return <span className={`logo block [&>svg]:h-full [&>svg]:w-auto ${className}`} dangerouslySetInnerHTML={{ __html: LOGO }} />;
 }
 
 export function ResearchFlow() {

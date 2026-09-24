@@ -1,10 +1,13 @@
 # syntax=docker/dockerfile:1
+# Build caching: dependency layers come before source, and npm/pip/apt
+# downloads sit in BuildKit cache mounts, so a code change rebuilds in seconds
+# and even a dependency change reuses what was downloaded before.
 
 # 1. Build the React app. The fonts and brand SVGs it imports live in app/assets.
 FROM node:22-slim AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund --prefer-offline
 COPY web/ ./
 COPY app/assets /src/app/assets
 RUN npm run build
@@ -21,13 +24,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SECTORAL_OUT=/app/out/web \
     SECTORAL_REPORTS=/app/out/reports
 # poppler-utils renders report cover thumbnails (pdftoppm).
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+ && apt-get update \
  && apt-get install -y --no-install-recommends poppler-utils \
- && rm -rf /var/lib/apt/lists/* \
  && python3 -m venv --system-site-packages /opt/venv
 WORKDIR /app
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 COPY app ./app
 COPY agents ./agents
 COPY scripts ./scripts
