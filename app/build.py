@@ -18,8 +18,12 @@ OUT = Path(__file__).resolve().parent.parent / "out"
 
 def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
           illustrative_scenarios=False, assumption_plan=None,
-          analyst_target=False, assumption_status=None):
+          analyst_target=False, assumption_status=None, news_evidence=None):
     doc_in, g1 = intake.load(ticker, as_of=as_of)
+    if news_evidence is not None:
+        doc_in["news"] = news_evidence["rows"]
+        doc_in["news_full"] = news_evidence["full"]
+        doc_in["news_search"] = news_evidence["search"]
     fc = forecast.build(doc_in, assumption_plan=assumption_plan)
     va = valuation.build(doc_in, fc, analyst_target=analyst_target,
                          assumption_status=assumption_status)

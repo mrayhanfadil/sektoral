@@ -1,4 +1,4 @@
-"""One-command Sectors-data research run: agent, validation, report, audit trace."""
+"""One-command research run: Sectors, dated Tavily news, report, audit trace."""
 from __future__ import annotations
 
 import argparse
@@ -7,7 +7,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import build, intake, research_context, ui
+from . import build, intake, news_fetch, news_sources, research_context, tavily, ui
 from .progress import emit
 
 _TRACE_CSS = (
@@ -82,7 +82,7 @@ def _analyst_html(intel, esc):
 
 
 def _trace_html(ticker, research, report_name, forecast_assumptions=None,
-                news_deepdive=None, analyst=None):
+                news_deepdive=None, analyst=None, news_sources=None):
     """A small, readable audit view for the analyst and the judging demo."""
     brief = research.get("document") if isinstance(research, dict) else None
     brief = brief if isinstance(brief, dict) else {}
@@ -108,7 +108,16 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
     parts.extend(f"<span class='chip'>{esc(endpoint)}</span>" for endpoint in endpoints)
     if not endpoints:
         parts.append("<span class='muted'>Tidak ada endpoint tercatat.</span>")
-    parts.append("</div><h2>Temuan dan hubungan sebab-akibat</h2>")
+    parts.append("</div><h2>Berita untuk asumsi forecast</h2>")
+    news_sources = news_sources or {}
+    search = news_sources.get("search") or {}
+    parts.append(f"<p class='muted'>Tavily: {esc(search.get('status'))}; "
+                 f"as-of {esc(search.get('as_of'))}</p><div class='card'><ol>")
+    for article in news_sources.get("articles") or []:
+        parts.append(f"<li>{esc(article.get('timestamp'))} · "
+                     f"{esc(', '.join(article.get('origins') or []))} · "
+                     f"<a href='{esc(article.get('source'))}'>{esc(article.get('title'))}</a></li>")
+    parts.append("</ol></div><h2>Temuan dan hubungan sebab-akibat</h2>")
     for insight in insights:
         if not isinstance(insight, dict):
             continue
@@ -171,7 +180,7 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
                      + (f" · {esc(item.get('fetched_at'))}" if item.get("fetched_at") else "")
                      + f" · {int(item.get('full_length') or 0)} karakter</small>"
                      + (f"<p>{esc(body_preview)}…</p>" if body_preview and status == "fetched" else
-                        "<p class='muted'>Teks lengkap tidak tersedia; memakai ringkasan berita dari Sectors.</p>")
+                        "<p class='muted'>Teks lengkap tidak tersedia; ringkasan berita hanya untuk konteks.</p>")
                      + "</section>")
     limitations = brief.get("limitations") or []
     if limitations:
@@ -196,7 +205,7 @@ def run_analyst(ticker):
 
 def run(ticker, outdir, want_pdf=False, as_of=None,
         illustrative_scenarios=False, analyst_target=False, refresh_assumptions=False):
-    """Run the research agent and build a report from the same cached evidence."""
+    """Run research and build a report from the same dated news evidence."""
     from agents.research.run import run_live
 
     t = str(ticker).strip().upper()
@@ -224,6 +233,26 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     report_as_of = as_of or date.today().isoformat()
     from agents.forecast_assumptions.run import run_cached as forecast_agent
     forecast_intake, _ = intake.load(t, as_of=report_as_of)
+    try:
+        # Stored Tavily results remain usable when a key is not configured.
+        found = tavily.news_context(t, forecast_intake["name"], report_as_of)
+        web_search = {**found, "status": "searched" if found["items"] else
+                      "no_relevant_results", "as_of": report_as_of}
+    except tavily.TavilyError as error:
+        web_search = {"status": "failed" if tavily.configured() else "unavailable",
+                      "items": [], "as_of": report_as_of, "error": str(error)}
+    combined_news = news_sources.combine(
+        t, forecast_intake["name"], report_as_of,
+        forecast_intake.get("news"), web_search["items"])
+    existing_full = {row.get("source_url"): row for row in
+                     forecast_intake.get("news_full") or [] if isinstance(row, dict)}
+    combined_full = [existing_full.get(row["source"]) or news_fetch.enrich_one(row)
+                     for row in combined_news]
+    forecast_intake["news"] = combined_news
+    forecast_intake["news_full"] = combined_full
+    forecast_intake["news_search"] = web_search
+    print(f"{t}: news Sectors+Tavily {len(combined_news)} artikel; "
+          f"Tavily {web_search['status']}", flush=True)
     emit("forecast", "Agent asumsi forecast membaca berita dan rilis resmi", status="run")
     assumption_result = forecast_agent(forecast_intake, refresh=refresh_assumptions)
     reused = " (dipakai ulang untuk bukti yang sama)" if assumption_result.get("reused") else ""
@@ -234,6 +263,8 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     report = build.build(t, destination, want_pdf=want_pdf, as_of=report_as_of,
                          illustrative_scenarios=illustrative_scenarios or analyst_target,
                          assumption_plan=assumption_plan,
+                         news_evidence={"rows": combined_news, "full": combined_full,
+                                        "search": web_search},
                          analyst_target=analyst_target,
                          assumption_status=assumption_result.get(
                              "interim_status", assumption_result.get("status")))
@@ -258,6 +289,7 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
         "analyst": intel,
         "research": safe_research,
         "forecast_assumptions": assumption_result,
+        "news_sources": {"search": web_search, "articles": combined_news},
         "product_sales_scenario": report.get("forecast_assumptions", {}).get(
             "product_sales_scenario"),
         "news_deepdive": forecast_intake.get("news_full") or [],
@@ -276,7 +308,8 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     trace_html.write_text(_trace_html(t, safe_research, f"{t}.html",
                                       assumption_result,
                                       forecast_intake.get("news_full"),
-                                      analyst=intel), encoding="utf-8")
+                                      analyst=intel,
+                                      news_sources=audit["news_sources"]), encoding="utf-8")
     emit("done", "Selesai")
     return {"ticker": t, "research_ok": safe_research["ok"], "intel": intel,
             "report_status": report["meta"].get("status"),

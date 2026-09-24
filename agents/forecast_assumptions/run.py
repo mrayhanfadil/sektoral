@@ -77,6 +77,9 @@ def _source_payload(intake):
         full_text = str(full.get("full_text") or "")[:3000]
         selected_news.append({"index": len(selected_news), "title": title,
                               "timestamp": timestamp, "url": url,
+                              "origin": row.get("origin") or "sectors",
+                              "origins": row.get("origins") or ["sectors"],
+                              "publisher": row.get("publisher"),
                               "body": str(row.get("body") or "")[:1400],
                               "full_text": full_text,
                               "full_text_status": str(full.get("fetch_status") or "unavailable_unknown"),
@@ -133,7 +136,7 @@ def _validate(plan, source, require_news_coverage=True):
         if (item.get("source_url") != row["url"] or
                 item.get("timestamp") != row["timestamp"] or
                 item.get("title") != row["title"]):
-            problems.append(f"news_effects[{i}] source does not match cached article")
+            problems.append(f"news_effects[{i}] source does not match supplied article")
         if (not isinstance(row["url"], str) or
                 not row["url"].startswith(("https://", "http://")) or
                 not isinstance(row["title"], str) or not row["title"].strip() or
@@ -142,6 +145,10 @@ def _validate(plan, source, require_news_coverage=True):
         driver = item.get("driver")
         if driver not in DRIVERS:
             problems.append(f"news_effects[{i}] has invalid driver")
+        if (row.get("origin") == "tavily" and driver != "none" and
+                row.get("full_text_status") != "fetched"):
+            problems.append(
+                f"news_effects[{i}] Tavily-only numerical effect needs fetched article text")
         if source.get("model_profile") == "financial_ddm":
             if driver not in {"coe_bps", "none"}:
                 problems.append(f"news_effects[{i}] driver inapplicable to financial_ddm")
@@ -166,6 +173,9 @@ def _validate(plan, source, require_news_coverage=True):
                 for field in ("factual_basis", "mechanism", "uncertainty")):
             problems.append(f"news_effects[{i}] needs fact, mechanism, and uncertainty")
         quote = item.get("full_text_quote")
+        if row.get("origin") == "tavily" and driver != "none" and not quote:
+            problems.append(
+                f"news_effects[{i}] Tavily-only numerical effect needs a text quote")
         if quote is not None:
             full_text = str(row.get("full_text") or "")
             if not isinstance(quote, str) or not quote.strip():
@@ -332,7 +342,9 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "[-100,100], coe_bps [-100,100], none (change 0, years []). "
             "For financial_ddm, only coe_bps or none apply; do not use revenue, "
             "EBITDA, or WACC. For other profiles, do not use coe_bps. "
-            "Use none for price/index "
+            "For Tavily-only news, a nonzero effect requires fetched article "
+            "text and an exact full_text_quote that support the claimed fact; a headline or snippet alone "
+            "gets none. Use none for price/index "
             "moves, generic sentiment, recommendations, stale or non-operating "
             "news. Connect any nonzero change to a measurable issuer driver and "
             "specific forecast years. Separate factual basis from quantified analyst "
@@ -340,7 +352,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "Each article also carries full_text (auto deep-dive extract, may be "
             "empty when the link is unavailable) plus full_text_status. Prefer "
             "full_text details for factual_basis when available, but keep the "
-            "exact cache title/URL/timestamp as provenance. Optionally add "
+            "exact supplied title/URL/timestamp as provenance. Optionally add "
             "full_text_quote (<=400 chars, exact substring of full_text) to anchor "
             "a nonzero driver."
         )
@@ -502,7 +514,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
         return {"status": "invalid", "fragment": None, "problems": problems}
     binding = ("official_evidence" if name == "interim" else
                "official_evidence_and_dated_news" if name == "outyears" else
-               "cached_news")
+               "sectors_and_tavily_news")
     return {"status": "validated", "fragment": fragment, "problems": [],
             "provenance_binding": binding}
 
@@ -593,10 +605,10 @@ def run_live(intake):
 def evidence_fingerprint(source, spec_sha256):
     """Identity of the evidence a plan was drawn from.
 
-    Report date and fetched article bodies are left out: the same release and
-    the same dated headlines should yield the same assumptions on any day.
+    Report date is left out. Changed article evidence produces a new plan.
     """
-    news = [{key: item.get(key) for key in ("title", "timestamp", "url")}
+    news = [{key: item.get(key) for key in ("title", "timestamp", "url",
+                                            "origin", "origins", "body", "full_text")}
             for item in source.get("news") or []]
     material = {"ticker": source.get("ticker"), "profile": source.get("model_profile"),
                 "official": source.get("official"), "news": news, "spec": spec_sha256,

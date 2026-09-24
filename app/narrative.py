@@ -1991,7 +1991,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                     "Berita sebagai asumsi skenario",
                     ["Tanggal", "Berita", "Dampak ke model", "Dasar keputusan"],
                     event_rows,
-                    "Sumber: berita bertanggal dalam data Sectors: " +
+                    "Sumber: berita bertanggal dari Sectors dan/atau Tavily: " +
                     "; ".join(dict.fromkeys(event_sources)) +
                     ". Dampak numerik adalah asumsi analis, bukan fakta emiten.")
             illustrative_pages.append({
@@ -3450,7 +3450,7 @@ def _build_draft(intake, fc, va, g1, method="auto",
         "headline": "Bukti Model Belum Lengkap",
             "bullets": [
                 "Skenario nilai belum disajikan karena bukti penting masih kurang.",
-                "Data sumber dibatasi pada data Sectors; sumber riset eksternal tidak dipakai.",
+                "Data historis memakai Sectors; rilis emiten dan berita bertanggal dicatat dengan sumbernya.",
                 "Berita yang lolos validasi diparafrase dan dihubungkan ke tesis dengan caveat.",
                 "SOTP/LoM belum dapat direkonsiliasi dari input yang tersedia.",
             ],
@@ -3479,8 +3479,8 @@ def _build_draft(intake, fc, va, g1, method="auto",
             "DRAFT NON-DISTRIBUTABLE: skenario nilai belum disajikan karena bukti belum lengkap.",
             "SOTP/LoM memerlukan NAV per aset, kepemilikan, net debt, minority interest, "
             "overhead korporat dan saham terdilusi dengan provenance.",
-            "Validasi latest interim memakai metadata yang tersedia di data Sectors; data di luar Sectors tidak dipakai.",
-            "News context hanya memakai berita ticker-spesifik dari data Sectors dan tidak langsung menjadi angka forecast.",
+            "Validasi latest interim memakai rilis emiten resmi bila tersedia, dengan tanggal dan sumber tercatat.",
+            "Berita ticker-spesifik dari Sectors dan Tavily dapat mendasari asumsi analis yang diberi label dan diuji dampaknya.",
             "Forecast tambang harus dihitung dari driver fisik; proyeksi CAGR hanya screening.",
             "RNAV annuitas indikatif dari overlay data Sectors bukan nilai wajar karena bukan SOTP asset-level.",
         ],
