@@ -117,6 +117,18 @@ def peer_ev_sales(peers) -> list[float]:
                   if _finite(p.get("ev_sales")) and p["ev_sales"] > 0)
 
 
+def peer_ev_ebitda_gap(peers):
+    """Reason when fewer than three Sectors peer EV/EBITDA points exist, else None."""
+    n_valid = len(peer_ev_ebitdas(peers))
+    if n_valid >= MIN_PEERS:
+        return None
+    rows = list(peers or [])
+    uncached = sum(1 for p in rows if p.get("ev_status") == "report_not_cached")
+    why = f"; laporan Sectors {uncached}/{len(rows)} peer belum di-cache" if uncached else ""
+    return (f"peer EV/EBITDA belum tersedia di cache Sectors ({n_valid} < {MIN_PEERS}{why}); "
+            "belum dimodelkan")
+
+
 def _bridge_label(net_debt_source) -> str:
     return f"bridge net debt dari {net_debt_source}" if net_debt_source else ""
 
@@ -194,14 +206,10 @@ def _peer_multiple_candidate(key, multiples, per_share_base, per_share_down_base
 def ev_ebitda_peer(peers, ebitda_fwd, shares, market_cap, net_debt=0.0,
                    net_debt_source=None) -> dict:
     """EV/EBITDA peer FY terakhir x EBITDA forward; bridge ke ekuitas via net debt."""
+    gap = peer_ev_ebitda_gap(peers)
+    if gap:
+        return candidate("ev_ebitda_peer", reasons=[gap])
     mults = peer_ev_ebitdas(peers)
-    if len(mults) < MIN_PEERS:
-        rows = list(peers or [])
-        uncached = sum(1 for p in rows if p.get("ev_status") == "report_not_cached")
-        why = f"; laporan Sectors {uncached}/{len(rows)} peer belum di-cache" if uncached else ""
-        return candidate("ev_ebitda_peer", reasons=[
-            f"peer EV/EBITDA belum tersedia di cache Sectors ({len(mults)} < {MIN_PEERS}{why}); "
-            "belum dimodelkan"])
     if not (_finite(ebitda_fwd) and ebitda_fwd > 0):
         return candidate("ev_ebitda_peer", reasons=["EBITDA forward <= 0; EV/EBITDA tidak bermakna"])
     q1, median, _q3 = pe_quartiles(sorted(mults))
@@ -463,7 +471,9 @@ _READER_REASONS = (
     ("latest official interim actual", "hasil interim resmi belum tervalidasi"),
     ("earnings scenario", "skenario laba FY belum tervalidasi"),
     ("peer PER", "peer PER valid kurang dari tiga"),
+    ("peer EV/EBITDA set", "peer EV/EBITDA valid kurang dari tiga"),
     ("peer EV/EBITDA", "peer EV/EBITDA belum tersedia di cache"),
+    ("FY EBITDA scenario", "EBITDA FY skenario belum tersedia atau tidak positif"),
     ("peer EV/Sales", "peer EV/Sales belum tersedia di cache"),
     ("peer P/BV", "peer P/BV valid kurang dari tiga"),
     ("peer holding_sotp", "SOTP holding belum tersedia"),

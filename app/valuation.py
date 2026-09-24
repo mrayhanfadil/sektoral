@@ -255,6 +255,22 @@ def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wa
         "exit EV/EBITDA historis sebagai cross-check")
 
 
+def _ev_ebitda_scenario_candidate(intake, fc, assumption_status):
+    """Ramping / thin-history primary: forward EV/EBITDA peer on the scenario FY EBITDA."""
+    if not fc.get("earnings_scenario"):
+        return None
+    detail, reasons = scenario_value.ev_ebitda_peer(intake, fc, intake.get("peers"))
+    gate = (release.assess_ev_ebitda_scenario(intake, fc, {"detail": detail}, assumption_status)
+            if detail else _NO_GATE)
+    if detail:
+        reasons = reasons + method_chain.scale_reasons(
+            detail["per_share"], detail["shares"], intake["price"] * detail["shares"])
+    year = fc["earnings_scenario"]["year"]
+    return _scenario_candidate(
+        "ev_ebitda_peer", detail, reasons, gate,
+        f"FY{year % 100:02d}F EV/EBITDA median peer x EBITDA skenario analis")
+
+
 def _pbv_book_candidate(intake, fc, assumption_status):
     """Median peer P/B x reported BVPS (official interim), for asset-heavy
     going concerns; downside at the lower quartile."""
@@ -772,6 +788,12 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                     scenario_dcf, key="dcf_reference",
                     short=method_chain.SHORT["dcf_reference"],
                     label=scenario_dcf["label"] + " [referensi]")
+    if profile == "going_concern_fcff" and "ev_ebitda_peer" in candidates:
+        # Ramping / thin history: the forward multiple values the scenario FY
+        # EBITDA behind its own gate, not the screening forecast's G2.9.
+        scenario_ev = _ev_ebitda_scenario_candidate(intake, fc, assumption_status)
+        if scenario_ev:
+            candidates["ev_ebitda_peer"] = scenario_ev
     if profile in ("going_concern_fcff", "financial_ddm"):
         # DCF/DDM/P-BV/PER-forward on the screening forecast are insufficient
         # while its data gates fail, so the chain can reach a scenario-based
@@ -979,7 +1001,17 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         impl.update(ev_ebitda=None,
                     pbv=(ddm_result or {}).get("fair_pbv"),
                     tp_inverse=(ddm_result or {}).get("tp_inverse"))
-    if scenario_sel and tp is not None:
+    if scenario_sel and tp is not None and selected == "ev_ebitda_peer":
+        # Implied multiples on the scenario FY the forward multiple values.
+        detail = sel["detail"]
+        scenario_fy = (fc.get("earnings_scenario") or {}).get("full_year") or {}
+        net_attr = scenario_fy.get("net_profit_attributable")
+        eps_fy = (net_attr * (detail.get("fx") or 1.0) / detail["shares"]
+                  if isinstance(net_attr, (int, float)) else None)
+        impl["per"] = tp / eps_fy if eps_fy and eps_fy > 0 else None
+        ev_at_tp = tp * detail["shares"] - detail["cash"] + detail["debt"] + detail["nci"]
+        impl["ev_ebitda"] = ev_at_tp / detail["ebitda_idr"] if detail["ebitda_idr"] > 0 else None
+    elif scenario_sel and tp is not None:
         # Implied multiples on the same FY path the target values.
         detail = sel["detail"]
         first = detail["lines"][0]

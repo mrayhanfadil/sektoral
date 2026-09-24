@@ -568,9 +568,15 @@ def peer_page(intake, valuation_inputs=None):
             ["Basis", "Multiple", "Nilai per saham"], cross,
             "Sumber: tabel peer Sectors dan estimasi Sektoral. Cross-check tidak dirata-ratakan "
             "dengan metode utama; P/E dan P/B peer bukan EV/EBITDA dan berbeda struktur modal."))
+        peer_ev = [p for p in intake.get("peers") or []
+                   if isinstance(p.get("ev_ebitda"), (int, float))]
         paragraphs.append(
+            "Multiple peer di bawah ini hanya cross-check: EV/EBITDA peer dibangun dari "
+            f"laporan Sectors tiap peer dan tersedia untuk {len(peer_ev)} peer; ia dipakai di "
+            "rantai metode, bukan di tabel ini." if peer_ev else
             "Multiple peer di bawah ini hanya cross-check: tabel peer Sectors tidak memuat "
-            "EBITDA dan utang bersih, sehingga EV/EBITDA peer belum dapat diverifikasi.")
+            "EBITDA dan utang bersih, dan laporan Sectors tiap peer belum di-cache, sehingga "
+            "EV/EBITDA peer belum dapat diverifikasi.")
     # 1-year own-history P/E and P/BV bands (mean, median, current, percentile).
     band = own_history_bands(intake)
     if band:
