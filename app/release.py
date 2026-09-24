@@ -89,8 +89,12 @@ def _verified_source_reference(value: object) -> bool:
         return True
     if not isinstance(value, str) or not value.strip():
         return False
+    # Evidence often keeps the document title alongside its direct URL.
+    # Accept that traceable form as well as a bare URL and cache provenance.
+    match = re.search(r"https://[^\s<>\"']+", value.strip(), flags=re.IGNORECASE)
+    candidate = match.group(0).rstrip(".,;)") if match else value.strip()
     try:
-        parsed = urlsplit(value.strip())
+        parsed = urlsplit(candidate)
         return (parsed.scheme.lower() == "https" and bool(parsed.hostname)
                 and parsed.username is None and parsed.password is None)
     except ValueError:
@@ -223,8 +227,8 @@ def _check_operating_bridge(forecast: object) -> list[str]:
         errors = _evidence_row(bridge[stage])
         blockers.extend(f"operating bridge {stage}: {error}" for error in errors)
         if isinstance(bridge[stage], Mapping) and _text(bridge[stage].get("source")) and \
-                not _cache_provenance(bridge[stage].get("source")):
-            blockers.append(f"operating bridge {stage}: source must be sectors_cache-only")
+                not _verified_source_reference(bridge[stage].get("source")):
+            blockers.append(f"operating bridge {stage}: source must identify verified provenance (HTTPS or sectors_cache)")
     return blockers
 
 
@@ -303,8 +307,8 @@ def _check_sotp(result: object, intake: object) -> list[str]:
             for field in ("name", "stage", "method", "source", "provenance"):
                 if not _text(asset.get(field)):
                     blockers.append(f"{prefix}.{field} is required")
-            if _text(asset.get("source")) and not _cache_provenance(asset.get("source")):
-                blockers.append(f"{prefix}.source must identify sectors_cache provenance")
+            if _text(asset.get("source")) and not _verified_source_reference(asset.get("source")):
+                blockers.append(f"{prefix}.source must identify verified provenance (HTTPS or sectors_cache)")
             for field in ("nav_idr", "ownership_pct", "attributable_nav_idr"):
                 if not _number(asset.get(field)):
                     blockers.append(f"{prefix}.{field} must be finite and present")
@@ -339,8 +343,8 @@ def _check_sotp(result: object, intake: object) -> list[str]:
                     blockers.append(f"{prefix}.{required} is required")
             if not _text(evidence.get("source")):
                 blockers.append(f"{prefix}.source must be non-empty")
-            elif not _cache_provenance(evidence.get("source")):
-                blockers.append(f"{prefix}.source must identify sectors_cache provenance")
+            elif not _verified_source_reference(evidence.get("source")):
+                blockers.append(f"{prefix}.source must identify verified provenance (HTTPS or sectors_cache)")
             if not _source_date(evidence.get("source_date")):
                 blockers.append(f"{prefix}.source_date must be YYYY-MM-DD")
             elif _source_date(as_of) and evidence["source_date"] > as_of:

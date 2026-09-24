@@ -50,3 +50,9 @@ def test_failed_plans_are_not_stored(monkeypatch, tmp_path):
     F.run_cached(INTAKE, store_dir=tmp_path)
     F.run_cached(INTAKE, store_dir=tmp_path)
     assert len(calls) == 2 and not list(tmp_path.glob("*.json"))
+
+
+def test_intake_without_identity_runs_agent_without_storage(monkeypatch, tmp_path):
+    monkeypatch.setattr(F, "run_live", lambda intake: {"status": "validated", "plan": {}})
+    assert F.run_cached({}, store_dir=tmp_path)["status"] == "validated"
+    assert not list(tmp_path.glob("*.json"))

@@ -79,15 +79,17 @@ def test_table_header_and_even_row_rules_use_spec_tokens():
 
 # ------------------------------------------------------------------- font
 
-def test_report_css_is_roboto_only():
+def test_report_uses_roboto_on_screen_and_copy_safe_font_in_print():
     css = render.CSS
     assert "Roboto" in css
     lowered = css.lower()
-    for foreign in ("poppins", "arial", "helvetica", "system-ui",
+    for foreign in ("poppins", "helvetica", "system-ui",
                     "segoe", "inter", "georgia", "times"):
         assert foreign not in lowered, foreign
     assert "@font-face" in css
     assert "font-family:'Roboto'" in css
+    assert "body{font-family:'Roboto',sans-serif" in css
+    assert "@media print{body,body *{font-family:Arial,sans-serif!important" in css
 
 
 def test_roboto_font_files_exist_and_embed():
