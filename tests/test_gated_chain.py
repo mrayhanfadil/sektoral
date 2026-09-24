@@ -256,3 +256,14 @@ def test_justified_pbv_gate_needs_coe_and_roe_above_growth():
     other = release.assess_pbv_roe_fy({"model_profile": "going_concern_fcff"}, {}, {"detail": {}},
                                       "validated")
     assert any("bank method" in b for b in other["blockers"])
+
+
+def test_ps_peer_uses_market_cap_over_revenue_in_band():
+    peers = [{"ps": v} for v in (0.5, 1.0, 1.5, 2.0, 45.0, None)]
+    c = MC.ps_peer(peers, revenue_fwd=1000.0, shares=100.0, market_cap=2000.0)
+    assert c["status"] == "sufficient" and c["detail"]["peer_count"] == 4
+    assert c["per_share"] == c["detail"]["median_ps"] * 10.0
+    assert MC.ps_peer(peers[:2], 1000.0, 100.0, 2000.0)["status"] == "insufficient"
+    from app import intake as I
+    doc_in, _ = I.load("JPFA", as_of="2026-09-24")
+    assert any(p.get("ps") for p in doc_in["peers"])
