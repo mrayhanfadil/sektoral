@@ -12,6 +12,7 @@ from . import issuer_evidence
 from . import analyst_scenario
 from . import news as news_context
 from . import news_fetch
+from . import peer_fundamentals
 from . import research_context
 
 
@@ -548,10 +549,12 @@ def _borrowed_peer_report(t):
 
 
 def _peer_ev(symbol, market_cap):
-    """Peer EV from Sectors only: the peer-table market cap plus total debt
-    less cash from the peer's own cached /company/report/<peer>/, with
-    EBITDA from the same latest FY row. A missing part leaves the multiple
-    None with a named status; no older year or other source fills the gap."""
+    """Peer EV: the Sectors peer-table market cap plus total debt less cash,
+    with EBITDA from the same latest FY. Debt, cash and EBITDA come from the
+    peer's own cached Sectors /company/report/<peer>/; when that report is
+    not cached, from a stored Yahoo Finance snapshot (app.peer_fundamentals),
+    and the row says so in ``ev_source_kind``. A missing part leaves the
+    multiple None with a named status; no older year fills the gap."""
     ticker = str(symbol or "").replace(".JK", "").strip().upper()
     try:
         report = cache.company_report(ticker) if ticker else None
@@ -559,7 +562,7 @@ def _peer_ev(symbol, market_cap):
         # One unreadable peer report must not drop the peer's PER/PBV row.
         return {"ev_status": "report_unreadable"}
     if not isinstance(report, dict):
-        return {"ev_status": "report_not_cached"}
+        return _peer_ev_yahoo(ticker, market_cap)
     row = max((r for r in (report.get("financials") or {}).get("historical_financials") or []
                if isinstance(r, dict) and isinstance(r.get("year"), (int, float))),
               key=lambda r: r["year"], default=None)
@@ -575,9 +578,30 @@ def _peer_ev(symbol, market_cap):
     ev = market_cap + debt - cash
     meaningful = ev > 0 and ebitda > 0
     return {"ev": ev, "ev_year": year, "ev_status": "ok" if meaningful else "not_meaningful",
-            "ev_ebitda": ev / ebitda if meaningful else None,
+            "ev_ebitda": ev / ebitda if meaningful else None, "ev_source_kind": "sectors",
             "ev_source": (f"Sectors: market cap tabel peer + total_debt, kas, EBITDA "
                           f"FY{year} /company/report/{ticker}/")}
+
+
+def _peer_ev_yahoo(ticker, market_cap):
+    """Peer EV from a stored Yahoo Finance snapshot, labelled as such."""
+    snapshot = peer_fundamentals.load(ticker)
+    if snapshot is None:
+        return {"ev_status": "report_not_cached"}
+    if market_cap is None:
+        return {"ev_status": "market_cap_missing"}
+    if snapshot.get("currency") not in (None, "IDR"):
+        # The peer-table market cap is IDR; a USD reporter needs a dated FX first.
+        return {"ev_status": "currency_mismatch", "ev_year": snapshot["fiscal_year"]}
+    debt, cash, ebitda = (snapshot["total_debt"], snapshot["cash_and_equivalents"],
+                          snapshot["ebitda"])
+    year = snapshot["fiscal_year"]
+    ev = market_cap + debt - cash
+    meaningful = ev > 0 and ebitda > 0
+    return {"ev": ev, "ev_year": year, "ev_status": "ok" if meaningful else "not_meaningful",
+            "ev_ebitda": ev / ebitda if meaningful else None, "ev_source_kind": "yahoo",
+            "ev_source": (f"market cap tabel peer Sectors + total_debt, kas, EBITDA "
+                          f"{snapshot['source']} (diambil {snapshot.get('fetched_at')})")}
 
 
 def _peers(rep, t):

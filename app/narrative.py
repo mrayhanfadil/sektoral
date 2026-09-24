@@ -3439,9 +3439,10 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None):
             "ramping atau riwayat singkat (Gate 3, §4.1a): EV = median EV/EBITDA "
             f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} x EBITDA {label} "
             "skenario analis (aktual 1H resmi + margin EBITDA asumsi agen).",
-            "EV/EBITDA tiap peer dihitung dari data Sectors: market cap tabel peer ditambah utang "
-            "dikurangi kas dan EBITDA FY terakhir dari laporan peer; peer dianggap sebanding. "
-            "Peer tanpa laporan Sectors di cache tidak masuk median.",
+            f"EV/EBITDA tiap peer dihitung dari {ev_s['peer_source']}: market cap tabel peer "
+            "Sectors ditambah utang dikurangi kas dan EBITDA FY terakhir dari laporan peer "
+            "(laporan Sectors bila di-cache, selain itu snapshot Yahoo Finance bertanggal); "
+            "peer dianggap sebanding. Peer tanpa laporan di kedua sumber tidak masuk median.",
             f"Ekuitas = EV + kas ({ev_s.get('cash_basis') or '-'}) - utang "
             f"({ev_s.get('debt_basis') or '-'}) - minoritas, dibagi saham "
             f"{ev_s.get('shares_basis') or '-'}; tanggal valuasi {ev_s['valuation_date']}. "
@@ -3542,16 +3543,18 @@ def _ev_ebitda_scenario_exhibit(intake, ev, label):
         value = fmt.tick((enterprise + ev["cash"] - ev["debt"] - ev["nci"]) / ev["shares"])
         rows.append([name, fmt.mult(mult, 1), f"Rp{bn(enterprise)} miliar",
                      f"Rp{fmt.rp(value)}", fmt.pct(value / intake["price"] - 1)])
+    tag = {"sectors": "Sectors", "yahoo": "Yahoo"}
     peers = ", ".join(f"{p['symbol']} {fmt.mult(p['ev_ebitda'], 1)}"
-                      + (f" (FY{p['ev_year']})" if p.get("ev_year") else "")
+                      + (f" (FY{p['ev_year']}" if p.get("ev_year") else " (")
+                      + f"{', ' if p.get('ev_year') else ''}{tag.get(p.get('source_kind'), '?')})"
                       for p in ev["peers"])
     return {
         "n": 0, "judul": f"Target harga: EV/EBITDA peer x EBITDA {label}", "tipe": "tabel",
         "data": {"cols": ["EV/EBITDA peer", "Kelipatan", "EV", "Nilai per saham",
                           "Terhadap harga"], "rows": rows},
         "catatan_sumber": (
-            "Sumber: EV/EBITDA FY terakhir tiap peer dari data Sectors (market cap tabel peer + "
-            f"utang - kas laporan peer): {peers}; EBITDA {label} skenario analis; kas "
+            f"Sumber: EV/EBITDA FY terakhir tiap peer dari {ev['peer_source']} (market cap tabel "
+            f"peer Sectors + utang - kas laporan peer): {peers}; EBITDA {label} skenario analis; kas "
             f"Rp{bn(ev['cash'])} miliar ({ev.get('cash_basis') or '-'}), utang "
             f"Rp{bn(ev['debt'])} miliar ({ev.get('debt_basis') or '-'}), minoritas "
             f"Rp{bn(ev['nci'])} miliar; saham {ev.get('shares_basis') or '-'}"
@@ -3804,7 +3807,7 @@ def _build_earnings_led(intake, fc, va, g1, method="auto"):
         f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai EV/EBITDA peer forward, metode "
         f"untuk aset yang masih ramping atau riwayat singkat (Gate 3): EV/EBITDA median "
         f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} (FY terakhir tiap "
-        f"peer, data Sectors) atas EBITDA {label} Rp{bn(ev_s['ebitda_idr'])} miliar (aktual 1H "
+        f"peer, {ev_s['peer_source']}) atas EBITDA {label} Rp{bn(ev_s['ebitda_idr'])} miliar (aktual 1H "
         f"resmi dan margin EBITDA asumsi agen) memberi EV Rp{bn(ev_s['ev'])} miliar; ditambah "
         f"kas Rp{bn(ev_s['cash'])} miliar, dikurangi utang Rp{bn(ev_s['debt'])} miliar dan "
         f"minoritas, ekuitas Rp{bn(ev_s['equity'])} miliar per {ev_s['valuation_date']}. "

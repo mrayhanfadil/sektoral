@@ -384,7 +384,8 @@ def test_unreadable_peer_report_keeps_the_peer_row(monkeypatch):
 
 
 def test_ev_ebitda_peer_labels_sectors_peers_and_the_real_bridge_source():
-    peers = [{"ev_ebitda": v, "ev_status": "ok"} for v in (6.0, 8.0, 10.0)]
+    peers = [{"ev_ebitda": v, "ev_status": "ok", "ev_source_kind": "sectors"}
+             for v in (6.0, 8.0, 10.0)]
     c = MC.ev_ebitda_peer(peers, ebitda_fwd=100.0, shares=10.0, market_cap=700.0,
                           net_debt=50.0, net_debt_source="data Sectors FY2025")
     assert c["status"] == "sufficient"
@@ -392,7 +393,7 @@ def test_ev_ebitda_peer_labels_sectors_peers_and_the_real_bridge_source():
     assert any("peer dari data Sectors" in label for label in c["labels"])
     assert "bridge net debt dari data Sectors FY2025" in c["labels"]
     assert not any("neraca resmi" in label for label in c["labels"])
-    assert c["detail"]["peer_source"] == "Sectors"
+    assert c["detail"]["peer_source"] == "data Sectors"
     official = MC.ev_ebitda_peer(peers, 100.0, 10.0, 700.0, 50.0, net_debt_source="neraca resmi")
     assert "bridge net debt dari neraca resmi" in official["labels"]
 
@@ -401,7 +402,7 @@ def test_ev_ebitda_peer_names_uncached_peer_reports():
     peers = [{"ev_status": "report_not_cached"}] * 8 + [{"ev_status": "ok", "ev_ebitda": 9.0}]
     c = MC.ev_ebitda_peer(peers, 100.0, 10.0, 700.0)
     assert c["status"] == "insufficient"
-    assert "(1 < 3; laporan Sectors 8/9 peer belum di-cache)" in c["reasons"][0]
+    assert "(1 < 3; laporan Sectors atau snapshot Yahoo 8/9 peer belum tersedia)" in c["reasons"][0]
     assert MC.reader_reason(c["reasons"][0]) == "peer EV/EBITDA belum tersedia di cache"
 
 
@@ -413,8 +414,9 @@ _RAMPING_STAGE = {"stage_classification": {
     "source_ids": ["official"]}}
 
 
-def test_inet_and_gmfi_ramping_stage_moves_the_chain_off_dcf():
-    from app import forecast, intake, valuation
+def test_inet_and_gmfi_ramping_stage_moves_the_chain_off_dcf(tmp_path, monkeypatch):
+    from app import forecast, intake, peer_fundamentals, valuation
+    monkeypatch.setattr(peer_fundamentals, "STORE_DIR", tmp_path / "none")
     for ticker in ("INET", "GMFI"):
         doc_in, _ = intake.load(ticker, as_of="2026-09-24")
         fc = forecast.build(doc_in)
@@ -428,10 +430,11 @@ def test_inet_and_gmfi_ramping_stage_moves_the_chain_off_dcf():
         assert chain["verdict_order"] == ["ev_ebitda_peer", "pe_fy_scenario"]
         first = chain["trace"][0]
         assert first["key"] == "ev_ebitda_peer" and first["status"] == "insufficient"
-        # No peer of either issuer has a cached Sectors company report yet.
+        # No peer of either issuer has a cached Sectors company report, and
+        # without a Yahoo snapshot store the multiple stays unavailable.
         peers = doc_in["peers"]
         assert peers and all(p["ev_status"] == "report_not_cached" for p in peers)
-        assert f"{len(peers)}/{len(peers)} peer belum di-cache" in first["reasons"][0]
+        assert f"{len(peers)}/{len(peers)} peer belum tersedia" in first["reasons"][0]
 
 
 def test_ramping_going_concern_publishes_on_forward_ev_ebitda_peer(tmp_path, monkeypatch):
@@ -442,7 +445,8 @@ def test_ramping_going_concern_publishes_on_forward_ev_ebitda_peer(tmp_path, mon
     from app import build, intake as I
     multiples = itertools.cycle([6.0, 7.0, 8.0, 9.0, 10.0])
     monkeypatch.setattr(I, "_peer_ev", lambda symbol, mcap: {
-        "ev_ebitda": next(multiples), "ev_status": "ok", "ev_year": 2025})
+        "ev_ebitda": next(multiples), "ev_status": "ok", "ev_year": 2025,
+        "ev_source_kind": "sectors"})
     doc_in, _ = I.load("JPFA", as_of="2026-09-24")
     actual = doc_in["latest_official_actual"]
     metrics = actual["metrics"]
@@ -492,3 +496,82 @@ def test_ramping_going_concern_publishes_on_forward_ev_ebitda_peer(tmp_path, mon
     assert "EV/EBITDA peer forward" in cover["isi"] and "PER median" not in cover["isi"]
     page = next(p for p in doc["bagian"] if p["judul"] == "Target harga berbasis EV/EBITDA peer")
     assert page["exhibit"][1]["judul"] == "Target harga: EV/EBITDA peer x EBITDA FY26F"
+
+
+# ------------------------------------------- Yahoo Finance peer fallback
+
+class _Frame:
+    """Minimal stand-in for the pandas frames yfinance returns."""
+    def __init__(self, rows, columns):
+        self.index, self.columns, self._rows = list(rows), list(columns), rows
+        self.empty = not rows
+
+    class _Loc:
+        def __init__(self, frame):
+            self.frame = frame
+
+        def __getitem__(self, key):
+            row, column = key
+            return self.frame._rows[row][self.frame.columns.index(column)]
+    loc = property(_Loc)
+
+
+class _FakeTicker:
+    def __init__(self, symbol):
+        self.symbol = symbol
+        cols = ["2025-12-31", "2024-12-31"]
+        self.balance_sheet = _Frame({"Total Debt": [None, 300.0],
+                                     "Cash And Cash Equivalents": [50.0, 100.0]}, cols)
+        self.income_stmt = _Frame({"EBITDA": [130.0, 120.0], "Total Revenue": [900.0, 800.0]},
+                                  cols)
+        self.info = {"financialCurrency": "IDR", "marketCap": 5000.0}
+
+
+def test_yahoo_snapshot_takes_the_latest_year_with_debt_cash_and_ebitda_together(tmp_path):
+    from app import peer_fundamentals as PF
+    data = PF.fetch("MORA", ticker_factory=_FakeTicker)
+    # FY2025 lacks debt, so FY2024 is used for every field; no mixing of years.
+    assert data["fiscal_year"] == 2024 and data["period_end"] == "2024-12-31"
+    assert (data["total_debt"], data["cash_and_equivalents"], data["ebitda"]) == (300.0, 100.0, 120.0)
+    assert data["source"] == "Yahoo Finance MORA.JK annual statements FY2024"
+    assert data["symbol"] == "MORA" and data["currency"] == "IDR"
+    result = PF.refresh(["MORA", "BAD"], store_dir=tmp_path, pause=0,
+                        fetcher=lambda s: PF.fetch(s, _FakeTicker) if s == "MORA" else 1 / 0)
+    assert list(result["stored"]) == ["MORA"] and "BAD" in result["failed"]
+    assert PF.load("MORA.JK", store_dir=tmp_path)["ebitda"] == 120.0
+    # A snapshot that does not carry Yahoo provenance is never read.
+    (tmp_path / "XXX.json").write_text('{"source": "Sectors", "total_debt": 1, '
+                                       '"cash_and_equivalents": 1, "ebitda": 1, "fiscal_year": 2025}')
+    assert PF.load("XXX", store_dir=tmp_path) is None
+
+
+def test_peer_ev_falls_back_to_a_yahoo_snapshot_and_says_so(tmp_path, monkeypatch):
+    from app import cache, intake as I, peer_fundamentals as PF
+    monkeypatch.setattr(cache, "company_report", lambda t: None)
+    monkeypatch.setattr(PF, "STORE_DIR", tmp_path)
+    PF.refresh(["MORA"], store_dir=tmp_path, pause=0,
+               fetcher=lambda s: PF.fetch(s, _FakeTicker))
+    row = I._peer_ev("MORA.JK", 1000.0)
+    assert row["ev_source_kind"] == "yahoo" and row["ev_status"] == "ok"
+    assert row["ev"] == 1000.0 + 300.0 - 100.0 and row["ev_ebitda"] == 1200.0 / 120.0
+    assert row["ev_year"] == 2024
+    assert "Yahoo Finance MORA.JK" in row["ev_source"] and not row["ev_source"].startswith("Sectors")
+    assert I._peer_ev("NONE.JK", 1000.0) == {"ev_status": "report_not_cached"}
+    usd = dict(PF.load("MORA", store_dir=tmp_path), currency="USD", symbol="USDX")
+    (tmp_path / "USDX.json").write_text(__import__("json").dumps(usd))
+    assert I._peer_ev("USDX", 1000.0)["ev_status"] == "currency_mismatch"
+
+
+def test_peer_ev_source_wording_never_calls_yahoo_data_sectors():
+    sectors = {"ev_ebitda": 6.0, "ev_source_kind": "sectors"}
+    yahoo = {"ev_ebitda": 8.0, "ev_source_kind": "yahoo"}
+    unknown = {"ev_ebitda": 9.0}
+    assert MC.peer_ev_sources([sectors, sectors]) == "data Sectors"
+    assert MC.peer_ev_sources([yahoo]) == "Yahoo Finance"
+    assert MC.peer_ev_sources([sectors, yahoo]) == "data Sectors dan Yahoo Finance"
+    assert MC.peer_ev_sources([unknown]) == "sumber tidak tercatat"
+    assert MC.peer_ev_sources([{"ev_status": "report_not_cached"}]) == "tanpa peer"
+    c = MC.ev_ebitda_peer([yahoo, yahoo, yahoo], 100.0, 10.0, 700.0)
+    assert c["detail"]["peer_source"] == "Yahoo Finance"
+    assert any("peer dari Yahoo Finance" in label for label in c["labels"])
+    assert not any("dari data Sectors" in label for label in c["labels"])

@@ -12,6 +12,14 @@ Export of ONLY the `sectors_cache` table from
   `python3 -m app.topup <paket> <target> --live` (butuh SECTORS_API_KEY,
   tercatat di `data/credit_log.jsonl`). Tanpa itu, upstream tidak tersentuh.
 
+## Peer fundamentals from Yahoo Finance (`data/yahoo_fundamentals/`, gitignored)
+
+Peer EV/EBITDA needs each peer's debt, cash and EBITDA. When a peer's own
+`/company/report/<peer>/` is not in the cache, the model reads a dated Yahoo
+Finance snapshot instead (`python3 -m app.peer_fundamentals --peers-of INET`).
+Those rows stay labelled Yahoo Finance in every exhibit and note; they are
+never written into `sectors_cache.db` and never called Sectors data.
+
 ## Use
 
 ```bash
