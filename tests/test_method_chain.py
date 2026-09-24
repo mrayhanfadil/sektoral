@@ -331,6 +331,7 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path, monkeypa
     assert risk_page["risks"] == doc["risks"] and risk_page["risks_after"] == 1
     labels = [row[0] for row in key_fin["data"]["rows"]]
     assert labels.count("EPS (Rp)") == 1 and labels.count("PER (x)") == 1
+    assert labels.index("Pertumbuhan EPS (%)") == labels.index("EPS (Rp)") + 1
     assert not any(all(cell in ("-", "NA") for cell in row[1:])
                    for row in key_fin["data"]["rows"])
     fy27 = key_fin["data"]["cols"].index("FY27F")
