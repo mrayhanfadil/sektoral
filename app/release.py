@@ -698,8 +698,65 @@ def assess_holding_sotp(intake, forecast, valuation, assumption_status):
     }
 
 
+_LOM_ASSUMPTIONS = ("discount_rate_usd", "elang_risk_factor", "elang_development_capex_usd",
+                    "elang_sustaining_capex_usd_per_year", "stockpile_rehandle_usd_per_t",
+                    "stockpile_phase_sustaining_share")
+
+
+def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
+    """Mining primary SOTP/LoM built on the physical chain (spec §4.1, §4.5).
+
+    Replaces the production gate's 'verified physical-driver forecast' with
+    the evidence the LoM actually uses: the official interim, every operating
+    bridge stage sourced, a complete SOTP bridge, a fresh close and dated FX,
+    and each undisclosed input as a labelled, sourced analyst assumption.
+    """
+    blockers = []
+    if (intake or {}).get("model_profile") != "finite_life_mining":
+        blockers.append("SOTP/LoM on the physical chain is the mining primary method")
+    blockers.extend(_check_latest_interim_actuals(intake))
+    if assumption_status != "validated":
+        blockers.append("forecast agent scenario has not passed validation")
+    detail = (valuation or {}).get("detail") or {}
+    blockers.extend(_check_operating_bridge({"operating_bridge": detail.get("operating_bridge")}))
+    blockers.extend(_check_sotp(detail.get("sotp"), intake))
+    actual = (intake or {}).get("latest_official_actual") or {}
+    blockers.extend(_fresh_close_blockers(intake, _date(actual.get("published_at"))))
+    fx = (intake or {}).get("fx_spot") or {}
+    fx_day, report_day = _date(fx.get("date")), _date((intake or {}).get("as_of"))
+    if (not report_day or not fx_day or fx_day > report_day or (report_day - fx_day).days > 7
+            or not _number(fx.get("rate")) or fx["rate"] <= 0):
+        blockers.append("fresh sourced USD/IDR quote is required")
+    lom = ((intake or {}).get("analyst_scenario") or {}).get("lom_assumptions") or {}
+    missing = [key for key in _LOM_ASSUMPTIONS if lom.get(key) in (None, {}, "")]
+    if missing:
+        blockers.append("LoM analyst assumptions missing: " + ", ".join(missing))
+    if not (_verified_source_reference(lom.get("broker_source_url"))
+            and _source_date(lom.get("broker_source_date"))):
+        blockers.append("LoM analyst assumptions need a dated, traceable source")
+    elif (_source_date((intake or {}).get("as_of"))
+          and lom["broker_source_date"] > str(intake["as_of"])[:10]):
+        blockers.append("LoM analyst assumption source is dated after the report")
+    if detail.get("gaps"):
+        blockers.append("LoM inputs missing: " + ", ".join(detail["gaps"]))
+    return {
+        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "method": "SOTP/LoM (asset NAV, no perpetual terminal)",
+        "blockers": blockers,
+        "limitations": [
+            "harga rata-rata 12 bulan data Sectors dianggap datar sepanjang umur tambang; "
+            "harga cadangan JORC emiten ditampilkan sebagai sensitivitas",
+            "capex dan jadwal Elang tidak diungkapkan emiten; capex dari riset broker dan "
+            "faktor risiko 50% adalah asumsi analis",
+            "logam di atas kapasitas smelter dijual sebagai konsentrat dengan asumsi izin "
+            "ekspor diperpanjang",
+            "cadangan Elang sesudah 2050 dan modal kerja tidak dinilai"],
+    }
+
+
 SCENARIO_ASSESSORS = {"ddm": assess_ddm_scenario, "fcff_dcf": assess_fcff_scenario,
-                      "dcf_reference": assess_fcff_scenario}
+                      "dcf_reference": assess_fcff_scenario,
+                      "sotp_lom": assess_sotp_lom_scenario}
 
 
 ASSET_HEAVY_SHARE = 0.5

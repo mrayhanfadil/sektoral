@@ -94,6 +94,9 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
         isinstance(assumption_release, dict) and (
             (profile == "finite_life_mining" and
              assumption_release.get("method") == "FY26F EV/EBITDA 8x") or
+            (profile == "finite_life_mining" and selected_method == "sotp_lom" and
+             _earnings_gate_passes(intake, forecast, valuation, assumption_status,
+                                   "sotp_lom")) or
             (profile in ("going_concern_fcff", "financial_ddm") and
              selected_method in ("pe_fy_scenario", "pbv_roe_fy", "pbv_book", "ddm",
                                  "fcff_dcf", "dcf_reference", "holding_sotp") and

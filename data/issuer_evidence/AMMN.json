@@ -1773,6 +1773,30 @@
       }
     ],
     "checked_at": "2026-09-24",
-    "valuation_consequence": "Tanpa capex dan jadwal produksi, NAV Elang tidak dapat dihitung secara risk-adjusted; SOTP/LoM tetap tidak lengkap."
+    "valuation_consequence": "Tanpa capex dan jadwal produksi, NAV Elang tidak dapat dihitung secara risk-adjusted; SOTP/LoM tetap tidak lengkap.",
+    "mining_until_at_least": 2050,
+    "mining_until_source": {
+      "source_title": "AMMAN 2025 Annual Report",
+      "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NTEzNywicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--8894e69222f3c75d05cccfe4d7b692e23e5b362a/Annual%20Report%202025%20-%20PT%20Amman%20Mineral%20Internasional%20Tbk.pdf?disposition=inline",
+      "source_page": "PDF 94",
+      "fact": "Penambangan Elang dimulai sesudah umur tambang Batu Hijau dan berlanjut hingga sekurangnya 2050."
+    }
+  },
+  "processing_plant": {
+    "design_input_mtpa": 85,
+    "fact": "Pabrik konsentrator yang diperluas berkapasitas input desain 85 juta ton per tahun; mekanikal selesai Q2 2026 dan bijih pertama masuk pabrik baru pertengahan Agustus 2026. Laporan Tahunan 2025 sebelumnya menyebut rentang 85-90 juta ton per tahun.",
+    "source_title": "AMMAN H1 2026 Earnings Presentation",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+    "source_page": 10,
+    "source_date": "2026-09-21"
+  },
+  "smelter_utilization": {
+    "period": "June 2026",
+    "production_rate_pct": 93,
+    "fact": "Tingkat produksi smelter Juni 2026 93%; smelter dan PMR lulus Performance Guarantee Test.",
+    "source_title": "AMMAN H1 2026 Earnings Presentation",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+    "source_page": 12,
+    "source_date": "2026-09-21"
   }
 }
