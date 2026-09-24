@@ -1,5 +1,6 @@
 """TAHAP 2: FORECAST ENGINE (GATE 2). Generik, berbasis driver, tiga tahun."""
 from . import fmt
+from . import scrub
 from . import rnav
 
 
@@ -127,7 +128,8 @@ def build(intake, n_years=5, assumption_plan=None):
     for i in range(1, len(gs)):
         if gs[i] >= gs[i - 1]:
             gs[i] = round(gs[i - 1] - 0.5, 1)
-    normalized_plan = dict(assumption_plan or {})
+    # Plans cached before a style rule existed are cleaned the same way.
+    normalized_plan = dict(scrub.normalize_plan(assumption_plan or {}))
     if isinstance(normalized_plan.get("interim_scenario"), dict):
         interim_plan = dict(normalized_plan["interim_scenario"])
         scenario_profile = intake.get("analyst_scenario") or {}
@@ -312,7 +314,7 @@ def build(intake, n_years=5, assumption_plan=None):
             "interim_scenario": interim_scenario,
             "earnings_scenario": earnings_scenario,
             "outyear_scenario": _outyear_scenario(
-                interim_scenario if is_mining else earnings_scenario, assumption_plan),
+                interim_scenario if is_mining else earnings_scenario, normalized_plan),
             "operating_bridge": operating_bridge,
             "driver_evidence": driver_evidence,
             "forecast_basis": forecast_basis,
