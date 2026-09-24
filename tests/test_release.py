@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app.release import OPERATING_BRIDGE_STAGES, assess_release  # noqa: E402
+from app.release import OPERATING_BRIDGE_STAGES, _verified_source_reference, assess_release  # noqa: E402
 from app.sotp import calculate_sotp  # noqa: E402
 
 
@@ -305,6 +305,12 @@ def test_unknown_profile_fails_closed():
 
     assert result["status"] == "draft_non_distributable"
     assert result["blockers"] == ["unsupported model profile: unknown"]
+
+
+def test_official_document_title_with_https_url_is_verified_provenance():
+    assert _verified_source_reference(
+        "AMMAN H1 2026 Earnings Release, p. 7 https://www.amman.co.id/earnings-release")
+    assert not _verified_source_reference("AMMAN H1 2026 Earnings Release, p. 7")
 
 
 def test_source_bridge_cannot_pass_without_physical_forecast_engine():

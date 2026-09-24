@@ -48,7 +48,7 @@ def test_ammn_end_to_end(tmp_path):
 def test_ammn_report_date_includes_published_interim_without_releasing_target(tmp_path):
     doc = B.build("AMMN", tmp_path, as_of="2026-09-23")
     assert doc["meta"]["tanggal"] == "2026-09-23"
-    assert doc["meta"]["harga_tanggal"] == "2026-09-11"
+    assert doc["meta"]["harga_tanggal"] == "2026-09-23"
     assert doc["meta"]["status"] == "draft_non_distributable"
     assert "tp" not in doc["meta"]
     titles = {item["judul"] for item in doc["exhibits"]}

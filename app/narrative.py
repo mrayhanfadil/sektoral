@@ -1,5 +1,8 @@
 """TAHAP 4: NARASI & LAYOUT. Prosa templat deterministik dari angka model."""
 import re
+import json
+from datetime import date, timedelta
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import cache as cache_mod
@@ -12,6 +15,243 @@ from . import valtables
 from . import valuation as valuation_mod
 
 MAX_PARA = 150
+
+
+def _market_rail(intake):
+    """Build dated ADTV and public-ownership context from available local data."""
+    ticker = str(intake.get("ticker") or "").upper()
+    price_date = str(intake.get("price_date") or intake.get("as_of") or "")[:10]
+    points = {}
+    for _, payload in cache_mod.payloads(f"/daily/{ticker}/"):
+        for row in (payload.get("data") or []):
+            day = str(row.get("date") or "")[:10]
+            if (day and (not price_date or day <= price_date) and
+                    row.get("close") is not None and row.get("volume") is not None):
+                points[day] = float(row["close"]) * float(row["volume"])
+    # A sourced daily sidecar can be newer than the API cache. Overlay it by
+    # date so the report uses the latest observation available at its cutoff.
+    source = "sectors_cache"
+    sidecar = Path(__file__).resolve().parent.parent / "data" / "market_history" / f"{ticker}.json"
+    try:
+        with sidecar.open(encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        payload = None
+    if isinstance(payload, dict):
+        for row in (payload.get("observations") or []):
+            day = str(row.get("date") or "")[:10]
+            if (day and (not price_date or day <= price_date) and
+                    row.get("close") is not None and row.get("volume") is not None):
+                points[day] = float(row["close"]) * float(row["volume"])
+                source = str(payload.get("source_title") or "sourced market history sidecar")
+    adtv, adtv_end, adtv_count = None, None, 0
+    if points:
+        adtv_end = max(points)
+        start = (date.fromisoformat(adtv_end) - timedelta(days=90)).isoformat()
+        vals = [value for day, value in points.items() if start <= day <= adtv_end]
+        if vals:
+            adtv, adtv_count = sum(vals) / len(vals), len(vals)
+    holders = intake.get("major_holders") or []
+    public = next((h for h in holders
+                   if str(h.get("name") or "").strip().lower() in ("public", "masyarakat")), None)
+    public_ownership = None
+    if public and public.get("share_percentage") is not None:
+        try:
+            public_ownership = float(public["share_percentage"])
+            if public_ownership > 1:
+                public_ownership /= 100
+        except (TypeError, ValueError):
+            pass
+    return {"adtv": adtv, "adtv_end": adtv_end, "adtv_count": adtv_count,
+            "adtv_source": source if adtv is not None else None,
+            "public_ownership": public_ownership}
+
+
+def _product_key(name):
+    text = str(name or "").lower()
+    if "konsentrat" in text or "concentrate" in text:
+        return "concentrate"
+    if "katoda" in text and "tembaga" in text:
+        return "cathode_copper"
+    if "emas murni" in text:
+        return "refined_gold"
+    if "emas" in text:
+        return "gold"
+    if "tembaga" in text or "copper" in text:
+        return "copper"
+    return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+
+
+def _mining_sales_bridge(intake, scenario):
+    """Return an explicit, assumption-led product sales/revenue reconciliation."""
+    evidence = intake.get("official_evidence") or {}
+    actual = evidence.get("latest_actual") or {}
+    q2 = (evidence.get("quarterly_actuals") or {}).get("q2_2026_derived") or {}
+    sales = evidence.get("sales_production_bridge") or []
+    revenues = (evidence.get("revenue_breakdown") or {}).get("segments") or []
+    guidance = evidence.get("management_guidance") or []
+    analyst = intake.get("analyst_scenario") or {}
+    top_down_projection = analyst.get("top_down_projection") or {}
+    if not scenario and top_down_projection.get("h2_revenue_usd") is not None:
+        scenario = {"h2": {"revenue": top_down_projection["h2_revenue_usd"]}}
+    sales_assumptions = {row.get("product_key"): row for row in
+                         (analyst.get("product_sales") or [])}
+    q2_by_key = {row.get("product_key"): row for row in
+                 (q2.get("sales_production_bridge") or [])}
+    market_refs = {row.get("product_key"): row for row in
+                   (analyst.get("market_references") or [])}
+    if not actual or not sales or not revenues or not scenario:
+        return None
+
+    by_key = {_product_key(row.get("name")): row for row in revenues}
+    details = []
+    for product in sales:
+        key = _product_key(product.get("product"))
+        revenue_row = by_key.get(key)
+        if not revenue_row:
+            continue
+        h1_sold = product.get("sales")
+        h1_production = product.get("production")
+        h1_revenue = revenue_row.get("current")
+        if not all(isinstance(x, (int, float)) and x > 0 for x in
+                   (h1_sold, h1_production, h1_revenue)):
+            continue
+        unit_value = h1_revenue / h1_sold
+        h2_price_basis = "H1 net realized price; carried forward as analyst assumption"
+        price_components = []
+        metal_prices = product.get("net_realized_prices") or {}
+        metal_sales = product.get("metal_sales") or {}
+        if key == "concentrate" and metal_prices and metal_sales:
+            cu_sold_lbs = float(metal_sales.get("copper_mlbs") or 0) * 1e6
+            au_sold_oz = float(metal_sales.get("gold_oz") or 0)
+            cu_price = float(metal_prices.get("copper_usd_per_lb") or 0)
+            au_price = float(metal_prices.get("gold_usd_per_oz") or 0)
+            modeled_revenue = cu_sold_lbs * cu_price + au_sold_oz * au_price
+            if all(value > 0 for value in (cu_sold_lbs, au_sold_oz, cu_price, au_price)):
+                unit_value = modeled_revenue / h1_sold
+                price_components = [
+                    {"product": "Tembaga dalam konsentrat", "h1_sold": cu_sold_lbs,
+                     "unit": "lb", "h1_price": cu_price},
+                    {"product": "Emas dalam konsentrat", "h1_sold": au_sold_oz,
+                     "unit": "oz", "h1_price": au_price},
+                ]
+        elif isinstance(product.get("net_realized_price"), dict):
+            unit_value = float(product["net_realized_price"].get("value") or unit_value)
+            q2_price = (q2_by_key.get(key) or {}).get("implied_net_realized_price")
+            if isinstance(q2_price, dict) and isinstance(q2_price.get("value"), (int, float)):
+                unit_value = float(q2_price["value"])
+                h2_price_basis = "Q2 implied net realized price; analyst carry-forward assumption"
+        h2_sales = None
+        basis = ""
+        h2_production = None
+        def guidance_unit_matches(candidate):
+            name = str(candidate.get("name") or "").lower()
+            unit = str(product.get("unit") or "").lower()
+            return ((unit == "ton" and "(kt)" in name) or
+                    (unit == "oz" and "(koz)" in name) or
+                    (unit == "dmt" and "(dmt)" in name) or
+                    (unit not in ("ton", "oz", "dmt") and
+                     _product_key(candidate.get("name")) == key))
+        guide = next((g for g in guidance
+                      if _product_key(g.get("name")) == key and
+                      guidance_unit_matches(g)), None)
+        if guide:
+            guide_value = float(guide["value"])
+            guide_name = str(guide.get("name") or "").lower()
+            if "kt" in guide_name:
+                guide_value *= 1000
+            elif "koz" in guide_name:
+                guide_value *= 1000
+            h2_production = max(0.0, guide_value - h1_production)
+            basis = "sisa guidance produksi FY; volume penjualan diproyeksikan terpisah"
+        if key in sales_assumptions:
+            assumption = sales_assumptions[key]
+            factor = assumption.get("h2_sales_to_h1")
+            if isinstance(factor, (int, float)) and factor >= 0:
+                h2_sales = h1_sold * factor
+                basis = str(assumption.get("basis") or "asumsi analis")
+        elif h2_production is not None:
+            q2_product = q2_by_key.get(key) or {}
+            q2_production, q2_sold = q2_product.get("production"), q2_product.get("sales")
+            sellthrough = (q2_sold / q2_production
+                           if isinstance(q2_sold, (int, float)) and q2_production else
+                           h1_sold / h1_production)
+            h2_sales = h2_production * sellthrough
+            basis = ("sisa guidance produksi FY × rasio penjualan/produksi Q2; Q2 diturunkan dari H1−Q1 (asumsi analis)"
+                     if q2_product else
+                     "sisa guidance produksi FY × rasio penjualan/produksi H1 (asumsi analis)")
+        if h2_sales is None:
+            continue
+        for component in price_components:
+            component["h2_sold"] = component["h1_sold"] * h2_sales / h1_sold
+            component["h2_revenue"] = component["h2_sold"] * component["h1_price"]
+        details.append({"key": key, "label": product["product"],
+                        "unit": product.get("unit") or "unit",
+                        "h1_sold": h1_sold, "h1_production": h1_production,
+                        "h1_revenue": h1_revenue, "unit_value": unit_value,
+                        "h2_production": h2_production, "h2_sales": h2_sales,
+                        "h2_revenue": (sum(c["h2_revenue"] for c in price_components)
+                                       if price_components else h2_sales * unit_value),
+                        "price_components": price_components, "basis": basis,
+                        "h2_price_basis": h2_price_basis,
+                        "net_realized_price": product.get("net_realized_price"),
+                        "market_ref": market_refs.get(
+                            "copper" if key == "cathode_copper" else
+                            "gold" if key == "refined_gold" else key)})
+    if not details:
+        return None
+    product_order = {_product_key(row.get("name")): index
+                     for index, row in enumerate(revenues)}
+    details.sort(key=lambda row: product_order.get(row["key"], 1e9))
+    h2_topdown = (scenario.get("h2") or {}).get("revenue")
+    base_sum = sum(row["h2_revenue"] for row in details)
+    residual = h2_topdown - base_sum if isinstance(h2_topdown, (int, float)) else None
+    gold = next((row for row in details if row["key"] == "refined_gold"), None)
+    gold_required = (gold["h2_sales"] + residual / gold["unit_value"]
+                     if gold and residual is not None else None)
+    return {"rows": details, "h2_topdown": h2_topdown, "base_sum": base_sum,
+            "residual": residual, "gold_required": gold_required,
+            "gold_required_sellthrough": (
+                gold_required / gold["h2_production"]
+                if gold and gold_required is not None and gold["h2_production"] else None)}
+
+
+def _volume_text(value, unit):
+    if value is None:
+        return "-"
+    if unit == "ton":
+        return f"{fmt._id(value / 1000, 1)} kt"
+    if unit == "oz":
+        return f"{fmt._id(value / 1000, 1)} koz"
+    if unit == "dmt":
+        return f"{fmt._id(value / 1000, 1)} kdmt"
+    return f"{fmt._id(value, 1)} {unit}"
+
+
+def _market_price_unit(unit):
+    text = str(unit or "").lower()
+    if "tonne" in text or text.endswith("/ton"):
+        return "ton"
+    if text.endswith("/oz"):
+        return "oz"
+    return str(unit or "unit")
+
+
+def _replace_interest_causality(text, net_margin_pct):
+    safe = (f"Net margin H2 {fmt.pct(net_margin_pct / 100)} adalah asumsi analis; "
+            "pajak dan jadwal bunga belum dijembatani.")
+    sentences = re.split(r"(?<=[.!?])\s+", str(text or ""))
+    out = []
+    replaced = False
+    for sentence in sentences:
+        lower = sentence.lower()
+        if ("net margin" in lower and "bunga" in lower and
+                ("flat" in lower or "karena" in lower)):
+            out.append(safe)
+            replaced = True
+        else:
+            out.append(sentence)
+    return " ".join(out), replaced
 
 
 def _trim(s, cap=30):
@@ -84,6 +324,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
     ticker = intake["ticker"]
     mining = intake.get("model_profile") == "finite_life_mining"
     evidence = intake.get("official_evidence") or {}
+    market_rail = _market_rail(intake)
     actual = evidence.get("latest_actual") or {}
     annuals = evidence.get("annual_actuals") or []
     balance = evidence.get("balance_sheet") or {}
@@ -109,6 +350,10 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                                      now is not None and prior is not None and
                                      (prior < 0 or now < 0) else "-")
     exhibits = []
+    inventory_sales_section = None
+    physical_sales_section = None
+    royalty_section = None
+    capex_section = None
 
     def add(title, columns, rows, source):
         exhibits.append({"n": len(exhibits) + 1, "judul": title,
@@ -160,10 +405,10 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             ["EV/EBITDA (x)"] + total_cols_dash,
         ]
         key_note = (f"Sumber: {evidence.get('annual_source_title') or actual.get('source_title')}; "
-                    f"angka {history[0]['year']}–{history[-1]['year']} ditampilkan dalam {unit}. "
+                    f"angka {history[0]['year']}-{history[-1]['year']} ditampilkan dalam {unit}. "
                     "EPS/BVPS historis memakai laba/ekuitas pemilik induk dan jumlah "
                     f"saham per {balance.get('period_end', 'periode interim')} sebagai basis pro forma; "
-                    f"{f_labels[0]}–{f_labels[-1]} belum diterbitkan.")
+                    f"{f_labels[0]}-{f_labels[-1]} belum diterbitkan.")
     else:
         cached = intake.get("annuals") or []
         history = cached[-2:]
@@ -274,9 +519,252 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
              actual["period"], "yoy"], breakdown_rows,
             f"Sumber: {actual['source_title']}, hlm. "
             f"{revenue_breakdown['source_page']}. " +
-            ("Angka merupakan penjualan produk, bukan forecast tahunan."
+             ("Angka merupakan penjualan produk, bukan forecast tahunan."
              if mining else "Segmen dan pelanggan adalah dua pemotongan pendapatan "
              "yang berbeda; jangan dijumlahkan bersama."))
+
+    inventory_sales = evidence.get("inventory_and_sales_detail") or {}
+    if mining and inventory_sales:
+        inventory_rows = [
+            [row["name"], fmt._id(row["dec_2025"] / 1000, 1),
+             fmt._id(row["jun_2026"] / 1000, 1)]
+            for row in inventory_sales.get("inventory_and_stockpile_carrying_amounts") or []
+        ]
+        add("Nilai tercatat persediaan dan stockpiles",
+            ["Pos (US$m)", "31 Des 2025", "30 Jun 2026"], inventory_rows,
+            f"Sumber: {inventory_sales['source_title']}, hlm. "
+            f"{inventory_sales['inventory_source_page']}; {inventory_sales['source_url']}. "
+            "Ini nilai tercatat berbasis biaya, bukan jumlah fisik konsentrat siap jual. "
+            "Laporan tidak memuat roll-forward tonase persediaan konsentrat, umpan smelter, "
+            "atau produk yang menunggu penjualan. Manajemen menyatakan stockpiles dapat dipakai/dijual "
+            "dan nilai realisasi netonya melebihi nilai tercatat.")
+
+        sales_market_rows = [
+            [row["product"], fmt._id(row["domestic"] / 1000, 1),
+             fmt._id(row["export"] / 1000, 1), fmt._id(row["total"] / 1000, 1)]
+            for row in inventory_sales.get("net_sales_by_product_and_market") or []
+        ]
+        add("Penjualan H1 menurut produk dan pasar",
+            ["Produk (US$m)", "Domestik", "Ekspor", "Total"], sales_market_rows,
+            f"Sumber: {inventory_sales['source_title']}, hlm. "
+            f"{inventory_sales['sales_source_page']}; {inventory_sales['source_url']}. "
+            "Angka laporan keuangan dalam US$ ribu. Penjualan historis menurut pasar tidak "
+            "menetapkan volume, harga, atau kanal penjualan H2; volume dan harga forward kontrak "
+            "tetap belum diungkap.")
+        inventory_sales_section = {
+            "halaman": 0,
+            "judul": "Persediaan, penjualan, dan batas rekonsiliasi",
+            "layout": "stack",
+            "paragraf": [
+                "Penjualan H1 dapat ditautkan ke produk dan pasar, dan laporan memberi nilai tercatat persediaan konsentrat serta WIP smelter. Namun, nilai tersebut memakai basis biaya dan tidak menyediakan tonase fisik atau kandungan logam per tahap. Karena itu, selisih 227.228 dmt antara produksi dan penjualan konsentrat H1 belum dapat dijelaskan sebagai umpan smelter, perubahan stockpile konsentrat, atau produk yang menunggu penjualan."
+            ],
+            "exhibit": [
+                next(e for e in exhibits if e["judul"] == "Nilai tercatat persediaan dan stockpiles"),
+                next(e for e in exhibits if e["judul"] == "Penjualan H1 menurut produk dan pasar"),
+            ],
+        }
+        physical_rows = []
+        for row in evidence.get("sales_production_bridge") or []:
+            product = str(row.get("product") or "")
+            if product == "Konsentrat":
+                physical_rows.append([
+                    "Konsentrat",
+                    f"{fmt._id(row['production'], 0)} dmt",
+                    f"{fmt._id(row['sales'], 0)} dmt",
+                    f"{fmt._id(row['production'] - row['sales'], 0)} dmt",
+                ])
+                metal_production = row.get("metal_production") or {}
+                metal_sales = row.get("metal_sales") or {}
+                for key, label, unit in (
+                        ("copper_mlbs", "Tembaga terkandung dalam konsentrat", "Mlb"),
+                        ("gold_oz", "Emas terkandung dalam konsentrat", "oz")):
+                    produced, sold = metal_production.get(key), metal_sales.get(key)
+                    if isinstance(produced, (int, float)) and isinstance(sold, (int, float)):
+                        physical_rows.append([
+                            label, f"{fmt._id(produced, 0)} {unit}",
+                            f"{fmt._id(sold, 0)} {unit}",
+                            f"{fmt._id(produced - sold, 0)} {unit}",
+                        ])
+            elif product in ("Katoda tembaga", "Emas murni"):
+                produced, sold = row.get("production"), row.get("sales")
+                if isinstance(produced, (int, float)) and isinstance(sold, (int, float)):
+                    unit = str(row.get("unit") or "unit")
+                    physical_rows.append([
+                        product, f"{fmt._id(produced, 0)} {unit}",
+                        f"{fmt._id(sold, 0)} {unit}",
+                        f"{fmt._id(produced - sold, 0)} {unit}",
+                    ])
+        if physical_rows:
+            physical_exhibit = add(
+                "Delta produksi dan penjualan produk H1",
+                ["Produk/tahap", "Produksi H1", "Penjualan H1", "Produksi dikurangi penjualan"],
+                physical_rows,
+                f"Sumber: {actual['source_title']}, hlm. 3; {actual['source_url']}. "
+                "Delta adalah selisih arus produksi dan penjualan yang dilaporkan, bukan perubahan persediaan. "
+                "Konsentrat, kandungan logam konsentrat, katoda, dan emas murni berada pada tahap berbeda; "
+                "angka tidak boleh dijumlahkan lintas tahap atau diperlakukan sebagai payable metal/inventory.")
+            physical_sales_section = {
+                "halaman": 0,
+                "judul": "Produksi dan penjualan aktual H1 menurut tahap",
+                "layout": "stack",
+                "paragraf": [
+                    "Laporan memberi volume produksi dan penjualan pada beberapa tahap rantai produk. Selisih antarangka menunjukkan pekerjaan rekonsiliasi yang dibutuhkan, tetapi tidak mengungkap sendiri tonase yang masuk smelter, recovery, payable metal, stok awal/akhir, atau waktu pengapalan dan pengakuan pendapatan."
+                ],
+                "exhibit": [physical_exhibit],
+            }
+
+    royalty = evidence.get("royalty_and_export_duty") or {}
+    if mining and royalty:
+        rates = royalty.get("rates_pct_of_reference_price") or {}
+        def rate_range(rows):
+            values = []
+            for row in rows:
+                if row.get("below") is not None:
+                    band = f"<{fmt._id(row['below'], 0)}"
+                elif row.get("from_inclusive") is not None and row.get("to_exclusive") is not None:
+                    band = (f"{fmt._id(row['from_inclusive'], 0)}–"
+                            f"<{fmt._id(row['to_exclusive'], 0)}")
+                elif row.get("from_inclusive") is not None:
+                    band = f"≥{fmt._id(row['from_inclusive'], 0)}"
+                else:
+                    band = "-"
+                values.append(f"{band}: {fmt.pct(row['rate_pct'] / 100)}")
+            return "; ".join(values)
+        royalty_rows = [
+            ["HMA resmi H1 2026: tembaga (12 periode, US$/dmt)",
+             "11.790,32–13.648,27; seluruh periode masuk tier tertinggi"],
+            ["HMA resmi H1 2026: emas (12 periode, US$/oz)",
+             "4.302,37–5.135,76; seluruh periode masuk tier tertinggi"],
+            ["Tier terpilih: konsentrat Cu / katoda Cu",
+             "10% / 7% dari harga referensi"],
+            ["Tier terpilih: Au ikutan konsentrat / emas murni",
+             "16% / 16% dari harga referensi"],
+            ["Tembaga dalam konsentrat (HMA US$/t)",
+             rate_range(rates.get("copper_in_concentrate_by_hma_usd_per_tonne") or [])],
+            ["Emas ikutan dalam konsentrat (HMA US$/oz)",
+             rate_range(rates.get("gold_byproduct_in_copper_concentrate_by_hma_usd_per_oz") or [])],
+            ["Katoda tembaga (HMA US$/t)",
+             rate_range(rates.get("copper_cathode_by_hma_usd_per_tonne") or [])],
+            ["Emas murni, logam primer (HMA US$/oz)",
+             rate_range(rates.get("primary_refined_gold_by_hma_usd_per_oz") or [])],
+            ["Bea keluar ekspor konsentrat pada periode yang ditegaskan AMMAN",
+             f"{fmt.pct(royalty.get('concentrate_export_duty_pct') / 100)}"],
+            ["Beban PNBP H1 2026 (US$m)",
+             fmt._id(royalty.get("h1_2026_pnbp_expense_usd_thousand") / 1000, 1)],
+            ["Kas dibayar: royalti, pajak dan PNBP H1 2026 (US$m)",
+             fmt._id(royalty.get("h1_2026_cash_paid_royalties_taxes_pnbp_usd_thousand") / 1000, 1)],
+            ["Formula HPM konsentrat tembaga", "Cu/Au/Ag payable × (HMA − TC/RC); Kepmen 144/2026"],
+            ["Input kontrak yang belum diungkap untuk netback", "assay/payable, TC/RC, penalti, HMA per shipment, timing volume"],
+        ]
+        royalty_exhibit = add(
+            "Kerangka royalti dan bea keluar; netback belum dapat dihitung",
+            ["Jenis produk / aktual", "Tarif atau jumlah"], royalty_rows,
+            f"Tarif: {royalty.get('statutory_source_title')}, hlm. "
+            f"{', '.join(str(p) for p in royalty.get('regulation_source_pages') or [])}; "
+            f"{royalty.get('statutory_source_url')}. PNBP, duty, dan arus kas: "
+            f"{royalty.get('company_confirmation_source_title')}, hlm. "
+            f"{', '.join(str(p) for p in royalty.get('company_confirmation_source_pages') or [])}; "
+            f"{royalty.get('company_confirmation_source_url')}. Tarif royalti bertingkat menggunakan HMA, "
+            f"sementara formula HPM konsentrat berubah melalui {((royalty.get('hpm_concentrate_methodology') or {}).get('source_title'))}, "
+            f"{((royalty.get('hpm_concentrate_methodology') or {}).get('source_url'))}. Formula itu memerlukan assay Cu/Au/Ag, "
+            "payable metal, TC/RC dan periode shipment; HPM legal bukan harga realisasi kontrak AMMN. "
+            "Seri HMA resmi dua-mingguan H1 2026 berasal dari 12 lampiran keputusan ESDM (lampiran halaman 5; nomor dan URL per keputusan disimpan di evidence JSON). "
+            "Semua 12 periode memilih tier tertinggi; ini menetapkan bracket hukum, bukan tarif efektif per shipment atau netback AMMN. "
+            "Net realized H1 hanya dijelaskan net treatment/refining dan MTM. Rilis tidak "
+            "mengungkap basis HMA/HPM per shipment, volume dan dasar royalti aktual per produk, atau apakah royalty/export duty sudah tercermin "
+            "dalam harga realisasi. Baris arus kas menggabungkan royalti, pajak dan PNBP. Jangan kurangi "
+            "tarif legal sekali lagi dari net realized atau forecast sebelum tie-out tersedia.")
+        royalty_section = {
+            "halaman": 0,
+            "judul": "Royalti, bea keluar, dan netback",
+            "layout": "stack",
+            "paragraf": [
+                "HMA resmi untuk seluruh 12 periode H1 telah dipetakan dan menentukan tier maksimum PP 19/2025. Namun, HMA bukan harga shipment AMMN: assay/payable, HPM, TC/RC, volume dan dasar royalti per produk serta tie-out terhadap net realized dan kas belum diungkap. Karena itu netback H1/H2 belum tervalidasi dan tarif legal tidak dikurangkan ulang dari realized price."
+            ],
+            "exhibit": [royalty_exhibit],
+        }
+
+    capex_reference = evidence.get("historical_capex_reference") or {}
+    analyst_projection = (intake.get("analyst_scenario") or {}).get(
+        "top_down_projection") or {}
+    if mining and capex_reference:
+        capex_rows = [
+            ["FY2024 aktual emiten", fmt._id(capex_reference["fy2024"], 1), "Dilaporkan"],
+            ["FY2025 aktual emiten", fmt._id(capex_reference["fy2025"], 1), "Dilaporkan"],
+            ["FY2025: sustaining tambang Phase 8", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("phase_8_mining_sustaining"), 1), "Dilaporkan; sudah di atas skenario FY26 total"],
+            ["FY2025: smelter tembaga dan PMR", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("copper_smelter_and_precious_metal_refinery"), 1), "US$m menurut penggunaan"],
+            ["FY2025: ekspansi pabrik pengolahan", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("processing_plant_expansion"), 1), "US$m menurut penggunaan"],
+            ["FY2025: PLTGU dan fasilitas LNG", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("combined_cycle_power_plant_lng_facilities"), 1), "US$m menurut penggunaan"],
+            ["1H2025 aktual", fmt._id(capex_reference["h1_2025"], 1), "Pembanding dalam H1 release"],
+            ["1H2026 aktual", fmt._id(capex_reference["h1_2026"], 1), "Laporan interim; capex kas + additions"],
+        ]
+        if analyst_projection.get("fy2026_capex_usd") is not None:
+            scenario_capex = analyst_projection["fy2026_capex_usd"] / 1e6
+            h2_capex = scenario_capex - capex_reference["h1_2026"]
+            capex_rows.extend([
+                ["FY2026 skenario AMMN(2)", fmt._id(scenario_capex, 1), "Asumsi analis; bukan guidance emiten"],
+                ["H2 tersirat dari skenario", fmt._id(h2_capex, 1), "FY26 skenario dikurangi H1 aktual"],
+            ])
+        capex_exhibit = add(
+            "Capex historis, aktual H1, dan skenario FY26",
+            ["Periode / basis (US$m)", "Belanja modal", "Status"], capex_rows,
+            f"FY24/FY25: {capex_reference['source_title']}, hlm. "
+            f"{capex_reference['source_page']}; {capex_reference['source_url']}. "
+            f"Rincian penggunaan FY25: {(capex_reference.get('fy2025_by_use_usd_million') or {}).get('source_title')}, "
+            f"hlm. {(capex_reference.get('fy2025_by_use_usd_million') or {}).get('source_page')}; "
+            f"{(capex_reference.get('fy2025_by_use_usd_million') or {}).get('source_url')}. Annual Report membulatkan "
+            "total FY25 menjadi US$1.373bn sementara kategori penggunaan yang ditampilkan berjumlah US$1.372bn. "
+            f"H1 aktual: {actual['source_title']}, hlm. {actual.get('page')}; "
+            f"rekonsiliasi detail: {capex_reference['h1_2026_exact_source_title']}, hlm. "
+            f"{', '.join(str(p) for p in capex_reference['h1_2026_exact_source_pages'])}; "
+            f"{capex_reference['h1_2026_exact_source_url']}. Tidak ditemukan budget FY26, "
+            "jadwal capex per proyek, atau pembayaran kontrak tersisa dalam sumber resmi yang ditelaah. "
+            "Actual FY24/FY25 bukan run-rate forward; skenario FY26 tidak menjadi forecast tervalidasi.")
+        cip = capex_reference.get("construction_in_progress") or {}
+        cip_exhibit = None
+        if cip:
+            cip_rows = []
+            for item in cip.get("current") or []:
+                prior = next((row for row in cip.get("prior_by_asset_class") or []
+                              if row.get("asset_class") == item.get("asset_class")), {})
+                completion = item.get("completion_pct_range") or []
+                prior_completion = prior.get("completion_pct_range") or []
+                cip_rows.append([
+                    item.get("asset_class", "-"),
+                    fmt._id(item.get("accumulated_cost"), 1),
+                    (f"{fmt._id(completion[0], 1)}–{fmt._id(completion[1], 1)}%"
+                     if len(completion) == 2 else "-"),
+                    item.get("estimated_completion", "-"),
+                    fmt._id(prior.get("accumulated_cost"), 1),
+                    (f"{fmt._id(prior_completion[0], 1)}–{fmt._id(prior_completion[1], 1)}%"
+                     if len(prior_completion) == 2 else "-"),
+                ])
+            cip_rows.append([
+                "TOTAL konsolidasi",
+                fmt._id(cip.get("current_total"), 1), "-", "-",
+                fmt._id(cip.get("prior_total"), 1), "-",
+            ])
+            cip_exhibit = add(
+                "Konstruksi dalam pengerjaan: biaya tercatat dan rentang selesai",
+                ["Kategori aset", "Akumulasi biaya Jun-26 (US$m)",
+                 "% selesai (rentang)", "Estimasi penyelesaian", "Akumulasi biaya Des-25 (US$m)",
+                 "% selesai (rentang)"],
+                cip_rows,
+                f"Sumber: {cip.get('source_title')}, hlm. {cip.get('source_page')}; "
+                f"{cip.get('source_url')}. Akumulasi CIP adalah nilai tercatat sampai tanggal laporan, "
+                "bukan estimasi biaya tersisa, kewajiban kontrak, atau arus kas capex mendatang. "
+                "Saldo konsolidasi tidak dialokasikan per proyek; rentang persentase/jadwal mencakup aset berbeda "
+                "dan tidak menunjukkan tanggal penyelesaian per proyek. Perubahan saldo CIP tidak sama dengan capex kas "
+                "atau additions karena juga dapat mencakup kapitalisasi, transfer ke aset operasi, dan reklasifikasi.")
+        capex_section = {
+            "halaman": 0,
+            "judul": "Capex historis dan asumsi analis FY26",
+            "layout": "stack",
+            "paragraf": [
+                "Skenario capex FY26 US$390 juta menyisakan sekitar US$260 juta untuk H2 setelah aktual H1. Total FY26 skenario itu US$84 juta lebih rendah daripada US$474 juta capex sustaining Phase 8 yang dilaporkan untuk FY25, dan tidak mencakup pembanding proyek-proyek FY25 secara sebanding. Laporan interim menunjukkan CIP konsolidasi US$3.082 juta dengan estimasi selesai yang membentang hingga Q4 2027; angka tersebut adalah biaya terakumulasi, bukan biaya tersisa atau budget FY26. Karena nilai CIP tidak dirinci per proyek dan tidak ada jadwal pembayaran, asumsi capex H2 belum tervalidasi. Belum ada rekonsiliasi capex, modal kerja, bunga, pajak, dan pembayaran utang menjadi FCFF H2."
+            ],
+            "exhibit": [capex_exhibit] + ([cip_exhibit] if cip_exhibit else []),
+        }
 
     operating_metrics = evidence.get("operating_metrics") or []
     if operating_metrics and actual:
@@ -288,31 +776,341 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
               fmt._id(row["current"], row.get("decimals", 0)),
               pct_change(row["current"], row.get("prior"))]
              for row in operating_metrics],
-            f"Sumber: {actual['source_title']}, hlm. 3–4. Produksi tidak sama "
+            f"Sumber: {actual['source_title']}, hlm. 3-4. Produksi tidak sama "
             "dengan penjualan; kadar dan throughput perlu dijembatani terpisah.")
 
     guidance = evidence.get("management_guidance") or []
     if guidance and actual:
         guidance_period = evidence.get("guidance_period") or f"FY{actual['period_end'][:4]}"
+        operating_by_name = {
+            re.sub(r"\s*\([^)]*\)", "", str(row.get("name") or "")).strip().lower(): row
+            for row in operating_metrics
+        }
+        product_production_by_key = {
+            _product_key(row.get("product")): row
+            for row in (evidence.get("sales_production_bridge") or [])
+            if isinstance(row.get("production"), (int, float))
+        }
+        guidance_rows = []
+        has_prior_guidance = any(
+            isinstance(row.get("previous_value"), (int, float))
+            for row in guidance)
+        for row in guidance:
+            label = str(row.get("name") or "")
+            unit_name = label.lower()
+            base = re.sub(r"\s*\([^)]*\)", "", label).strip().lower()
+            operating = operating_by_name.get(base)
+            product_actual = product_production_by_key.get(_product_key(base))
+            if product_actual and not (
+                    str(product_actual.get("unit") or "").lower() == "dmt" and
+                    "(dmt)" in unit_name):
+                product_actual = None
+            fy_value = float(row["value"])
+            h1_value = (operating.get("current") if operating else
+                        product_actual.get("production") if product_actual else None)
+            implied_h2 = None
+            display_unit = ""
+            if "(kt)" in unit_name:
+                fy_value *= 1000
+                display_unit = "kt"
+                h1_value = h1_value / 1000 if h1_value is not None else None
+                fy_value /= 1000
+            elif "(koz)" in unit_name:
+                fy_value *= 1000
+                display_unit = "koz"
+                h1_value = h1_value / 1000 if h1_value is not None else None
+                fy_value /= 1000
+            elif "(mlbs)" in unit_name:
+                display_unit = "Mlbs"
+            else:
+                display_unit = str(row.get("unit") or "")
+            if h1_value is not None:
+                implied_h2 = fy_value - h1_value
+            guidance_row = [
+                label,
+                "-" if h1_value is None else fmt._id(h1_value, 1),
+            ]
+            if has_prior_guidance:
+                guidance_row.append(
+                    fmt._id(row["previous_value"], 1)
+                    if isinstance(row.get("previous_value"), (int, float)) else "-")
+            guidance_row.extend([
+                fmt._id(fy_value, 1),
+                "-" if implied_h2 is None else fmt._id(implied_h2, 1),
+            ])
+            guidance_rows.append(guidance_row)
+        guidance_note = (
+            f"Sumber: {actual['source_title']}, hlm. 3 dan 7. Panduan manajemen "
+            "bukan estimasi analis atau dasar target harga secara otomatis. H2 tersirat "
+            "adalah guidance FY dikurangi output H1, bukan guidance penjualan. "
+            "AMMAN menyebut utilisasi smelter dapat menggeser timing persediaan dan penjualan konsentrat "
+            "(FY 2025 Earnings Presentation, hlm. 19). Izin ekspor yang dikutip dalam laporan keuangan "
+            "interim berlaku sampai 30 April 2026 (H1 2026 Financial Statements, hlm. 123); "
+            "berita 6 Mei mengutip pejabat NTB bahwa AMNT mengajukan tambahan waktu, tetapi juru bicara AMMAN "
+            "pada 7 Mei menyatakan belum mengajukan; pada 6 Juni Kepala ESDM NTB menyebut AMNT belum berencana "
+            "mengajukan. Status resmi setelah Juni tetap belum terverifikasi, jadi sisa guidance adalah output, "
+            "bukan penjualan yang dijamin.")
+        if has_prior_guidance:
+            revised = next(row for row in guidance
+                           if isinstance(row.get("previous_value"), (int, float)))
+            guidance_note += (
+                f" Panduan FY26 {revised['name']} direvisi dari "
+                f"{fmt._id(revised['previous_value'], 0)} menjadi "
+                f"{fmt._id(revised['value'], 0)} (+{fmt._id(revised.get('revision_change_pct'), 1)}%). "
+                f"{str(revised.get('revision_reason') or '').rstrip('. ')}. "
+                f"Panduan awal: {revised.get('previous_guidance_source_title')}, hlm. "
+                f"{revised.get('previous_guidance_source_page')}; revisi: "
+                f"{revised.get('revision_source_title')}, hlm. {revised.get('revision_source_page')}.")
         add(f"Panduan produksi {guidance_period} dari manajemen",
-            ["Produk", f"{guidance_period} guidance"],
-            [[row["name"], fmt._id(row["value"], 0)] for row in guidance],
-            f"Sumber: {actual['source_title']}, hlm. 7. Panduan manajemen "
-            "bukan estimasi analis atau dasar target harga secara otomatis.")
+            (["Produk", f"{actual['period']} produksi", "Guidance awal",
+              "Guidance kini FY26", "H2 tersirat"]
+             if has_prior_guidance else
+             ["Produk", f"{actual['period']} produksi", f"{guidance_period} guidance",
+              "H2 tersirat"]),
+            guidance_rows,
+            guidance_note + " Dokumen: https://www.amman.co.id/rails/active_storage/blobs/proxy/"
+            "eyJfcmFpbHMiOnsiZGF0YSI6NDk3OCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--50df1975317d5d37d39e6c868f5b05f51f29bb1d/"
+            "FY%202025%20EARNINGS%20PRESENTATION.pdf?disposition=inline; "
+            "https://www.amman.co.id/rails/active_storage/blobs/proxy/"
+            "eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/"
+            "H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline.")
+
+    cost_actuals = evidence.get("cost_actuals") or {}
+    if mining and cost_actuals:
+        cost_rows = [
+            ["Biaya penambangan", fmt._id(cost_actuals["prior_unit_mining_cost_usd_per_tonne"], 2),
+             fmt._id(cost_actuals["unit_mining_cost_usd_per_tonne"], 2),
+             fmt._id(cost_actuals.get("fy2025_unit_mining_cost_usd_per_tonne"), 2),
+             "US$/ton; FY25 kolom tahunan"],
+            ["Biaya pengolahan", fmt._id(cost_actuals["prior_unit_processing_cost_usd_per_tonne"], 2),
+             fmt._id(cost_actuals["unit_processing_cost_usd_per_tonne"], 2), "-",
+             "US$/ton bijih"],
+            ["Biaya smelting dan refining", fmt._id(cost_actuals["prior_smelting_refining_cost_usd_per_cathode_tonne"], 0),
+             fmt._id(cost_actuals["smelting_refining_cost_usd_per_cathode_tonne"], 0), "-",
+             "US$/ton katoda"],
+        ]
+        debt_outlook = evidence.get("debt_outlook") or {}
+        actual_q3_repayment = debt_outlook.get("actual_q3_debt_repayment_usd")
+        planned_q3_repayment = debt_outlook.get("planned_q3_debt_repayment_usd")
+        if actual_q3_repayment:
+            cost_rows.append(["Pelunasan utang Q3 (dilaporkan aktual)", "-",
+                              fmt._id(actual_q3_repayment / 1e6, 0),
+                              "-", "US$ juta; presentasi manajemen, 21 Sep 2026"])
+        elif planned_q3_repayment:
+            cost_rows.append(["Rencana pelunasan utang Q3", "-",
+                              fmt._id(planned_q3_repayment / 1e6, 0),
+                              "-", "US$ juta; outlook, belum aktual"])
+        add("Biaya unit historis dan pelunasan utang Q3",
+            ["Metrik", "1H25", "1H26 / Q3 actual", "FY25 tahunan", "Satuan / basis"], cost_rows,
+            f"Sumber: {cost_actuals['source_title']}, hlm. {cost_actuals['source_page']}; "
+            f"{cost_actuals['source_url']}. FY25 unit mining cost: "
+            f"{cost_actuals.get('fy2025_cost_context_source_title')}, hlm. "
+            f"{cost_actuals.get('fy2025_cost_context_source_page')}; "
+            f"{cost_actuals.get('fy2025_cost_context_source_url')}. Basis/periode FY25 dan H1 tidak dinormalisasi; angka historis tidak menjadi jadwal biaya FY26. "
+            + (f"Pembayaran Q3 yang disebut aktual: {debt_outlook.get('actual_source_title')}, hlm. "
+               f"{debt_outlook.get('actual_source_page')}; {debt_outlook.get('actual_source_url')}. "
+               "Saldo utang/kas pascapembayaran belum tersedia; jumlah ini tidak dimasukkan sebagai saldo baru atau proyeksi bunga."
+               if actual_q3_repayment else
+               "Rencana pembayaran utang bukan bukti pembayaran terealisasi atau jadwal bunga."))
+        cost_history = cost_actuals.get("operating_cost_history") or {}
+        trend = cost_history.get("unit_cost_trend") or []
+        cash_costs = cost_history.get("cash_cost_per_copper_lb_sold") or []
+        if trend:
+            periods = [row.get("period", "-") for row in trend]
+            unit_rows = []
+            for key, label, decimals in (
+                    ("unit_mining_cost_usd_per_tonne_mined", "Penambangan (US$/t material mined)", 2),
+                    ("unit_processing_cost_usd_per_tonne_milled", "Pengolahan (US$/t throughput)", 2),
+                    ("unit_smelt_refine_cost_usd_per_tonne_cathode", "Smelting/refining (US$/t katoda)", 0)):
+                unit_rows.append([label] + [
+                    "-" if row.get(key) is None else fmt._id(row[key], decimals)
+                    for row in trend])
+            add("Biaya operasi historis per setengah tahun",
+                ["Metrik", *periods], unit_rows,
+                f"Sumber: {cost_history.get('source_title')}, hlm. {cost_history.get('source_page')}; "
+                f"{cost_history.get('source_url')}. Basis berbeda: biaya mining per ton material mined, "
+                "processing per ton throughput, smelting/refining per ton katoda. Series ini menunjukkan "
+                "historis biaya dan ramp-up, bukan FY26 forecast; grafik menyajikan angka fisik yang dibulatkan.")
+        if cash_costs:
+            periods = [row.get("period", "-") for row in cash_costs]
+            cash_rows = []
+            for key, label in (
+                    ("operating_costs_ex_adjustments", "Biaya operasi, sebelum adjustment"),
+                    ("byproduct_credits", "Kredit produk sampingan"),
+                    ("smelt_refine_treatment_costs", "Biaya treatment smelting/refining"),
+                    ("royalties", "Royalti"),
+                    ("unit_cash_cost", "Unit cash cost dilaporkan")):
+                cash_rows.append([label] + [fmt._id(row[key], 2) for row in cash_costs])
+            add("Jembatan unit cash cost per pon Cu terjual",
+                ["Komponen (US$/lb Cu terjual)", *periods], cash_rows,
+                f"Sumber: {cost_history.get('source_title')}, hlm. {cost_history.get('source_page')}; "
+                f"{cost_history.get('source_url')}. Kredit by-product mencakup emas, perak, asam sulfat dan selenium; "
+                "treatment cost mencakup smelter dan PMR. Angka biaya sangat sensitif terhadap campuran dan volume produk, "
+                "kadar, recovery, harga kredit by-product dan royalti. H1 2025 hingga H1 2026 bukan satu run-rate; "
+                "unit cash cost ini adalah historical cross-check, bukan asumsi biaya H2 atau forecast C1/FCF per aset. "
+                "Jumlah komponen dapat berbeda dari subtotal dilaporkan karena pembulatan.")
 
     mine_life = evidence.get("mine_life_context") or {}
+    amdal_scope_exhibit = None
     if mining and mine_life:
-        add("Cadangan dan jadwal tambang dari rilis resmi",
-            ["Aset / tonggak", "Data manajemen"],
-            [["Cadangan bijih Batu Hijau", f"{fmt._id(mine_life['batu_hijau_reserves_mt'])} juta ton"],
-             ["Penambangan Batu Hijau sampai", mine_life["batu_hijau_mining_through"]],
-             ["Pengolahan stockpile sampai", mine_life["batu_hijau_stockpile_through"]],
-             ["Cadangan bijih Elang", f"{fmt._id(mine_life['elang_reserves_mt'])} juta ton"],
-             ["Bijih pertama Elang", mine_life["elang_first_ore"]],
-             ["Target keputusan investasi Elang", mine_life["elang_fid_target"]]],
+        rows = []
+        for name, category, mt_key, cu_grade_key, au_grade_key, cu_key, au_key in (
+                ("Stockpile Batu Hijau", "Stockpile", "stockpile_mt",
+                 "stockpile_grade_cu_pct", "stockpile_grade_au_gpt",
+                 "stockpile_contained_cu_blb", "stockpile_contained_au_moz"),
+                ("Batu Hijau", "Cadangan", "batu_hijau_reserves_mt",
+                 "batu_hijau_grade_cu_pct", "batu_hijau_grade_au_gpt",
+                 "batu_hijau_contained_cu_blb", "batu_hijau_contained_au_moz"),
+                ("Batu Hijau", "Sumber daya", "batu_hijau_resources_mt",
+                 "batu_hijau_resource_grade_cu_pct", "batu_hijau_resource_grade_au_gpt",
+                 "batu_hijau_resource_contained_cu_blb", "batu_hijau_resource_contained_au_moz"),
+                ("Elang", "Cadangan", "elang_reserves_mt",
+                 "elang_grade_cu_pct", "elang_grade_au_gpt",
+                 "elang_contained_cu_blb", "elang_contained_au_moz"),
+                ("Elang", "Sumber daya", "elang_resources_mt",
+                 "elang_resource_grade_cu_pct", "elang_resource_grade_au_gpt",
+                 "elang_resource_contained_cu_blb", "elang_resource_contained_au_moz")):
+            mt = mine_life.get(mt_key)
+            cu_grade = mine_life.get(cu_grade_key)
+            au_grade = mine_life.get(au_grade_key)
+            cu_contained = mine_life.get(cu_key)
+            au_contained = mine_life.get(au_key)
+            if all(value is not None for value in
+                   (mt, cu_grade, au_grade, cu_contained, au_contained)):
+                rows.append([name, category, fmt._id(mt, 0),
+                             fmt._id(cu_grade, 2), fmt._id(au_grade, 2),
+                             fmt._id(cu_contained, 2), fmt._id(au_contained, 2)])
+        add("Cadangan dan sumber daya mineral",
+            ["Aset", "Kategori", "Mt", "Cu %", "Au g/t", "Cu Blb", "Au Moz"],
+            rows,
             f"Sumber: {mine_life['source_title']}, hlm. {mine_life['source_page']}; "
-            f"{mine_life['source_url']}. Jadwal dan cadangan belum memberi produksi, "
-            "harga, biaya, capex, atau arus kas tahunan untuk NAV LoM.")
+            f"{mine_life['source_url']}. As of {mine_life.get('resource_source_date') or mine_life.get('reserves_as_of')}; "
+            f"competent person: {mine_life.get('competent_person')}. Sumber daya "
+            "mencakup cadangan dan tidak boleh dijumlahkan dengannya. Angka ini "
+            "belum menjadi jadwal produksi, biaya, capex, atau arus kas tahunan NAV LoM.")
+        development = mine_life.get("development_status") or {}
+        milestone_rows = [
+            ["Penambangan Batu Hijau sampai", mine_life["batu_hijau_mining_through"]],
+            ["Pengolahan stockpile sampai", mine_life["batu_hijau_stockpile_through"]],
+            ["Bijih pertama Elang", mine_life["elang_first_ore"]],
+            ["Target keputusan investasi Elang", mine_life["elang_fid_target"]],
+        ]
+        status_labels = (
+            ("mine_planning_status", "Penyusunan rencana tambang"),
+            ("overland_conveyor_corridor_permitting", "Perizinan koridor OLC"),
+            ("early_engineering_contractor_selection", "Pemilihan kontraktor early engineering"),
+            ("feasibility_study_status", "Feasibility study Elang"),
+            ("optimization_study_status", "Optimasi teknis Elang"),
+        )
+        for key, label in status_labels:
+            if development.get(key):
+                milestone_rows.append([label, development[key]])
+        if development.get("infrastructure_scope"):
+            milestone_rows.append(["Lingkup infrastruktur Elang", development["infrastructure_scope"]])
+        annual_report = development.get("annual_report_context") or {}
+        if annual_report.get("elang_operations_through"):
+            milestone_rows.append([
+                "Elang: horizon operasi yang diperkirakan",
+                annual_report["elang_operations_through"]])
+        if annual_report.get("detailed_engineering_and_optimization"):
+            milestone_rows.append([
+                "Engineering rinci dan optimasi (Annual Report 2025)",
+                annual_report["detailed_engineering_and_optimization"]])
+        consultation = development.get("2026_public_consultation_context") or {}
+        if consultation:
+            capex_range = consultation.get("reported_initial_investment_idr_trillion_range") or []
+            if len(capex_range) == 2:
+                capex_indication = (
+                    f"Rp{fmt._id(capex_range[0], 0)}–{fmt._id(capex_range[1], 0)} triliun; "
+                    "informasi awal yang disampaikan Bupati sebagai informasi dari AMNT")
+                milestone_rows.append(["Indikasi investasi awal Elang (bukan anggaran tervalidasi)", capex_indication])
+            if consultation.get("reported_construction_target"):
+                milestone_rows.append([
+                    "Target konstruksi yang disampaikan pada konsultasi publik",
+                    consultation["reported_construction_target"]])
+        if consultation.get("reported_project_status"):
+            milestone_rows.append([
+                "Konteks konsultasi publik AMDAL (22 Sep 2026)",
+                consultation["reported_project_status"]])
+        amdal_notice = development.get("2026_amdal_scoping_notice") or {}
+        if amdal_notice:
+            comparison = amdal_notice.get("context_comparators") or {}
+            planned_facilities = amdal_notice.get("planned_support_facilities") or []
+            conveyor_notice = next((item for item in planned_facilities
+                                    if "conveyor" in item.lower()), "-")
+            amdal_rows = [
+                ["Rencana kapasitas penambangan bijih Elang",
+                 f"~{fmt._id(amdal_notice.get('ore_mining_capacity_million_tonnes_per_year_approx'), 0)} Mt/tahun",
+                 "Skala rencana pada pengumuman penyusunan AMDAL; bukan output tahunan atau guidance produksi."],
+                ["Kapasitas tahunan pabrik pengolahan",
+                 f"{fmt._id(comparison.get('annual_processing_ore_capacity_million_tonnes'), 0)} Mt/tahun",
+                 "Angka nameplate ekspansi pabrik pada presentasi H1; definisinya berbeda dari kapasitas penambangan Elang."],
+                ["Rentang desain ekspansi pabrik (Annual Report 2025)",
+                 f"{fmt._id((annual_report.get('planned_processing_capacity_million_tonnes_per_year_range') or [85, 90])[0], 0)}–{fmt._id((annual_report.get('planned_processing_capacity_million_tonnes_per_year_range') or [85, 90])[1], 0)} Mt/tahun; first ore to mills {annual_report.get('expanded_plant_first_ore_to_mills_target', 'ditargetkan 2026')}",
+                 "Rentang yang diungkap lebih awal; presentasi H1 2026 kemudian menyebut kapasitas pabrik 85 Mt/tahun. Tidak digunakan sebagai skenario throughput tambahan."],
+                ["Overland conveyor Elang",
+                 "54 km (presentasi Mar-26) / " + conveyor_notice.replace("overland ore conveyor ", ""),
+                 "Panjang/rute belum direkonsiliasi; perbedaan berdampak pada lingkup dan estimasi capex."],
+                ["Fasilitas pendukung yang direncanakan",
+                 "; ".join(item for item in planned_facilities if "conveyor" not in item.lower()),
+                 "Ruang lingkup awal AMDAL; tidak berisi biaya, jadwal konstruksi terinci, atau komitmen kontrak."],
+            ]
+            amdal_scope_exhibit = add(
+                "Skala dan lingkup Elang pada tahap pengumuman AMDAL",
+                ["Komponen", "Angka / rencana yang diumumkan", "Batas interpretasi"],
+                amdal_rows,
+                f"Pengumuman penyusunan AMDAL oleh PT AMNT, {amdal_notice.get('published_date')}; "
+                f"dokumen: {amdal_notice.get('document_url')}; salinan diumumkan di "
+                f"{amdal_notice.get('dissemination_page_url')}. Kapasitas olah 85 Mt/tahun: "
+                f"{comparison.get('source_title')}, hlm. {comparison.get('source_page')}; "
+                f"{comparison.get('source_url')}. Rentang desain pabrik dan target first ore: "
+                f"{annual_report.get('source_title')}, hlm. 103; {annual_report.get('source_url')}. "
+                f"Lingkup OLC sebelumnya: "
+                f"{development.get('infrastructure_scope_source_title')}, hlm. "
+                f"{development.get('infrastructure_scope_source_page')}; "
+                f"{development.get('infrastructure_scope_source_url')}. Notice AMDAL meminta "
+                f"masukan masyarakat selama {amdal_notice.get('public_input_period_working_days')} hari kerja; "
+                "ini dokumen scoping untuk penyusunan AMDAL, bukan AMDAL disetujui atau desain final. "
+                "Kapasitas 90 Mt/tahun adalah skala penambangan bijih, sedangkan 85 Mt/tahun merujuk kapasitas pengolahan; "
+                "keduanya tidak disamakan menjadi asumsi throughput. Perbedaan OLC 54/60 km belum dimodelkan sebagai capex.")
+        status_source = ""
+        if development.get("source_url"):
+            status_source = (
+                f" Status pengembangan: {development.get('source_title')}, "
+                f"hlm. {development.get('source_page')}; {development['source_url']}."
+            )
+        if development.get("feasibility_source_url"):
+            status_source += (
+                f" Status studi/optimasi FY2025: {development.get('feasibility_source_title')}, "
+                f"hlm. {development.get('feasibility_source_page')}; "
+                f"{development['feasibility_source_url']}."
+            )
+        if development.get("infrastructure_scope_source_url"):
+            status_source += (
+                f" Lingkup infrastruktur: {development.get('infrastructure_scope_source_title')}, "
+                f"hlm. {development.get('infrastructure_scope_source_page')}; "
+                f"{development['infrastructure_scope_source_url']}."
+            )
+        if annual_report.get("source_url"):
+            status_source += (
+                f" Horizon Elang dan status studi lanjutan: {annual_report.get('source_title')}, "
+                f"hlm. {', '.join(str(page) for page in annual_report.get('source_pages') or [])}; "
+                f"{annual_report['source_url']}."
+            )
+        if consultation.get("source_url"):
+            status_source += (
+                f" Informasi konsultasi publik 22 September 2026: {consultation.get('source_title')} "
+                f"({consultation.get('source_attribution')}); {consultation['source_url']}. "
+                "Rentang investasi bersifat indikatif, disampaikan Bupati dengan atribusi informasi dari AMNT; "
+                "bukan capex budget atau phasing dan tidak digunakan sebagai input NAV LoM."
+            )
+        add("Jadwal operasi dan status pengembangan tambang",
+            ["Tonggak / pekerjaan", "Perkiraan atau status yang diumumkan"],
+            milestone_rows,
+            f"Sumber tonggak: {mine_life['source_title']}, hlm. {mine_life['source_page']}; "
+            f"{mine_life['source_url']}.{status_source} Tonggak proyek dan status "
+            "pekerjaan bukan jadwal tahunan produksi, biaya, capex, atau arus kas "
+            "untuk NAV LoM; rencana tambang masih dalam penyusunan.")
 
     if balance:
         debt = balance.get("total_debt")
@@ -345,6 +1143,653 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
 
     illustrative_pages = []
     if illustrative_scenarios and mining:
+        top_down_projection = (intake.get("analyst_scenario") or {}).get(
+            "top_down_projection") or {}
+        product_bridge = _mining_sales_bridge(
+            intake, fc.get("interim_scenario") or {})
+        # Compare remaining FY26 contained-metal guidance with refined
+        # product output guidance. These stage-to-stage ratios are diagnostics,
+        # not recovery rates: feed timing and inventory movements are absent.
+        guidance = evidence.get("management_guidance") or []
+        guide_by_name = {str(row.get("name") or "").lower(): row
+                         for row in guidance}
+        actual_sales = evidence.get("sales_production_bridge") or []
+        actual_by_key = {_product_key(row.get("product")): row
+                         for row in actual_sales}
+
+        def guide_value(fragment):
+            item = next((row for name, row in guide_by_name.items()
+                         if fragment in name), None)
+            value = item.get("value") if item else None
+            return value if isinstance(value, (int, float)) else None
+
+        contained_cu_guide = guide_value("tembaga dalam konsentrat")
+        contained_au_guide = guide_value("emas dalam konsentrat")
+        cathode_guide_kt = guide_value("katoda tembaga")
+        refined_au_guide_koz = guide_value("emas murni")
+        concentrate_actual = actual_by_key.get("concentrate") or {}
+        cathode_actual = actual_by_key.get("cathode_copper") or {}
+        gold_actual = actual_by_key.get("refined_gold") or {}
+        cu_h1_mlb = (concentrate_actual.get("metal_production") or {}).get("copper_mlbs")
+        au_h1_oz = (concentrate_actual.get("metal_production") or {}).get("gold_oz")
+        cathode_h1_t = cathode_actual.get("production")
+        refined_au_h1_oz = gold_actual.get("production")
+        interstage_rows = []
+        if all(isinstance(value, (int, float)) for value in
+               (contained_cu_guide, cu_h1_mlb, cathode_guide_kt, cathode_h1_t)):
+            cu_h2_mlb = contained_cu_guide - cu_h1_mlb
+            cathode_h2_kt = cathode_guide_kt - cathode_h1_t / 1000
+            cathode_h2_mlb = cathode_h2_kt * 2.20462262
+            interstage_rows.extend([
+                ["Cu terkandung dalam konsentrat", f"{fmt._id(cu_h2_mlb, 1)} Mlb", "sisa guidance FY dikurangi aktual H1"],
+                ["Output katoda tembaga", f"{fmt._id(cathode_h2_kt, 1)} kt / {fmt._id(cathode_h2_mlb, 1)} Mlb Cu", "sisa guidance FY dikurangi aktual H1"],
+                ["Rasio output katoda / Cu terkandung", fmt.pct(cathode_h2_mlb / cu_h2_mlb) if cu_h2_mlb else "-", "diagnostik antar-tahap; bukan recovery metalurgi"],
+            ])
+        if all(isinstance(value, (int, float)) for value in
+               (contained_au_guide, au_h1_oz, refined_au_guide_koz, refined_au_h1_oz)):
+            au_h2_koz = (contained_au_guide * 1000 - au_h1_oz) / 1000
+            refined_au_h2_koz = refined_au_guide_koz - refined_au_h1_oz / 1000
+            interstage_rows.extend([
+                ["Au terkandung dalam konsentrat", f"{fmt._id(au_h2_koz, 1)} koz", "sisa guidance FY dikurangi aktual H1"],
+                ["Output emas murni", f"{fmt._id(refined_au_h2_koz, 1)} koz", "sisa guidance FY dikurangi aktual H1"],
+                ["Rasio output emas murni / Au terkandung", fmt.pct(refined_au_h2_koz / au_h2_koz) if au_h2_koz else "-", "diagnostik antar-tahap; bukan recovery metalurgi"],
+            ])
+        if interstage_rows:
+            interstage_exhibit = add(
+                "Uji antar-tahap logam H2: konsentrat ke produk refinery",
+                ["Metrik", "Sisa H2 tersirat", "Basis / batas interpretasi"],
+                interstage_rows,
+                f"Aktual H1 dan panduan FY26: {actual.get('source_title')}, hlm. 3 dan 7. "
+                "H2 dihitung sebagai panduan FY dikurangi produksi H1; angka Mlb katoda "
+                "dikonversi dari ton metrik. Cu/Au dalam konsentrat dan output katoda/emas "
+                "murni adalah tahap berbeda, dapat memiliki timing serta persediaan antar-tahap, "
+                "dan tidak mengungkap feed, recovery, assay, atau roll-forward material. Rasio "
+                "bukan recovery metalurgi dan tidak memvalidasi penjualan maupun revenue H2.")
+            illustrative_pages.append({
+                "halaman": 0, "judul": "Uji antar-tahap produksi H2",
+                "layout": "stack",
+                "paragraf": [
+                    "Panduan FY26 menyiratkan output H2 katoda dan emas murni yang besar relatif terhadap sisa logam terkandung dalam panduan konsentrat. Rasio ini hanya penanda besarnya aliran material yang perlu dijelaskan: produk H2 dapat memakai umpan dan persediaan lintas periode, sedangkan produksi konsentrat dapat dijual eksternal atau masuk ke smelter. Tanpa rekonsiliasi feed, stockpile, recovery, dan jadwal penjualan, diagnostik ini tidak dapat dipakai sebagai recovery ataupun jembatan revenue tervalidasi."],
+                "exhibit": [interstage_exhibit]})
+        q2_data = ((evidence.get("quarterly_actuals") or {}).get(
+            "q2_2026_derived") or {})
+        if q2_data and product_bridge:
+            q2_financials = q2_data.get("financials_usd_mn") or {}
+            q2_product_rows = []
+            for item in q2_data.get("sales_production_bridge") or []:
+                key = item.get("product_key")
+                if key not in ("concentrate", "cathode_copper", "refined_gold"):
+                    continue
+                label = {"concentrate": "Konsentrat", "cathode_copper": "Katoda tembaga",
+                         "refined_gold": "Emas murni"}[key]
+                rev = item.get("segment_revenue_usd_mn")
+                q2_product_rows.append([
+                    label, _volume_text(item.get("production"), item.get("unit")),
+                    _volume_text(item.get("sales"), item.get("unit")),
+                    money(rev * 1e6) if rev is not None else "-",
+                    (f"US$ {fmt._id(item['revenue_per_sold_unit_proxy'], 0)}/{item['unit']}"
+                     if item.get("revenue_per_sold_unit_proxy") is not None else "-"),
+                    ((f"US$ {fmt._id(item['implied_net_realized_price']['value'], 0)}/"
+                      f"{item['implied_net_realized_price']['unit'].replace('USD/', '')}")
+                     if item.get("implied_net_realized_price") else "-")])
+            for label, key in (("Net sales", "net_sales"), ("EBITDA", "ebitda"),
+                               ("Laba bersih", "net_income"), ("Capex", "capex")):
+                q2_product_rows.append([label, "-", "-",
+                                        fmt._id(q2_financials.get(key), 0), "US$ juta", "-"])
+            q2_exhibit = add(
+                "Rekonstruksi Q2 2026 (H1 dikurangi Q1)",
+                ["Produk / metrik", "Produksi Q2", "Terjual Q2",
+                 "Revenue / metrik", "Revenue per unit, proxy", "Implied net price"], q2_product_rows,
+                "Q2 diturunkan dari H1 resmi dikurangi Q1 resmi; volume dan metrik finansial adalah angka turunan. "
+                "Revenue produk dibulatkan di kedua rilis; revenue/unit konsentrat adalah proxy segmen, bukan realized price/netback. "
+                "Sumber Q1: AMMAN Q1 2026 Performance Release, hlm. 3-5. "
+                "Sumber H1: AMMAN H1 2026 Earnings Release, hlm. 3-4.")
+            q2_is = q2_data.get("income_statement_usd_thousand") or {}
+            q2_cf = q2_data.get("cash_flow_usd_thousand") or {}
+            q2_fin_rows = []
+            for label, key in (("Penjualan bersih", "net_sales"),
+                               ("Beban pokok penjualan", "cost_applicable_to_sales"),
+                               ("Laba operasi", "operating_profit"),
+                               ("Beban keuangan", "finance_costs"),
+                               ("Pajak penghasilan", "income_tax"),
+                               ("Laba bersih", "net_income")):
+                q2_fin_rows.append([label, fmt._id(q2_is[key] / 1000, 1),
+                                    "H1 laporan keuangan dikurangi Q1"])
+            for label, key, basis in (
+                    ("Arus kas operasi", "operating_cash_flow", "H1 laporan arus kas dikurangi Q1"),
+                    ("Kas untuk investasi/capex", "investing_cash_used", "H1 laporan arus kas dikurangi Q1"),
+                    ("Arus kas bebas indikatif", "free_cash_flow_derived", "OCF + arus kas investasi; turunan analis"),
+                    ("Arus kas pendanaan", "financing_cash_flow", "H1 laporan arus kas dikurangi Q1"),
+                    ("Kenaikan kas sebelum kurs", "net_increase_in_cash", "H1 laporan arus kas dikurangi Q1"),
+                    ("Dampak kurs", "fx_effect", "H1 laporan arus kas dikurangi Q1"),
+                    ("Kas akhir Q2", "closing_cash", "H1 laporan posisi keuangan; kas 30 Jun")):
+                q2_fin_rows.append([label, fmt._id(q2_cf[key] / 1000, 1), basis])
+            q2_fin_rows.insert(1, [
+                "EBITDA", fmt._id(q2_data["financials_usd_mn"]["ebitda"], 0),
+                "Selisih Q1 ke H1; kedua angka sumber dibulatkan ke US$ juta"])
+            q2_fin_exhibit = add(
+                "Rekonstruksi laba rugi dan arus kas Q2 2026",
+                ["Metrik", "Q2 (US$ juta)", "Basis"], q2_fin_rows,
+                "Turunan H1 dikurangi Q1 dari laporan interim resmi; angka laporan keuangan dasar dalam US$ ribu. "
+                "EBITDA serta revenue per produk memakai angka rilis yang dibulatkan. FCF indikatif = arus kas operasi + arus kas investasi; "
+                "bukan metrik FCF yang dinyatakan emiten. Sumber: Q1 2026 Performance Release, lampiran laporan keuangan; "
+                "H1 2026 Earnings Release, lampiran laporan keuangan.")
+            pricing = evidence.get("provisional_pricing_evidence") or {}
+            pricing_exhibit = None
+            if pricing:
+                pricing_rows = [
+                    ["Harga provisional saat penjualan", "Konsentrat dan katoda awalnya dicatat 100% pada harga provisional; pengakuan revenue tetap mensyaratkan delivery/title transfer."],
+                    ["Sebelum settlement final", "Harga di-mark-to-market memakai forward price untuk estimasi bulan settlement; embedded derivative masuk laba rugi."],
+                    ["Assay dan kuantitas", "Harga/kuantitas provisional bisa disesuaikan saat assay dan informasi jumlah metal baru diterima."],
+                    ["Periode final pricing", "Mengikuti periode yang ditetapkan kontrak; periode per shipment/customer tidak diungkap dalam catatan ini."],
+                    ["Risiko harga", "Penurunan 2% dinilai tidak signifikan terhadap laba per 30 Jun; tidak ada sensitivitas dolar yang diberikan."],
+                ]
+                pricing_exhibit = add(
+                    "Ketentuan provisional pricing dan settlement",
+                    ["Pengungkapan interim", "Dampak pada forecast"], pricing_rows,
+                    f"Sumber: {pricing.get('source_title')}, Catatan 2.s hlm. 40 dan Catatan 30.a.ii hlm. 113; "
+                    f"{pricing.get('source_url')}. Harga Q2 implied pada exhibit sebelumnya adalah estimasi historis turunan, "
+                    "bukan final price atau netback shipment H2.")
+            illustrative_pages.append({
+                "halaman": 0, "judul": "Rekonstruksi aktual Q2 2026",
+                "layout": "stack",
+                "paragraf": [
+                    "Ini angka aktual turunan dari dua rilis, bukan angka Q2 yang dilaporkan terpisah. Perusahaan melaporkan volume dan realized price H1; harga Q2 sendiri tidak diberikan terpisah. Konsentrat dan katoda juga memakai provisional pricing sampai settlement final, sehingga implied price Q2 hanya kalibrasi historis, bukan harga final H2. Revenue/unit hanya proxy untuk menguji konsistensi mix dan sales."],
+                "exhibit": [q2_exhibit, q2_fin_exhibit] +
+                           ([pricing_exhibit] if pricing_exhibit else [])})
+
+            pricing_balances = ((evidence.get("provisional_pricing_evidence") or {}).get(
+                "receivables_and_derivatives") or {})
+            if pricing_balances:
+                receivables = pricing_balances.get("trade_receivables") or {}
+                derivs = pricing_balances.get("derivative_balances") or {}
+                jun = receivables.get("2026-06-30") or {}
+                dec = receivables.get("2025-12-31") or {}
+                jun_deriv = derivs.get("2026-06-30") or {}
+                dec_deriv = derivs.get("2025-12-31") or {}
+                pricing_balance_rows = [
+                    ["Piutang usaha total", fmt._id(jun.get("total", 0) / 1000, 1),
+                     fmt._id(dec.get("total", 0) / 1000, 1), "Seluruh produk/customer; tidak dipilah shipment."],
+                    ["Piutang usaha FVPL", fmt._id(jun.get("fair_value_through_profit_or_loss", 0) / 1000, 1),
+                     fmt._id(dec.get("fair_value_through_profit_or_loss", 0) / 1000, 1),
+                     "Kebijakan akuntansi mengaitkan kategori ini dengan sebagian piutang provisional Cu/Au."],
+                    ["Piutang usaha amortized cost", fmt._id(jun.get("amortized_cost", 0) / 1000, 1),
+                     fmt._id(dec.get("amortized_cost", 0) / 1000, 1), "Tidak dirinci menurut produk/customer."],
+                    ["Aset derivatif", fmt._id(jun_deriv.get("assets", 0) / 1000, 1),
+                     fmt._id(dec_deriv.get("assets", 0) / 1000, 1),
+                     "Note 18 merinci IRS/CCS/POS; bukan saldo provisional metal terpisah."],
+                    ["Liabilitas derivatif", fmt._id(jun_deriv.get("liabilities", 0) / 1000, 1),
+                     fmt._id(dec_deriv.get("liabilities", 0) / 1000, 1),
+                     "Note 18 merinci IRS/CCS/POS; bukan saldo provisional metal terpisah."],
+                ]
+                pricing_balance_exhibit = add(
+                    "Piutang provisional FVPL dan derivatif swap",
+                    ["Saldo keuangan (US$m)", "30 Jun 2026", "31 Des 2025", "Klasifikasi dan batas data"],
+                    pricing_balance_rows,
+                    f"Sumber: {pricing_balances.get('source_title')}, {pricing_balances.get('classification_source_note')}; "
+                    f"{pricing_balances.get('derivative_source_note')}; {pricing_balances.get('source_url')}. "
+                    "Piutang FVPL adalah bagian dari piutang usaha, sedangkan aset/liabilitas derivatif merupakan pos berbeda.")
+                illustrative_pages.append({
+                    "halaman": 0,
+                    "judul": "Saldo settlement provisional dan klasifikasi derivatif",
+                    "layout": "stack",
+                    "paragraf": [
+                        "Kebijakan akuntansi menyebut aset FVPL mencakup sebagian piutang dari penjualan tembaga/emas provisional. Nilai tercatat kategori itu turun dari US$540,5 juta pada akhir 2025 menjadi US$23,3 juta per Juni 2026, tetapi laporan tidak memecahnya per produk, customer, shipment, atau tanggal final pricing. Penurunan saldo tidak sama dengan volume settlement atau realized price H1. Pos derivative asset/liability yang terpisah dirinci sebagai IRS, CCS, dan POS; jangan menghitungnya sebagai eksposur harga komoditas provisional."
+                    ],
+                    "exhibit": [pricing_balance_exhibit]})
+
+            cogs = q2_data.get("cost_of_sales_components") or {}
+            cogs_components = cogs.get("components") or {}
+            if cogs_components:
+                q1_costs = cogs_components.get("reported_q1") or {}
+                q2_costs = cogs_components.get("derived_q2") or {}
+                h1_costs = cogs_components.get("reported_h1") or {}
+                cost_labels = [
+                    ("mining_processing_operating", "Mining, processing, dan operasi"),
+                    ("deferred_stripping_movement", "Amortisasi stripping tertunda"),
+                    ("depreciation_amortization", "Depresiasi dan amortisasi"),
+                    ("government_royalty", "Royalti pemerintah"),
+                    ("export_duty", "Bea ekspor"),
+                    ("employee_costs", "Beban karyawan"),
+                    ("freight_marketing", "Angkut dan pemasaran"),
+                    ("silver_byproduct_credit", "Kredit produk perak"),
+                    ("selenium_byproduct_credit", "Kredit produk selenium"),
+                    ("sulfuric_acid_byproduct_credit", "Kredit produk asam sulfat"),
+                    ("stockpiles_product_inventory_movement", "Mutasi stockpile dan persediaan produk"),
+                    ("other", "Lainnya"),
+                    ("total_costs_applicable_to_sales", "Total beban pokok penjualan"),
+                ]
+                cogs_rows = [[label,
+                              fmt._id(q1_costs[key] / 1000, 1),
+                              fmt._id(q2_costs[key] / 1000, 1),
+                              fmt._id(h1_costs[key] / 1000, 1)]
+                             for key, label in cost_labels]
+                cogs_exhibit = add(
+                    "Rekonsiliasi komponen beban pokok penjualan Q2",
+                    ["Komponen (US$m)", "Q1 aktual", "Q2 turunan", "H1 aktual"],
+                    cogs_rows,
+                    "Q1 dari laporan interim AMMAN, Catatan 25 hlm. 105 dan Catatan 11 hlm. 72; H1 dari laporan keuangan interim AMMAN, Catatan 25 hlm. 108 dan Catatan 11 hlm. 73. "
+                    "Q2 dihitung sebagai H1 dikurangi Q1; bukan angka triwulanan yang dilaporkan terpisah. "
+                    "Sumber Q1 (arsip salinan filing emiten): https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q1/AMMN_Q1_2026.pdf. "
+                    f"Sumber H1: {cogs.get('source_url_h1')}. Nilai dalam US$ juta; angka sumber dalam US$ ribu.")
+                illustrative_pages.append({
+                    "halaman": 0,
+                    "judul": "Komposisi biaya aktual dan keterbatasan run-rate",
+                    "layout": "stack",
+                    "paragraf": [
+                        "Catatan biaya menunjukkan HPP Q2 US$622,7 juta tersusun dari US$436,9 juta mining/processing/operasi, US$286,0 juta amortisasi stripping tertunda, dan US$168,6 juta royalti, lalu sebagian diimbangi mutasi stockpile/persediaan negatif US$435,9 juta serta kredit produk sampingan. Catatan 11 melaporkan nihil tambahan kapitalisasi stripping pada Q1 dan H1; jumlah US$286,0 juta adalah amortisasi aset stripping, bukan belanja kas Q2. Jadi HPP akuntansi tidak sama dengan biaya kas unit yang bisa langsung diekstrapolasi. Data ini merekonsiliasi aktual Q2; belum menentukan biaya H2 karena jadwal ore, grade, penjualan, inventory, dan basis kewajiban fiskal per shipment belum tersedia."
+                    ],
+                    "exhibit": [cogs_exhibit]})
+
+                gp_diag = q2_data.get("inventory_movement_gross_profit_diagnostic") or {}
+                inv_diag = q2_data.get("inventory_carrying_value_vs_cogs_movement") or {}
+                gp_periods = gp_diag.get("periods") or {}
+                if gp_periods and inv_diag:
+                    gp_rows = []
+                    for label, key in [
+                            ("Penjualan bersih", "net_sales_usd_thousand"),
+                            ("HPP dilaporkan", "reported_costs_applicable_to_sales_usd_thousand"),
+                            ("Pergerakan stockpile/persediaan di HPP", "stockpiles_product_inventory_movement_in_cogs_usd_thousand"),
+                            ("Laba kotor dilaporkan", "gross_profit_excluding_that_movement_usd_thousand"),
+                            ("HPP setelah membalik pergerakan tersebut", "cogs_excluding_that_movement_usd_thousand"),
+                            ("Laba kotor diagnostik setelah dibalik", "gross_profit_excluding_that_movement_usd_thousand")]:
+                        # Compute reported gross profit directly for the first appearance;
+                        # the diagnostic gross profit is shown after reversing the movement credit.
+                        row = [label]
+                        for period in ("q1_reported", "q2_derived", "h1_reported"):
+                            values = gp_periods[period]
+                            if label == "Laba kotor dilaporkan":
+                                amount = (values["net_sales_usd_thousand"] -
+                                          values["reported_costs_applicable_to_sales_usd_thousand"])
+                            else:
+                                amount = values[key]
+                            row.append(fmt._id(amount / 1000, 1))
+                        gp_rows.append(row)
+                    gp_exhibit = add(
+                        "Dampak pergerakan persediaan pada laba kotor (diagnostik)",
+                        ["Metrik (US$m)", "Q1 aktual", "Q2 turunan", "H1 aktual"],
+                        gp_rows,
+                        "Perhitungan analitis dari laporan keuangan Q1 dan H1, bukan metrik yang dilaporkan emiten. "
+                        "Q2 = H1 dikurangi Q1. Baris diagnostik hanya membalik satu baris pergerakan stockpile/persediaan pada HPP; "
+                        "bukan gross profit adjusted, cash cost, EBITDA, atau FCFF. Sumber Q1: AMMAN Interim Financial Statements, "
+                        "laporan laba rugi dan Catatan 25, hlm. 4 dan 105; sumber H1: AMMAN Interim Financial Statements, "
+                        "laporan laba rugi dan Catatan 25, hlm. 4-5 dan 108.")
+                    carrying_rows = {
+                        row.get("name"): row for row in
+                        ((evidence.get("inventory_and_sales_detail") or {}).get(
+                            "inventory_and_stockpile_carrying_amounts") or [])}
+                    inv_rows = []
+                    for key, label in (("Total inventory, net", "Persediaan bersih"),
+                                       ("Stockpiles, total", "Stockpiles")):
+                        item = carrying_rows.get(key) or {}
+                        opening = item.get("dec_2025")
+                        closing = item.get("jun_2026")
+                        if opening is not None and closing is not None:
+                            inv_rows.append([
+                                label, fmt._id(opening / 1000, 1),
+                                fmt._id(closing / 1000, 1),
+                                fmt._id((closing - opening) / 1000, 1)])
+                    inv_rows.extend([
+                        ["Gabungan nilai tercatat", fmt._id(inv_diag["opening_inventory_and_stockpile_carrying_value"] / 1000, 1),
+                         fmt._id(inv_diag["closing_inventory_and_stockpile_carrying_value"] / 1000, 1),
+                         fmt._id(inv_diag["increase_in_carrying_value"] / 1000, 1)],
+                        ["Kredit pergerakan persediaan di HPP H1", "-", "-",
+                         fmt._id(inv_diag["h1_cogs_stockpiles_product_inventory_movement"] / 1000, 1)],
+                        ["Selisih yang tidak dijembatani catatan", "-", "-",
+                         fmt._id(inv_diag["difference_not_reconciled_by_public_note"] / 1000, 1)],
+                    ])
+                    inv_exhibit = add(
+                        "Nilai tercatat persediaan bukan tonase konsentrat",
+                        ["Komponen (US$m)", "Des-25", "Jun-26", "Perubahan"],
+                        inv_rows,
+                        "Sumber: AMMAN H1 2026 Interim Financial Statements, Catatan 7 hlm. 61 dan Catatan 25 hlm. 108. "
+                        "Selisih nilai tercatat gabungan dengan kredit HPP tidak direkonsiliasi langsung dalam catatan; "
+                        "keduanya tidak boleh dikonversi menjadi tonase konsentrat atau volume penjualan.")
+                    illustrative_pages.append({
+                        "halaman": 0,
+                        "judul": "Persediaan, gross profit, dan batas rekonsiliasi",
+                        "layout": "stack",
+                        "paragraf": [
+                            "Baris pergerakan stockpile/persediaan mengurangi HPP yang dilaporkan sebesar US$974,7 juta pada H1. Jika baris itu dibalik secara mekanis, laba kotor H1 menjadi negatif US$10,6 juta; angka ini hanya diagnostik, bukan ukuran laba atau arus kas alternatif. Nilai tercatat gabungan persediaan dan stockpiles naik US$1.024,6 juta, berbeda US$49,9 juta dari kredit HPP. Catatan tidak menyediakan roll-forward fisik yang menghubungkan produksi, transfer ke smelter, penjualan, dan saldo akhir. Karena itu nilai inventory tidak memvalidasi penjualan konsentrat H2."
+                        ],
+                        "exhibit": [gp_exhibit, inv_exhibit]})
+
+            debt_evidence = evidence.get("debt_and_contract_evidence") or {}
+            offtake = evidence.get("customer_delivery_commitment") or {}
+            if debt_evidence and offtake:
+                debt = debt_evidence.get("debt_usd_thousand") or {}
+                costs = debt_evidence.get("h1_finance_costs_usd_thousand") or {}
+                h1_debt_cash = debt_evidence.get("h1_bank_debt_cash_flows_usd_thousand") or {}
+                liquidity = debt_evidence.get(
+                    "contractual_undiscounted_long_term_loan_cashflows_usd_thousand") or {}
+                advances = offtake.get("prepayment_advance_usd_thousand") or {}
+                debt_contract_rows = [
+                    ["Pelunasan utang yang dilaporkan untuk Q3 2026",
+                     fmt._id((evidence.get("debt_outlook") or {}).get(
+                         "actual_q3_debt_repayment_usd", 0) / 1e6, 0),
+                     "Dilaporkan telah dibayar; saldo utang/kas setelah pembayaran belum dilaporkan."],
+                    ["Glencore cathode prepayment balance, Jun-26",
+                     fmt._id(advances.get("balance_2026_06_30") / 1000, 1),
+                     "Monthly deduction against cathode deliveries; delivery quantity and price formula not public."],
+                    ["Long-term loans, net of unamortized fees",
+                     fmt._id(debt.get("long_term_loans_net") / 1000, 1),
+                     f"Current maturity US${fmt._id(debt.get('long_term_current_maturities')/1000, 1)}m; noncurrent net US${fmt._id(debt.get('long_term_noncurrent_net')/1000, 1)}m."],
+                    ["Undiscounted long-term loan cash flows <1y",
+                     fmt._id(liquidity.get("less_than_1_year") / 1000, 1),
+                     "Principal plus interest; not a principal-only maturity or free-cash-flow forecast."],
+                    ["H1 interest expense (long-term debt)",
+                     fmt._id(costs.get("long_term_interest_expense") / 1000, 1),
+                     f"H1 total consolidated P&L finance cost US${fmt._id(costs.get('total_consolidated_pnl_finance_cost')/1000, 1)}m; cash finance costs US${fmt._id(costs.get('cash_finance_costs_paid')/1000, 1)}m."],
+                    ["Accrued capex payable, Jun-26",
+                     fmt._id(debt_evidence.get("accrued_capital_expenditure_usd_thousand") / 1000, 1),
+                     "Accrued balance only; not remaining project budget or payment schedule."],
+                ]
+                debt_contract_exhibit = add(
+                    "Kontrak cathode, utang, dan kewajiban kas yang diungkapkan",
+                    ["Fakta resmi (US$m)", "Nilai", "Makna untuk forecast"],
+                    debt_contract_rows,
+                    f"Sumber: {debt_evidence.get('source_title')}, catatan laporan keuangan 15, 17, 21 dan 30; "
+                    f"{debt_evidence.get('source_url')}. Pelunasan Q3 US$350m dilaporkan aktual oleh manajemen pada "
+                    f"{(evidence.get('debt_outlook') or {}).get('actual_source_title')}, hlm. "
+                    f"{(evidence.get('debt_outlook') or {}).get('actual_source_page')}; "
+                    f"{(evidence.get('debt_outlook') or {}).get('actual_source_url')}. Angka itu memperbarui outlook H1, "
+                    "tetapi belum ada neraca pascapembayaran untuk menghitung kas/utang baru atau bunga forward."
+                )
+                illustrative_pages.append({
+                    "halaman": 0,
+                    "judul": "Batas bukti kontrak, beban bunga, dan capex",
+                    "layout": "stack",
+                    "paragraf": [
+                        "Ada bukti offtake cathode sampai akhir 2027 dan customer prepayment, tetapi volume pengiriman dan formula harga tidak diungkap. Beban bunga serta pembayaran pinjaman Q2 kini dapat direkonsiliasi sebagai actual; keduanya belum menjadi jadwal H2. Capex akrual dan capex kas H1/Q2 juga tidak menggantikan anggaran sisa proyek."
+                    ],
+                    "exhibit": [debt_contract_exhibit]})
+                if h1_debt_cash:
+                    hc = h1_debt_cash
+                    h1_debt_rows = [
+                        ["Penerimaan pinjaman bank jangka pendek", fmt._id(hc["short_term_bank_loan_proceeds"] / 1000, 1), "Arus kas masuk aktual H1."],
+                        ["Pembayaran pinjaman bank jangka pendek", fmt._id(hc["short_term_bank_loan_repayments"] / 1000, 1), "Arus kas keluar aktual H1."],
+                        ["Penerimaan pinjaman bank jangka panjang", fmt._id(hc["long_term_bank_loan_proceeds"] / 1000, 1), "Arus kas masuk aktual H1."],
+                        ["Pembayaran pokok pinjaman bank jangka panjang", fmt._id(hc["long_term_bank_loan_principal_repayments"] / 1000, 1), "Angka rinci laporan keuangan; US$340,0m adalah pelunasan dipercepat yang termasuk di sini."],
+                        ["Arus kas bersih pinjaman bank (hasil hitung)", fmt._id(hc["net_cash_flow_from_bank_borrowing_calculated"] / 1000, 1), "Jumlah penerimaan dan pembayaran short- plus long-term."],
+                        ["Arus kas perubahan kas dibatasi", fmt._id(hc["restricted_cash_change_cash_flow"] / 1000, 1), "Arus kas yang dilaporkan di bagian pendanaan."],
+                        ["Arus kas bersih aktivitas pendanaan", fmt._id(hc["net_cash_used_in_financing_activities_reported"] / 1000, 1), "Nilai laporan; sama dengan arus pinjaman bersih plus perubahan kas dibatasi."],
+                        ["Headline presentasi: utang dibayar YTD", fmt._id(hc["management_presentation_repayment_headline_usd_thousand"] / 1000, 1), f"Dibanding pembayaran pokok jangka panjang rinci US${fmt._id(abs(hc['long_term_bank_loan_principal_repayments']) / 1000, 3)}m, selisih nominal US${fmt._id(hc['difference_presentation_headline_vs_exact_long_term_repayments'] / 1000, 3)}m belum direkonsiliasi; basis keduanya belum terbukti sama."],
+                    ]
+                    h1_debt_flow_exhibit = add(
+                        "Rekonsiliasi arus pinjaman dan pembayaran utang H1 2026",
+                        ["Arus kas pendanaan H1 2026 (US$m)", "Nilai", "Basis / batas rekonsiliasi"],
+                        h1_debt_rows,
+                        f"Sumber utama: {hc.get('source_title')}, laporan arus kas cetak hlm. "
+                        f"{(hc.get('source_pages') or {}).get('cash_flow_statement')} dan rincian pembayaran pokok Note 17 hlm. "
+                        f"{(hc.get('source_pages') or {}).get('long_term_principal_detail')}; {hc.get('source_url')}. "
+                        "Presentasi manajemen H1 hlm. 16 menyebut US$588m utang dibayar YTD; laporan keuangan merinci US$580,866m pembayaran pokok jangka panjang. "
+                        "Selisih nominal headline tidak dijelaskan dalam sumber yang ditelaah dan basis headline belum terbukti sama; angka presisi laporan keuangan tetap dipakai untuk arus kas. "
+                        "Pembayaran US$350m Q3 yang dilaporkan kemudian tidak termasuk dalam periode H1 dan belum memiliki saldo kas/utang pascapembayaran."
+                    )
+                    illustrative_pages.append({
+                        "halaman": 0,
+                        "judul": "Arus kas pinjaman dan pelunasan utang",
+                        "layout": "stack",
+                        "paragraf": [
+                            "Rekonsiliasi H1 menunjukkan arus kas bank bersih keluar US$520,0m, bukan pembayaran pokok bruto. "
+                            "Setelah arus kas perubahan kas dibatasi US$57,5m, total kas bersih aktivitas pendanaan adalah US$462,4m keluar. "
+                            "Headline pelunasan US$588m pada presentasi H1 berbeda secara nominal US$7,134m dari pembayaran pokok jangka panjang rinci; sumber tidak mengonfirmasi bahwa basis keduanya sama atau memberi bridge selisih."
+                        ],
+                        "exhibit": [h1_debt_flow_exhibit],
+                    })
+
+            product_rows = []
+            for row in product_bridge["rows"]:
+                if row.get("price_components"):
+                    price_text = "; ".join(
+                        f"{('Cu' if 'Tembaga' in component['product'] else 'Au')} "
+                        f"US${fmt._id(component['h1_price'], 2)}/{component['unit']}"
+                        for component in row["price_components"])
+                elif row.get("net_realized_price"):
+                    price = row["net_realized_price"]
+                    price_unit = str(price.get("unit", row["unit"])).replace("USD/", "")
+                    if price_unit == "tonne":
+                        price_unit = "t"
+                    if row.get("h2_price_basis", "").startswith("Q2 implied"):
+                        price_text = (f"Q2 impl. US${fmt._id(row['unit_value'], 0)}/"
+                                      f"{price_unit}")
+                    else:
+                        price_text = (f"H1 US${fmt._id(price['value'], 0)}/"
+                                      f"{price_unit}")
+                else:
+                    price_text = (f"US${fmt._id(row['unit_value'], 2)}/"
+                                  f"unit revenue proxy")
+                product_rows.append([
+                    row["label"], _volume_text(row["h1_sold"], row["unit"]),
+                    price_text,
+                    _volume_text(row["h2_production"], row["unit"]),
+                    _volume_text(row["h2_sales"], row["unit"]),
+                    fmt._id(row["h2_revenue"] / 1e6, 1)])
+            product_rows.extend([
+                ["Subtotal product bridge", "-", "-", "-", "-",
+                 fmt._id(product_bridge["base_sum"] / 1e6, 1)],
+                ["Top-down H2 analyst scenario", "-", "-", "-", "-",
+                 fmt._id(product_bridge["h2_topdown"] / 1e6, 1)],
+                ["Gap belum dijelaskan", "-", "-", "-", "-",
+                 fmt._id(product_bridge["residual"] / 1e6, 1)]])
+            product_exhibit = add(
+                "Uji revenue H2 dari volume produk dan realized price",
+                ["Produk", "H1 terjual aktual", "Basis harga H2", "H2 output tersirat", "H2 sales skenario", "H2 revenue (US$m)"],
+                product_rows,
+                "H1 sales dan realized prices: AMMAN H1 2026 Earnings Presentation, hlm. 22; FY output guidance: "
+                "AMMAN H1 2026 Earnings Release, hlm. 7. H2 sales memakai sell-through Q2 turunan untuk produk olahan; "
+                "cabang sensitivitas konservatif mengecualikan penjualan konsentrat karena volume ekspor H2 belum dapat diverifikasi. "
+                "Q2 implied net realized price untuk katoda dan emas diturunkan dari rata-rata tertimbang harga Q1 dan H1 yang dilaporkan; angka sumber dibulatkan, sehingga ini estimasi, bukan harga Q2 yang dilaporkan terpisah. Harga Q1 dan H1 sama-sama net of mark-to-market adjustment. Ini bukan fakta aktual, forecast emiten, atau bukti penjualan konsentrat total nol. "
+                "DetikBali (6 Mei 2026) mengutip pejabat NTB mengatakan AMNT mengajukan tambahan waktu enam bulan; "
+                "DetikBali (7 Mei 2026) mengutip VP Corporate Communications AMMAN bahwa perpanjangan belum diajukan; "
+                "kedua laporan itu bertentangan. IDN Times (6 Juni 2026) mengutip Kepala ESDM NTB yang menyampaikan hasil koordinasi AMNT belum berencana mengajukan. "
+                "Laporan media itu terbatas pada tanggal masing-masing, bukan konfirmasi status izin setelah Juni. "
+                "Rujukan: https://www.detik.com/bali/bisnis/d-8477778/amnt-ajukan-perpanjangan-ekspor-konsentrat-ke-esdm; "
+                "https://www.detik.com/bali/bisnis/d-8479474/amnt-sebut-belum-ajukan-perpanjangan-izin-ekspor-konsentrat; "
+                "https://ntb.idntimes.com/news/ntb/amnt-dipastikan-tak-ajukan-perpanjangan-relaksasi-ekspor-konsentrat-00-ldn3d-b7qt8x. "
+                "Paparan Publik AMMAN 2026, hlm. 16, menyatakan konsentrat hanya dapat dijual dengan izin sementara sampai 30 April 2026; laporan interim H1 mengonfirmasi izin tersebut berakhir, bukan status izin berikutnya. "
+                "PP 24/2026 tentang ekspor SDA strategis mencakup batubara, kelapa sawit, dan ferroalloy pada tahap awal, bukan konsentrat tembaga; peraturan tersebut tidak membuktikan ada atau tidaknya izin AMNT. "
+                "AMMAN juga menyatakan stabilitas utilisasi smelter dapat memengaruhi timing persediaan dan penjualan konsentrat: "
+                "FY 2025 Earnings Presentation, hlm. 19. "
+                f"Top-down H2 revenue US${fmt._id(product_bridge['h2_topdown']/1e6, 1)} juta berasal dari "
+                f"{top_down_projection.get('source_title', 'skenario analis yang dimasukkan')}; angka ini adalah hurdle skenario, "
+                "bukan panduan emiten atau forecast tervalidasi. "
+                "Harga Q2 implied untuk katoda/emas dan net realized price H1 untuk konsentrat dipakai sebagai proxy H2, bukan forecast harga emiten. H2 adalah periode enam bulan Jul-Dec yang "
+                "dihitung dari H1 aktual. Presentasi H1 menyebut first ore mill baru pada pertengahan Agustus, laju smelter Juni 93%, "
+                "rate Juli-Agustus membaik/stabil, dan rekor kinerja baru pada Juli-Agustus; tetapi tidak memberi tonase umpan atau "
+                "produksi bulanan Jul-Aug, sehingga update operasional ini belum memvalidasi penjualan maupun revenue H2. Volume periode itu masih belum dapat "
+                "diisolasi sebagai actual kuantitatif dalam jembatan ini. Sumber: AMMAN H1 2026 Earnings Presentation, hlm. 10, 12, 18; "
+                "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline. "
+                "Rilis H1/Q1 resmi membulatkan revenue segmen.")
+            q2_concentrate = next((row for row in
+                                   q2_data.get("sales_production_bridge") or []
+                                   if row.get("product_key") == "concentrate"), {})
+            concentrate_scenario = next((row for row in
+                                         ((intake.get("analyst_scenario") or {}).get("product_sales") or [])
+                                         if row.get("product_key") == "concentrate"), {})
+            contingent_text = ""
+            if q2_concentrate.get("revenue_per_sold_unit_proxy") and \
+                    concentrate_scenario.get("conditional_case_h2_sales_to_h1"):
+                h1_conc = next((row for row in product_bridge["rows"]
+                                if row["key"] == "concentrate"), None)
+                if h1_conc:
+                    contingent_volume = (h1_conc["h1_sold"] *
+                                         concentrate_scenario["conditional_case_h2_sales_to_h1"])
+                    contingent_value = contingent_volume * q2_concentrate["revenue_per_sold_unit_proxy"]
+                    contingent_text = (
+                        f" Jika ada izin/kanal dan kontrak yang berlaku, {_volume_text(contingent_volume, 'dmt')} penjualan konsentrat (volume H1) "
+                        f"pada proxy revenue Q2 sekitar US${fmt._id(contingent_value/1e6, 1)} juta akan menutup hampir "
+                        "seluruh gap. Ini sensitivitas, bukan asumsi base atau bukti penjualan.")
+            delivery_commitment = ((intake.get("official_evidence") or {}).get(
+                "customer_delivery_commitment") or {})
+            commitment_text = ""
+            if delivery_commitment:
+                advance = delivery_commitment.get("prepayment_advance_usd_thousand") or {}
+                opening_advance = advance.get("balance_2025_12_31")
+                received_advance = advance.get("received_2026_04")
+                closing_advance = advance.get("balance_2026_06_30")
+                commitment_text = (
+                    " Kontrak Glencore mendukung keberadaan kanal penjualan katoda dengan komitmen "
+                    f"pengiriman sampai {delivery_commitment.get('delivery_commitment_until')}; uang muka "
+                    "dipotong proporsional dari pengiriman bulanan, dan kegagalan memenuhi komitmen "
+                    "mewajibkan pembayaran kembali uang muka terkait beserta bunga. "
+                )
+                if all(value is not None for value in
+                       (opening_advance, received_advance, closing_advance)):
+                    commitment_text += (
+                        f"Penerimaan uang muka April adalah US${fmt._id(received_advance/1000, 1)} juta; "
+                        f"saldo naik bersih dari US${fmt._id(opening_advance/1000, 1)} juta pada akhir 2025 "
+                        f"menjadi US${fmt._id(closing_advance/1000, 1)} juta pada akhir Juni. "
+                    )
+                commitment_text += (
+                    "Catatan tidak mengungkap volume tersisa per kuartal, formula harga, atau rekonsiliasi "
+                    "penerimaan dan potongan atas pengiriman. Kontrak ini tidak memvalidasi volume katoda H2 "
+                    "atau harga pada bridge. Sumber: "
+                    f"{delivery_commitment.get('source_title')}, hlm. {delivery_commitment.get('source_page')}; "
+                    f"{delivery_commitment.get('source_url')}."
+                )
+            export_report = (((intake.get("official_evidence") or {}).get(
+                "strategic_export_governance_2026") or {}).get(
+                    "reported_export_realization") or {})
+            export_text = ""
+            if export_report:
+                export_text = (
+                    f" Data terpisah yang Bloomberg Technoz atribusikan kepada pejabat Kemendag menyebut "
+                    f"ekspor sementara {fmt._id(export_report.get('volume', 0)/1000, 0)} ribu "
+                    f"{export_report.get('unit')} sampai menjelang izin berakhir pada April 2026; "
+                    "verifikasi bersama Bea Cukai saat itu masih berlangsung. Angka WMT ini tidak dapat "
+                    "direkonsiliasi langsung dengan rekomendasi kuota 480 ribu DMT AMMAN karena konversi "
+                    "kadar air tidak tersedia, tidak sama dengan revenue sales, dan tidak membuktikan izin H2. "
+                    f"Sumber laporan bertanggal {export_report.get('published_date')}: "
+                    f"{export_report.get('source_url')}."
+                )
+            illustrative_pages.append({
+                "halaman": 0, "judul": "Uji monetisasi produksi terhadap revenue H2",
+                "layout": "stack",
+                "paragraf": [
+                    f"Product bridge pada asumsi penjualan dasar menghasilkan US${fmt._id(product_bridge['base_sum']/1e6, 1)} juta, dibanding top-down US${fmt._id(product_bridge['h2_topdown']/1e6, 1)} juta. "
+                    f"Gap US${fmt._id(product_bridge['residual']/1e6, 1)} juta masih belum dijelaskan.{contingent_text}{commitment_text}{export_text} "
+                    "Karena belum ada konfirmasi volume H2, realized price forward, atau jadwal stockpile/umpan smelter, kedua angka tetap skenario internal dan release gate tetap draft."],
+                "exhibit": [product_exhibit]})
+
+            h1_price_rows = []
+            reconstructed_total = 0.0
+            reported_total = 0.0
+            for row in product_bridge["rows"]:
+                if row.get("price_components"):
+                    price_basis = "; ".join(
+                        f"{fmt._id(component['h1_sold'] / 1e6, 1)} Mlb Cu × "
+                        f"US${fmt._id(component['h1_price'], 2)}/lb" if component["unit"] == "lb" else
+                        f"{fmt._id(component['h1_sold'] / 1000, 1)} koz Au × "
+                        f"US${fmt._id(component['h1_price'], 0)}/oz"
+                        for component in row["price_components"])
+                else:
+                    realized = row.get("net_realized_price") or {}
+                    price_unit = str(realized.get("unit", row["unit"])).replace("USD/", "")
+                    if price_unit == "tonne":
+                        price_unit = "t"
+                    price_basis = (f"{_volume_text(row['h1_sold'], row['unit'])} × "
+                                   f"US${fmt._id(row['unit_value'], 0)}/{price_unit}")
+                reconstructed = row["unit_value"] * row["h1_sold"]
+                reconstructed_total += reconstructed
+                reported_total += row["h1_revenue"]
+                h1_price_rows.append([
+                    row["label"], price_basis,
+                    fmt._id(reconstructed / 1e6, 1),
+                    fmt._id(row["h1_revenue"] / 1e6, 0),
+                    fmt._id((reconstructed - row["h1_revenue"]) / 1e6, 1),
+                ])
+            h1_price_rows.append([
+                "Total produk", "Revenue dihitung dari volume × realized price",
+                fmt._id(reconstructed_total / 1e6, 1),
+                fmt._id(reported_total / 1e6, 0),
+                fmt._id((reconstructed_total - reported_total) / 1e6, 1),
+            ])
+            h1_price_exhibit = add(
+                "Rekonsiliasi realized price dengan revenue produk H1",
+                ["Produk", "Volume × harga terealisasi H1", "Revenue hitungan (US$m)",
+                 "Revenue segmen dilaporkan (US$m)", "Selisih (US$m)"],
+                h1_price_rows,
+                "Harga realisasi dan volume penjualan: AMMAN H1 2026 Earnings Presentation, hlm. 22; "
+                "revenue segmen: AMMAN H1 2026 Earnings Release, hlm. 3-4. Harga/volume "
+                "yang dipublikasikan dibulatkan sehingga tie-out tidak presisi; selisih tidak "
+                "dianggap penyesuaian harga yang bisa diekstrapolasi ke H2. Untuk konsentrat, "
+                "Cu dan Au dihitung terpisah memakai net realized metal price yang dilaporkan.")
+            illustrative_pages.append({
+                "halaman": 0,
+                "judul": "Uji realized price terhadap revenue aktual H1",
+                "layout": "stack",
+                "paragraf": [
+                    "Volume kali harga realisasi memberi cross-check revenue tiap produk. "
+                    "Selisih kecil terhadap revenue segmen berasal dari presisi publikasi "
+                    "yang dibulatkan dan tidak dipakai untuk menambah atau mengurangi "
+                    "asumsi H2."],
+                "exhibit": [h1_price_exhibit]})
+
+            capacity = evidence.get("processing_capacity") or {}
+            capacity_products = capacity.get("products") or {}
+            actual_by_key = {
+                _product_key(row.get("product")): row for row in
+                (evidence.get("sales_production_bridge") or [])}
+            guidance_map = {
+                "cathode_copper": ("Katoda tembaga (kt)", 1000),
+                "refined_gold": ("Emas murni (koz)", 1000),
+            }
+            capacity_rows = []
+            for key, (guide_name, unit_multiplier) in guidance_map.items():
+                cap_product = capacity_products.get(key) or {}
+                actual_product = actual_by_key.get(key) or {}
+                guide = next((item for item in guidance
+                              if item.get("name") == guide_name and
+                              item.get("value") is not None), None)
+                actual_output = actual_product.get("production")
+                annual_capacity = cap_product.get("annual_design_capacity")
+                if not all(isinstance(value, (int, float)) for value in
+                           (guide.get("value") if guide else None,
+                            actual_output, annual_capacity,
+                            cap_product.get("fy2025_production"))):
+                    continue
+                guide_output = guide["value"] * unit_multiplier
+                h2_balance = guide_output - actual_output
+                half_capacity = annual_capacity / 2
+                needed_utilization = h2_balance / half_capacity if half_capacity else None
+                unit = actual_product.get("unit") or cap_product.get("unit")
+                capacity_rows.append([
+                    cap_product.get("name") or key,
+                    _volume_text(cap_product["fy2025_production"], unit) +
+                    f" / {fmt._id(cap_product.get('fy2025_output_rate_pct'), 0)}%",
+                    _volume_text(actual_output, unit),
+                    _volume_text(guide_output, unit),
+                    _volume_text(h2_balance, unit),
+                    _volume_text(half_capacity, unit),
+                    fmt.pct(needed_utilization) if needed_utilization is not None else "-",
+                ])
+            if capacity_rows:
+                capacity_exhibit = add(
+                    "Kapasitas fasilitas versus panduan produksi FY26",
+                    ["Produk", "FY25 produksi / output rate", "H1 aktual", "FY26 guidance", "FY26 balance vs H1", "½ kapasitas desain", "Utilisasi H2 tersirat"],
+                    capacity_rows,
+                    f"Nameplate dan output rate FY2025: {capacity.get('source_title')}, "
+                    f"hlm. {', '.join(str(page) for page in capacity.get('source_pages') or [])}; "
+                    f"{capacity.get('source_url')}. H1 actual dan FY26 guidance: "
+                    "AMMAN H1 2026 Earnings Release, hlm. 3 dan 7. Balance FY guidance "
+                    "dikurangi output H1 dan utilisasi H2 dihitung analis dengan membagi "
+                    "nameplate tahunan menjadi dua semester. Presentasi H1 melaporkan mill baru first ore pada pertengahan Agustus, "
+                    "smelter rate Juni 93%, rate Juli-Agustus membaik/stabil, dan catatan rekor kinerja baru Juli-Agustus; "
+                    "tetapi tidak memberi output bulanan Jul-Aug. "
+                    "Karena itu pembagian kapasitas desain menjadi dua semester bukan jadwal aktual H2. " +
+                    str(capacity.get("capacity_caveat") or ""))
+                illustrative_pages.append({
+                    "halaman": 0,
+                    "judul": "Uji kapasitas terhadap sisa panduan produksi",
+                    "layout": "stack",
+                    "paragraf": [
+                        "Panduan logam olahan FY26 menyiratkan produksi untuk seluruh periode H2 yang lebih tinggi "
+                        "daripada output H1, tetapi masih di bawah setengah kapasitas desain "
+                        "tahunan. Ini mendukung kemungkinan fisik ramp-up; angka tersebut "
+                        "tetap panduan produksi, bukan volume penjualan atau forecast revenue."],
+                    "exhibit": [capacity_exhibit]})
+
         agent_case = fc.get("interim_scenario")
         if agent_case:
             case_money = lambda value: fmt._id(value / 1e6, 1)
@@ -361,7 +1806,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                 f"Sumber aktual: {agent_case['source_url']} (terbit "
                 f"{agent_case['published_at']}); 2H26 adalah asumsi analis. "
                 "Rasio produksi panduan tidak sama dengan penjualan: persediaan, bauran "
-                "produk, harga realisasi, dan biaya belum direkonsiliasi.")
+                "produk, harga realisasi, dan biaya belum direkonsiliasi. Per 24 Sep, "
+                "2H mencakup Jul-Dec; produksi/penjualan Jul-Aug belum tersedia sebagai "
+                "actual publik setelah H1 cutoff.")
             case_assumptions = agent_case["assumptions"]
             ratio_exhibit = add(
                 "Asumsi eksplisit untuk skenario 2H26",
@@ -609,12 +2056,39 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                     "exhibit": [value_exhibit, grid_exhibit]})
 
     if mining:
+        bridge_exhibit = None
         release_rows = [
             ["Hasil interim resmi", ("Tersedia: " + actual["period"] + " dengan data keuangan dan operasi.")
              if actual else "Belum ada hasil interim resmi yang memenuhi tanggal laporan."],
             ["Forecast fisik", "Perlu jadwal produksi, pemrosesan dan penjualan, harga, biaya, pajak dan capex per tahun."],
-            ["SOTP", "Perlu NAV setiap aset dan proyek yang material, kepemilikan, kas, utang, overhead dan jumlah saham."],
+            ["SOTP", "Kas, utang finansial, NCI dan saham sudah bersumber; NAV aset LoM, overhead PV, serta rekonsiliasi uang muka pelanggan ke delivery/arus kas belum tersedia."],
             ["Keputusan rilis", "Rating dan target harga ditahan sampai forecast dan SOTP dapat direkonsiliasi."]]
+        sotp = va.get("sotp") or {}
+        bridge = intake.get("sotp_bridge") or {}
+        if sotp and bridge:
+            cash_value = sotp.get("cash_idr")
+            debt_value = sotp.get("debt_idr")
+            minority_value = sotp.get("minority_interest_idr")
+            shares_value = sotp.get("shares")
+            bridge_rows = [
+                ["Kas dan setara kas", f"Rp{fmt._id(cash_value / 1e12, 2)} triliun" if cash_value is not None else "-",
+                 "Financial Statements 30 Jun 2026, hlm. 1; diterjemahkan pada JISDOR BI 23 Sep 2026."],
+                ["Utang finansial", f"Rp{fmt._id(debt_value / 1e12, 2)} triliun" if debt_value is not None else "-",
+                 "Pinjaman bank neto + lease/pembiayaan; hlm. 2, 89, 98; diterjemahkan pada JISDOR BI 23 Sep 2026."],
+                ["Kepentingan nonpengendali", f"Rp{fmt._id(minority_value / 1e12, 2)} triliun" if minority_value is not None else "-",
+                 "Financial Statements 30 Jun 2026, hlm. 3; diterjemahkan pada JISDOR BI 23 Sep 2026."],
+                ["Saham beredar", f"{fmt._id(shares_value / 1e6, 1)} juta" if shares_value is not None else "-",
+                 "Financial Statements 30 Jun 2026, hlm. 101; sesudah saham treasuri."],
+                ["PV overhead korporat", "Belum tersedia",
+                 "Tidak ada proyeksi overhead dan dasar kapitalisasi yang bersumber."],
+                ["Uang muka pelanggan", f"US${fmt._id((bridge.get('customer_advance_excluded_usd_thousand') or 0) / 1000, 1)} juta",
+                 "Tidak dimasukkan ke utang finansial; volume delivery, harga, dan alokasi arus kas kontrak belum dipetakan."],
+            ]
+            bridge_exhibit = add("Jembatan korporat SOTP yang terverifikasi, masih parsial",
+                ["Komponen", "Nilai / status", "Basis dan batas bukti"], bridge_rows,
+                "Sumber: AMMAN H1 2026 Financial Statements dan Bank Indonesia JISDOR 23 Sep 2026. "
+                "Saldo keuangan per 30 Jun 2026 diterjemahkan ke IDR memakai JISDOR Rp17.803/USD; "
+                "ini hanya mengisi jembatan korporat, bukan NAV aset atau target harga.")
     else:
         release_rows = [
             ["Hasil interim resmi", ("Tersedia: " + actual["period"])
@@ -630,16 +2104,17 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
     if actual:
         if mining:
             watch_rows = [
-                [f"Perkembangan operasi {i + 1}", item["fact"],
+                [item.get("label") or f"Perkembangan operasi {i + 1}", item["fact"],
                  "Uji dampaknya pada volume terjual, biaya, arus kas dan nilai aset."]
                 for i, item in enumerate((evidence.get("operating_context") or [])[:2])
                 if item.get("fact")]
             segments = revenue_breakdown.get("segments") or []
             if segments:
                 segment = max(segments, key=lambda row: row.get("current") or 0)
+                segment_name = re.sub(r"^penjualan\s+", "", segment["name"], flags=re.IGNORECASE)
                 watch_rows.append([
-                    f"Bauran {segment['name']}",
-                    f"Penjualan {segment['name']} {money_phrase(segment.get('current'))} "
+                    f"Penjualan {segment_name} H1",
+                    f"Penjualan {segment_name} {money_phrase(segment.get('current'))} "
                     f"pada {actual['period']}.",
                     "Pantau volume, harga realisasi dan waktu pengakuan penjualan."])
             if guidance:
@@ -659,10 +2134,20 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                  "Butuh jadwal modal kerja, capex, bunga dan pajak."],
                 ["Forecast", "Driver tahunan belum didukung bukti yang tervalidasi.",
                  "Rating dan target harga tetap ditahan."]]
+        operating_sources = evidence.get("operating_context") or []
+        operating_source = next((item for item in operating_sources
+                                if item.get("label") == "Ramp-up fasilitas hilir"), {})
+        watch_source_note = f"Sumber fakta: {actual['source_title']}; "
+        if operating_source.get("source_url"):
+            watch_source_note += (
+                f"ramp-up fasilitas: {operating_source.get('source_title')}, "
+                f"hlm. {', '.join(str(page) for page in operating_source.get('source_pages') or [])}; "
+                f"{operating_source['source_url']}. "
+            )
+        watch_source_note += "Kolom implikasi adalah analisis Sektoral dan belum menjadi asumsi valuasi."
         add("Katalis, risiko, dan indikator pemantauan",
             ["Tema", "Bukti terkini", "Implikasi yang diuji"], watch_rows,
-            f"Sumber fakta: {actual['source_title']}; kolom implikasi adalah "
-            "analisis Sektoral dan belum menjadi asumsi valuasi.")
+            watch_source_note)
 
     if actual:
         current = actual["metrics"]
@@ -747,7 +2232,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             cash = balance.get("cash")
             if cash is not None and debt is not None:
                 net_debt_text = f"utang bersih {money_phrase(debt - cash)}"
-                position_text = (f"Kas {money_phrase(cash)} dan pinjaman berbunga "
+                debt_label = ("utang finansial (pinjaman bank dan lease/pembiayaan)"
+                              if balance.get("debt_scope") else "pinjaman berbunga")
+                position_text = (f"Kas {money_phrase(cash)} dan {debt_label} "
                                  f"{money_phrase(debt)} menyiratkan {net_debt_text}.")
             else:
                 cash_text = money_phrase(cash) if cash is not None else "belum tersedia"
@@ -759,9 +2246,11 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             valuation_text = (
                 f"{position_text} Per {balance.get('period_end', 'tanggal laporan')}. "
                 f"Ekuitas tercatat {equity_text}. " +
-                ("SOTP yang dapat dipakai sebagai target perlu LoM dan NAV tiap aset "
-                 "material, arus kas pemrosesan, biaya penyelesaian proyek, nilai "
-                 "opsi yang disesuaikan risiko, dan rekonsiliasi utang bersih. " if mining else
+                ("SOTP yang dapat dipakai sebagai target masih memerlukan NAV LoM "
+                 "tiap aset material, jadwal arus kas dan capex per aset, serta PV "
+                 "overhead korporat. Uang muka pelanggan Glencore US$388,4 juta "
+                 "dicatat terpisah dari utang finansial dan belum direkonsiliasi "
+                 "ke volume delivery/arus kas. " if mining else
                 "DCF FCFF yang dapat dipakai sebagai target memerlukan jadwal utang dan "
                 "bunga, capex, perubahan modal kerja, serta proyeksi operasi yang "
                 "terhubung. Selisih nilai Gordon dan exit multiple pada screen lama "
@@ -846,7 +2335,6 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                       "Jembatan pendapatan menurut layanan dan pelanggan",
                       f"Komposisi pendapatan {actual['period']}" if actual else "",
                       "Metrik operasi dan pemrosesan",
-                      "Cadangan dan jadwal tambang dari rilis resmi",
                       f"Panduan produksi {guidance_period} dari manajemen" if guidance and actual else ""}]},
         {"halaman": 4, "judul": "Valuasi dan kelengkapan bukti",
          "layout": "stack",
@@ -855,10 +2343,72 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                      {"Pemeriksaan sebelum rating dan target harga",
                       "Katalis, risiko, dan indikator pemantauan"}]},
     ]
+    if mining:
+        sections.insert(2, {
+            "halaman": 4, "judul": "Cadangan, jadwal proyek, dan biaya",
+            "layout": "stack",
+            "paragraf": [
+                "Rilis terbaru memberi basis reserve/resource dan tonggak umur tambang, "
+                "serta beberapa biaya unit aktual. Seri resmi cash cost berubah dari "
+                "US$14,68/lb pada H1 2025 menjadi negatif US$0,58/lb pada H1 2026, "
+                "bersamaan dengan perubahan besar pada kredit by-product; angka H1 2026 "
+                "bukan run-rate biaya ke depan. Presentasi H1 menyebut rencana "
+                "tambang masih disusun, sementara perizinan koridor OLC dan pemilihan "
+                "kontraktor early engineering masih berjalan. Presentasi FY2025 "
+                "menyatakan feasibility study Elang selesai, dengan optimasi teknis "
+                "masih berlangsung. Annual Report 2025 menyebut operasi Elang "
+                "berlanjut setidaknya sampai 2050. Pengumuman scoping AMDAL September "
+                "menambahkan skala rencana penambangan bijih sekitar 90 Mt/tahun dan "
+                "lingkup infrastruktur awal, tetapi belum memberi jadwal produksi tahunan. "
+                "Panjang OLC 54 km versus 60 km belum direkonsiliasi. Data publik tersebut belum "
+                "memuat jadwal produksi tahunan, biaya per aset, capex Elang, atau "
+                "FCFF untuk NAV LoM."],
+            "exhibit": [e for e in exhibits if e["judul"] in {
+                "Cadangan dan sumber daya mineral",
+                "Biaya unit historis dan pelunasan utang Q3",
+                "Biaya operasi historis per setengah tahun",
+                "Jembatan unit cash cost per pon Cu terjual"}]})
+        schedule_exhibit = next((e for e in exhibits if e["judul"] ==
+                                 "Jadwal operasi dan status pengembangan tambang"), None)
+        if amdal_scope_exhibit:
+            sections.insert(3, {
+                "halaman": 6, "judul": "Elang: skala tambang dan infrastruktur pada tahap AMDAL",
+                "layout": "stack",
+                "paragraf": [
+                    "Pengumuman ini memberi batas skala awal untuk menguji konsistensi rancangan, bukan untuk membentuk lintasan throughput atau capex. Perbedaan panjang conveyor dan tidak adanya jadwal tambang membuat FCFF Elang belum dapat dihitung dari angka ini."],
+                "exhibit": [amdal_scope_exhibit]})
+        if schedule_exhibit:
+            sections.insert(4, {
+                "halaman": 5, "judul": "Jadwal operasi dan status pengembangan tambang",
+                "layout": "stack",
+                "paragraf": [
+                    "Jadwal ini merangkum tonggak publik, bukan jadwal produksi atau "
+                    "arus kas tahunan yang tervalidasi. Elang masih memerlukan studi, "
+                    "optimasi teknis, perizinan, dan keputusan investasi; angka "
+                    "investasi indikatif belum dimasukkan ke valuasi."],
+                "exhibit": [schedule_exhibit]})
+        if bridge_exhibit:
+            sections.insert(5, {
+                "halaman": 5, "judul": "Jembatan korporat untuk SOTP",
+                "layout": "stack",
+                "paragraf": [
+                    "Kas, utang finansial, kepentingan nonpengendali dan saham beredar "
+                    "kini memiliki input bersumber. Jembatan ini masih parsial: PV "
+                    "overhead dan NAV aset belum tersedia; uang muka Glencore perlu "
+                "dipetakan ke kewajiban delivery sebelum net debt final."],
+                "exhibit": [bridge_exhibit]})
+        if inventory_sales_section:
+            sections.insert(2, inventory_sales_section)
+        if physical_sales_section:
+            sections.insert(2, physical_sales_section)
+        if royalty_section:
+            sections.insert(2, royalty_section)
+        if capex_section:
+            sections.insert(2, capex_section)
     if illustrative_pages:
         sections[2:2] = illustrative_pages
-        for page_number, section in enumerate(sections, start=2):
-            section["halaman"] = page_number
+    for page_number, section in enumerate(sections, start=2):
+        section["halaman"] = page_number
 
     method = (method or "auto").lower()
     method_select = method
@@ -964,6 +2514,12 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
         "bila tersedia; forecast tidak diturunkan otomatis dari CAGR historis.",
         "Tanda '-' berarti angka tidak tersedia atau belum tervalidasi, bukan nol.",
     ]
+    if market_rail.get("adtv") is not None:
+        catatan.append(
+            f"ADTV adalah rata-rata nilai transaksi 90 hari berdasarkan {market_rail['adtv_count']} "
+            f"observasi dari {market_rail.get('adtv_source') or 'cache'} sampai {market_rail['adtv_end']}.")
+    if market_rail.get("public_ownership") is not None:
+        catatan.append("Porsi pemegang 'Public' adalah kategori kepemilikan dari snapshot cache, bukan angka free float terverifikasi.")
     if illustrative_pages:
         catatan.append(
             "Skenario ilustratif memakai proksi historis dan metode perpetual/exit; "
@@ -998,7 +2554,12 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                                   "saham": shares_outstanding or intake["shares"],
                                   "market_cap": intake["price"] *
                                   (shares_outstanding or intake["shares"]),
-                                  "adtv": "-", "free_float": "-"},
+                                  "adtv": (f"{fmt.miliar(market_rail['adtv'])}"
+                                           + (f" (s.d. {market_rail['adtv_end']})"
+                                              if market_rail.get("adtv_end") else ""))
+                                  if market_rail.get("adtv") is not None else "-",
+                                  "public_ownership": (fmt.pct(market_rail["public_ownership"])
+                                                       if market_rail.get("public_ownership") is not None else "-")},
                    "key_financials": key_rows},
         "bagian": sections,
         "tabel_asumsi": [], "exhibits": exhibits,
@@ -1022,9 +2583,11 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
     forecast_label = f"FY{scenario['year'] % 100:02d}F"
     value = va["scenario_target"]
     meta = doc["meta"]
-    meta.update(status="distributable_assumption_led", rating=va["rating"],
+    meta.update(status="distributable_assumption_led",
+                model_profile=intake.get("model_profile"), rating=va["rating"],
                 tp=va["tp"], upside_persen=va["upside"] * 100,
                 status_rating=va["rating"], illustrative_scenarios=False)
+    rail = _market_rail(intake)
     doc["method"] = va["method"]
     doc["log_gate"]["G3"] = va["g3"]
     doc["log_gate"]["release"] = va["release"]
@@ -1049,7 +2612,11 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
         "serta multiple 8x EV/EBITDA sebagai asumsi analis, bukan multiple peer terverifikasi.",
         "Skenario 6x/8x/10x menunjukkan sensitivitas; 8x adalah basis target harga.",
         f"Harga penutupan {intake['price_date']} bersumber dari "
-        f"{(intake.get('market_quote') or {}).get('source_url', 'data pasar bertanggal')}.",
+        f"{(intake.get('market_quote') or {}).get('source_url', 'data pasar bertanggal')}. "
+        + (f"ADTV 90 hari memakai {rail['adtv_count']} observasi lokal sampai "
+           f"{rail['adtv_end']}. " if rail.get("adtv") is not None else "")
+        + ("Porsi Public adalah kategori kepemilikan dari snapshot cache, bukan free float terverifikasi."
+           if rail.get("public_ownership") is not None else ""),
         "LoM/SOTP per aset, capex masa depan, dan perubahan kas/utang setelah neraca "
         "interim belum dimodelkan; audit gate SOTP tetap ada dalam trace.",
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
@@ -1106,25 +2673,366 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
     for page in doc["bagian"]:
         if page["judul"] == "Skenario FY26 dari rilis terbaru":
             page["judul"] = f"Forecast {forecast_label} dari rilis terbaru"
+            rationale = ". ".join((scenario.get("rationale") or "").split(". ")[:4]).rstrip(".") + "."
+            rationale, _ = _replace_interest_causality(
+                rationale, scenario["assumptions"]["h2_net_margin_pct"])
             page["paragraf"] = [
                 "Hasil interim resmi menjadi basis semester pertama. Semester kedua "
                 "mengikuti asumsi analis yang dijelaskan di tabel; panduan produksi "
                 "belum otomatis menjadi volume penjualan.",
-                ". ".join((scenario.get("rationale") or "").split(". ")[:4]).rstrip(".") + "."]
+                rationale]
         elif page["judul"] == "Cross-check nilai FY26 dari hasil terbaru":
             page["judul"] = f"Target harga {forecast_label} EV/EBITDA"
             page["paragraf"] = [
                 f"Target Rp{fmt.rp(va['tp'])} memakai EBITDA {forecast_label} "
-                "dan multiple 8x. Rentang 6x–10x memperlihatkan sensitivitas "
+                "dan multiple 8x. Rentang 6x-10x memperlihatkan sensitivitas "
                 "terhadap asumsi valuasi; seluruh nilai memakai utang, minoritas, "
                 "jumlah saham, dan kurs yang ditampilkan."]
         elif page["judul"] == "Valuasi dan kelengkapan bukti":
             page["judul"] = "Valuasi dan batasan model"
             page["paragraf"] = [
                 "Metode utama adalah FY forecast EV/EBITDA 8x dengan asumsi analis. "
+                "Status rilis distributable_assumption_led berlaku melalui jalur opt-in analyst-target; "
+                "gate operating bridge G2.9 dan SOTP aset tetap gagal. "
                 "LoM/SOTP tetap belum lengkap; daftar di bawah menunjukkan bukti "
                 "yang diperlukan untuk menguji ulang nilai aset dan capex."]
         page["halaman"] = doc["bagian"].index(page) + 2
+    bridge = _mining_sales_bridge(intake, scenario)
+    new_pages = []
+    if bridge:
+        bridge_rows = []
+        gold_row = next((row for row in bridge["rows"]
+                         if row["key"] == "refined_gold"), None)
+        for row in bridge["rows"]:
+            h2_required = (bridge["gold_required"]
+                           if row["key"] == "refined_gold" and
+                           bridge["gold_required"] is not None else row["h2_sales"])
+            bridge_rows.append([
+                row["label"],
+                _volume_text(row["h1_sold"], row["unit"]),
+                fmt._id(row["h1_revenue"] / 1e6, 1),
+                (f"Q2 impl. US$ {fmt._id(row['unit_value'], 0)}/{row['unit']}"
+                 if row.get("h2_price_basis", "").startswith("Q2 implied") else
+                 f"H1 proxy US$ {fmt._id(row['unit_value'], 0)}/{row['unit']}"),
+                _volume_text(row["h2_sales"], row["unit"]),
+                fmt._id(row["h2_revenue"] / 1e6, 1),
+                _volume_text(h2_required, row["unit"]),
+            ])
+        bridge_rows.extend([
+            ["Subtotal pada basis harga H2", "-", fmt._id(
+                sum(row["h1_revenue"] for row in bridge["rows"]) / 1e6, 1),
+             "-", "-", fmt._id(bridge["base_sum"] / 1e6, 1), "-"],
+            ["Skenario pendapatan H2", "-", "-", "-", "-", fmt._id(
+                bridge["h2_topdown"] / 1e6, 1), "-"],
+            ["Selisih yang belum dijelaskan", "-", "-", "-", "-", fmt._id(
+                bridge["residual"] / 1e6, 1), "-"],
+        ])
+        actual = (intake.get("official_evidence") or {}).get("latest_actual") or {}
+        analyst_scenario = intake.get("analyst_scenario") or {}
+        market_refs = {row.get("product_key"): row for row in
+                       (analyst_scenario.get("market_references") or [])}
+        bridge_exhibit = {
+            "n": 11.1, "judul": "Jembatan penjualan produk dan revenue H2 2026",
+            "tipe": "tabel",
+            "data": {"cols": ["Produk", "H1 terjual", "H1 revenue (US$m)",
+                              "Basis harga H2", "H2 terjual (basis)",
+                              "H2 revenue pada basis harga H2 (US$m)",
+                              "H2 terjual untuk rekonsiliasi"],
+                     "rows": bridge_rows},
+            "catatan_sumber": (
+                f"Sumber H1: {actual.get('source_title')}, hlm. 3-4; guidance FY: "
+                f"{actual.get('source_title')}, hlm. 7; {str(analyst_scenario.get('basis', 'asumsi analis')).rstrip('. ')}. "
+                "Untuk katoda dan emas dipakai estimasi Q2 net realized price dari harga Q1/H1 dan volume sales tertimbang; sumber dibulatkan sehingga harga Q2 ini turunan. Untuk konsentrat, basis H1 menggabungkan net realized Cu/Au dan volume logam; tidak menangkap variasi payability, TC-RC, atau bauran H2.")
+        }
+        doc["exhibits"].append(bridge_exhibit)
+        gold_sellthrough_h1 = (
+            gold_row["h1_sold"] / gold_row["h1_production"]
+            if gold_row and gold_row["h1_production"] else None)
+        bridge_paragraph = (
+            f"Pada volume dasar dan basis harga H2 yang memakai estimasi harga Q2 untuk katoda/emas serta net realized H1 untuk konsentrat, produk membentuk revenue H2 US$ {fmt._id(bridge['base_sum']/1e6, 1)} juta, "
+            f"di bawah skenario top-down US$ {fmt._id(bridge['h2_topdown']/1e6, 1)} juta; selisih US$ {fmt._id(bridge['residual']/1e6, 1)} juta belum dijelaskan. "
+            if bridge["residual"] is not None else "")
+        if gold_row and bridge["gold_required"] is not None:
+            bridge_paragraph += (
+                f"Jika seluruh selisih ditutup lewat penjualan emas murni pada implied net realized price Q2, volume H2 perlu "
+                f"{_volume_text(bridge['gold_required'], gold_row['unit'])}, atau "
+                f"{fmt.pct(bridge['gold_required_sellthrough'])} dari output H2 tersirat. "
+                f"Rasio penjualan/output H1 adalah {fmt.pct(gold_sellthrough_h1)}. "
+                "Volume rekonsiliasi adalah kebutuhan matematis, bukan guidance atau forecast penjualan independen.")
+        q2_conc = next((row for row in
+                        (((intake.get("official_evidence") or {}).get("quarterly_actuals") or {})
+                         .get("q2_2026_derived") or {}).get("sales_production_bridge") or []
+                        if row.get("product_key") == "concentrate"), None)
+        conditional_h1_conc = next((row for row in
+                                    (analyst_scenario.get("product_sales") or [])
+                                    if row.get("product_key") == "concentrate"), {})
+        if q2_conc and conditional_h1_conc.get("conditional_case_h2_sales_to_h1"):
+            conditional_volume = (conditional_h1_conc["conditional_case_h2_sales_to_h1"] *
+                                  next(row["h1_sold"] for row in bridge["rows"]
+                                       if row["key"] == "concentrate"))
+            q2_conc_value = q2_conc.get("revenue_per_sold_unit_proxy")
+            conditional_revenue = conditional_volume * q2_conc_value if q2_conc_value else None
+            if conditional_revenue is not None:
+                bridge_paragraph += (
+                    f"Sebagai uji bersyarat, penjualan konsentrat { _volume_text(conditional_volume, 'dmt')} "
+                    f"pada proxy revenue Q2 US$ {fmt._id(q2_conc_value, 0)}/dmt memberi sekitar "
+                    f"US$ {fmt._id(conditional_revenue/1e6, 1)} juta. Nilai itu hampir menutup gap, "
+                    "tetapi bukan realized netback dan bergantung pada izin/kanal serta kontrak yang belum dibuktikan.")
+        delivery_commitment = ((intake.get("official_evidence") or {}).get(
+            "customer_delivery_commitment") or {})
+        if delivery_commitment:
+            advance = delivery_commitment.get("prepayment_advance_usd_thousand") or {}
+            opening_advance = advance.get("balance_2025_12_31")
+            received_advance = advance.get("received_2026_04")
+            closing_advance = advance.get("balance_2026_06_30")
+            commitment_text = (
+                "Kontrak Glencore mendukung keberadaan kanal penjualan katoda: komitmen pengiriman "
+                f"berlaku sampai {delivery_commitment.get('delivery_commitment_until')}; "
+                "uang muka dikurangkan proporsional dari pengiriman bulanan dan kegagalan memenuhi "
+                "komitmen mewajibkan pembayaran kembali uang muka terkait beserta bunga. "
+            )
+            if all(value is not None for value in
+                   (opening_advance, received_advance, closing_advance)):
+                net_change = closing_advance - opening_advance
+                commitment_text += (
+                    f"Catatan mencatat penerimaan uang muka US$ {fmt._id(received_advance/1000, 1)} juta "
+                    f"pada April, saldo US$ {fmt._id(opening_advance/1000, 1)} juta pada akhir 2025, "
+                    f"dan US$ {fmt._id(closing_advance/1000, 1)} juta pada akhir Juni "
+                    f"(perubahan bersih +US$ {fmt._id(net_change/1000, 1)} juta). "
+                )
+            commitment_text += (
+                "Namun volume kontrak dan sisa kewajiban per kuartal, formula harga, serta rekonsiliasi "
+                "penerimaan uang muka dengan potongan atas pengiriman tidak diungkap. Karena itu kontrak "
+                "tidak membuktikan asumsi penjualan katoda H2 pada tabel. Sumber: "
+                f"{delivery_commitment.get('source_title')}, hlm. {delivery_commitment.get('source_page')}; "
+                f"{delivery_commitment.get('source_url')}."
+            )
+            bridge_paragraph += " " + commitment_text
+        new_pages.append({
+            "halaman": 0, "judul": "Jembatan revenue H2 menurut produk",
+            "layout": "stack", "paragraf": [bridge_paragraph],
+            "exhibit": [bridge_exhibit]})
+
+        q2 = ((intake.get("official_evidence") or {}).get("quarterly_actuals") or {}).get(
+            "q2_2026_derived") or {}
+        q2_fin = q2.get("financials_usd_mn") or {}
+        q2_sales = q2.get("sales_production_bridge") or []
+        if q2_fin and q2_sales:
+            q2_rows = []
+            for item in q2_sales:
+                if not item.get("product_key") in ("concentrate", "cathode_copper", "refined_gold"):
+                    continue
+                product_label = {"concentrate": "Konsentrat", "cathode_copper": "Katoda tembaga",
+                                 "refined_gold": "Emas murni"}[item["product_key"]]
+                q2_revenue = item.get("segment_revenue_usd_mn")
+                if q2_revenue is None and item["product_key"] == "concentrate":
+                    q2_revenue = (q2.get("revenue_by_product_usd_mn") or {}).get("concentrate")
+                q2_rows.append([
+                    product_label, _volume_text(item.get("production"), item.get("unit")),
+                    _volume_text(item.get("sales"), item.get("unit")),
+                    (fmt._id(q2_revenue, 0) if q2_revenue is not None else "-"),
+                    (f"US$ {fmt._id(item['revenue_per_sold_unit_proxy'], 0)}/{item['unit']}"
+                     if item.get("revenue_per_sold_unit_proxy") is not None else "-"),
+                    ((f"US$ {fmt._id(item['implied_net_realized_price']['value'], 0)}/"
+                      f"{item['implied_net_realized_price']['unit'].replace('USD/', '')}")
+                     if item.get("implied_net_realized_price") else "-")])
+            for label, key in (("Net sales", "net_sales"), ("EBITDA", "ebitda"),
+                               ("Laba bersih", "net_income"), ("Capex", "capex")):
+                q2_rows.append([label, "-", "-", fmt._id(q2_fin.get(key), 0), "US$ juta", "-"])
+            q2_exhibit = {
+                "n": 11.05, "judul": "Q2 2026: angka turunan dari H1 dikurangi Q1",
+                "tipe": "tabel",
+                "data": {"cols": ["Produk / metrik", "Q2 produksi", "Q2 terjual",
+                                  "Revenue / metrik (US$m)", "Revenue per unit, proxy",
+                                  "Q2 implied net price"],
+                         "rows": q2_rows},
+                "catatan_sumber": (
+                    "Q2 dihitung sebagai H1 2026 resmi dikurangi Q1 2026 resmi; volume dan finansial adalah angka turunan. "
+                    "Revenue segmen dibulatkan dalam rilis, sehingga tidak sama persis dengan net sales; nilai konsentrat/dmt "
+                    "adalah proxy campuran, bukan realized price/netback. Q1: AMMAN Q1 2026 Performance Release, hlm. 3-5; "
+                    "H1: AMMAN H1 2026 Earnings Release, hlm. 3-4."),
+            }
+            doc["exhibits"].append(q2_exhibit)
+            new_pages.append({
+                "halaman": 0, "judul": "Rekonstruksi aktual Q2 2026",
+                "layout": "stack",
+                "paragraf": [
+                    "Rekonstruksi ini mempersempit data aktual terbaru menjadi Q2. Revenue per unit hanya proxy dari revenue segmen dibagi unit terjual; rilis tidak memberi realized price Q2 yang terpisah. Angka ini membantu mengkalibrasi skenario H2, tetapi tidak memvalidasi penjualan atau harga H2."],
+                "exhibit": [q2_exhibit]})
+
+        output_sales_rows = []
+        for row in bridge["rows"]:
+            if row.get("h2_production") is None:
+                continue
+            output_sales_rows.append([
+                row["label"], _volume_text(row["h1_production"], row["unit"]),
+                _volume_text(row["h1_sold"], row["unit"]),
+                _volume_text(row["h2_production"], row["unit"]),
+                _volume_text(row["h2_sales"], row["unit"]),
+                fmt.pct(row["h2_sales"] / row["h2_production"])
+                if row["h2_production"] else "-",
+            ])
+        if output_sales_rows:
+            output_sales_exhibit = {
+                "n": 11.15, "judul": "Output tersirat dan asumsi penjualan H2",
+                "tipe": "tabel",
+                "data": {"cols": ["Produk", "H1 produksi", "H1 terjual",
+                                  "H2 produksi tersirat", "H2 penjualan skenario",
+                                  "H2 terjual / output"],
+                         "rows": output_sales_rows},
+                "catatan_sumber": (
+                    f"Sumber actual dan guidance: {actual.get('source_title')}, hlm. 3 dan 7. "
+                    "H2 production adalah sisa panduan FY dikurangi output H1. Penjualan katoda/emas "
+                    "memakai rasio sell-through Q2 yang diturunkan dari H1 dikurangi Q1. Base case tidak "
+                    "mengasumsikan ekspor konsentrat tanpa bukti izin baru; penjualan nol adalah asumsi skenario, "
+                    "bukan aktual. Kasus 120.079 dmt konsentrat H2 hanya conditional pada izin/kanal dan kontrak. "
+                    "Selisih output dan penjualan tidak otomatis sama dengan perubahan stockpile.")
+            }
+            doc["exhibits"].append(output_sales_exhibit)
+            new_pages.append({
+                "halaman": 0, "judul": "Output dan penjualan H2",
+                "layout": "stack",
+                "paragraf": [
+                    "Tabel membedakan sisa output dari volume penjualan yang diasumsikan. Rasio penjualan/output "
+                    "bukan roll-forward persediaan; perubahan stockpile dan umpan internal belum tersedia."],
+                "exhibit": [output_sales_exhibit]})
+
+        price_detail_rows = []
+        def metal_volume(value, unit):
+            if unit == "lb":
+                return f"{fmt._id(value / 1e6, 1)} Mlbs"
+            if unit == "ton":
+                return f"{fmt._id(value / 1000, 1)} kt"
+            if unit == "oz":
+                return f"{fmt._id(value / 1000, 1)} koz"
+            return _volume_text(value, unit)
+        for row in bridge["rows"]:
+            if row["key"] == "concentrate":
+                for component in row.get("price_components") or []:
+                    price_detail_rows.append([
+                        component["product"], metal_volume(component["h1_sold"], component["unit"]),
+                        f"US$ {fmt._id(component['h1_price'], 2)}/{component['unit']}",
+                        metal_volume(component["h2_sold"], component["unit"]),
+                        fmt._id(component["h2_revenue"] / 1e6, 1),
+                    ])
+            elif row["key"] in ("cathode_copper", "refined_gold"):
+                product = next((item for item in actual_sales
+                                if _product_key(item.get("product")) == row["key"]), {})
+                price = product.get("net_realized_price") or {}
+                if price.get("value") is not None:
+                    price_detail_rows.append([
+                        row["label"], metal_volume(row["h1_sold"], row["unit"]),
+                        f"US$ {fmt._id(price['value'], 2)}/{_market_price_unit(price.get('unit'))}",
+                        metal_volume(row["h2_sales"], row["unit"]),
+                        fmt._id(row["h2_revenue"] / 1e6, 1),
+                    ])
+        if price_detail_rows:
+            price_detail_exhibit = {
+                "n": 11.18, "judul": "Volume penjualan dan net realized price per logam",
+                "tipe": "tabel",
+                "data": {"cols": ["Produk", "H1 terjual", "Net realized price H1",
+                                  "H2 terjual skenario", "H2 revenue (US$m)"],
+                         "rows": price_detail_rows},
+                "catatan_sumber": (
+                    f"Volume: {actual.get('source_title')}, hlm. 3; harga net realized: AMMAN H1 2026 Earnings Presentation, hlm. 22. "
+                    "Harga bersih konsentrat setelah TCR dan "
+                    "penyesuaian MTM pengiriman sebelumnya; harga produk murni setelah MTM. Volume logam "
+                    "konsentrat H2 mempertahankan komposisi metal terjual per dmt H1; semua volume H2 adalah asumsi analis.")
+            }
+            doc["exhibits"].append(price_detail_exhibit)
+            new_pages.append({
+                "halaman": 0, "judul": "Net realized price dan volume logam",
+                "layout": "stack",
+                "paragraf": [
+                    "Harga aktual H1 dipakai sebagai basis nilai H2, bukan dianggap sebagai forward price. Konsentrat dihitung dari Cu dan Au terjual serta net realized price masing-masing; pemisahan ini menjaga kontribusi logam tetap terlihat."],
+                "exhibit": [price_detail_exhibit]})
+
+        price_rows = []
+        for key, label in (("copper", "Tembaga, benchmark LME"),
+                           ("gold", "Emas, benchmark LBMA")):
+            ref = market_refs.get(key)
+            product_key = "cathode_copper" if key == "copper" else "refined_gold"
+            actual_row = next((row for row in bridge["rows"]
+                               if row["key"] == product_key), None)
+            price_rows.append([
+                label,
+                (f"US$ {fmt._id(actual_row['unit_value'], 0)}/{actual_row['unit']}"
+                 if actual_row else "-"),
+                (f"US$ {fmt._id(ref['price'], 2)}/{_market_price_unit(ref['unit'])} ({ref['date']})"
+                 if ref else "-"),
+                "H1 revenue/unit dipertahankan datar untuk skenario; benchmark spot hanya pembanding.",
+            ])
+        conc = next((row for row in bridge["rows"]
+                     if row["key"] == "concentrate"), None)
+        price_rows.append([
+            "Konsentrat, nilai penjualan efektif",
+            (f"US$ {fmt._id(conc['unit_value'], 0)}/dmt" if conc else "-"),
+            "Tidak sebanding dengan benchmark Cu/Au tanpa kadar payable dan TC-RC",
+            "H1 revenue/dmt dipakai sebagai proxy datar; belum merupakan netback produk.",
+        ])
+        price_exhibit = {
+            "n": 11.2, "judul": "Benchmark komoditas dan asumsi nilai realisasi",
+            "tipe": "tabel",
+            "data": {"cols": ["Produk", "Net realized H1 / nilai efektif",
+                              "Benchmark pasar terbaru", "Basis harga skenario H2"],
+                     "rows": price_rows},
+            "catatan_sumber": "; ".join(
+                f"{row['source_title']}: {row['source_url']}"
+                for row in market_refs.values()) +
+                ". Benchmark adalah spot bertanggal, bukan kurva forward atau kontrak penjualan AMMN."
+        }
+        doc["exhibits"].append(price_exhibit)
+        new_pages.append({
+            "halaman": 0, "judul": "Harga komoditas dan asumsi realisasi",
+            "layout": "stack",
+            "paragraf": [
+                "Model menahan nilai penjualan per unit H1 untuk skenario H2. Benchmark spot memberi konteks harga, tetapi belum menggantikan harga kontrak, premium katoda, payability, TC-RC, dan timing pengakuan penjualan."
+            ],
+            "exhibit": [price_exhibit]})
+
+        comparison_rows = []
+        brids = next((item for item in
+                      (analyst_scenario.get("external_estimates") or [])
+                      if ("brids" in str(item.get("name") or "").lower() or
+                          ("bri" in str(item.get("name") or "").lower() and
+                           "danareksa" in str(item.get("name") or "").lower()))), None)
+        if brids:
+            for label, key in (("Pendapatan", "revenue"),
+                               ("EBITDA", "ebitda"),
+                               ("Laba bersih", "net_profit")):
+                h1 = scenario["h1"][key]
+                h2 = scenario["h2"][key]
+                fy = scenario["full_year"][key]
+                peer = brids[f"{key}_usd_mn"] * 1e6
+                comparison_rows.append([
+                    label, fmt._id(h1 / 1e6, 1), fmt._id(h2 / 1e6, 1),
+                    fmt._id(fy / 1e6, 1), fmt._id(peer / 1e6, 1),
+                    fmt.pct(fy / peer - 1),
+                ])
+            comparison_exhibit = {
+                "n": 11.3, "judul": "Estimasi FY26 Sektoral dibanding BRIDS",
+                "tipe": "tabel",
+                "data": {"cols": ["US$ juta", "1H26 aktual", "2H26 Sektoral",
+                                  "FY26 Sektoral", "FY26 BRIDS", "Selisih"],
+                         "rows": comparison_rows},
+                "catatan_sumber": (
+                    f"Sumber BRIDS: {brids['source_title']} ({brids['as_of']}), "
+                    f"{brids['source_url']}. Satu house estimate, bukan konsensus; "
+                    "manajemen menerbitkan panduan produksi, bukan guidance keuangan FY26.")
+            }
+            doc["exhibits"].append(comparison_exhibit)
+            new_pages.append({
+                "halaman": 0, "judul": "Estimasi FY26 dan pembanding",
+                "layout": "stack",
+                "paragraf": [
+                    "Skenario Sektoral berada di atas estimasi BRIDS untuk metrik laba utama, sementara target berbasis multiple belum memasukkan nilai aset Batu Hijau dan Elang melalui SOTP lengkap. Perbedaan ini menyorot dua hal: monetisasi H2 perlu direkonsiliasi ke volume dan harga, sedangkan nilai aset belum masuk ke target."
+                ],
+                "exhibit": [comparison_exhibit]})
+    forecast_index = next((i for i, page in enumerate(doc["bagian"])
+                           if page["judul"].startswith("Forecast ") and
+                           "rilis terbaru" in page["judul"]), None)
+    if forecast_index is not None and new_pages:
+        doc["bagian"][forecast_index + 1:forecast_index + 1] = new_pages
     for exhibit in doc["exhibits"]:
         title = exhibit["judul"]
         if title == "Cross-check EV/EBITDA FY26 berbasis skenario interim":
@@ -1152,11 +3060,21 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
             exhibit["catatan_sumber"] = (
                 "Sumber: pemeriksaan model Sektoral; kelengkapan LoM/SOTP "
                 "dicatat terpisah dari metode target FY EV/EBITDA.")
-    used = {id(exhibit) for page in doc["bagian"] for exhibit in page["exhibit"]}
-    used.add(id(doc["exhibits"][0]))
-    doc["exhibits"] = [exhibit for exhibit in doc["exhibits"] if id(exhibit) in used]
+    doc["bagian"].sort(key=lambda page: min(
+        (float(exhibit.get("n", 1e9)) for exhibit in page.get("exhibit") or []),
+        default=1e9))
+    ordered_exhibits = [doc["exhibits"][0]]
+    seen_exhibits = {id(ordered_exhibits[0])}
+    for page in doc["bagian"]:
+        for exhibit in page.get("exhibit") or []:
+            if id(exhibit) not in seen_exhibits:
+                ordered_exhibits.append(exhibit)
+                seen_exhibits.add(id(exhibit))
+    doc["exhibits"] = ordered_exhibits
     for number, exhibit in enumerate(doc["exhibits"], 1):
         exhibit["n"] = number
+    for page_number, page in enumerate(doc["bagian"], start=2):
+        page["halaman"] = page_number
     if doc["cover"].get("key_financials"):
         rows = doc["cover"]["key_financials"]
         full = scenario["full_year"]
@@ -1511,7 +3429,7 @@ def _build_draft(intake, fc, va, g1, method="auto",
             ],
             "data_pasar": {"harga": price,
                             "saham": intake["shares"], "market_cap": market_cap,
-                            "adtv": "-", "free_float": "-"},
+                            "adtv": "-", "public_ownership": "-"},
             "key_financials": hist_rows,
         },
         "bagian": sections,
@@ -1623,7 +3541,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
           f"Risiko utama: {r3}.")
     p3t = "Skenario nilai indikatif"
 
-    # Left rail market data calculations: ADTV & Free Float
+    # Left rail market data calculations: ADTV & public ownership
     daily_pts = {}
     for _, p in cache_mod.payloads(f"/daily/{t}/"):
         for r in (p.get("data") or []):
@@ -2056,7 +3974,7 @@ def build(intake, fc, va, g1, method="auto", illustrative_scenarios=False):
                                  "saham": intake["shares"],
                                  "market_cap": intake["market_cap"],
                                  "adtv": adtv_str,
-                                 "free_float": ff_str},
+                                 "public_ownership": ff_str},
                   "key_financials": kf_rows},
         "bagian": bagian,
         "tabel_asumsi": [

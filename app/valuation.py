@@ -199,11 +199,15 @@ def build(intake, fc, analyst_target=False, assumption_status=None):
         )
         sotp_result["bridge_evidence"] = {
             field: {key: bridge[field].get(key) for key in
-                    ("source", "source_date", "page", "unit")}
+                    ("source", "source_date", "page", "unit",
+                     "financial_source_date", "balance_period_end", "fx_date",
+                     "fx_rate", "basis")}
             if isinstance(bridge.get(field), dict) else None
             for field in ("cash_idr", "debt_idr", "minority_interest_idr",
                           "corporate_overhead_idr", "shares")
         }
+        sotp_result["customer_advance_excluded_usd_thousand"] = bridge.get(
+            "customer_advance_excluded_usd_thousand")
     ddm_result = None
     if is_bank and intake.get("payout") is not None:
         nets = [r["net"] for r in fc["rows"]]

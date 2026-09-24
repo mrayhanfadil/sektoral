@@ -32,7 +32,7 @@ def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path
         "agent_trace": document["agent_trace"]})
 
     def fake_build(ticker, outdir, want_pdf=False, as_of=None,
-                   illustrative_scenarios=False):
+                   illustrative_scenarios=False, **kwargs):
         assert as_of == "2026-09-23"
         assert illustrative_scenarios is False
         (outdir / "TEST.html").write_text("<h1>Report</h1>", encoding="utf-8")
@@ -41,6 +41,10 @@ def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path
                          "research_status": "loaded"}}
 
     monkeypatch.setattr(research.build, "build", fake_build)
+    monkeypatch.setattr(research.intake, "load", lambda ticker, as_of=None: ({}, {}))
+    monkeypatch.setattr("agents.forecast_assumptions.run.run_live",
+                        lambda intake: {"status": "validated", "interim_status": "validated",
+                                        "plan": {}})
     def fake_load_analysis(ticker, as_of):
         assert as_of == "2026-09-11"
         return document, {"status": "loaded"}
@@ -69,10 +73,14 @@ def test_rejected_agent_prose_is_not_published_in_trace(monkeypatch, tmp_path):
                                        "rejected_claims": ["citation mismatch"]}},
     })
     monkeypatch.setattr(research.build, "build", lambda ticker, outdir, want_pdf=False,
-                        as_of=None, illustrative_scenarios=False: {
+                        as_of=None, illustrative_scenarios=False, **kwargs: {
         "meta": {"status": "draft_non_distributable", "tanggal": "2026-09-23",
                  "harga_tanggal": "2026-09-11",
                  "research_status": "insufficient"}})
+    monkeypatch.setattr(research.intake, "load", lambda ticker, as_of=None: ({}, {}))
+    monkeypatch.setattr("agents.forecast_assumptions.run.run_live",
+                        lambda intake: {"status": "invalid", "interim_status": "invalid",
+                                        "plan": None})
     monkeypatch.setattr(research.research_context, "load_analysis",
                         lambda ticker, as_of: (None, {"status": "insufficient"}))
 
