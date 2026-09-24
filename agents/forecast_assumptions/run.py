@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
+from agents.analyst.run import _FLOW_PHRASES
 from agents.estimator.run import _chat, _response_text
 from app import store
 
@@ -512,7 +513,9 @@ def _validate_thesis(scenario, allowed):
     problems += risk_problems
     texts += risk_texts
     texts.append(str(scenario.get("rationale") or ""))
-    if any(_RECOMMENDATION.search(t) for t in texts):
+    # "Net sell asing" describes what investors did, not advice to the reader
+    # (the analyst agent's rule); BBCA's scenario was rejected on it.
+    if any(_RECOMMENDATION.search(_FLOW_PHRASES.sub(" ", t)) for t in texts):
         problems.append("thesis/risks must not contain recommendation or target-price language")
     if any(re.search(r"[\u4e00-\u9fff]", t) for t in texts):
         problems.append("thesis/risks must use Indonesian text")

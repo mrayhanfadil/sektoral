@@ -97,6 +97,15 @@ def test_thesis_and_risks_are_required_and_recommendation_free():
         "Kenaikan harga jual ayam hidup menaikkan margin laba bersih H2.",
         "Harga bahan baku yang stabil menjaga margin laba bersih di atas 10%."])
     assert agent._validate_earnings(price, _source()) == []
+    # "Net sell asing" describes foreign flows, not advice (BBCA's rejected scenario).
+    flows = _scenario(thesis_points=[
+        "Net sell asing berlanjut tetapi tidak mengubah transmisi laba bersih H2.",
+        "Harga bahan baku yang stabil menjaga margin laba bersih di atas 10%."])
+    assert agent._validate_earnings(flows, _source()) == []
+    sell = _scenario(thesis_points=[
+        "Kami menyarankan sell karena laba H2 melemah dan margin tertekan.",
+        "Harga bahan baku yang stabil menjaga margin laba bersih di atas 10%."])
+    assert any("recommendation" in p for p in agent._validate_earnings(sell, _source()))
 
 
 def test_key_risks_are_categorised_quantified_and_cited():
