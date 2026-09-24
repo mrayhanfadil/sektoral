@@ -62,8 +62,8 @@ Every report also carries sections built directly from the local Sectors snapsho
 | `data/issuer_evidence/` | Dated local copies of metrics transcribed from official issuer releases |
 | `spec/` | Report and output requirements |
 | `docs/` | Sectors API/MCP reference, recipes, and implementation notes |
-| `video-recording-guide.md` | Real-workflow video scripts and recording checks |
-| `submission-checklist.md` | Hackathon submission requirements and deadline checklist |
+| `docs/hackathon/` | Rules, submission checklist, and team operations |
+| `docs/plans/` | Implementation plans and project planning notes |
 
 ## Sectors API and MCP reference
 
@@ -77,4 +77,4 @@ The product's demo path reads the local cache. The API and MCP guides below are 
 
 ## Hackathon submission
 
-The declared track is **AI Agents & Assistants**: custom-built agent logic and an AI/LLM component must be central to the product. Before submission, check the [official rules](https://hackathon.sectors.app/rules) and [track requirements](https://hackathon.sectors.app/tracks/ai-agents-assistants), then use the [submission checklist](submission-checklist.md). The repository must be public at submission and remain public through at least 15 January 2027 (90 days after the announced 17 October winners date). Submissions close 8 October 2026, 23:59 WIB.
+The declared track is **AI Agents & Assistants**: custom-built agent logic and an AI/LLM component must be central to the product. Before submission, check the [official rules](https://hackathon.sectors.app/rules) and [track requirements](https://hackathon.sectors.app/tracks/ai-agents-assistants), then use the [submission checklist](docs/hackathon/submission-checklist.md). The repository must be public at submission and remain public through at least 15 January 2027 (90 days after the announced 17 October winners date). Submissions close 8 October 2026, 23:59 WIB.

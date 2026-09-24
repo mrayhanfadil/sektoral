@@ -45,4 +45,4 @@ Track is determined by **what the product fundamentally does**. A screener or da
 - Must use Sectors MCP or Sectors REST API as a **core** data source (not decorative).
 - Working MVP / prototype with end-to-end workflow.
 - No automated trade execution.
-- See [`../rules.md`](../rules.md) §06 + §07 for the full set.
+- See [`../docs/hackathon/rules.md`](../docs/hackathon/rules.md) §06 + §07 for the full set.
