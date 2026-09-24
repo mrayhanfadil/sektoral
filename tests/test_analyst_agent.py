@@ -186,9 +186,16 @@ def test_plan_with_advice_or_unavailable_tool_is_rejected():
 
 
 def test_flow_descriptions_are_not_mistaken_for_advice():
-    assert A._advice_terms("Asing mencatat jual bersih; aksi beli mereda") == []
-    assert A._advice_terms("Investor sebaiknya jual") == ["jual"]
-    assert A._advice_terms("valuasi sudah menarik") == ["valuasi sudah menarik"]
+    for fact in ("Asing mencatat jual bersih; aksi beli mereda",
+                 "Arus beli asing berlanjut lima sesi", "Investor asing menjual saham",
+                 "Pembelian asing mendorong harga", "tekanan sell-off mereda"):
+        assert A._advice_terms(fact) == [], fact
+    for advice, term in (("Investor sebaiknya jual", "sebaiknya jual"),
+                         ("Saham layak dibeli", "layak dibeli"),
+                         ("valuasi sudah menarik", "valuasi sudah menarik"),
+                         ("Kami rekomendasikan hold", "hold"),
+                         ("target harga naik", "target harga")):
+        assert term in A._advice_terms(advice), advice
 
 
 # ------------------------------------------------------------------- memory
@@ -363,3 +370,21 @@ def test_relative_return_uses_dates_both_series_share():
     # stock +10% vs index 0% over 01-01..01-05, not the stock's +21% to 01-09
     assert relative["value"] == pytest.approx(0.10)
     assert relative["period"] == "2026-01-01 s.d. 2026-01-05"
+
+
+def test_plan_with_leaked_cjk_is_cleaned_not_rejected(tmp_path):
+    plan = dict(PLAN, question="Bagaimana posisi SIDO读取 terhadap peer farmasi?")
+    result = A.run("SIDO", chat=scripted(plan, {"done": True}, SYNTHESIS), memory_dir=tmp_path)
+    assert result["plan"]["source"] == "agent"
+    assert "读取" not in result["plan"]["question"]
+
+
+def test_signal_ids_and_label_numbers_are_not_invented_figures(tmp_path):
+    prose = dict(SYNTHESIS, headline="Arus asing 20 sesi terakhir (flow.net_20d) menahan harga")
+    chat = scripted(PLAN, {"calls": [{"tool": "foreign_flow", "args": {}, "why": "asing"}]},
+                    {"done": True}, dict(prose, findings=[dict(SYNTHESIS["findings"][0],
+                                                               signal_ids=["flow.net_20d"])]))
+    result = A.run("SIDO", chat=chat, memory_dir=tmp_path)
+    assert result["synthesis"]["source"] == "agent", result["problems"]
+    assert "flow.net_20d" not in result["synthesis"]["headline"]
+    assert "arus bersih asing" in result["synthesis"]["headline"]

@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from agents.analyst import memory as analyst_memory  # noqa: E402
 from agents.analyst import run as analyst_run  # noqa: E402
 from app import tavily  # noqa: E402
+from agents.forecast_assumptions import run as forecast_run  # noqa: E402
 
 
 def _no_llm(_messages, **_kwargs):
@@ -28,3 +29,4 @@ def isolate_analyst(monkeypatch, tmp_path):
     # No real web search in tests; tests that need it inject their own ring.
     monkeypatch.setattr(tavily, "_RING", tavily.KeyRing([]))
     monkeypatch.setattr(tavily, "STORE_DIR", tmp_path / "web_news")
+    monkeypatch.setattr(forecast_run, "PLAN_STORE", tmp_path / "forecast_plans")

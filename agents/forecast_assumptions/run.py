@@ -5,6 +5,8 @@ import math
 import json
 import re
 import hashlib
+import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
@@ -14,6 +16,7 @@ from agents.estimator.run import _chat, _response_text
 
 DRIVERS = {"revenue_growth_pp", "ebitda_margin_pp", "wacc_bps", "coe_bps", "none"}
 SPEC_PATH = Path(__file__).resolve().parents[2] / "spec" / "Instruksi-Report-v3.md"
+PLAN_STORE = Path(__file__).resolve().parents[2] / "data" / "forecast_plans"
 
 
 def _spec_sections():
@@ -585,3 +588,55 @@ def run_live(intake):
             "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
             "spec_sha256": spec_sha256,
             "model_effort": "high; 8192 completion tokens per subagent"}
+
+
+def evidence_fingerprint(source, spec_sha256):
+    """Identity of the evidence a plan was drawn from.
+
+    Report date and fetched article bodies are left out: the same release and
+    the same dated headlines should yield the same assumptions on any day.
+    """
+    news = [{key: item.get(key) for key in ("title", "timestamp", "url")}
+            for item in source.get("news") or []]
+    material = {"ticker": source.get("ticker"), "profile": source.get("model_profile"),
+                "official": source.get("official"), "news": news, "spec": spec_sha256,
+                "model": os.environ.get("SEKTORAL_LLM_MODEL", "MiniMax-M3")}
+    return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:20]
+
+
+def run_cached(intake, refresh=False, store_dir=None):
+    """Reuse a validated plan for identical evidence so targets are reproducible.
+
+    LLM assumptions vary between calls; without this, rerunning the same
+    ticker on the same evidence moves FY EBITDA and therefore the target.
+    """
+    try:
+        _spec, spec_sha256 = _spec_sections()
+    except (OSError, UnicodeError, ValueError):
+        return run_live(intake)
+    fingerprint = evidence_fingerprint(_source_payload(intake), spec_sha256)
+    folder = Path(store_dir or PLAN_STORE)
+    path = folder / f"{intake['ticker']}-{fingerprint}.json"
+    if not refresh:
+        try:
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(stored, dict) and stored.get("plan"):
+                stored["reused"] = True
+                return stored
+        except (OSError, ValueError):
+            pass
+    result = run_live(intake)
+    result["fingerprint"] = fingerprint
+    result["reused"] = False
+    if result.get("plan") and result.get("interim_status") in ("validated", "not_run") and \
+            result.get("status") in ("validated", "partial"):
+        result["stored_at"] = date.today().isoformat()
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            handle, temp = tempfile.mkstemp(dir=folder, suffix=".tmp")
+            with os.fdopen(handle, "w", encoding="utf-8") as stream:
+                json.dump(result, stream, ensure_ascii=False, indent=1)
+            os.replace(temp, path)
+        except OSError:
+            pass
+    return result

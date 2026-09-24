@@ -229,7 +229,7 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             ["Rasio", previous.get("period", "Periode lalu"), actual["period"]],
             diagnostic_rows,
             f"Sumber: {actual['source_title']}, {page_reference}; "
-            "rasio dihitung dari angka resmi, nilai negatif ditampilkan sebagai '-'.")
+            "rasio dihitung dari angka resmi; nilai negatif ditampilkan dalam kurung.")
         chart_metrics = [
             {"label": "Pendapatan", "prior": prior_metrics.get("revenue"),
              "current": metrics.get("revenue")},
@@ -639,7 +639,8 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
                 segment = max(segments, key=lambda row: row.get("current") or 0)
                 watch_rows.append([
                     f"Bauran {segment['name']}",
-                    f"Penjualan {segment['name']} {money_phrase(segment.get('current'))} "
+                    f"{segment['name'] if segment['name'].lower().startswith('penjualan') else 'Penjualan ' + segment['name']} "
+                    f"{money_phrase(segment.get('current'))} "
                     f"pada {actual['period']}.",
                     "Pantau volume, harga realisasi dan waktu pengakuan penjualan."])
             if guidance:
@@ -693,14 +694,11 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             value = current.get(key)
             if value is None:
                 continue
-            fact = f"{label} {money_phrase(value)}"
-            prior_value = prior.get(key)
-            if prior_value is not None:
-                fact += f" ({pct_change(value, prior_value)} yoy)"
-            lead_facts.append(fact)
-        lead = (f"{ticker} mencatat " + ", ".join(lead_facts) + ". " +
-                f"{material_mix}{runrate}"
-                f"Hasil ini berasal dari laporan resmi terbit {actual['published_at']}.")
+            lead_facts.append(
+                _change_sentence(label, value, prior.get(key), actual["period"],
+                                 prior.get("period", "periode pembanding"), money_phrase))
+        lead = (f"{ticker} menerbitkan hasil {actual['period']} pada {actual['published_at']}. " +
+                " ".join(lead_facts[:3]) + " " + f"{material_mix}{runrate}").strip()
         operating = evidence.get("operating_context") or []
         driver = operating[0]["fact"] if operating else "Rincian driver operasional belum tervalidasi."
         if revenue_breakdown and not mining:
@@ -772,9 +770,9 @@ def _build_general_draft(intake, fc, va, g1, method="auto",
             valuation_text = ("Data aktual yang tersedia belum cukup untuk "
                               "menerbitkan nilai wajar atau rekomendasi produksi. "
                               "Pemeriksaan yang belum selesai tercantum pada halaman valuasi.")
-        first_bullet = (f"Pendapatan {actual['period']} tumbuh "
-                        f"{pct_change(current.get('revenue'), prior.get('revenue'))} yoy "
-                        f"ke {money_phrase(current.get('revenue'))}.")
+        first_bullet = _change_sentence("pendapatan", current.get("revenue"), prior.get("revenue"),
+                                        actual["period"], prior.get("period", "periode pembanding"),
+                                        money_phrase)
         if mining:
             segments = revenue_breakdown.get("segments") or []
             segment_facts = ", ".join(
@@ -1028,8 +1026,7 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
     doc["method"] = va["method"]
     doc["log_gate"]["G3"] = va["g3"]
     doc["log_gate"]["release"] = va["release"]
-    doc["cover"]["headline"] = (
-        f"{va['rating']}: {forecast_label} EBITDA dan valuasi 8x EV/EBITDA")
+    doc["cover"]["headline"] = _assumption_headline(va["rating"], forecast_label)
     doc["cover"]["bullets"][2] = (
         f"Target Rp{fmt.rp(va['tp'])} memberi {fmt.pct(va['upside'])} terhadap "
         f"penutupan Rp{fmt.rp(intake['price'])} pada {intake['price_date']}; "
@@ -1090,7 +1087,9 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
                 "bukan panduan emiten atau forecast produksi LoM.")}
         doc["exhibits"].append(assumptions_exhibit)
         anchor = next((index for index, page in enumerate(doc["bagian"])
-                       if page["judul"] == "Forecast FY26 dari rilis terbaru"), 0)
+                       if page["judul"] in ("Skenario FY26 dari rilis terbaru",
+                                            f"Forecast {forecast_label} dari rilis terbaru")),
+                      len(doc["bagian"]) - 1)
         doc["bagian"].insert(anchor + 1, {
             "halaman": 0,
             "judul": "Skenario laba FY27F-FY30F",
@@ -1232,6 +1231,39 @@ def _build_assumption_led(intake, fc, va, g1, method="auto"):
         "Laba bersih": fmt._id(scenario["full_year"]["net_profit"] * value["fx"]["rate"] / 1e9, 0),
     }
     return doc
+
+
+def _change_sentence(label, value, prior, period, prior_period, money_phrase):
+    """One metric per sentence (spec §5.1: at most three figures per sentence).
+
+    Growth off a near-zero or loss base is described in words, not as a
+    four-digit percentage that says nothing about the business.
+    """
+    subject = label[:1].upper() + label[1:]
+    if value is None:
+        return ""
+    if prior is None:
+        return f"{subject} {period} {money_phrase(value)}."
+    if prior < 0 <= value:
+        return (f"{subject} {period} {money_phrase(value)}, berbalik dari rugi "
+                f"{money_phrase(abs(prior))} pada {prior_period}.")
+    if prior > 0 and value / prior - 1 > 3:
+        return (f"{subject} {period} naik ke {money_phrase(value)} dari basis rendah "
+                f"{money_phrase(prior)} pada {prior_period}.")
+    if prior > 0:
+        change = value / prior - 1
+        return (f"{subject} {period} {'naik' if change >= 0 else 'turun'} "
+                f"{fmt.pct(abs(change))} yoy ke {money_phrase(value)}.")
+    return f"{subject} {period} {money_phrase(value)}."
+
+
+def _assumption_headline(rating, forecast_label):
+    """Forward thesis with a verb, at most ten words (spec §5.2)."""
+    return {
+        "Buy": f"Pemulihan {forecast_label} Belum Tercermin pada Harga Saham",
+        "Hold": f"Pemulihan {forecast_label} Berjalan, Harga Mendekati Nilai Wajar",
+        "Sell": f"Pemulihan {forecast_label} Sudah Tercermin, Valuasi Membatasi Ruang Naik",
+    }.get(rating, f"Pemulihan {forecast_label} Berjalan, Valuasi Menunggu Bukti")
 
 
 def _research_section(intake, page=2):
