@@ -426,11 +426,15 @@ def _build_once(t, out, kwargs, pins):
 
 def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
                 analyst_target: bool = False, live_inputs: bool = False,
-                refresh_assumptions: bool = False, db=None, log=None) -> dict:
+                refresh_assumptions: bool = False, db=None, log=None,
+                plan_override: dict | None = None, trace_extra: dict | None = None) -> dict:
     """Rebuild one ticker from ``source`` into ``out``; returns the comparison.
 
     ``refresh_assumptions`` re-runs the Forecast Assumption Agent on the stored
     evidence first (see ``refreshed_assumptions``) and stores its new plan.
+    ``plan_override`` builds on a reviewed plan instead (app.assumption_review:
+    the analyst's edits); the trace stores it as the plan, keeps the agent's
+    as ``agent_plan_before_review`` and takes ``trace_extra`` keys as given.
     """
     t = str(ticker).strip().upper()
     source, out = Path(source), Path(out)
@@ -453,6 +457,8 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         kwargs.update(assumption_plan=copy.deepcopy(fresh_plan["plan"]),
                       assumption_status=assumption_status(fresh_plan),
                       spec_sha=fresh_plan.get("spec_sha256"))
+    if plan_override is not None:
+        kwargs["assumption_plan"] = copy.deepcopy(plan_override)
     recorded = source_manifest.get("market_inputs") if isinstance(
         source_manifest.get("market_inputs"), dict) else None
     pins = None if live_inputs else copy.deepcopy(recorded)
@@ -500,6 +506,14 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
             fresh_plan["plan"] = normalized
             fresh_plan["plan_normalized_for_report"] = True
         trace["forecast_assumptions"] = fresh_plan
+    if plan_override is not None:
+        fa = dict(trace.get("forecast_assumptions") or {})
+        before = fa.get("agent_plan_raw") if "agent_plan_raw" in fa else fa.get("plan")
+        fa.setdefault("agent_plan_before_review", before)
+        fa["plan"] = (doc.get("forecast_assumptions") or {}).get("plan") or plan_override
+        fa["agent_plan_raw"] = copy.deepcopy(plan_override)
+        trace["forecast_assumptions"] = fa
+    trace.update(copy.deepcopy(trace_extra or {}))
     outputs.save(outputs.TRACE, out, t, trace, db)
     outputs.save(outputs.MANIFEST, out, t, manifest, db)
     stored_events = outputs.load(outputs.EVENTS, source, t, db)
