@@ -484,3 +484,32 @@ def test_mining_fourth_chart_is_volume_against_unit_cost(tmp_path):
     assert "Adjusted C1" in chart["narasi"] and "Adjusted C1" in chart["catatan_sumber"]
     html = render.render(doc)
     assert "(3,37)" in html and "US$/lb, sumbu kanan" in html
+
+
+def test_mining_reports_keep_audit_detail_out_of_the_printed_report():
+    from app import report_extras as X
+    page = lambda title, *exhibits: {"judul": title, "paragraf": ["p"], "exhibit": list(exhibits), "halaman": 0}
+    ex = lambda title: {"n": 0, "judul": title, "tipe": "tabel", "data": {"cols": [], "rows": []}}
+    doc = {"bagian": [
+        page("Hasil terbaru", ex("Hasil interim")),
+        page("Target harga berbasis SOTP/LoM", ex("SOTP/LoM: nilai aset ke ekuitas"),
+             ex("Komponen WACC US$ untuk NAV aset tambang"), ex(X.rate_benchmarks.TITLE),
+             ex("Uji tambahan SOTP/LoM"), ex("Rantai metode valuasi")),
+        page("Data keuangan", ex("Laba rugi")),
+        page("Rekonstruksi aktual Q2 2026", ex("Q2")),
+        page("Royalti, bea keluar, dan netback", ex("Royalti")),
+        page("Rekonstruksi aktual Q2 2026", ex("Q2 lagi")),
+        page("Cross-check FY26F EV/EBITDA", ex("x"))]}
+    X.slim_mining(doc, {"model_profile": "going_concern_fcff"})
+    assert len(doc["bagian"]) == 7  # other profiles untouched
+    X.slim_mining(doc, {"model_profile": "finite_life_mining"})
+    titles = [p["judul"] for p in doc["bagian"]]
+    assert titles == ["Hasil terbaru", "Target harga berbasis SOTP/LoM", "Data keuangan",
+                      X.VALUATION_APPENDIX, "Royalti, bea keluar, dan netback"]
+    target = doc["bagian"][1]
+    assert [e["judul"] for e in target["exhibit"]] == ["SOTP/LoM: nilai aset ke ekuitas",
+                                                     "Rantai metode valuasi"]
+    assert len(doc["bagian"][3]["exhibit"]) == 3
+    assert [p["judul"] for p in doc["lampiran_audit"]] == [
+        "Rekonstruksi aktual Q2 2026", "Rekonstruksi aktual Q2 2026 (lanjutan)", "Cross-check FY26F EV/EBITDA"]
+    assert [p["halaman"] for p in doc["bagian"]] == [2, 3, 4, 5, 6]
