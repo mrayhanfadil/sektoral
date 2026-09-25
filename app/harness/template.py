@@ -177,6 +177,9 @@ def classify_cell(cell) -> str:
         return "nm"
     if parse_num(s) is not None:
         return "num"
+    # A capped growth rate: '>500%'.
+    if re.fullmatch(r"[<>]\s?\d[\d.,]*%", s):
+        return "num"
     # A figure with a short unit or qualifier: 'Rp860 miliar', '13,5x (p28)', '1.683 ha'.
     if re.match(r"^\(?[-−+]?\s?(?:Rp|US\$)?\s?[-−]?\d", s) and len(s.split()) <= 4:
         return "num"

@@ -373,11 +373,12 @@ def _method_label(method):
 
 
 def _NM_CHANGE_NOTE(rows):
-    """The reason for n.m. in a yoy column: a change above 500% or across zero."""
+    """The reason for n.m. in a yoy column: a change across zero. A change
+    above 500% prints as '>500%' and needs no note."""
     if not any("n.m." in [str(c) for c in row[1:]] for row in rows):
         return ""
-    return (" n.m. pada kolom yoy: perubahan di atas 500% atau dari/ke angka negatif "
-            "tidak bermakna sebagai persentase.")
+    return (" n.m. pada kolom yoy: perubahan dari/ke angka negatif tidak bermakna "
+            "sebagai persentase.")
 
 
 def _build_general_draft(intake, fc, va, s1, method="auto",
@@ -406,7 +407,7 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                       if isinstance(source_page, int) or
                       (isinstance(source_page, str) and source_page.replace("-", "").isdigit())
                       else f"rujukan {source_page}")
-    pct_change = lambda now, prior: ("n.m." if now is not None and prior is not None and
+    pct_change = lambda now, prior: (">500%" if now is not None and prior is not None and
                                      prior > 0 and now >= 0 and now / prior - 1 > 5 else
                                      fmt.pct(now / prior - 1)
                                      if now is not None and prior is not None and
