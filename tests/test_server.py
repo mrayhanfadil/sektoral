@@ -292,3 +292,21 @@ def test_ticker_suggestions_are_the_issuers_with_a_report(make_client, tmp_path,
     _report(reports, "AAAA", reviewed=False)
     monkeypatch.setattr(server, "available_tickers", lambda: ["AAAA", "BBBB", "CCCC"])
     assert make_client(reports=reports).get("/api/tickers").json() == {"tickers": ["AAAA"]}
+
+
+def test_live_runs_can_require_a_token(make_client, tmp_path, monkeypatch):
+    client = make_client()
+    monkeypatch.setattr(client.app.state.jobs, "submit", lambda ticker: "a" * 32)
+    monkeypatch.delenv("SECTORAL_LIVE_RUNS", raising=False)
+    assert client.get("/api/config").json()["live_runs"] == "open"
+    assert client.post("/api/jobs", json={"ticker": "AMMN"}).status_code == 201
+    monkeypatch.setenv("SECTORAL_LIVE_RUNS", "token")
+    monkeypatch.delenv("SECTORAL_RUN_TOKEN", raising=False)
+    assert client.get("/api/config").json()["live_runs"] == "token"
+    refused = client.post("/api/jobs", json={"ticker": "AMMN"})
+    assert refused.status_code == 403 and "putar ulang" in refused.json()["detail"]
+    monkeypatch.setenv("SECTORAL_RUN_TOKEN", "rahasia")
+    assert client.post("/api/jobs", json={"ticker": "AMMN"}, headers={"X-Run-Token": "salah"}).status_code == 403
+    assert client.post("/api/jobs", json={"ticker": "AMMN"}, headers={"X-Run-Token": "rahasia"}).status_code == 201
+    monkeypatch.setenv("SECTORAL_LIVE_RUNS", "off")
+    assert client.post("/api/jobs", json={"ticker": "AMMN"}, headers={"X-Run-Token": "rahasia"}).status_code == 403

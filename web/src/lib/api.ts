@@ -232,10 +232,11 @@ export const api = {
     }),
   job: (id: string) => request<Job>(`/api/jobs/${encodeURIComponent(id)}`),
   jobTrace: (id: string) => request<TraceView>(`/api/jobs/${encodeURIComponent(id)}/trace`),
-  submit: (ticker: string) =>
+  config: () => request<{ live_runs: "open" | "token" | "off"; review: boolean }>("/api/config"),
+  submit: (ticker: string, runToken?: string) =>
     request<{ id: string }>("/api/jobs", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(runToken ? { "X-Run-Token": runToken } : {}) },
       body: JSON.stringify({ ticker }),
     }).then((r) => r.id),
 };
