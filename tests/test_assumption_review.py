@@ -107,3 +107,26 @@ def test_review_endpoints_need_the_reviewer_token(tmp_path, monkeypatch):
         ok = client.post("/api/reports/UJIA/review", json=body, headers={"X-Review-Token": "rahasia"})
         assert ok.status_code == 200 and ok.json()["state"] == "approved"
         assert client.get("/api/reports/NONE/review").status_code == 404
+
+
+def test_a_reapproval_keeps_the_earlier_record_and_its_edits(tmp_path):
+    _stored(tmp_path)
+
+    def rebuild(t, source, out, **kw):
+        trace = outputs.load(outputs.TRACE, out, t)
+        trace["forecast_assumptions"] = {"plan": kw["plan_override"], "agent_plan_raw": kw["plan_override"]}
+        outputs.save(outputs.TRACE, out, t, trace)
+    first = R.approve(tmp_path, "UJIA", "Analis Dua", edits=[
+        {"path": "outyear_scenario[0].ebitda_margin_pct", "value": 18.0,
+         "reason": "Margin memudar ke rata-rata siklus."}], rebuild_fn=rebuild)
+    second = R.approve(tmp_path, "UJIA", "Analis Tiga", "Setuju ulang.")
+    assert second["edits"] == [] and second["plan_sha"] == first["plan_sha"]
+    assert [h["reviewer"] for h in second["history"]] == ["Analis Dua"]
+    assert "history" not in second["history"][0]
+    view = R.public(tmp_path, "UJIA")
+    assert view["reviewer"] == "Analis Tiga"
+    assert [(e["path"], e["reviewer"]) for e in view["edits"]] == [
+        ("outyear_scenario[0].ebitda_margin_pct", "Analis Dua")]
+    assert view["history"][0]["edits"] == 1
+    third = R.approve(tmp_path, "UJIA", "Analis Empat")
+    assert [h["reviewer"] for h in third["history"]] == ["Analis Tiga", "Analis Dua"]
