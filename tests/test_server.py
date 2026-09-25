@@ -203,6 +203,7 @@ def test_reports_api_and_files_are_confined(make_client, tmp_path):
     assert [i["ticker"] for i in items] == ["AAAA", "BBBB"]
     pdf = client.get("/files/reports/AAAA.pdf")
     assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf"
+    assert pdf.headers["cache-control"] == "no-cache" and pdf.headers["etag"]
     assert client.get("/files/reports/AAAA-trace.html").status_code == 200
     for bad in ("/files/reports/AAAA.json", "/files/reports/AAAA-trace.json", "/files/reports/AAAA.secrets",
                 "/files/reports/..%2FAAAA.pdf", "/files/reports/ZZZZ.pdf"):
