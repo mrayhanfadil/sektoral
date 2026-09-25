@@ -25,7 +25,13 @@ const RESEARCH: [string, string][] = [
   ["temuan", "Temuan bersitasi"], ["kurang", "Bukti yang masih kurang"],
 ];
 const NEWS: [string, string][] = [["berita", "Pencarian berita"], ["deep-dive", "Deep-dive berita"]];
-const FORECAST: [string, string][] = [["asumsi", "Dampak berita"], ["interim", "Skenario interim"], ["tahun-lanjutan", "Tahun lanjutan"]];
+const FORECAST: [string, string][] = [
+  ["asumsi", "Dampak berita"], ["interim", "Skenario interim"], ["tahun-lanjutan", "Tahun lanjutan"], ["driver-bank", "Driver bank"],
+];
+const BANK_COLS: [keyof NonNullable<TraceView["forecast"]["bank_drivers"]>[number], string][] = [
+  ["loan_growth_pct", "Pertumbuhan kredit"], ["nim_pct", "NIM"], ["non_ii_to_nii_pct", "Non-bunga / NII"],
+  ["cost_to_income_pct", "Biaya / pendapatan"], ["cost_of_credit_pct", "Biaya kredit"], ["deposit_growth_pct", "Pertumbuhan DPK"],
+];
 const LABEL = Object.fromEntries([...RESEARCH, ...NEWS, ...FORECAST]);
 
 const INDEX: IndexGroup[] = [
@@ -576,6 +582,52 @@ function TraceBody({ trace }: { trace: TraceView }) {
                           )}
                         </td>
                       </tr>
+                    </tbody>
+                  ))}
+                </table>
+              </div>
+            </Section>
+          )}
+          {(forecast.bank_drivers?.length ?? 0) > 0 && (
+            <Section id="driver-bank" title={LABEL["driver-bank"]} count={forecast.bank_drivers!.length}>
+              <p className="mb-3 max-w-[80ch] text-[14px] text-ink-soft">
+                Driver model bank per tahun: tahun berjalan memakai aktual 1H resmi ditambah driver H2; tahun berikutnya setahun penuh.
+                Neraca, laba dan dividen dihitung model dari driver ini, dengan batas modal dan pendanaan.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] border-collapse text-[14px]">
+                  <thead>
+                    <tr className="text-[12.5px] text-ink-soft [&>th]:px-2 [&>th]:pb-2 [&>th]:align-bottom [&>th]:font-medium">
+                      <th scope="col" className="text-left">Tahun</th>
+                      {BANK_COLS.map(([key, label]) => <th key={key} scope="col" className="text-right">{label}</th>)}
+                    </tr>
+                  </thead>
+                  {forecast.bank_drivers!.map((row, i) => (
+                    <tbody key={row.year ?? i} className="border-t border-rule">
+                      <tr className="[&>td]:px-2 [&>td]:pt-2.5 [&>td]:pb-1">
+                        <th scope="row" className="px-2 pt-2.5 pb-1 text-left font-mono font-semibold text-ink-strong">
+                          {row.year}{i === 0 && <span className="ml-1.5 font-sans text-[12px] font-normal text-ink-soft">H2</span>}
+                        </th>
+                        {BANK_COLS.map(([key]) => {
+                          const v = row[key] as number | null;
+                          return <td key={key} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(v)}</td>;
+                        })}
+                      </tr>
+                      {row.rationale && (
+                        <tr>
+                          <td colSpan={BANK_COLS.length + 1} className="px-2 pb-3 text-[13.5px] text-ink-soft">
+                            {/* The table scrolls sideways on phones; the rationale stays in view and wraps to it. */}
+                            <div className="sticky left-2 max-w-[min(80ch,calc(100vw-72px))]">
+                              <span className="sr-only">Dasar: </span>{row.rationale}
+                              {row.source_ids.length > 0 && (
+                                <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                                  {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   ))}
                 </table>

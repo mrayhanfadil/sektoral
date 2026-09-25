@@ -179,6 +179,10 @@ export type TraceView = {
     interim: { rationale: string | null; published_at: string | null; url: string | null } | null;
     outyears: { year: string | null; revenue_growth_pct: number | null; ebitda_margin_pct: number | null;
       net_income_margin_pct: number | null; capex_to_revenue_pct: number | null; rationale: string | null; source_ids: string[] }[];
+    /** Bank Driver Scenario: the interim year's H2 drivers, then the out-years (percent). */
+    bank_drivers?: { year: string | null; loan_growth_pct: number | null; nim_pct: number | null; non_ii_to_nii_pct: number | null;
+      cost_to_income_pct: number | null; cost_of_credit_pct: number | null; deposit_growth_pct: number | null;
+      rationale: string | null; source_ids: string[] }[];
   };
   deepdive: { title: string | null; date: string | null; url: string | null; status: string | null; length: number; preview: string | null }[];
 };

@@ -24,6 +24,28 @@ export function Hold({ n, tone }: { n: number; tone: Status }) {
   );
 }
 
+const LIGHT: Record<Status, string> = {
+  idle: "transparent",
+  run: "var(--color-brand-ink)",
+  ok: "var(--color-done)",
+  warn: "var(--color-warn-rule)",
+  error: "var(--color-err-ink)",
+};
+
+/**
+ * The row-sized hold light: a short bar at the row's left edge that holds the
+ * new state's colour, then settles. Used where many rows can change at once
+ * (the hypotheses), so a batch of verdicts lights rows, not the whole block.
+ * Parent needs `relative`.
+ */
+export function HoldLight({ n, tone }: { n: number; tone: Status }) {
+  if (n === 0 || tone === "idle") return null;
+  return (
+    <span key={n} aria-hidden className="pointer-events-none absolute top-2 bottom-2 left-0 w-[3px] animate-hold rounded-full"
+      style={{ "--hold-color": LIGHT[tone] } as CSSProperties} />
+  );
+}
+
 /** One glyph per status: the E-mark breathing while running, drawn icons once settled. */
 export function Glyph({ status, className = "" }: { status: Status; className?: string }) {
   if (status === "run") return <span className={`inline-grid size-4 flex-none place-items-center ${className}`}><LiveMark status="run" className="h-3 w-3.5" /></span>;
