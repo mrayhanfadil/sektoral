@@ -241,6 +241,21 @@ def test_lom_reconciliation_walks_cumulatively_from_the_target():
             rows[key]["per_share"] - rows["horizon"]["per_share"])
 
 
+def test_lom_unit_cost_is_cash_cost_after_the_gold_credit_per_pound():
+    import pytest
+    from app import lom
+    inp = {"cu_price": 10_000.0, "au_price": 2_000.0}
+    rows = [{"year": 2026, "share": 0.5, "mining": 1, "rehandle": 0, "processing": 1,
+             "smelting": 1, "refined_oz": 1, "conc_au_oz": 0, "cathode_t": 1, "conc_cu_t": 0},
+            {"year": 2027, "share": 1.0, "mining": 300e6, "rehandle": 0.0, "processing": 200e6,
+             "smelting": 100e6, "refined_oz": 200_000, "conc_au_oz": 100_000,
+             "cathode_t": 80_000, "conc_cu_t": 20_000}]
+    cost = lom.unit_cost(inp, rows)
+    assert 2026 not in cost  # part year: no full-year cost
+    gold = (200_000 + 100_000 * lom.PAYABLE_AU) * 2_000.0
+    assert cost[2027] == pytest.approx((600e6 - gold) / (100_000 * lom.LB_PER_T))
+
+
 def test_lom_gate_needs_sourced_analyst_assumptions():
     import pytest
     doc_in, fc, (res, gaps) = _ammn_lom()
