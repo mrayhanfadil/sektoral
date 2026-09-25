@@ -87,37 +87,40 @@
   }
 }
 
-/* Dark: the console. A navy ground drawn from the brand blue, surfaces lifted
-   by lightness rather than shadow; text blue becomes the #7596FF chart tint. */
+/* Dark: the console. A navy ground drawn along the brand blue's hue (#0928B1,
+   ~229deg): lightness and chroma raised so the field reads navy, not
+   blue-black. Surfaces lift by lightness rather than shadow; text blue becomes
+   a pale periwinkle (#9DB1FF) lifted from the #7596FF chart tint. Body and secondary ink hold >= 4.5:1 on every step
+   up to brand-50 (ink-faint 5.3:1 there). */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --color-brand: #3552F0;
   --color-brand-hover: #4A66F6;
-  --color-brand-ink: #93A8FF;
-  --color-brand-50: #131D48;
-  --color-brand-100: #1C2A66;
-  --color-tint: #2A3A70;
-  --color-surface: #0C1328;
-  --color-raised: #111A35;
-  --color-canvas: #070B19;
-  --color-ink: #E3E8F3;
-  --color-ink-strong: #F5F7FC;
-  --color-ink-soft: #A6AFC6;
-  --color-ink-faint: #8690AD;
-  --color-rule: #222D52;
-  --color-rule-soft: #18213F;
-  --color-rule-strong: #34416B;
+  --color-brand-ink: #9DB1FF;
+  --color-brand-50: #172A68;
+  --color-brand-100: #20367F;
+  --color-tint: #2C4190;
+  --color-surface: #0D1B4B;
+  --color-raised: #122258;
+  --color-canvas: #0A1640;
+  --color-ink: #E6EBF7;
+  --color-ink-strong: #F6F8FD;
+  --color-ink-soft: #AEB9D9;
+  --color-ink-faint: #95A2CC;
+  --color-rule: #26377A;
+  --color-rule-soft: #1B2B63;
+  --color-rule-strong: #3A4E98;
   --color-wordmark: #F2F4FA;
   --color-done: #4FE0B6;
-  --color-ok-bg: #0B2A26;
+  --color-ok-bg: #0C3340;
   --color-ok-ink: #6EE7C0;
-  --color-warn-bg: #2E2410;
+  --color-warn-bg: #33290F;
   --color-warn-ink: #F5C45A;
   --color-warn-rule: #B8871F;
-  --color-err-bg: #361519;
+  --color-err-bg: #3A1630;
   --color-err-ink: #FF9A9A;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, .4), 0 16px 32px -18px rgba(0, 0, 0, .7);
-  --shadow-pop: 0 2px 8px rgba(0, 0, 0, .5), 0 28px 60px -20px rgba(0, 0, 0, .85);
+  --shadow-card: 0 1px 2px rgba(2, 6, 24, .45), 0 16px 32px -18px rgba(2, 6, 24, .75);
+  --shadow-pop: 0 2px 8px rgba(2, 6, 24, .55), 0 28px 60px -20px rgba(2, 6, 24, .9);
 }
 
 @layer base {

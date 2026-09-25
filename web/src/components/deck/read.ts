@@ -6,6 +6,8 @@ import type { Status } from "../../lib/agents";
 export const SPRING = { type: "spring", stiffness: 420, damping: 40, mass: 0.8 } as const;
 export const SPRING_SOFT = { type: "spring", stiffness: 240, damping: 34, mass: 1 } as const;
 export const EXPO = [0.16, 1, 0.3, 1] as const;
+/** A gate needle settling: overdamped (damping above 2*sqrt(k*m)), so it eases in and never overshoots. */
+export const GATE_SETTLE = { stiffness: 90, damping: 26, mass: 1 } as const;
 
 export const STATUS_INK: Record<Status, string> = {
   idle: "text-ink-faint", run: "text-brand-ink", ok: "text-done", warn: "text-warn-ink", error: "text-err-ink",
@@ -38,6 +40,22 @@ const VERDICT_TONE: Record<string, string> = { didukung: "pill-ok", "tidak diduk
 export function verdictTone(verdict?: string): string {
   if (!verdict) return "";
   return VERDICT_TONE[verdict.toLowerCase()] ?? "pill-warn";
+}
+
+/** The analyst could not answer the hypothesis: tested, but no verdict. */
+export const UNANSWERED = "belum terjawab";
+
+/** A real verdict (didukung, tidak didukung, sebagian...); "belum terjawab" is not one. */
+export function isJudged(verdict?: string): boolean {
+  return !!verdict && verdict.toLowerCase() !== UNANSWERED;
+}
+
+/**
+ * The row glyph of a hypothesis: open until the analyst answers, the done
+ * check for a real verdict, the warning mark when it stayed unanswered.
+ */
+export function verdictGlyph(verdict?: string): Status {
+  return !verdict ? "idle" : isJudged(verdict) ? "ok" : "warn";
 }
 
 export function verdictStatus(verdict?: string): Status {

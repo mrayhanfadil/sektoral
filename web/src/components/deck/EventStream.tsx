@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, TriangleAlert } from "lucide-react";
 import { AGENT, AGENTS, duration, type AgentId, type DeckState, type Step } from "../../lib/agents";
 import { EngineTag, Glyph, Hold, Sweep } from "./kit";
-import { SPRING, clock, useChangeCount, verdictTone, words } from "./read";
+import { SPRING, clock, useChangeCount, verdictGlyph, verdictTone, words } from "./read";
 
 /** Whether rows mounting in this render are new arrivals (animate) or a jump (don't). */
 const Enter = createContext(false);
@@ -250,7 +250,7 @@ function CallCard({ step, showAgent }: { step: Step; showAgent: boolean }) {
           <p className="flex flex-wrap items-baseline gap-x-2">
             <code className="font-mono text-[13.5px] font-semibold text-ink-strong">{tool}</code>
             {showAgent && <span className="text-[12.5px] text-ink-soft">{AGENT[step.agent].short}</span>}
-            {step.status === "run" && <span className="data text-brand-ink">keluar</span>}
+            {step.status === "run" && <span className="text-[12.5px] font-medium text-brand-ink">keluar</span>}
           </p>
           {reason && <p className="mt-0.5 text-[14px] leading-snug text-ink"><Data text={reason} /></p>}
           <ResultLine step={step} />
@@ -304,6 +304,7 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
   let text: ReactNode = step.title;
   let side: ReactNode = null;
   let sub: string | undefined = words(step.resultDetail);
+  let glyph = step.status;
 
   if (step.kind === "hypothesis") {
     lead = `H${d.index ?? ""}`;
@@ -312,9 +313,11 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
   } else if (step.kind === "verdict") {
     lead = `H${d.index ?? ""}`;
     text = <span className={`pill ${verdictTone(d.verdict)} px-2 py-0 text-[12.5px]`}>{d.verdict ?? step.title}</span>;
+    // An unanswered hypothesis is not a finished test: it carries the warning mark.
+    if (step.status !== "run" && verdictGlyph(d.verdict) === "warn") glyph = "warn";
   } else if (step.kind === "gate") {
     lead = `G${d.gate ?? ""}`;
-    text = <>{step.title} <span className={`data ${step.status === "ok" ? "text-done" : d.verdict === "tidak berlaku" ? "text-ink-soft" : "text-warn-ink"}`}>{d.verdict}</span></>;
+    text = <>{step.title} <span className={`text-[12.5px] font-medium ${step.status === "ok" ? "text-done" : d.verdict === "tidak berlaku" ? "text-ink-soft" : "text-warn-ink"}`}>{d.verdict}</span></>;
   } else if (step.kind === "chain") {
     text = <><code className="font-mono text-[13px] font-semibold text-ink-strong">{step.title}</code> <span className={d.decision === "Terpilih" ? "font-bold text-brand-ink" : "text-ink-soft"}>{d.decision}</span></>;
     side = <span className="data text-ink-strong">{d.value}</span>;
@@ -325,7 +328,7 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
   return (
     <div className="relative px-4 py-2 max-sm:px-3">
       <div className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-x-3 text-[13.5px] leading-snug">
-        <Glyph status={step.status} className="mt-[2px]" />
+        <Glyph status={glyph} className="mt-[2px]" />
         <div className="min-w-0">
           <p className={step.kind === "hypothesis" ? "line-clamp-2" : ""} title={typeof text === "string" ? text : undefined}>
             {lead && <span className="data mr-2 text-ink-soft">{lead}</span>}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Search } from "lucide-react";
+import { Search, Workflow } from "lucide-react";
 import { Logo } from "./Brand";
 import { ThemeToggle } from "./Theme";
 import { PaletteProvider, usePalette } from "./CommandPalette";
@@ -68,17 +68,24 @@ function DeckBar() {
       <header className="sticky top-0 z-50 border-b border-rule bg-surface">
         <div className="wrap flex h-[52px] items-center gap-5 max-sm:gap-2">
           <Link to="/" aria-label="Sectoral, beranda" className="flex-none">
-            <Logo className="h-[22px]" />
+            <Logo className="h-[22px] max-sm:h-[19px]" />
           </Link>
-          <nav aria-label="Navigasi utama" className="flex h-full items-stretch gap-1 max-sm:ml-auto">
+          <nav aria-label="Navigasi utama" className="flex h-full items-stretch gap-1 max-sm:ml-auto max-sm:gap-0">
             {KEYS.map((k) => {
               const active = k.match(pathname);
               return (
                 <Link key={k.key} to={k.to} aria-current={active ? "page" : undefined}
-                  className={`group relative flex items-center gap-2 px-2.5 text-[14px] font-medium no-underline transition-colors max-sm:px-2 ${
+                  className={`group relative flex items-center gap-2 px-2.5 text-[14px] font-medium whitespace-nowrap no-underline transition-colors max-sm:px-1.5 max-sm:text-[13.5px] ${
                     active ? "text-ink-strong" : "text-ink-soft hover:text-ink-strong"}`}>
                   <kbd className={`kbd transition-colors max-sm:hidden ${active ? "!border-brand-ink/40 !text-brand-ink" : "group-hover:text-ink"}`}>{k.key}</kbd>
-                  <span className={k.key === "F3" ? "max-md:hidden" : ""}>{k.label}</span>
+                  {/* Phones: F3 keeps an icon and a short label so all three keys fit the bar. */}
+                  {k.key === "F3" ? (
+                    <>
+                      <Workflow aria-hidden className="size-4 flex-none sm:hidden" strokeWidth={2.2} />
+                      <span className="max-sm:sr-only">{k.label}</span>
+                      <span aria-hidden className="sm:hidden">Cara</span>
+                    </>
+                  ) : k.label}
                   {active && (
                     <motion.span layoutId="deck-tab" aria-hidden className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-brand-ink"
                       transition={{ type: "spring", stiffness: 500, damping: 40 }} />

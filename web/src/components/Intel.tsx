@@ -38,10 +38,10 @@ const WORD_TONE: Record<Status, string> = {
   idle: "text-ink-faint", run: "text-brand-ink", ok: "text-done", warn: "text-warn-ink", error: "text-err-ink",
 };
 
-/** A status in the deck's mono voice: dot plus word (Selesai, Gagal, Catatan). */
+/** A status: dot plus word. The bare status code reads in mono; a sentence in Roboto. */
 export function StatusWord({ status, children }: { status: Status; children?: React.ReactNode }) {
   return (
-    <span className={`data inline-flex items-center gap-1.5 whitespace-nowrap ${WORD_TONE[status]}`}>
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap ${children ? "text-[12.5px] font-medium" : "data"} ${WORD_TONE[status]}`}>
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
       {children ?? STATUS_WORD[status]}
     </span>
@@ -215,7 +215,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
                       <code className="font-mono text-[13.5px] font-semibold text-brand-ink">{s.tool}</code>
                       <Chip tone={tone}>{label}</Chip>
                       <span className="ml-auto">
-                        {status === "idle" && s.status ? <StatusWord status="idle">{s.status}</StatusWord> : status !== "idle" && <StatusWord status={status} />}
+                        {status === "idle" && s.status ? <StatusWord status="idle"><code className="font-mono text-[12px]">{s.status}</code></StatusWord> : status !== "idle" && <StatusWord status={status} />}
                       </span>
                     </div>
                     {s.why && <p className="mt-1 text-[14.5px]">{s.why}</p>}

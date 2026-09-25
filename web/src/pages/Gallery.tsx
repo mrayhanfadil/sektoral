@@ -225,7 +225,7 @@ export default function Gallery() {
 
               {!loading && (
                 <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-rule px-5 py-3 max-sm:px-4">
-                  <p aria-live="polite" className="data text-ink-soft">Menampilkan {shown.length} dari {all.length} laporan</p>
+                  <p aria-live="polite" className="text-[13px] text-ink-soft tabular-nums">Menampilkan {shown.length} dari {all.length} laporan</p>
                   <ChainLegend />
                 </div>
               )}

@@ -33,8 +33,8 @@ export function GateInstruments({ gates, ticker }: { gates?: GateState[]; ticker
               {g && ticker && (
                 <div className="mt-auto pt-5">
                   <GateMeter status={g.status} className="h-[3px]" />
-                  <p className="m-0 mt-2 flex items-baseline justify-between gap-2 font-mono text-[11.5px] font-medium">
-                    <span className="text-ink-soft">{ticker}</span>
+                  <p className="m-0 mt-2 flex items-baseline justify-between gap-2 text-[12.5px] font-medium">
+                    <span className="font-mono text-[11.5px] text-ink-soft">{ticker}</span>
                     <span className={`truncate ${GATE_TONE[g.status].text}`}>{g.verdict || "belum dinilai"}</span>
                   </p>
                 </div>
