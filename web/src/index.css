@@ -87,40 +87,40 @@
   }
 }
 
-/* Dark: the console. A navy ground drawn along the brand blue's hue (#0928B1,
-   ~229deg): lightness and chroma raised so the field reads navy, not
-   blue-black. Surfaces lift by lightness rather than shadow; text blue becomes
-   a pale periwinkle (#9DB1FF) lifted from the #7596FF chart tint. Body and secondary ink hold >= 4.5:1 on every step
-   up to brand-50 (ink-faint 5.3:1 there). */
+/* Dark: a true dark console. Neutral charcoal grounds (a trace of cool, no
+   navy) lifted by lightness rather than shadow; the brand blue stays an
+   accent only: fills, the active mark, and a pale periwinkle (#9DB1FF) for
+   text-blue. Body and secondary ink hold >= 4.5:1 on every surface step
+   (ink-faint 5.4:1 on raised). */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --color-brand: #3552F0;
   --color-brand-hover: #4A66F6;
   --color-brand-ink: #9DB1FF;
-  --color-brand-50: #172A68;
-  --color-brand-100: #20367F;
-  --color-tint: #2C4190;
-  --color-surface: #0D1B4B;
-  --color-raised: #122258;
-  --color-canvas: #0A1640;
-  --color-ink: #E6EBF7;
-  --color-ink-strong: #F6F8FD;
-  --color-ink-soft: #AEB9D9;
-  --color-ink-faint: #95A2CC;
-  --color-rule: #26377A;
-  --color-rule-soft: #1B2B63;
-  --color-rule-strong: #3A4E98;
-  --color-wordmark: #F2F4FA;
+  --color-brand-50: #1A2036;
+  --color-brand-100: #222A45;
+  --color-tint: #2A3352;
+  --color-surface: #16181C;
+  --color-raised: #1D2025;
+  --color-canvas: #0F1013;
+  --color-ink: #E4E6EA;
+  --color-ink-strong: #F5F6F8;
+  --color-ink-soft: #AAAFB9;
+  --color-ink-faint: #8E94A0;
+  --color-rule: #2B2F36;
+  --color-rule-soft: #22252B;
+  --color-rule-strong: #3B4049;
+  --color-wordmark: #F2F3F5;
   --color-done: #4FE0B6;
-  --color-ok-bg: #0C3340;
+  --color-ok-bg: #11291F;
   --color-ok-ink: #6EE7C0;
-  --color-warn-bg: #33290F;
+  --color-warn-bg: #2D2412;
   --color-warn-ink: #F5C45A;
   --color-warn-rule: #B8871F;
-  --color-err-bg: #3A1630;
+  --color-err-bg: #321719;
   --color-err-ink: #FF9A9A;
-  --shadow-card: 0 1px 2px rgba(2, 6, 24, .45), 0 16px 32px -18px rgba(2, 6, 24, .75);
-  --shadow-pop: 0 2px 8px rgba(2, 6, 24, .55), 0 28px 60px -20px rgba(2, 6, 24, .9);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .5), 0 16px 32px -18px rgba(0, 0, 0, .8);
+  --shadow-pop: 0 2px 8px rgba(0, 0, 0, .6), 0 28px 60px -20px rgba(0, 0, 0, .9);
 }
 
 @layer base {
