@@ -78,6 +78,29 @@ def load(ticker) -> dict | None:
     return group
 
 
+def regional(ticker):
+    """(rows, missing symbols, basis) of the pack's ``regional_reference``: non-IDX
+    listings shown for context only. They never enter ``companies``, the peer
+    medians, the cross-checks or the method chain (peers stay IDX-only)."""
+    group = load(ticker)
+    entries = list((group or {}).get("regional_reference") or [])
+    rows, missing = [], []
+    for entry in entries:
+        if not entry.get("symbol") or not entry.get("yahoo") or not str(
+                entry.get("reason") or "").strip():
+            raise ValueError(f"regional reference needs a symbol, a Yahoo symbol and a reason: "
+                             f"{ticker}")
+        if entry.get("market") in (None, MARKET):
+            raise ValueError(f"regional reference {entry['symbol']} must name its non-IDX market")
+        row = _from_snapshot(entry)
+        if row is None:
+            missing.append(entry["symbol"])
+            continue
+        rows.append({**row, "group": ["regional_reference"], "market": entry["market"],
+                     "reason": entry["reason"]})
+    return rows, missing, (group or {}).get("regional_reference_basis")
+
+
 def _num(value):
     return peer_fundamentals._num(value)
 
