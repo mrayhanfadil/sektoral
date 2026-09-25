@@ -2126,15 +2126,50 @@ def _t5_peer_consistency(ctx, r):
               f"{checked} nilai/median peer konsisten dengan rantai metode" if not bad else _short(bad, 5))
 
 
+_BAND_TEMPLATE = ("P/E", "P/BV")
+_BAND_SUBSTITUTE = re.compile(r"^(EV/EBITDA|EV/SALES|EV/EBIT|EV/REVENUE|P/S)$")
+_BAND_SWAP = re.compile(r"(\S+) menggantikan (?:band )?(P/E|P/BV|P/B)\b[^.]*?\bkarena \S"
+                        r"|(\S+) replaces (?:the )?(P/E|P/BV|P/B)\b[^.]*?\bbecause \S", re.I)
+
+
+def _band_label(e):
+    label = _clean(_data(e).get("label")).upper().replace(" ", "")
+    return "P/BV" if label == "P/B" else label
+
+
+def _band_swaps(text):
+    """{template multiple: substitute} stated as '<X> menggantikan band <P/E|P/BV> karena ...'."""
+    out = {}
+    for m in _BAND_SWAP.finditer(_clean(text)):
+        sub, orig = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        orig = "P/BV" if orig.upper() == "P/B" else orig.upper()
+        out[orig] = sub.upper()
+    return out
+
+
 @_check("T5.hist_bands_mean_median_marker")
 def _t5_bands(ctx, r):
+    """P/E and P/BV bands over a year with mean, median and the current marker.
+    Where P/E or P/BV is not meaningful the template allows another multiple
+    (EV/EBITDA, EV/Sales): a substitute chart counts for the multiple it
+    replaces only when its note states the swap and why."""
     bands = [e for e in ctx.exs if e.get("tipe") == "band_chart"]
     if not bands:
         r.add("T5.hist_bands_mean_median_marker", False, "grafik band P/E dan P/BV tidak ada")
         return
-    labels = {_clean(_data(e).get("label")).upper().replace(" ", "") for e in bands}
-    problems = [f"tanpa band {m}" for m in ("P/E", "P/BV") if m not in labels and
-                not (m == "P/BV" and "P/B" in labels)]
+    covered, problems, swaps = set(), [], []
+    for e in bands:
+        label = _band_label(e)
+        if label in _BAND_TEMPLATE:
+            covered.add(label)
+        elif _BAND_SUBSTITUTE.match(label):
+            stated = {orig for orig, sub in _band_swaps(_note(e)).items() if sub == label}
+            if not stated:
+                problems.append(f"Exhibit {e.get('n')}: band {label} tanpa alasan pengganti P/E atau P/BV")
+            covered |= stated
+            swaps += [f"{_clean(_data(e).get('label'))} menggantikan {orig}" for orig in sorted(stated)]
+    problems = [f"tanpa band {m} (atau pengganti yang dinyatakan)" for m in _BAND_TEMPLATE
+                if m not in covered] + problems
     for e in bands:
         d = _data(e)
         values = [v for v in d.get("values") or [] if isinstance(v, (int, float))]
@@ -2150,7 +2185,9 @@ def _t5_bands(ctx, r):
             problems.append(f"Exhibit {e.get('n')}: jendela {span} hari (template 1 tahun)")
         if values and not min(values) <= d["mean"] <= max(values):
             problems.append(f"Exhibit {e.get('n')}: mean di luar band")
-    r.add("T5.hist_bands_mean_median_marker", not problems, "band P/E dan P/BV 1 tahun lengkap"
+    r.add("T5.hist_bands_mean_median_marker", not problems,
+          ("band P/E dan P/BV 1 tahun lengkap" + (f" ({'; '.join(swaps)}, alasan dinyatakan)"
+                                                   if swaps else ""))
           if not problems else "; ".join(problems))
 
 
@@ -2162,17 +2199,27 @@ def _t5_implied(ctx, r):
     else:
         cols = [_clean(c).lower() for c in _cols(table)]
         idx = next((i for i, c in enumerate(cols) if re.search(r"implisit|implied", c)), None)
-        good = []
+        # A substitute multiple's row counts only when the table note states
+        # which multiple it replaces and why.
+        stated = set(_band_swaps(_note(table)).values())
+        good, unstated = [], []
         for row in _rows(table):
             if idx is None or idx >= len(row):
                 continue
             values = re.findall(r"Rp\s?\d[\d.]*", _clean(row[idx]))
-            if len(values) >= 2:
-                good.append(_clean(row[0]))
+            if len(values) < 2:
+                continue
+            label = _clean(row[0])
+            key = "P/BV" if label.upper().replace(" ", "") == "P/B" else label.upper().replace(" ", "")
+            if key in _BAND_TEMPLATE or not _BAND_SUBSTITUTE.match(key) or key in stated:
+                good.append(label)
+            else:
+                unstated.append(label)
         ok = len(good) >= 2
         r.add("T5.implied_price_mean_median_two_multiples", ok,
               f"harga implisit mean/median: {', '.join(good)}" if ok
-              else f"harga implisit mean dan median hanya untuk {good or 'tidak ada'}")
+              else f"harga implisit mean dan median hanya untuk {good or 'tidak ada'}"
+              + (f"; pengganti tanpa alasan: {', '.join(unstated)}" if unstated else ""))
     anchor = table or next((e for e in ctx.exs if e.get("tipe") == "band_chart"), None)
     page = ctx.page_of(anchor) if anchor else None
     if not page:
@@ -2294,7 +2341,25 @@ def _t7_cf(ctx, r):
         problems.append(f"blok {', '.join(n for n, _ in CF_SECTIONS if n not in sections)} tidak ada")
     vals = {k: _row_values(ctx.cf, found[k]) for k in ("begin_cash", "net_change", "end_cash", "cfo", "cfi", "cff")
             if k in found}
-    fc_bad, act_bad = [], []
+    # Explicit, labelled source-data reconciling lines (actual columns only):
+    # 'cash' sits between begin and end cash, 'flows' between CFO+CFI+CFF and
+    # the net change. They count on actual columns; a forecast cell must read
+    # 0 or n.m. (a filled one would be a plug and fails the blocker).
+    gaps = _cf_gap_rows(ctx.cf)
+    gap_vals = {k: _row_values(ctx.cf, row) for k, row in gaps.items()}
+    fc_bad, act_bad, bridged = [], [], set()
+    for key, row in gaps.items():
+        for year, (value, tol, kind) in gap_vals[key].items():
+            if kind == "F" and not _close(value, 0.0, tol):
+                fc_bad.append(f"baris selisih data sumber '{_clean(row[0])}' terisi pada {year}F")
+
+    def gap(key, year, kind):
+        if kind == "F" or year not in gap_vals.get(key, {}):
+            return 0.0, 0.0
+        value, tol, _k = gap_vals[key][year]
+        if value:
+            bridged.add(f"{year}A")
+        return value, tol
 
     def recon(name, year, lhs, rhs, tol, kind):
         if not _close(lhs, rhs, tol):
@@ -2304,22 +2369,46 @@ def _t7_cf(ctx, r):
         for year, (end, tol, kind) in vals["end_cash"].items():
             if year in vals["begin_cash"] and year in vals["net_change"]:
                 b, n = vals["begin_cash"][year], vals["net_change"][year]
-                tol_all = tol + b[1] + n[1]
-                recon("awal + perubahan = akhir", year, b[0] + n[0], end,
+                g, g_tol = gap("cash", year, kind)
+                tol_all = tol + b[1] + n[1] + g_tol
+                recon("awal + perubahan = akhir", year, b[0] + n[0] + g, end,
                       tol_all if kind == "F" else max(tol_all, 0.01 * abs(end)), kind)
     if {"cfo", "cfi", "cff", "net_change"} <= set(vals):
         for year, (chg, tol, kind) in vals["net_change"].items():
             if all(year in vals[k] for k in ("cfo", "cfi", "cff")):
-                s = sum(vals[k][year][0] for k in ("cfo", "cfi", "cff"))
-                t = tol + sum(vals[k][year][1] for k in ("cfo", "cfi", "cff"))
+                g, g_tol = gap("flows", year, kind)
+                s = sum(vals[k][year][0] for k in ("cfo", "cfi", "cff")) + g
+                t = tol + sum(vals[k][year][1] for k in ("cfo", "cfi", "cff")) + g_tol
                 recon("CFO + CFI + CFF = perubahan", year, s, chg,
                       t if kind == "F" else max(t, 0.01 * max(abs(chg), abs(s))), kind)
     if fc_bad:
         problems.append("rekonsiliasi proyeksi: " + _short(fc_bad, 3))
     r.add("T7.cash_flow_sections_and_tieout", not problems, "blok dan rekonsiliasi kas lengkap"
           if not problems else "; ".join(problems))
-    r.add("T7.cash_flow_actual_reconciliation", not act_bad, "rekonsiliasi kas aktual dalam 1%"
+    r.add("T7.cash_flow_actual_reconciliation", not act_bad,
+          (f"rekonsiliasi kas aktual lengkap dengan baris selisih data sumber eksplisit "
+           f"({', '.join(sorted(bridged))})" if bridged else "rekonsiliasi kas aktual dalam 1%")
           if not act_bad else _short(act_bad, 3))
+
+
+_CF_GAP_LABEL = re.compile(r"\((data sumber|source data)\)\s*$", re.I)
+
+
+def _cf_gap_rows(e):
+    """{'cash' | 'flows': row} of explicitly labelled source-data reconciling
+    lines: the label ends '(data sumber)'/'(source data)' and names an FX or
+    cash-definition effect ('cash') or a cash-flow-component gap ('flows')."""
+    out = {}
+    for row in _rows(e):
+        label = _clean(row[0]) if row else ""
+        if not _CF_GAP_LABEL.search(label):
+            continue
+        low = label.lower()
+        if re.search(r"komponen arus kas|cash flow components?", low):
+            out.setdefault("flows", row)
+        elif re.search(r"efek kurs|selisih definisi kas|fx effect|cash definition", low):
+            out.setdefault("cash", row)
+    return out
 
 
 @_check("T7.key_ratio_sections_format", "T7.key_ratio_format")

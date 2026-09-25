@@ -16,6 +16,17 @@ driver values the valuation uses for this issuer:
   dividends, equity, per-share values); bank balance-sheet drivers are
   never invented and are listed in ``notes``.
 
+Interim opening (``MODE_INTERIM``): when the issuer evidence pack carries the
+full official 1H balance sheet, the 1H cash flow that ties opening to closing
+cash and the 1H D&A, the first forecast year's balance sheet rolls from that
+balance sheet with H2 flows only (H2 profit; FY D&A, capex and working-capital
+change less the official 1H; the prior year's final dividend when 1H did not
+pay it), and its cash flow is the official 1H plus the modelled H2 from the
+year-end cash. This also covers a share count that moved since the year-end
+(rights issue): the interim balance sheet already holds the capital raised.
+Later years roll as usual. The revolver floor is capped at the lower of the
+interim and the year-end cash, since interim cash can hold unspent proceeds.
+
 Everything the scenario does not give (debt path, other non-current items,
 dividend timing, NCI dividends) is a labelled screening assumption in
 ``assumptions``. Cash is never a plug: it is opening cash plus the cash-flow
@@ -58,6 +69,9 @@ import re
 from . import cache, fmt, scenario_value
 
 MODE_FULL = "laporan lengkap"
+# Full statements opened from the official interim balance sheet (spec §4.1a):
+# the first forecast year's balance sheet rolls from it with H2 flows only.
+MODE_INTERIM = "laporan lengkap, neraca awal interim resmi"
 MODE_EQUITY = "laba dan ekuitas"
 MODE_BANK = "bank: laba, dividen dan ekuitas"
 
@@ -307,10 +321,11 @@ def _cash(row):
     return None
 
 
-def _minimum_cash(history, base_year, cash0):
+def _minimum_cash(history, base_year, cash0, cap_label=None):
     """(ratio, basis): the lowest cash-to-revenue ratio of the last three actual
     years; the floor each year is the lower of that ratio x revenue and the
-    last actual cash, so it never exceeds cash the issuer actually held."""
+    last actual cash (``cap_label`` names it when it is not the base year's),
+    so it never exceeds cash the issuer actually held."""
     points = []
     for row in history:
         if row["year"] > base_year or row["year"] <= base_year - 3:
@@ -323,8 +338,9 @@ def _minimum_cash(history, base_year, cash0):
     ratio, year = min(points)
     years = sorted(y for _, y in points)
     span = f"FY{years[0]}-FY{years[-1]}" if len(years) > 1 else f"FY{years[0]}"
-    return ratio, (f"yang lebih rendah dari kas FY{base_year} {_bn(cash0)} dan rasio kas terhadap "
-                   f"pendapatan terendah {span} ({fmt.pct(ratio)}, FY{year}) x pendapatan tahun itu")
+    return ratio, (f"yang lebih rendah dari {cap_label or f'kas FY{base_year}'} {_bn(cash0)} dan "
+                   f"rasio kas terhadap pendapatan terendah {span} ({fmt.pct(ratio)}, FY{year}) x "
+                   "pendapatan tahun itu")
 
 
 def _trace_detail(va, keys, need):
@@ -403,6 +419,89 @@ def _official_interest(intake, fx):
     if not cost or not months or not fx:
         return None, None
     return abs(cost) * 12 / months * fx, actual.get("period") or "interim"
+
+
+def _official_interest_income(intake, fx):
+    """The official interim finance income annualised, flat, like
+    ``_official_interest``; None when the release does not report it."""
+    actual = (intake.get("latest_official_actual") or
+              (intake.get("official_evidence") or {}).get("latest_actual") or {})
+    metrics = actual.get("metrics") or {}
+    income = next((_num(metrics[k]) for k in ("finance_income", "interest_income")
+                   if _num(metrics.get(k)) is not None), None)
+    months = scenario_value._period_months(actual.get("period"))
+    if income is None or income < 0 or not months or not fx:
+        return None
+    return income * 12 / months * fx
+
+
+# Official interim lines the interim opening needs (reporting currency).
+_INTERIM_BALANCE = ("cash", "current_assets", "fixed_assets", "total_assets",
+                    "current_liabilities", "total_liabilities", "short_term_debt",
+                    "long_term_debt", "total_equity", "non_controlling_interest")
+_INTERIM_FLOWS = ("cash_begin", "operating_cash_flow", "capital_expenditure",
+                  "investing_cash_flow", "debt_raised", "dividends_paid", "equity_raised",
+                  "other_financing_cash_flow", "financing_cash_flow", "net_cash_flow")
+
+
+def _interim_opening(intake, anchor, fx):
+    """The official 1H balance sheet and cash flow the first forecast year opens
+    from, in Rupiah, else None.
+
+    Needs the full interim balance sheet (cash, current and fixed assets,
+    current liabilities, short- and long-term debt, equity and minorities, and
+    balancing), the interim cash flow that ties opening to closing cash, the
+    interim D&A, and a 1H + H2 earnings scenario of the same year.
+    """
+    evidence = intake.get("official_evidence") or {}
+    balance = evidence.get("balance_sheet") or {}
+    actual = (intake.get("latest_official_actual") or evidence.get("latest_actual") or {})
+    flows = actual.get("cash_flow") or {}
+    metrics = actual.get("metrics") or {}
+    h2 = (anchor or {}).get("h2") or {}
+    period_end = str(balance.get("period_end") or "")
+    if (not fx or not anchor or scenario_value._period_months(actual.get("period")) != 6
+            or period_end != str(actual.get("period_end") or "")
+            or period_end[:4] != str(anchor.get("year"))
+            or _num(h2.get("revenue")) is None or _num(h2.get("net_profit")) is None
+            or _num(metrics.get("depreciation")) is None
+            or any(_num(balance.get(k)) is None for k in _INTERIM_BALANCE)
+            or any(_num(flows.get(k)) is None for k in _INTERIM_FLOWS)):
+        return None
+    b = {k: _num(v) for k, v in balance.items() if _num(v) is not None}
+    f = {k: _num(v) for k, v in flows.items() if _num(v) is not None}
+    scale = max(abs(b["total_assets"]), 1.0)
+    tolerance = max(scale * 1e-9, 1.0)
+    if (abs(b["total_assets"] - b["total_liabilities"] - b["total_equity"]) > tolerance
+            or abs(f["cash_begin"] + f["net_cash_flow"] - b["cash"]) > tolerance
+            or abs(f["operating_cash_flow"] + f["investing_cash_flow"]
+                   + f["financing_cash_flow"] - f["net_cash_flow"]) > tolerance):
+        return None
+    inv = b.get("inventories", 0.0)
+    receivables = b.get("trade_receivables", 0.0)
+    payables = b.get("trade_payables", 0.0)
+    out = {k: v * fx for k, v in b.items()}
+    out.update(
+        inventories=inv * fx, trade_receivables=receivables * fx, trade_payables=payables * fx,
+        other_current_assets=(b["current_assets"] - b["cash"] - inv - receivables) * fx,
+        other_current_liabilities=(b["current_liabilities"] - b["short_term_debt"]
+                                   - payables) * fx,
+        other_non_current_assets=(b["total_assets"] - b["current_assets"]
+                                  - b["fixed_assets"]) * fx,
+        other_non_current_liabilities=(b["total_liabilities"] - b["current_liabilities"]
+                                       - b["long_term_debt"]) * fx,
+        period_end=period_end, period=actual.get("period"),
+        shares=_num(balance.get("shares_outstanding")) or _num(balance.get("shares_issued")),
+        source=balance.get("source_title") or actual.get("source_title"),
+        has_receivables="trade_receivables" in b, has_payables="trade_payables" in b,
+        has_inventories="inventories" in b,
+        net_cons_1h=_num(metrics.get("net_profit")) * fx
+        if _num(metrics.get("net_profit")) is not None else None,
+        da_1h=metrics["depreciation"] * fx,
+        flows={k: v * fx for k, v in f.items()}, flow_pages=flows.get("pages"))
+    out["flows"]["other_investing_cash_flow"] = (f["investing_cash_flow"]
+                                                 + f["capital_expenditure"]) * fx
+    return out if out["net_cons_1h"] is not None else None
 
 
 def _official_usd_base(intake, base, fx):
@@ -550,7 +649,7 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
     has_capex = all(r.get("capex") is not None for r in path)
 
     # --- operating drivers (non-financial): the valuation's values
-    da_list, tax, interest, dnwc_list = None, None, None, None
+    da_list, tax, interest, dnwc_list, interest_income = None, None, None, None, None
     interest_period = None
     da_reason, nwc_sentence = None, None
     if not bank:
@@ -583,6 +682,7 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                     "tidak mengarang angka.")
         if interest is None and not lom:
             interest, interest_period = _official_interest(intake, fx)
+        interest_income = _official_interest_income(intake, fx) if not lom else None
         if tax is None:
             tax = _num((dcf or {}).get("tax_rate"))
             tax_basis = (dcf or {}).get("tax_basis")
@@ -624,19 +724,45 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             "Mekanika model: EBIT = EBITDA skenario - D&A; pos non-operasional bersih (beban "
             "bunga dan lain-lain bersih) = laba sebelum pajak - EBIT, implisit dari margin laba "
             "bersih skenario, bukan asumsi terpisah"
-            + ("; beban bunga = 2x beban keuangan 1H resmi, sama dengan jadwal LoM."
+            + ("; beban bunga = 2x beban keuangan 1H resmi, sama dengan jadwal LoM"
                if interest is not None and lom else
                f"; beban bunga = beban keuangan {interest_period} resmi disetahunkan, flat, "
-               "dipisahkan dari pos non-operasional lain tanpa mengubah laba sebelum pajak."
-               if interest is not None else "."))
+               "dipisahkan dari pos non-operasional lain tanpa mengubah laba sebelum pajak"
+               if interest is not None else "")
+            + (f"; pendapatan bunga = penghasilan keuangan {period} resmi disetahunkan, flat "
+               f"({_bn(interest_income)} per tahun), dipisahkan dengan cara yang sama"
+               if interest_income is not None else "") + ".")
 
     # --- which statements can be built
     needs_bs = ("total_assets", "total_liabilities", "total_equity", "current_assets",
                 "current_liabilities", "fixed_assets")
     bs_complete = (base is not None and _cash(base) is not None and
                    all(_num(base.get(k)) is not None for k in needs_bs))
-    full = (not bank and not moved and fcff_ok and payout is not None and bs_complete)
-    mode = MODE_BANK if bank else MODE_FULL if full else MODE_EQUITY
+    # Interim opening: the official 1H balance sheet and cash flow, with the
+    # first year's H2 flows (FY scenario less the official 1H actual).
+    interim = (None if bank or not fcff_ok or payout is None
+               else _interim_opening(intake, anchor, fx))
+    if interim:
+        h2 = anchor["h2"]
+        interim["h2_cons"] = h2["net_profit"] * fx
+        interim["h2_share"] = (h2["revenue"] * fx / first["revenue"]
+                               if first["revenue"] else 0.5)
+        interim["da_h2"] = da_list[0] - interim["da_1h"]
+        interim["capex_1h"] = abs(interim["flows"]["capital_expenditure"])
+        interim["capex_h2"] = first["capex"] - interim["capex_1h"]
+        interim["dnwc_h2"] = dnwc_list[0] * interim["h2_share"]
+        short = [name for name, key in (("D&A", "da_h2"), ("capex", "capex_h2"))
+                 if interim[key] < 0]
+        if short:
+            assumptions.append(
+                f"Mekanika model: neraca interim resmi {interim['period_end']} tidak dipakai "
+                f"sebagai neraca awal karena {' dan '.join(short)} FY skenario lebih kecil dari "
+                f"{period} resmi, sehingga arus H2 akan negatif.")
+            interim = None
+    full = (not bank and fcff_ok and payout is not None and
+            (interim is not None or (not moved and bs_complete)))
+    mode = (MODE_BANK if bank else MODE_INTERIM if full and interim else
+            MODE_FULL if full else MODE_EQUITY)
     if fcff_ok and nwc_sentence:
         assumptions.append(nwc_sentence)
 
@@ -657,6 +783,9 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
     if payout is None:
         equity_reason = ("Payout tidak tersedia di data Sectors maupun asumsi forecast, "
                          "sehingga dividen dan ekuitas tidak dapat diproyeksikan.")
+    elif interim:
+        opening = {"equity": interim["total_equity"], "when": interim["period_end"],
+                   "interim": True}
     elif moved and official_equity is not None and official_fx and h2_net is not None:
         opening = {"equity": official_equity * official_fx,
                    "when": balance.get("period_end"), "interim": True}
@@ -676,16 +805,38 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
     if nci0 is None and _num(balance.get("non_controlling_interest")) is not None and official_fx:
         nci0 = balance["non_controlling_interest"] * official_fx
         nci_basis = f"nilai buku, neraca interim resmi {balance.get('period_end')}"
+    if interim:
+        nci0 = interim["non_controlling_interest"]
+        nci_basis = f"nilai buku, neraca interim resmi {interim['period_end']}"
     if nci0 is None:
         nci0, nci_basis = 0.0, "tidak dilaporkan terpisah; ekuitas induk = total ekuitas"
     prior_earnings = _num((base or {}).get("earnings"))
+    if interim:
+        # The prior year's final dividend follows the AGM: when the interim cash
+        # flow shows it paid, H2 pays nothing more (interim dividends are not
+        # modelled); otherwise it is still due in H2.
+        paid_1h = interim["flows"]["dividends_paid"]
+        if paid_1h > 0:
+            interim["div_h2"] = 0.0
+            interim["div_text"] = (
+                f"{first['label']}: dividen final FY{first['year'] - 1} {_bn(paid_1h)} sudah "
+                f"dibayar pada {period} (arus kas resmi) dan tercermin di ekuitas neraca interim "
+                f"{interim['period_end']}; dividen H2 nol karena dividen interim tidak dimodelkan")
+        else:
+            interim["div_h2"] = payout * max(prior_earnings or 0.0, 0.0)
+            interim["div_text"] = (
+                f"{first['label']}: arus kas {period} resmi tidak mencatat dividen, sehingga "
+                f"dividen final FY{first['year'] - 1} = payout x laba induk FY"
+                f"{first['year'] - 1} dibayar pada H2")
     if opening:
         assumptions.append(
             f"Skenario analis: porsi laba pemilik induk {fmt.pct(share_parent)}, sumber "
             f"{_source(attributable_basis)}; laba non-pengendali menambah ekuitas NCI dengan "
             f"saldo awal {_bn(nci0)}, sumber {_source(nci_basis)}; dividen ke NCI tidak "
             "dimodelkan.")
-        if opening["interim"]:
+        if interim:
+            timing = interim["div_text"]
+        elif opening["interim"]:
             timing = (f"{first['label']}: dividen tahun berjalan sudah tercermin di ekuitas "
                       f"neraca interim {opening['when']}")
         elif prior_earnings is not None:
@@ -707,7 +858,18 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 f"screening; dividen tunai tahun t = payout x laba induk tahun t-1; {timing}. "
                 "DPS dan payout tidak ditampilkan karena payout historis tidak tersedia "
                 "(spesifikasi §5.4).")
-        if opening["interim"]:
+        if interim:
+            assumptions.append(
+                "Mekanika model: "
+                + (f"jumlah saham berubah {fmt.pct(official_shares / year_shares - 1)} sejak "
+                   f"akhir FY{first['year'] - 1}; perubahan modal itu sudah masuk neraca dan arus "
+                   f"kas {period} resmi, sehingga " if moved else "")
+                + f"ekuitas {first['label']} = ekuitas neraca interim resmi {opening['when']} "
+                f"sebesar {_bn(opening['equity'])} + laba bersih konsolidasi H2 skenario "
+                f"{_bn(interim['h2_cons'])} - dividen H2; tahun berikutnya = ekuitas awal + laba "
+                "bersih konsolidasi - dividen; tanpa penerbitan atau pembelian kembali saham "
+                "sesudah neraca interim.")
+        elif opening["interim"]:
             assumptions.append(
                 f"Mekanika model: {moved_text}, sehingga ekuitas {first['label']} = ekuitas "
                 f"neraca interim resmi {opening['when']} sebesar {_bn(opening['equity'])} + laba "
@@ -721,7 +883,68 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 "saham.")
 
     # --- balance-sheet opening (full statements only)
-    if full:
+    rec0 = pay0 = 0.0
+    if full and interim:
+        cash0, fa0 = interim["cash"], interim["fixed_assets"]
+        std0, ltd0 = interim["short_term_debt"], interim["long_term_debt"]
+        inv_known = interim["has_inventories"]
+        inv0, rec0, pay0 = (interim["inventories"], interim["trade_receivables"],
+                            interim["trade_payables"])
+        oca0, ocl0 = interim["other_current_assets"], interim["other_current_liabilities"]
+        onca0, oncl0 = interim["other_non_current_assets"], interim["other_non_current_liabilities"]
+        nwc0 = rec0 + inv0 + oca0 - pay0 - ocl0
+        when, flows = interim["period_end"], interim["flows"]
+        # Interim cash can still hold unspent proceeds of a share or bond issue:
+        # the floor is capped at the lower of it and the last fiscal year-end cash.
+        year_cash = _cash(base) if base else None
+        cash_cap = min(cash0, year_cash) if year_cash is not None and year_cash > 0 else cash0
+        cash_ratio, cash_floor_basis = _minimum_cash(
+            history, first["year"] - 1, cash_cap,
+            f"kas neraca interim {when}" if cash_cap == cash0 else
+            f"kas FY{first['year'] - 1} (kas neraca interim {when} {_bn(cash0)} masih memuat "
+            "dana aksi korporasi atau penerbitan utang yang belum terpakai)")
+        residual = flows["operating_cash_flow"] - interim["net_cons_1h"] - interim["da_1h"]
+        later = path[1]["label"] if len(path) > 1 else "tahun berikutnya"
+        assumptions.append(
+            f"Mekanika model (neraca awal interim): neraca {first['label']} bergulir dari neraca "
+            f"konsolidasian resmi {when} ({_source(interim['source'])}) dengan arus H2 saja: laba "
+            f"bersih konsolidasi H2 skenario {_bn(interim['h2_cons'])}, D&A H2 "
+            f"{_bn(interim['da_h2'])} (D&A FY {_bn(da_list[0])} - D&A {period} resmi "
+            f"{_bn(interim['da_1h'])}), capex H2 {_bn(interim['capex_h2'])} (capex FY skenario "
+            f"{_bn(first['capex'])} - capex {period} resmi {_bn(interim['capex_1h'])}), kenaikan "
+            f"modal kerja H2 {_bn(interim['dnwc_h2'])} (kenaikan FY x porsi pendapatan H2 "
+            f"{fmt.pct(interim['h2_share'])}) dan dividen H2 {_bn(interim['div_h2'])}; {later} "
+            f"dan seterusnya bergulir dari neraca akhir {first['label']}.")
+        assumptions.append(
+            f"Mekanika model: arus kas {first['label']} = arus kas {period} aktual resmi"
+            + (f" ({_source(interim['flow_pages'])})" if interim.get("flow_pages") else "")
+            + f" + arus kas H2 model, dari kas awal FY{first['year'] - 1} "
+            f"{_bn(flows['cash_begin'])}; arus kas operasi {period} resmi "
+            f"{_bn(flows['operating_cash_flow'])}, selisihnya terhadap laba + D&A {period} "
+            f"({_bn(residual)}) tersaji sebagai pos operasi lainnya; pos investasi lainnya "
+            f"({_bn(flows['other_investing_cash_flow'])}), penarikan (pembayaran) utang "
+            f"({_bn(flows['debt_raised'])}), penerbitan saham ({_bn(flows['equity_raised'])}) dan "
+            f"pos pendanaan lainnya ({_bn(flows['other_financing_cash_flow'])}) {period} adalah "
+            "angka aktual.")
+        assumptions.append(
+            f"Asumsi screening: utang awal flat pada saldo neraca interim resmi {when} (jangka "
+            f"pendek {_bn(std0)}, jangka panjang {_bn(ltd0)}); tanpa jadwal pelunasan atau "
+            "penarikan bersumber, utang yang jatuh tempo dianggap dibiayai kembali.")
+        assumptions.append(
+            f"Asumsi screening: aset tidak lancar lain {_bn(onca0)} dan liabilitas tidak lancar "
+            f"non-utang {_bn(oncl0)} flat pada saldo {when}; sesudah {period} arus kas investasi "
+            "hanya capex dan arus kas pendanaan hanya dividen dan utang jangka pendek "
+            "penyeimbang kas, tanpa penerbitan saham.")
+        assumptions.append(
+            f"Skenario analis: capex per tahun dari skenario; aset tetap = saldo {when} "
+            f"{_bn(fa0)} + capex H2 - D&A H2, lalu + capex - D&A per tahun.")
+        assumptions.append(
+            f"Mekanika model: kas akhir {first['label']} = kas neraca interim {when} "
+            f"{_bn(cash0)} + arus kas bersih H2, sesudahnya kas awal + arus kas bersih, bukan "
+            "penyeimbang; arus kas operasi = laba induk + D&A - kenaikan modal kerja + laba "
+            "non-pengendali; neraca seimbang karena setiap pos bergerak lewat laba rugi atau "
+            "arus kas.")
+    elif full:
         cash0 = _cash(base)
         std0 = _num(base.get("short_term_debt")) or 0.0
         ltd0 = _num(base.get("long_term_debt"))
@@ -739,6 +962,7 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         oncl0 = ta0 - te0 - cl0 - ltd0
         gap = ta0 - te0 - base["total_liabilities"]
         nwc0 = oca0 + inv0 - ocl0
+        cash_cap = cash0
         cash_ratio, cash_floor_basis = _minimum_cash(history, base_year, cash0)
         assumptions.append(
             f"Asumsi screening: utang awal flat pada saldo FY{base_year} data Sectors (jangka "
@@ -777,6 +1001,7 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         row = {"year": p["year"], "label": p["label"], "revenue": p["revenue"],
                "net_cons": p["net_cons"], "earnings": p["earnings"],
                "minority": p["net_cons"] - p["earnings"]}
+        first_interim = interim is not None and i == 0
         if not bank:
             row.update(ebitda=p.get("ebitda"), capital_expenditure=p.get("capex"))
             ebt = p["net_cons"] / (1 - tax) if p["net_cons"] > 0 else p["net_cons"]
@@ -786,10 +1011,13 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 ebit = p["ebitda"] - da
                 row.update(depreciation=da, operating_pnl=ebit,
                            non_operating_income_or_loss=ebt - ebit,
-                           other_non_operating=ebt - ebit + (interest or 0.0))
+                           other_non_operating=(ebt - ebit + (interest or 0.0)
+                                                - (interest_income or 0.0)))
                 if interest is not None:
                     row["interest_expense_non_operating"] = interest
                     row["interest_coverage"] = ebit / interest if interest else None
+                if interest_income is not None:
+                    row["interest_income"] = interest_income
             if fcff_ok:
                 ebit = row["operating_pnl"]
                 row["fcff"] = (ebit - max(ebit, 0.0) * tax + row["depreciation"] - p["capex"]
@@ -798,8 +1026,13 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         if te is not None:
             if opening["interim"] and i == 0:
                 h2_cons = h2_net * fx
-                paid = None
-                te += h2_cons
+                if first_interim:
+                    # Dividends of the year: the official 1H cash flow plus H2.
+                    paid = interim["flows"]["dividends_paid"] + interim["div_h2"]
+                    te += h2_cons - interim["div_h2"]
+                else:
+                    paid = None
+                    te += h2_cons
                 nci += h2_cons * (1 - share_parent)
             else:
                 basis_earnings = earnings_prev if earnings_prev is not None else p["earnings"]
@@ -819,36 +1052,60 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             if payout_sourced:
                 row["dps"] = payout * max(p["earnings"], 0.0) / shares
                 row["payout"] = payout
-        # Full statements: working capital, fixed assets, cash.
+        # Full statements: working capital, fixed assets, cash. The interim
+        # opening's first year moves the balance sheet by its H2 flows only.
         if full:
-            dnwc = dnwc_list[i]
+            if first_interim:
+                cons_step, da_step = interim["h2_cons"], interim["da_h2"]
+                capex_step, dnwc = interim["capex_h2"], interim["dnwc_h2"]
+                paid_step = interim["div_h2"]
+            else:
+                cons_step, da_step, capex_step = p["net_cons"], row["depreciation"], p["capex"]
+                dnwc, paid_step = dnwc_list[i], row["dividends_paid"]
             nwc_new = nwc + dnwc
             if nwc0 > 0:
                 scale = nwc_new / nwc0
-                inv, oca, ocl = inv0 * scale, oca0 * scale, ocl0 * scale
+                inv, rec, oca = inv0 * scale, rec0 * scale, oca0 * scale
+                pay, ocl = pay0 * scale, ocl0 * scale
             else:
-                inv, ocl = inv0, ocl0
+                inv, rec, pay, ocl = inv0, rec0, pay0, ocl0
                 oca = oca0 + (nwc_new - nwc0)
-            cfo = p["net_cons"] + row["depreciation"] - dnwc
-            cfi = -p["capex"]
+            cfo_step = cons_step + da_step - dnwc
             # Short-term debt balancing cash: draw what keeps cash at the
             # minimum, repay it first once cash is above it. No interest is
             # added; the scenario's net margin already sets pre-tax profit.
-            before_debt = cash + cfo + cfi - row["dividends_paid"]
-            floor = min(cash0, cash_ratio * p["revenue"]) if cash_ratio else 0.0
+            before_debt = cash + cfo_step - capex_step - paid_step
+            floor = min(cash_cap, cash_ratio * p["revenue"]) if cash_ratio else 0.0
             if before_debt < floor:
                 drawn = floor - before_debt
             else:
                 drawn = -min(revolver, before_debt - floor)
             revolver += drawn
-            cff = drawn - row["dividends_paid"]
-            net_flow = cfo + cfi + cff
-            cash_begin, cash = cash, cash + net_flow
-            fa += p["capex"] - row["depreciation"]
+            net_step = cfo_step + -capex_step + (drawn - paid_step)
+            cash_begin, cash = cash, cash + net_step
+            fa += capex_step - da_step
             nwc = nwc_new
-            ca = cash + inv + oca
+            if first_interim:
+                # The year's cash flow: official 1H actual + modelled H2.
+                f = interim["flows"]
+                cash_begin = f["cash_begin"]
+                cfo = f["operating_cash_flow"] + cfo_step
+                cfi = f["investing_cash_flow"] - capex_step
+                other_investing = f["other_investing_cash_flow"]
+                debt_flow, equity_flow = f["debt_raised"] + drawn, f["equity_raised"]
+                other_financing = f["other_financing_cash_flow"]
+                cff = f["financing_cash_flow"] + drawn - paid_step
+                net_flow = f["net_cash_flow"] + net_step
+                other_operating = cfo - p["earnings"] - row["depreciation"] + dnwc
+            else:
+                cfo, cfi, other_investing = cfo_step, -capex_step, 0.0
+                debt_flow, equity_flow, other_financing = drawn, 0.0, 0.0
+                cff = drawn - paid_step
+                net_flow = net_step
+                other_operating = row["minority"]
+            ca = cash + inv + rec + oca
             std = std0 + revolver
-            cl = std + ocl
+            cl = std + pay + ocl
             ncl = ltd0 + oncl0
             row.update(
                 cash_and_equivalents=cash, other_current_assets=oca, current_assets=ca,
@@ -858,17 +1115,25 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 non_current_liabilities=ncl, total_liabilities=cl + ncl,
                 total_debt=std + ltd0, net_debt=std + ltd0 - cash, working_capital=nwc,
                 revolver=revolver, cash_begin=cash_begin, operating_cash_flow=cfo,
-                change_in_working_capital=-dnwc, other_operating_cash_flow=row["minority"],
-                other_investing_cash_flow=0.0, investing_cash_flow=cfi, debt_raised=drawn,
-                equity_raised=0.0, other_financing_cash_flow=0.0, financing_cash_flow=cff,
-                net_cash_flow=net_flow, free_cash_flow=cfo - p["capex"])
+                change_in_working_capital=-dnwc, other_operating_cash_flow=other_operating,
+                other_investing_cash_flow=other_investing, investing_cash_flow=cfi,
+                debt_raised=debt_flow, equity_raised=equity_flow,
+                other_financing_cash_flow=other_financing, financing_cash_flow=cff,
+                net_cash_flow=net_flow, free_cash_flow=cfo - p["capex"], revolver_drawn=drawn)
             if inv_known:
                 row["inventories"] = inv
+            if interim and interim["has_receivables"]:
+                row["trade_receivables"] = rec
+            if interim and interim["has_payables"]:
+                row["trade_payables"] = pay
         earnings_prev = p["earnings"]
         rows.append(row)
     if full:
-        draws = [f"{r['label']} {'tarik' if r['debt_raised'] > 0 else 'lunasi'} "
-                 f"{_bn(abs(r['debt_raised']))}" for r in rows if abs(r["debt_raised"]) > 0.5]
+        draws = [f"{r['label']} {'tarik' if r['revolver_drawn'] > 0 else 'lunasi'} "
+                 f"{_bn(abs(r['revolver_drawn']))}" for r in rows
+                 if abs(r["revolver_drawn"]) > 0.5]
+        for r in rows:
+            r.pop("revolver_drawn", None)
         assumptions.append(
             "Asumsi screening: utang jangka pendek penyeimbang kas. Kas minimum = "
             f"{cash_floor_basis}; bila kas sebelum pembiayaan di bawah minimum, kekurangannya "

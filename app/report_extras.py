@@ -19,6 +19,7 @@ from agents.estimator import tools as local_data
 
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
                mineops, scenario_value)
+from . import lom as lom_mod
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
 # Spec §3.1: the forecast model and the valuation tables run five years
@@ -788,10 +789,15 @@ def peer_page(intake, valuation_inputs=None):
     if band:
         exhibits.append(band)
         exhibits.extend(band_charts(intake))
+        swaps = [(sub, orig, why) for sub, orig, why in band_selection(_band_data(intake))
+                 if orig]
         paragraphs.append(
             "Band historis P/E dan P/BV adalah cross-check mean-reversion atas sejarah emiten "
             "sendiri, bukan target harga: harga implisitnya menganggap driver fundamental "
-            "(EPS dan BVPS terakhir) konstan dan hanya multiple yang kembali ke mean atau median.")
+            "(EPS dan BVPS terakhir) konstan dan hanya multiple yang kembali ke mean atau median."
+            + "".join(f" Grafik band memakai {sub} sebagai pengganti {orig} karena {why}; "
+                      f"harga implisit {sub} = multiple x basis per saham terakhir dikurangi "
+                      "utang bersih per saham." for sub, orig, why in swaps))
     else:
         paragraphs.append("Band historis P/E dan P/BV belum dimodelkan: "
                           "cache membutuhkan harga harian + EPS/BVPS TTM yang sebanding; "
@@ -841,49 +847,151 @@ def _band_data(intake):
                  and isinstance(a.get(key), (int, float))]
         return (known[-1][key] / shares, known[-1]["year"]) if known else (None, None)
 
+    def net_debt_on(day):
+        """Net debt per share of the annual already published on ``day``."""
+        known = [a for a in annuals
+                 if date(a["year"], 12, 31) + timedelta(days=PUBLICATION_LAG_DAYS) <= day]
+        if not known or not all(isinstance(known[-1].get(k), (int, float))
+                                for k in ("total_debt", "cash")):
+            return None
+        return (known[-1]["total_debt"] - known[-1]["cash"]) / shares
+
     months = max(1, round((points[-1][0] - points[0][0]).days / 30.4))
     out = {"window": f"{months} bulan", "start": points[0][0], "end": points[-1][0],
            "source": source, "multiples": {}}
-    for label, key in (("P/E", "earnings"), ("P/BV", "equity")):
+    # P/E and P/BV are the template's bands; EV/EBITDA and EV/Sales are the
+    # substitutes a report shows when one of them is not meaningful
+    # (``band_selection``). EV = close x current shares + debt - cash of the
+    # annual already published on that day.
+    for label, key, ev in (("P/E", "earnings", False), ("P/BV", "equity", False),
+                           ("EV/EBITDA", "ebitda", True), ("EV/Sales", "revenue", True)):
         series = []
         for day, close in points:
             base, year = base_on(day, key)
-            if base and base > 0:
-                series.append((day, close / base, base, year))
+            debt = net_debt_on(day) if ev else 0.0
+            if base and base > 0 and debt is not None and (close + debt) > 0:
+                series.append((day, (close + debt) / base, base, year, debt))
         if len(series) < 40:
             continue
-        mults = sorted(m for _, m, _, _ in series)
+        mults = sorted(m for _, m, _, _, _ in series)
         cur, base_now = series[-1][1], series[-1][2]
         out["multiples"][label] = {
-            "series": [(d, m) for d, m, _, _ in series],
+            "series": [(d, m) for d, m, _, _, _ in series],
             "mean": sum(mults) / len(mults), "median": statistics.median(mults),
             "current": cur, "percentile": sum(1 for m in mults if m <= cur) / len(mults) * 100,
-            "base_now": base_now, "base_year": series[-1][3],
-            "constant_base": len({round(b, 6) for _, _, b, _ in series}) == 1}
-    return out if out["multiples"] else None
+            "base_now": base_now, "base_year": series[-1][3], "net_debt_now": series[-1][4],
+            "constant_base": len({round(b, 6) for _, _, b, _, _ in series}) == 1}
+    return out if any(k in out["multiples"] for k in BAND_MULTIPLES) else None
+
+
+BAND_MULTIPLES = ("P/E", "P/BV")            # the template's own-history bands
+BAND_SUBSTITUTES = ("EV/EBITDA", "EV/Sales")  # in this order when one is not meaningful
+_BAND_BASE = {"P/E": "EPS", "P/BV": "BVPS", "EV/EBITDA": "EBITDA per saham",
+              "EV/Sales": "pendapatan per saham"}
+
+
+def _band_problem(data, label):
+    """Why a multiple's band is not meaningful, or None when it is: it must
+    cover about a year, end on the last close (a positive base today) and
+    stay within the multiple cap."""
+    m = data["multiples"].get(label)
+    base = _BAND_BASE[label].split(" ")[0]
+    if not m:
+        return f"basis {base} tidak positif sepanjang jendela"
+    first, last = m["series"][0][0], m["series"][-1][0]
+    if last < data["end"]:
+        after = last + timedelta(days=1)
+        return (f"{base} FY{_published_year_on(data, label, after)} tidak positif sejak "
+                f"{after.isoformat()}, sehingga {label} kini tidak bermakna")
+    if (last - first).days < 330:
+        months = max(1, round((last - first).days / 30.4))
+        return (f"basis {base} tidak positif sebelum {first.isoformat()}, sehingga band {label} "
+                f"hanya {months} bulan" if first > data["start"] else
+                f"data harga harian hanya {months} bulan")
+    if max(m["mean"], m["median"]) > fmt.MULT_CAP:
+        return (f"{label} di atas {fmt.MULT_CAP}x (basis {base} sangat kecil), "
+                "sehingga band-nya tidak bermakna")
+    return None
+
+
+def _published_year_on(data, label, day):
+    """The fiscal year whose annual is published on ``day`` (FY end + lag)."""
+    year = day.year - 1
+    return year if date(year, 12, 31) + timedelta(days=PUBLICATION_LAG_DAYS) <= day else year - 1
+
+
+def band_selection(data):
+    """[(label, replaces, why)] for the two band charts: P/E and P/BV, each
+    replaced by the first meaningful substitute (EV/EBITDA, else EV/Sales)
+    when its own band is not meaningful. ``replaces``/``why`` are None for a
+    template multiple shown as is."""
+    out, used = [], set()
+    for label in BAND_MULTIPLES:
+        why = _band_problem(data, label)
+        if why is None:
+            out.append((label, None, None))
+            continue
+        sub = next((s for s in BAND_SUBSTITUTES if s not in used
+                    and _band_problem(data, s) is None), None)
+        if sub:
+            used.add(sub)
+            out.append((sub, label, why))
+        elif label in data["multiples"]:
+            out.append((label, None, None))  # nothing better: the short band as is
+    return out
+
+
+def _implied(m, label):
+    """Implied price per share at a multiple (EV multiples less net debt)."""
+    debt = m.get("net_debt_now") or 0.0 if label.startswith("EV/") else 0.0
+    return lambda multiple: multiple * m["base_now"] - debt
 
 
 def own_history_bands(intake):
     """Struktur slide 5 lower half: own-history band table (mean, median,
-    current percentile, implied price at mean and median reversion)."""
+    current percentile, implied price at mean and median reversion). A
+    substitute band (EV/EBITDA or EV/Sales, ``band_selection``) adds its row
+    and the note states why it replaces P/E or P/BV."""
     data = _band_data(intake)
     if not data:
         return None
+    swaps = [(sub, orig, why) for sub, orig, why in band_selection(data) if orig]
     rows = []
-    for label in ("P/E", "P/BV"):
+    for label in BAND_MULTIPLES + tuple(sub for sub, _, _ in swaps):
         m = data["multiples"].get(label)
         if not m:
             rows.append([label, "NA", "NA", "NA", "basis fundamental historis tidak cukup"])
             continue
-        meaningless = max(m["mean"], m["median"]) > fmt.MULT_CAP
+        # A base that is no longer positive (the latest annual is a loss or
+        # negative equity) leaves no current multiple and no implied price.
+        stale = m["series"][-1][0] < data["end"]
+        meaningless = stale or max(m["mean"], m["median"]) > fmt.MULT_CAP
+        price = _implied(m, label)
         implied = ("n.m." if meaningless else
-                   f"Rp{fmt.rp(fmt.tick(m['mean'] * m['base_now']))} / "
-                   f"Rp{fmt.rp(fmt.tick(m['median'] * m['base_now']))}")
+                   f"Rp{fmt.rp(fmt.tick(price(m['mean'])))} / "
+                   f"Rp{fmt.rp(fmt.tick(price(m['median'])))}")
         rows.append([label, fmt.mult(m["mean"], cap=fmt.MULT_CAP), fmt.mult(m["median"], cap=fmt.MULT_CAP),
+                     "n.m." if stale else
                      f"{fmt.mult(m['current'], cap=fmt.MULT_CAP)} (p{m['percentile']:.0f})", implied])
-    constant = [label for label, m in data["multiples"].items() if m["constant_base"]]
+    stale = [label for label in BAND_MULTIPLES if label in data["multiples"]
+             and data["multiples"][label]["series"][-1][0] < data["end"]]
+    constant = [label for label, m in data["multiples"].items()
+                if m["constant_base"] and label in [r[0] for r in rows] and label not in stale]
+    replaced = {orig for _, orig, _ in swaps}
+
+    def row_note(label):
+        """What a template row reads when its band is not meaningful."""
+        m = data["multiples"][label]
+        if label in stale:
+            return (f"mean dan median {label} atas periode basis positif; kolom kini dan harga "
+                    "implisit ditulis n.m. (tanpa basis positif saat ini)")
+        if (m["series"][-1][0] - m["series"][0][0]).days < 330:
+            return f"baris {label} memakai jendela yang lebih pendek itu"
+        return ""
+    shown = [row[0] for row in rows]
     return _exhibit(
-        f"Band historis {data['window']} P/E dan P/BV (bukan target harga)",
+        f"Band historis {data['window']} {', '.join(shown[:-1])} dan {shown[-1]} "
+        "(bukan target harga)",
         ["Multiple", "Mean", "Median", "Kini (persentil)", "Implisit mean / median"],
         rows,
         f"Source: {data['source']} {data['start'].isoformat()} sampai "
@@ -893,31 +1001,45 @@ def own_history_bands(intake):
         "dengan driver tetap; cross-check reversion, bukan target harga. Multiple di atas "
         f"{fmt.MULT_CAP}x ditulis n.m. karena basis laba atau ekuitas sangat kecil."
         + (f" Basis {', '.join(constant)} tidak berubah sepanjang jendela, sehingga harga "
-           "implisitnya sama dengan rata-rata/median harga penutupan." if constant else ""))
+           "implisitnya sama dengan rata-rata/median harga penutupan." if constant else "")
+        + "".join(f" {label}: {row_note(label)} karena {_band_problem(data, label)}."
+                  for label in stale if label not in replaced)
+        + "".join(f" {sub} menggantikan band {orig} karena {why}"
+                  + (f"; {row_note(orig)}" if orig in data["multiples"] and row_note(orig) else "")
+                  + "." for sub, orig, why in swaps)
+        + (" EV = kapitalisasi pasar (saham kini) + utang - kas dari laporan tahunan yang sudah "
+           "terbit; harga implisit EV = multiple x basis per saham - utang bersih per saham "
+           "terakhir; kepentingan non-pengendali tidak dikurangkan." if swaps else ""))
 
 
 def band_charts(intake):
     """Struktur Exhibits 12-13: P/E and P/BV lines with mean (dashed),
-    median (dotted) and the current level marked."""
+    median (dotted) and the current level marked. A band that is not
+    meaningful is replaced by EV/EBITDA or EV/Sales (``band_selection``),
+    and the chart note states why."""
     data = _band_data(intake)
     if not data:
         return []
     charts = []
-    for label in ("P/E", "P/BV"):
-        m = data["multiples"].get(label)
-        if not m:
-            continue
+    for label, replaces, reason in band_selection(data):
+        m = data["multiples"][label]
         # A series shorter than the price window (a negative EPS/BVPS base or a
         # short price history) states its own window in the title.
         first, last = m["series"][0][0], m["series"][-1][0]
         months = max(1, round((last - first).days / 30.4))
         short = (last - first).days < 330
         window = f"{months} bulan" if short else data["window"]
+        base = _BAND_BASE[label]
         why = ("" if not short else
                f" Jendela {first.isoformat()} sampai {last.isoformat()} ({months} bulan): "
-               + (f"basis {'EPS' if label == 'P/E' else 'BVPS'} tidak positif sebelum "
-                  f"{first.isoformat()}." if first > data["start"] else
+               + (f"basis {base} tidak positif sebelum {first.isoformat()}."
+                  if first > data["start"] else
+                  f"basis {base} tidak positif sejak {(last + timedelta(days=1)).isoformat()}."
+                  if last < data["end"] else
                   "data harga harian lokal hanya mencakup periode ini."))
+        swap = (f" {label} menggantikan band {replaces} karena {reason}; EV = kapitalisasi pasar "
+                "(saham kini) + utang - kas dari laporan tahunan yang sudah terbit."
+                if replaces else "")
         charts.append({
             "n": 0, "judul": f"Band {label} {window} {intake['ticker']}", "tipe": "band_chart",
             "data": {"label": label, "dates": [d.isoformat() for d, _ in m["series"]],
@@ -926,9 +1048,9 @@ def band_charts(intake):
                      "percentile": m["percentile"]},
             "catatan_sumber": (
                 f"Source: {data['source']}; basis "
-                f"{'EPS' if label == 'P/E' else 'BVPS'} FY{m['base_year']}; garis putus-putus = "
+                f"{base} FY{m['base_year']}; garis putus-putus = "
                 f"mean {fmt.mult(m['mean'])}, titik-titik = median {fmt.mult(m['median'])}; "
-                f"kini {fmt.mult(m['current'])} di persentil {m['percentile']:.0f}." + why)})
+                f"kini {fmt.mult(m['current'])} di persentil {m['percentile']:.0f}." + why + swap)})
     return charts
 
 
@@ -941,8 +1063,11 @@ def ownership_exhibits(intake):
         exhibits.append(_exhibit(
             "Pemegang saham utama", ["Pemegang saham", "Kepemilikan (%)"],
             [[name, fmt._id(pct, 1)] for name, pct in holders[:6]],
-            "Sumber: Sectors, company/report, ownership.major_shareholders; komposisi dapat "
-            "berbeda dari tanggal laporan interim."))
+            (f"Sumber: {intake['major_holders_source']} (Sectors tidak memuat pemegang saham "
+             "emiten ini); komposisi dapat berbeda dari tanggal laporan interim."
+             if intake.get("major_holders_source") else
+             "Sumber: Sectors, company/report, ownership.major_shareholders; komposisi dapat "
+             "berbeda dari tanggal laporan interim.")))
         top = holders[0]
         paragraphs.append(f"Pemegang saham terbesar adalah {top[0]} dengan {fmt._id(top[1], 1)}% saham.")
     flow_rows = (local_data.cache_get(intake["ticker"], f"/foreign-flow/{intake['ticker']}/") or {}).get("data") or []
@@ -1013,6 +1138,12 @@ _NOT_MODELED = "pos ini tidak dihasilkan model forecast"
 _NOT_MEANINGFUL = "tidak bermakna karena basis pembanding nol, negatif, atau tidak tersedia"
 _BEYOND_MODEL = "tahun ini di luar horizon skenario tervalidasi"
 _SECTORS_GAP = "tidak dilaporkan di data Sectors untuk tahun ini"
+# Cash-flow reconciling lines: shown only when an actual year's Sectors figures
+# do not reconcile, so the table adds up and the reader sees the source gap.
+# The harness (T7.cash_flow_actual_reconciliation) accepts them on actual
+# columns only; forecast cells must read 0 or n.m.
+CASH_GAP_LINE = "Efek kurs dan selisih definisi kas (data sumber)"
+FLOW_GAP_LINE = "Selisih komponen arus kas (data sumber)"
 _OFFICIAL_USD_GAP = ("rilis tahunan resmi US$ hanya memuat pendapatan, EBITDA, laba dan ekuitas; "
                      "data Sectors untuk pos ini hanya tersedia dalam rupiah hasil konversi")
 # Lines Sectors never reports for an actual year, with the reason the note gives.
@@ -1434,6 +1565,52 @@ def financials_page(intake, fc=None, va=None, statements=None):
             return _num(r["cash_begin"])  # the model's own opening balance
         return cash(before(r))
 
+    # Tie-outs: begin cash + net change = end cash; assets = liabilities + equity.
+    # An actual year whose Sectors figures do not reconcile gets an explicit,
+    # labelled reconciling line (the source gap, never a forecast plug).
+    cash_gaps_text, balance_breaks = [], []
+    fx_gap_years, flow_gap_years = [], []
+    for r, label in zip(actual + forecast, labels):
+        if not is_actual(r) and not any(r is m for m in modeled):
+            continue
+        begin, change, end = _num(begin_cash(r)), _num(r.get("net_cash_flow")), _num(cash(r))
+        misses.clear()
+        if is_actual(r) and None not in (begin, change, end) and end and \
+                abs(begin + change - end) / abs(end) > 0.001:
+            fx_gap_years.append(label)
+            cash_gaps_text.append(f"{label}: kas akhir selisih {money(end - begin - change)} "
+                                  "dari kas awal + perubahan kas")
+        flows = [_num(r.get(k)) for k in ("operating_cash_flow", "investing_cash_flow",
+                                          "financing_cash_flow")]
+        if is_actual(r) and None not in flows and change is not None and \
+                abs(sum(flows) - change) > 0.01 * max(abs(change), abs(sum(flows)), 1):
+            flow_gap_years.append(label)
+            cash_gaps_text.append(f"{label}: arus kas operasi + investasi + pendanaan "
+                                  f"{money(sum(flows))} vs perubahan kas {money(change)}")
+        if not is_actual(r):
+            assets, liab, equity = (_num(r.get(k)) for k in
+                                    ("total_assets", "total_liabilities", "total_equity"))
+            if None not in (assets, liab, equity) and assets and \
+                    abs(assets - liab - equity) / abs(assets) > 0.001:
+                balance_breaks.append(f"{label} selisih {money(assets - liab - equity)}")
+
+    def _settled(value, scale):
+        """A forecast residual of floating-point size is the model's exact zero."""
+        return 0.0 if value is not None and abs(value) <= 1e-6 * max(abs(scale or 0), 1) else value
+
+    def flow_gap(r):
+        """Sectors' net change less CFO + CFI + CFF (actual years); the model's
+        own residual, zero by construction, in forecast years."""
+        value = minus(get(r, "net_cash_flow"), get(r, "operating_cash_flow"),
+                      get(r, "investing_cash_flow"), get(r, "financing_cash_flow"))
+        return value if is_actual(r) else _settled(value, _num(r.get("net_cash_flow")))
+
+    def cash_gap(r):
+        """End cash less begin cash and net change: FX effects and the gap
+        between the balance-sheet and cash-flow cash definitions (actual years)."""
+        value = minus(cash(r), begin_cash(r), get(r, "net_cash_flow"))
+        return value if is_actual(r) else _settled(value, cash(r))
+
     cash_rows, cash_gaps = table([
         "Blok Arus kas operasi",
         ("Laba bersih", lambda r: get(r, "earnings"), money),
@@ -1451,12 +1628,15 @@ def financials_page(intake, fc=None, va=None, statements=None):
         ("Penerbitan (pembelian kembali) saham", forecast_only("equity_raised"), money),
         ("Pos pendanaan lainnya", other_financing, money),
         ("Jumlah arus kas pendanaan", lambda r: get(r, "financing_cash_flow"), money),
-        "Blok Saldo kas",
-        ("Perubahan kas bersih", lambda r: get(r, "net_cash_flow"), money),
-        ("Kas awal", begin_cash, money),
-        ("Kas akhir", cash, money),
-        ("Arus kas bebas (operasi - capex, memo)",
-         lambda r: minus(get(r, "operating_cash_flow"), abs(get(r, "capital_expenditure"))), money)])
+        "Blok Saldo kas"]
+        + ([(FLOW_GAP_LINE, flow_gap, money)] if flow_gap_years else [])
+        + [("Perubahan kas bersih", lambda r: get(r, "net_cash_flow"), money),
+           ("Kas awal", begin_cash, money)]
+        + ([(CASH_GAP_LINE, cash_gap, money)] if fx_gap_years else [])
+        + [("Kas akhir", cash, money),
+           ("Arus kas bebas (operasi - capex, memo)",
+            lambda r: minus(get(r, "operating_cash_flow"), abs(get(r, "capital_expenditure"))),
+            money)])
     if bank:
         # A bank has no capex or working-capital line; keep what either side reports.
         keep = [row for row in cash_rows
@@ -1470,30 +1650,6 @@ def financials_page(intake, fc=None, va=None, statements=None):
                 kind[reason] = [n for n in kind[reason] if n not in dropped]
                 if not kind[reason]:
                     del kind[reason]
-
-    # Tie-outs: begin cash + net change = end cash; assets = liabilities + equity.
-    cash_gaps_text, balance_breaks = [], []
-    for r, label in zip(actual + forecast, labels):
-        if not is_actual(r) and not any(r is m for m in modeled):
-            continue
-        begin, change, end = _num(begin_cash(r)), _num(r.get("net_cash_flow")), _num(cash(r))
-        misses.clear()
-        if is_actual(r) and None not in (begin, change, end) and end and \
-                abs(begin + change - end) / abs(end) > 0.001:
-            cash_gaps_text.append(f"{label}: kas awal + perubahan kas selisih "
-                                  f"{money(begin + change - end)} dari kas akhir")
-        flows = [_num(r.get(k)) for k in ("operating_cash_flow", "investing_cash_flow",
-                                          "financing_cash_flow")]
-        if is_actual(r) and None not in flows and change is not None and \
-                abs(sum(flows) - change) > 0.01 * max(abs(change), abs(sum(flows)), 1):
-            cash_gaps_text.append(f"{label}: arus kas operasi + investasi + pendanaan "
-                                  f"{money(sum(flows))} vs perubahan kas {money(change)}")
-        if not is_actual(r):
-            assets, liab, equity = (_num(r.get(k)) for k in
-                                    ("total_assets", "total_liabilities", "total_equity"))
-            if None not in (assets, liab, equity) and assets and \
-                    abs(assets - liab - equity) / abs(assets) > 0.001:
-                balance_breaks.append(f"{label} selisih {money(assets - liab - equity)}")
 
     usd_reporter = evidence.get("reporting_currency") == "USD"
     spot = intake.get("fx_spot") or {}
@@ -1525,12 +1681,24 @@ def financials_page(intake, fc=None, va=None, statements=None):
         "produktif selain kredit (penempatan, surat berharga) adalah pos penyeimbang model "
         "driver bank."
         if modeled and bank_model else "")
+    gap_lines = [line for line, years in ((FLOW_GAP_LINE, flow_gap_years),
+                                          (CASH_GAP_LINE, fx_gap_years)) if years]
     cf_note = note + gap_note(cash_gaps) + (
         " Selisih data sumber pada kolom aktual: " + "; ".join(cash_gaps_text)
         + ". Angka aktual adalah data Sectors apa adanya: kas di neraca dan kas di laporan arus "
         "kas memakai definisi berbeda (misalnya penempatan jangka pendek atau giro di bank "
-        "sentral), ditambah efek kurs dan reklasifikasi; tabel tidak menambahkan angka "
-        "penyeimbang." if cash_gaps_text else
+        "sentral), ditambah efek kurs dan reklasifikasi. Baris "
+        + " dan ".join(f"'{line}'" for line in gap_lines)
+        + " menampilkan selisih itu secara eksplisit"
+        + (" (" + CASH_GAP_LINE.split(" (")[0].lower() + " = kas akhir - kas awal - perubahan kas"
+           if fx_gap_years else " (")
+        + ("; " if fx_gap_years and flow_gap_years else "")
+        + ("selisih komponen = perubahan kas - arus kas operasi, investasi dan pendanaan"
+           if flow_gap_years else "")
+        + ") sehingga kolom aktual terekonsiliasi; baris ini bukan angka penyeimbang model"
+        + (" dan pada kolom forecast bernilai 0 karena kas proyeksi terekonsiliasi tanpa pos "
+           "penyeimbang." if modeled and not bank else ".")
+        if cash_gaps_text else
         " Kas awal + perubahan kas = kas akhir, dan kas akhir sama dengan kas di neraca.")
     if not bank:
         cf_note += ((" Pos operasi lainnya pada kolom aktual memuat perubahan modal kerja dan "
@@ -1887,6 +2055,11 @@ def shape_key_financials(doc, intake, fc=None, va=None, statements=None):
                 continue
             value, reason = compute(i)
             if keep and cur == "n.m.":
+                if value is not None and not reason:
+                    # The narrative wrote n.m. by its own rule (e.g. a growth
+                    # rate above 500% or across zero); name that rule.
+                    reason = ("perubahan di atas 500% atau dari/ke angka negatif tidak "
+                              "bermakna sebagai pertumbuhan")
                 value = None  # the narrative's n.m. stands; compute only gives its reason
             if value is None:
                 cells.append("n.m.")
@@ -1995,10 +2168,22 @@ def shape_key_financials(doc, intake, fc=None, va=None, statements=None):
         value = _num((annual or sectors.get(year) or {}).get(key))
         return value or None if key == "ebitda" else value
 
+    prior_from_sectors = []
+
     def growth_of(key, model_key):
         def value(i):
             if i < 0:
-                return actual_value(year_of(0) - 1, key) if actual[0] else None
+                if not actual[0]:
+                    return None
+                prior = year_of(0) - 1
+                before = actual_value(prior, key)
+                # The audited rows start at the first actual year: the year before
+                # comes from Sectors' parent profit (same basis, rupiah reporters).
+                if before is None and key == "earnings" and official_basis and not usd:
+                    before = _num((sectors.get(prior) or {}).get("earnings"))
+                    if before is not None and prior not in prior_from_sectors:
+                        prior_from_sectors.append(prior)
+                return before
             if actual[i]:
                 return actual_value(year_of(i), key)
             value = _num(model_row(i).get(model_key))
@@ -2114,6 +2299,11 @@ def shape_key_financials(doc, intake, fc=None, va=None, statements=None):
                           if c})
     note += (" Pertumbuhan EPS sama dengan pertumbuhan laba yang dibagi karena EPS memakai satu "
              "jumlah saham pro forma di semua kolom.")
+    if prior_from_sectors and eps_growth_row[1] != "n.m.":
+        note += (f" Pertumbuhan EPS {periods[0]} dihitung terhadap laba bersih pemilik induk "
+                 + ", ".join(f"FY{y}" for y in prior_from_sectors)
+                 + " dari data Sectors, karena laporan resmi yang dipakai tabel ini tidak memuat "
+                 "tahun itu.")
     if close_dates:
         note += (" Multiple aktual memakai harga penutupan akhir tahun (IDX, "
                  + ", ".join(close_dates) + ") dengan jumlah saham, laba, ekuitas"
@@ -2255,6 +2445,12 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
                 if len(vals) >= 2 and vals[0] > 0 and vals[-1] > 0 else None)
 
     base = history[-3] if len(history) >= 3 else {}
+    if not base and official_basis and not usd:
+        # Official rows start at the first actual year: EPS growth of that year
+        # reads Sectors' parent profit of the year before, as Key Financials does.
+        prior = next((a for a in sectors_history
+                      if a.get("year") == int(annuals[0]["year"]) - 1), None)
+        base = {"earnings": earnings(prior)} if prior else {}
     rev_bars = [a.get("revenue") for a in annuals] + [to_ccy(r.get("revenue")) for r in frows]
     rev_g = yoy(rev_bars, base.get("revenue"))
     # An unreported EBITDA arrives as 0 from Sectors; it is a gap, not a zero bar.
@@ -2350,6 +2546,7 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
                    {"label": f"Laba bersih ({unit}) & pertumbuhan EPS", "bars": net_bars,
                     "line": eps_g, "is_forecast": is_fc}, labels, text))
 
+    mining_panel = None if bank else _mining_ops_panel(intake, va, labels, n_act, frows, is_fc)
     base_sectors = sectors_history[-3] if len(sectors_history) >= 3 else {}
     equity = [num(a.get("equity")) for a in sectors_annuals] + [
         num((model.get(r.get("label")) or {}).get("total_equity")) for r in frows]
@@ -2419,6 +2616,10 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
                        {"label": "NIM (%) & biaya kredit", "bars": nim, "line": coc,
                         "is_forecast": is_fc[:len(cols)], "bar_unit": "%"},
                        cols, text))
+    elif mining_panel:
+        # Finite-life miner: production volume (bars) vs unit cost (line),
+        # Struktur-Template's mining/E&P fourth chart.
+        panels.append(mining_panel)
     else:
         # A negative equity makes DER meaningless; leave the bar out.
         der = [a["liab"] / a["equity"] if num(a.get("liab")) is not None and num(a.get("equity"))
@@ -2450,7 +2651,8 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
                         "is_forecast": is_fc[:len(cols)]}, cols, text))
 
     notes = statements.get("notes") or {}
-    reasons = {"Pendapatan": (notes.get("revenue"), "basis tahun sebelumnya nol atau negatif"),
+    reasons = {"Produksi tembaga": (_MINING_VOLUME_GAP, _MINING_C1_GAP),
+               "Pendapatan": (notes.get("revenue"), "basis tahun sebelumnya nol atau negatif"),
                "EBITDA": (notes.get("ebitda"), "pendapatan atau EBITDA tidak tersedia"),
                "Laba bersih": (notes.get("earnings"), "laba tahun sebelumnya nol atau negatif"),
                "DER": (notes.get("total_liabilities"), "ekuitas rata-rata tidak positif"),
@@ -2481,16 +2683,102 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
               "lebih terang; "
               + (f"pendapatan, EBITDA dan laba dalam US$ seperti Key Financials (forecast rupiah "
                  f"dibagi kurs Rp{fmt.rp(fx)}/US$); " if usd else "")
-              + "forecast dari model yang sama dengan Key Financials dan tabel "
-              "keuangan (DER = total liabilitas / ekuitas; ROE = laba bersih / rata-rata "
-              "ekuitas).")
+              + "forecast dari model yang sama dengan Key Financials dan tabel keuangan"
+              + (" (DER = total liabilitas / ekuitas; ROE = laba bersih / rata-rata ekuitas)."
+                 if not mining_panel else "; volume tambang dari rilis operasi emiten dan jadwal "
+                 "LoM valuasi."))
     exhibits = [{"n": 0, "judul": title, "tipe": "combo_panel",
                  "data": {"cols": cols, "series": [panel]}, "narasi": note,
-                 "catatan_sumber": source}
+                 "catatan_sumber": source + (panel.pop("source_note", None) or "")}
                 for title, panel, cols, note in panels]
     return _page("Kinerja keuangan dan profitabilitas",
                  [f"Empat grafik berikut memakai periode {span} yang sama dengan Key Financials; "
                   "forecast hanya tampil bila skenario tervalidasi."], exhibits)
+
+
+_MINING_C1_GAP = ("model LoM menghitung biaya tambang, olah dan smelter per ton bijih, bukan "
+                  "Adjusted C1 per pon tembaga terjual setelah kredit emas dan perak, sehingga "
+                  "C1 forecast tidak dihitung")
+_MINING_VOLUME_GAP = "jadwal LoM atau panduan emiten untuk tahun ini tidak tersedia"
+
+
+def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
+    """Mining chart 4 (title, series, cols, narrative) or None: copper in
+    concentrate (Mlbs, bars) against Adjusted C1 (US$/lb, line). Actual years
+    from the issuer's annual operations (``annual_operations.rows``); forecast
+    volumes from the valued LoM schedule (a part year adds the reported 1H),
+    else FY guidance for its year; the C1 line stays actual-only because the
+    LoM has no by-product-credit unit cost."""
+    if intake.get("model_profile") != "finite_life_mining":
+        return None
+    evidence = intake.get("official_evidence") or {}
+    ops = evidence.get("annual_operations") or {}
+    by_year = {int(r["year"]): r for r in ops.get("rows") or []
+               if isinstance(r, dict) and r.get("year")}
+    years = [int(str(label)[:4]) for label in labels[:n_act]]
+    if not years or not all(isinstance((by_year.get(y) or {}).get("copper_mlb"), (int, float))
+                            for y in years):
+        return None
+    volume = [float(by_year[y]["copper_mlb"]) for y in years]
+    c1 = [by_year[y].get("c1_cost_usd_lb") if isinstance(by_year[y].get("c1_cost_usd_lb"),
+                                                          (int, float)) else None
+          for y in years]
+    gold = [by_year[y].get("gold_koz") for y in years]
+    detail = forecast_statements._trace_detail(va, ("sotp_lom",), ("lom",)) or {}
+    lom = detail.get("lom") or {}
+    inp = lom.get("inputs") or {}
+    schedule_t, part_year = {}, set()
+    for row in (lom.get("base") or {}).get("rows") or []:
+        schedule_t[row["year"]] = schedule_t.get(row["year"], 0.0) + (row.get("cu_rec_t") or 0.0)
+        if (row.get("share") or 1.0) < 1.0:
+            part_year.add(row["year"])
+    guidance = {str(g.get("period")): g for g in evidence.get("management_guidance") or []
+                if isinstance(g, dict) and g.get("name") == "Tembaga dalam konsentrat (Mlbs)"}
+    fc_volume, basis = [], []
+    for r in frows:
+        year = int(r["year"]) if r.get("year") else None
+        tonnes = schedule_t.get(year)
+        if tonnes is not None and year in part_year:
+            h1 = _num(inp.get("h1_cu_t"))
+            tonnes = tonnes + h1 if h1 is not None else None
+        if tonnes is not None:
+            fc_volume.append(tonnes * lom_mod.LB_PER_T / 1e6)
+            basis.append((r.get("label"), "1H aktual + 2H jadwal LoM" if year in part_year
+                          else "jadwal LoM valuasi"))
+        elif _num((guidance.get(f"FY{year}") or {}).get("value")) is not None:
+            fc_volume.append(float(guidance[f"FY{year}"]["value"]))
+            basis.append((r.get("label"), f"panduan emiten FY{year}"))
+        else:
+            fc_volume.append(None)
+    last = labels[n_act - 1]
+    text = (f"Tembaga dalam konsentrat {last} {fmt._id(volume[-1], 0)} juta pon "
+            f"({'turun' if volume[-1] < volume[0] else 'naik'} "
+            f"{fmt.pct(abs(volume[-1] / volume[0] - 1))} dari {labels[0]})")
+    if all(isinstance(g, (int, float)) for g in gold):
+        text += f", emas {fmt._id(gold[-1], 0)} ribu oz dari {fmt._id(gold[0], 0)} ribu oz"
+    if c1[-1] is not None:
+        text += (f"; Adjusted C1 {'(' + fmt._id(-c1[-1], 2) + ')' if c1[-1] < 0 else fmt._id(c1[-1], 2)}"
+                 " US$/lb"
+                 + (" (negatif: kredit emas dan perak melebihi biaya tunai)"
+                    if c1[-1] < 0 else ""))
+    known = [f"{label} {fmt._id(v, 0)} ({how})" for (label, how), v in
+             zip(basis, [v for v in fc_volume if v is not None])]
+    if known:
+        text += ". Volume forecast (juta pon): " + ", ".join(known)
+    text += "."
+    sources = "; ".join(dict.fromkeys(
+        f"{by_year[y].get('source_title')}, hlm. {by_year[y].get('page')}" for y in years
+        if by_year[y].get("source_title")))
+    note = ((f" Volume dan C1 aktual: {sources}." if sources else "")
+            + " Tembaga = kandungan logam dalam konsentrat yang diproduksi; Adjusted C1 per pon "
+            "tembaga terjual, negatif (dalam kurung) bila kredit emas dan perak melebihi biaya "
+            "tunai.")
+    cols = labels
+    return (f"Produksi tembaga dan biaya unit C1 ({cols[0]}-{cols[-1]})",
+            {"label": "Produksi tembaga (juta pon) & Adjusted C1",
+             "bars": volume + fc_volume, "line": c1 + [None] * len(frows),
+             "is_forecast": is_fc[:len(cols)], "line_unit": "US$/lb", "source_note": note},
+            cols, text)
 
 
 def price_chart_exhibit(intake):

@@ -242,6 +242,15 @@ def _driver_evidence_inputs(official_evidence, payout, payout_basis,
 MAX_IMPLIED_ASSET_LIFE = 40
 
 
+def _pack_holders(evidence):
+    """Shareholder rows of an issuer evidence pack, in Sectors' major_shareholders shape."""
+    rows = (((evidence or {}).get("shareholders") or {}).get("rows")) or []
+    return [{"name": r["name"], "share_amount": r.get("share_amount"),
+             "share_percentage": r["share_percentage"]}
+            for r in rows if isinstance(r, dict) and r.get("name")
+            and isinstance(r.get("share_percentage"), (int, float))]
+
+
 def _official_annual_depreciation(annuals, evidence):
     """Replace Sectors D&A and EBITDA with audited annual figures where the
     issuer evidence pack carries them (``annual_actuals`` rows with
@@ -609,7 +618,10 @@ def load(ticker, as_of=None):
         "dps_hist": dps_hist, "dps_basis": dps_basis,
         "dividend_events": dividend_events,
         "industry": ov.get("industry"), "sub_sector": ov.get("sub_sector"),
-        "major_holders": (own.get("major_shareholders") or [])[:5],
+        # Sectors ownership first; else the reviewed pack's IDX shareholder table.
+        "major_holders": ((own.get("major_shareholders") or []) or _pack_holders(official_evidence))[:5],
+        "major_holders_source": (None if own.get("major_shareholders") else
+                                 ((official_evidence or {}).get("shareholders") or {}).get("source_title")),
         "free_float": None,
         "daily": drows[-5:] if isinstance(drows, list) else [],
         "news": relevant_news,

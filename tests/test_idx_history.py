@@ -37,3 +37,20 @@ def test_band_covers_a_year_of_idx_closes():
     assert data["window"] == "12 bulan" and "IDX" in data["source"]
     # FY2025 was published inside the window, so the base changes.
     assert not data["multiples"]["P/E"]["constant_base"]
+
+
+def test_sido_has_24_months_of_idx_closes_for_the_cover_chart_and_band():
+    # SIDO's Sectors cache holds ~3 months; the IDX file carries the same
+    # 24-month window as the other issuers, labelled IDX.
+    loaded = idx_history.load("SIDO", "2026-09-25")
+    assert "IDX" in loaded["source_title"] and loaded["source_url"].startswith("https://www.idx.co.id/")
+    assert loaded["retrieved_at"] == "2026-09-25"
+    assert loaded["points"][0][0].isoformat() == "2024-07-22"
+    assert loaded["points"][-1][0].isoformat() == "2026-09-24" and loaded["points"][-1][1] == 350.0
+    window = render._price_window("SIDO", "2026-09-25")
+    assert (window["rel_dates"][-1] - window["rel_dates"][0]).days >= 365
+    assert "IDX" in window["source"]
+    doc_in, _ = I.load("SIDO", as_of="2026-09-25")
+    data = X._band_data(doc_in)
+    assert data["window"] == "12 bulan" and "IDX" in data["source"]
+    assert set(data["multiples"]) >= {"P/E", "P/BV"}

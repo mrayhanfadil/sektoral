@@ -195,7 +195,13 @@ def test_statements_follow_struktur_with_two_actual_and_three_forecast_years(tmp
     assert income["data"]["cols"] == ["Rp miliar"] + DISPLAY
     assert [r[0] for r in income["data"]["rows"]] == INCOME_LINES
     assert [r[0] for r in _table(doc, "Neraca")["data"]["rows"]] == BALANCE_LINES
-    assert [r[0] for r in _table(doc, "Arus kas")["data"]["rows"]] == CASH_LINES
+    cash = [r[0] for r in _table(doc, "Arus kas")["data"]["rows"]]
+    gap_lines = (X.CASH_GAP_LINE, X.FLOW_GAP_LINE)
+    assert [line for line in cash if line not in gap_lines] == CASH_LINES
+    # A source-data reconciling line sits right before the line it bridges to.
+    for gap, bridged in ((X.FLOW_GAP_LINE, "Perubahan kas bersih"), (X.CASH_GAP_LINE, "Kas akhir")):
+        if gap in cash:
+            assert cash[cash.index(gap) + 1] == bridged
     rows = {r[0]: r for r in _table(doc, "Neraca")["data"]["rows"]}
     assert rows["Total aset"][1:3] == rows["Total liabilitas dan ekuitas"][1:3]
     ratios = _table(doc, "Rasio utama")
@@ -437,3 +443,44 @@ def test_fcff_growth_starts_from_fy2025_on_the_table_definition(tmp_path):
     cells = _row(fcff, "Pertumbuhan FCFF")
     assert "-" not in list(cells.values())[1:]
     assert cells["FY26F"] != "n.m." and "FCFF FY2025" in fcff["catatan_sumber"]
+
+
+def _parse(cell):
+    text = str(cell).replace(".", "").replace(",", ".")
+    return -float(text[1:-1]) if text.startswith("(") else float(text)
+
+
+def test_actual_cash_gap_shows_as_an_explicit_source_line_and_forecasts_stay_zero(tmp_path):
+    doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
+    table = _table(doc, "Arus kas")
+    rows = {r[0]: r for r in table["data"]["rows"]}
+    gap = rows[X.CASH_GAP_LINE]
+    for i in (1, 2):   # actual columns: begin + change + gap = end
+        assert abs(_parse(rows["Kas awal"][i]) + _parse(rows["Perubahan kas bersih"][i])
+                   + _parse(gap[i]) - _parse(rows["Kas akhir"][i])) <= 2
+    # Never a plug in a forecast column: 0 (a modelled year) or n.m. (none).
+    assert set(gap[3:]) <= {"0", "n.m."}
+    assert "bukan angka penyeimbang model" in table["catatan_sumber"]
+
+
+def test_negative_base_band_is_replaced_by_a_stated_ev_multiple(tmp_path):
+    doc = B.build("SSIA", tmp_path, as_of="2026-09-24")
+    charts = [e for e in doc["exhibits"] if e["tipe"] == "band_chart"]
+    labels = [e["data"]["label"] for e in charts]
+    assert "P/E" not in labels and "EV/EBITDA" in labels and "P/BV" in labels
+    ev = next(e for e in charts if e["data"]["label"] == "EV/EBITDA")
+    assert "EV/EBITDA menggantikan band P/E karena" in ev["catatan_sumber"]
+    table = next(e for e in doc["exhibits"] if e["judul"].startswith("Band historis"))
+    rows = {r[0]: r for r in table["data"]["rows"]}
+    assert rows["P/E"][3:] == ["n.m.", "n.m."]           # FY2025 EPS is negative today
+    assert rows["EV/EBITDA"][4].count("Rp") == 2
+
+
+def test_mining_fourth_chart_is_volume_against_unit_cost(tmp_path):
+    doc = _doc(tmp_path)
+    chart = next(e for e in doc["exhibits"] if e["judul"].startswith("Produksi tembaga"))
+    series = chart["data"]["series"][0]
+    assert series["bars"][:2] == [395.0, 209.0] and series["line"][:2] == [-3.37, -0.54]
+    assert "Adjusted C1" in chart["narasi"] and "Adjusted C1" in chart["catatan_sumber"]
+    html = render.render(doc)
+    assert "(3,37)" in html and "US$/lb, sumbu kanan" in html

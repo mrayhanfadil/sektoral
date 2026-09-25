@@ -921,6 +921,96 @@ def test_cash_flow_forecast_reconciliation_blocks_actual_warns():
     assert failed(doc)["T7.cash_flow_actual_reconciliation"]["severity"] == T.WARNING
 
 
+def _with_source_gap_lines(doc, cash_gap, flow_gap=None):
+    """Insert the explicit source-data reconciling lines into the cash flow."""
+    rows = find(doc, "Arus kas")["data"]["rows"]
+    at = rows.index(row(find(doc, "Arus kas"), "Kas akhir"))
+    rows.insert(at, _row("Efek kurs dan selisih definisi kas (data sumber)", cash_gap))
+    if flow_gap:
+        at = rows.index(row(find(doc, "Arus kas"), "Perubahan kas bersih"))
+        rows.insert(at, _row("Selisih komponen arus kas (data sumber)", flow_gap))
+    return doc
+
+
+def test_cash_flow_actual_gap_reconciles_through_an_explicit_source_line():
+    # 2024A: Sectors end cash 130 = begin 80 + change 20 + a 30 FX/definition gap.
+    doc = make_doc()
+    row(find(doc, "Arus kas"), "Kas akhir")[1] = "130"
+    row(find(doc, "Arus kas"), "Kas awal")[2] = "130"
+    row(find(doc, "Neraca"), "Kas dan setara kas")[1] = "130"
+    assert "T7.cash_flow_actual_reconciliation" in failed(doc)
+    _with_source_gap_lines(doc, [30, -30, 0, 0, 0])   # 2025A opens at the 130 again
+    res = results(doc)
+    check = res["T7.cash_flow_actual_reconciliation"]
+    assert check["status"] != T.FAIL and "2024A" in check["message"], check
+    assert res["T7.cash_flow_sections_and_tieout"]["status"] != T.FAIL
+
+
+def test_cash_flow_component_gap_line_bridges_cfo_cfi_cff_to_net_change():
+    doc = make_doc()
+    row(find(doc, "Arus kas"), "Perubahan kas bersih")[2] = "0"   # source reports 0
+    row(find(doc, "Arus kas"), "Kas awal")[2] = "100"
+    _with_source_gap_lines(doc, [0, 50, 0, 0, 0], flow_gap=[0, -50, 0, 0, 0])
+    assert "T7.cash_flow_actual_reconciliation" not in failed(doc)
+
+
+def test_cash_flow_source_gap_line_never_plugs_a_forecast_year():
+    doc = _with_source_gap_lines(make_doc(), [0, 0, 5, 0, 0])
+    row(find(doc, "Arus kas"), "Kas akhir")[3] = "205"
+    msg = failed(doc)["T7.cash_flow_sections_and_tieout"]["message"]
+    assert "terisi pada 2026F" in msg
+
+
+def test_cash_flow_gap_line_needs_the_source_data_label():
+    doc = make_doc()
+    row(find(doc, "Arus kas"), "Kas akhir")[1] = "130"
+    row(find(doc, "Arus kas"), "Kas awal")[2] = "130"
+    row(find(doc, "Neraca"), "Kas dan setara kas")[1] = "130"
+    rows = find(doc, "Arus kas")["data"]["rows"]
+    rows.insert(rows.index(row(find(doc, "Arus kas"), "Kas akhir")),
+                _row("Penyesuaian kas", [30, 0, 0, 0, 0]))
+    assert "T7.cash_flow_actual_reconciliation" in failed(doc)
+
+
+def _swap_band(doc, reason_stated=True):
+    """Replace the P/BV band with an EV/EBITDA band (as for a negative book)."""
+    chart = next(e for e in doc["exhibits"] if e["tipe"] == "band_chart" and e["data"]["label"] == "P/BV")
+    chart["data"]["label"] = "EV/EBITDA"
+    chart["judul"] = "Band EV/EBITDA 12 bulan TEST"
+    table = find(doc, "Band historis")
+    table["data"]["rows"][1] = ["P/BV", "3,6x", "3,5x", "3,5x (p52)", "Rp57 / Rp56"]
+    table["data"]["rows"].append(["EV/EBITDA", "8,0x", "7,9x", "7,5x (p40)", "Rp1.050 / Rp1.030"])
+    table["judul"] = "Band historis 12 bulan P/E, P/BV dan EV/EBITDA (bukan target harga)"
+    if reason_stated:
+        why = (" EV/EBITDA menggantikan band P/BV karena basis BVPS tidak positif sebelum "
+               "2026-03-31, sehingga band P/BV hanya 6 bulan.")
+        chart["catatan_sumber"] += why
+        table["catatan_sumber"] += why
+    return doc
+
+
+def test_band_substitute_counts_only_with_a_stated_reason():
+    res = results(_swap_band(make_doc()))
+    bands = res["T5.hist_bands_mean_median_marker"]
+    assert bands["status"] != T.FAIL and "EV/EBITDA menggantikan P/BV" in bands["message"]
+    assert res["T5.implied_price_mean_median_two_multiples"]["status"] != T.FAIL
+    f = failed(_swap_band(make_doc(), reason_stated=False))
+    assert "P/BV" in f["T5.hist_bands_mean_median_marker"]["message"]
+
+
+def test_band_substitute_still_needs_two_multiples_with_implied_prices():
+    doc = _swap_band(make_doc())
+    rows = find(doc, "Band historis")["data"]["rows"]
+    rows[0][4] = "n.m."
+    rows[1][4] = "n.m."
+    assert "T5.implied_price_mean_median_two_multiples" in failed(doc)
+    doc = _swap_band(make_doc())
+    find(doc, "Band historis")["catatan_sumber"] = SRC   # substitution not stated in the table
+    find(doc, "Band historis")["data"]["rows"][0][4] = "n.m."
+    msg = failed(doc)["T5.implied_price_mean_median_two_multiples"]["message"]
+    assert "pengganti tanpa alasan" in msg
+
+
 def test_key_ratio_lines_and_format():
     doc = make_doc()
     ratio = find(doc, "Rasio utama")

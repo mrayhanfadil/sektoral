@@ -57,7 +57,7 @@ def discount_rate(intake, tax_rate=None, ntgr_rate=None):
     date: debt against the market capitalisation in US$ at the report's one
     USD/IDR rate. The tax shield uses income tax and PNBP together, as the
     flows bear them. The rate is rounded to 0,1pp; the sensitivity grid moves
-    it by +/-2pp. Elang takes the same rate: its development risk is carried
+    it by +/-1pp and +/-2pp. Elang takes the same rate: its development risk is carried
     by the probability of development, not a higher rate.
     """
     ust = intake.get("ust_10y") or {}
@@ -528,7 +528,8 @@ def build(intake, fc):
         return None, gaps
     base = value(inp, b, fx)
     grid = {}
-    for rate in (inp["discount"] - 0.02, inp["discount"], inp["discount"] + 0.02):
+    # Five discount-rate steps (Struktur-Template slide 4): base +/-1pp and +/-2pp.
+    for rate in (inp["discount"] + step for step in (-0.02, -0.01, 0.0, 0.01, 0.02)):
         for name in ("reserve", "down20", "base", "up20"):
             grid[(round(rate, 3), name)] = value(inp, b, fx, name, rate)["per_share"]
     other_export = value(inp, b, fx, export=not inp.get("export_base", True))["per_share"]

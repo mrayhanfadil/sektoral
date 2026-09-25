@@ -25,6 +25,14 @@ PLAN_COLLECTION = "forecast_plans"
 # new fields are not reused (2: earnings key_risks; 3: thesis_titles;
 # 5: Bank Driver Scenario for financial_ddm instead of H2 revenue and margin).
 PLAN_SCHEMA = 5
+# Schema per profile: bumping one profile's plan shape (5: bank drivers) must
+# not discard the stored plans of the others.
+PLAN_SCHEMA_BY_PROFILE = {"financial_ddm": 5}
+PLAN_SCHEMA_DEFAULT = 4
+
+
+def plan_schema(profile) -> int:
+    return PLAN_SCHEMA_BY_PROFILE.get(profile, PLAN_SCHEMA_DEFAULT)
 
 
 def _spec_sections():
@@ -40,8 +48,11 @@ def _spec_sections():
         if start not in full or end not in full:
             raise ValueError(f"report spec section missing: {start}")
         excerpts.append(full.split(start, 1)[1].split(end, 1)[0].strip())
-    return ("\n\n".join(f"{start}\n{body}" for (start, _), body in
-                      zip(markers, excerpts)), hashlib.sha256(full.encode()).hexdigest())
+    text = "\n\n".join(f"{start}\n{body}" for (start, _), body in zip(markers, excerpts))
+    # The plan is pinned to the instruction the agents actually read, so an
+    # edit elsewhere in the spec (layout, harness, exhibit rules) does not
+    # discard validated plans.
+    return text, hashlib.sha256(text.encode()).hexdigest()
 
 
 def _decode_response(raw):
@@ -1590,7 +1601,7 @@ def evidence_fingerprint(source, spec_sha256):
             for item in source.get("news") or []]
     material = {"ticker": source.get("ticker"), "profile": source.get("model_profile"),
                 "official": source.get("official"), "news": news, "spec": spec_sha256,
-                "plan_schema": PLAN_SCHEMA,
+                "plan_schema": plan_schema(source.get("model_profile")),
                 "model": os.environ.get("SEKTORAL_LLM_MODEL", "MiniMax-M3")}
     return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:20]
 
