@@ -45,3 +45,11 @@ def test_every_covered_ticker_has_a_dated_sourced_consensus():
         doc = json.loads(path.read_text())
         assert doc["as_of"] and doc["source_url"].startswith("https://")
         assert doc["target_low"] <= doc["target_avg"] <= doc["target_high"]
+
+
+def test_a_withheld_target_says_why_instead_of_nm(tmp_path):
+    _write(tmp_path)
+    e = C.exhibit("UJI", "2026-09-25", None, None, 800, tmp_path)
+    cells = [c for row in e["data"]["rows"] for c in row]
+    assert "n.m." not in cells
+    assert "tidak dihitung: target harga Sektoral ditahan" in cells
