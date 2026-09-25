@@ -205,11 +205,39 @@ def approve(folder, ticker, reviewer, note="", edits=None, *, db=None, want_pdf=
         trace = outputs.load(outputs.TRACE, folder, t, db)
     rec["plan_sha"] = plan_sha(report_plan(trace))
     rec["after"] = _verdict(doc)
+    rec["history"] = history(record(folder, t, db))
     store.put(COLLECTION, _key(folder, t), rec, db)
     trace = dict(trace or {})
     trace["assumption_review"] = rec
     outputs.save(outputs.TRACE, folder, t, trace, db)
     return rec
+
+
+MAX_HISTORY = 20
+
+
+def history(previous) -> list[dict]:
+    """Earlier approvals, newest first: the previous record (without its own
+    history) then its history. A re-approval never erases what came before."""
+    if not isinstance(previous, dict):
+        return []
+    earlier = [x for x in previous.get("history") or [] if isinstance(x, dict)]
+    return ([{k: v for k, v in previous.items() if k != "history"}] + earlier)[:MAX_HISTORY]
+
+
+def plan_edits(rec) -> list[dict]:
+    """Every change behind the approved plan: the edits of this approval and of
+    any earlier one that produced the same plan, each with who made it and when."""
+    if not isinstance(rec, dict):
+        return []
+    out = []
+    for entry in [rec] + [x for x in rec.get("history") or [] if isinstance(x, dict)]:
+        if entry.get("plan_sha") != rec.get("plan_sha"):
+            continue
+        for edit in entry.get("edits") or []:
+            out.append({**edit, "reviewer": entry.get("reviewer"),
+                        "reviewed_at": entry.get("reviewed_at")})
+    return out
 
 
 def _verdict(doc) -> dict:
@@ -225,7 +253,11 @@ def public(folder, ticker, db=None) -> dict:
     return {"state": st["state"], "plan_sha": st["plan_sha"],
             "reviewer": rec.get("reviewer"), "reviewed_at": rec.get("reviewed_at"),
             "decision": rec.get("decision"), "note": rec.get("note"),
-            "edits": rec.get("edits") or [],
+            "edits": plan_edits(rec) if rec else [],
+            "history": [{"reviewer": h.get("reviewer"), "reviewed_at": h.get("reviewed_at"),
+                         "decision": h.get("decision"), "edits": len(h.get("edits") or []),
+                         "note": h.get("note")}
+                        for h in (rec.get("history") or []) if isinstance(h, dict)],
             "stale": bool(st.get("stale_record")),
             "fields": fields(report_plan(trace))}
 
