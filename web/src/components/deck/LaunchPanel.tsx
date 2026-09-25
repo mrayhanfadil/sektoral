@@ -9,6 +9,7 @@ import { ratingLabel, ratingTone } from "../../lib/labels";
 import { useLoad } from "../State";
 import { usePalette } from "../CommandPalette";
 import { IssuerLogo } from "../IssuerLogo";
+import { keepRunToken, launch, readRunToken, useLiveRuns } from "../../lib/launch";
 
 const TICKER = /^[A-Za-z0-9][A-Za-z0-9.-]{0,9}$/;
 const RATING_INK = { buy: "text-ok-ink", hold: "text-ink-strong", sell: "text-err-ink", review: "text-warn-ink" };
@@ -30,6 +31,8 @@ function CommandLine() {
   const [ticker, setTicker] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const mode = useLiveRuns();
+  const [runToken, setRunToken] = useState(readRunToken);
   const value = ticker.trim().toUpperCase();
 
   async function start(event: FormEvent) {
@@ -42,9 +45,9 @@ function CommandLine() {
     setBusy(true);
     setError(null);
     try {
-      navigate(`/jobs/${await api.submit(value)}`);
+      navigate((await launch(value)).path);
     } catch (e) {
-      setError(`Riset belum bisa dimulai: ${(e as Error).message} Coba lagi sebentar lagi.`);
+      setError((e as Error).message || "Riset belum bisa dimulai. Coba lagi sebentar lagi.");
       setBusy(false);
     }
   }
@@ -54,6 +57,7 @@ function CommandLine() {
       <h1 id="launch-title" className="text-[20px] font-bold">Jalankan riset emiten</h1>
       <p className="mt-1 max-w-[62ch] text-[14px] text-ink-soft">
         Agent menyusun rencana, memanggil tool data Sectors, lalu gerbang metode memilih valuasi. Semua langkahnya tampil di deck di bawah.
+        {mode === "token" && " Di situs ini, emiten yang sudah diriset diputar ulang dari jejak auditnya, langkah demi langkah, tanpa memanggil model lagi."}
       </p>
       <form onSubmit={start} noValidate className="mt-4">
         <label htmlFor="deck-ticker" className="sr-only">Kode emiten BEI</label>
@@ -83,7 +87,7 @@ function CommandLine() {
         )}
       </form>
       <div className="mt-4">
-        <p id="picks-title" className="text-[13px] text-ink-soft">Emiten dengan data Sectors di cache lokal</p>
+        <p id="picks-title" className="text-[13px] text-ink-soft">Emiten yang sudah diriset</p>
         <div role="group" aria-labelledby="picks-title" className="mt-2 flex flex-wrap gap-1.5">
           {loading && Array.from({ length: 10 }, (_, i) => <span key={i} aria-hidden className="h-8 w-14 animate-pulse rounded-md bg-raised" />)}
           {tickers.map((t) => (
@@ -95,6 +99,19 @@ function CommandLine() {
           ))}
         </div>
       </div>
+      {mode === "token" && (
+        <details className="mt-4 text-[13.5px]">
+          <summary className="cursor-pointer text-ink-soft">Riset langsung dengan token pemilik</summary>
+          <div className="mt-2 flex max-w-[420px] gap-2">
+            <label htmlFor="run-token" className="sr-only">Token riset</label>
+            <input id="run-token" type="password" value={runToken} autoComplete="off"
+              onChange={(e) => { setRunToken(e.target.value); keepRunToken(e.target.value.trim()); }}
+              placeholder="Token riset"
+              className="h-9 min-w-0 flex-1 rounded-md border border-rule bg-raised px-3 text-[14px] text-ink-strong placeholder:text-ink-faint focus:border-brand-ink" />
+          </div>
+          <p className="mt-1.5 text-ink-faint">Dengan token, emiten apa pun dijalankan langsung oleh agent dan memakai kredit API.</p>
+        </details>
+      )}
     </section>
   );
 }

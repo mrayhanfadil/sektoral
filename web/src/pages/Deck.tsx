@@ -19,6 +19,7 @@ import { clock, words } from "../components/deck/read";
 import { ReplayControls } from "../components/deck/ReplayControls";
 import { RunHeader, type RunPhase } from "../components/deck/RunHeader";
 import type { ResultData } from "../components/deck/SidePanels";
+import { launch } from "../lib/launch";
 
 const NO_EVENTS: JobEvent[] = [];
 const IDLE = derive([]);
@@ -138,7 +139,13 @@ function RerunButton({ ticker, label }: { ticker: string; label: string }) {
           setBusy(true);
           setError(null);
           try {
-            navigate(`/jobs/${await api.submit(ticker)}`);
+            const next = await launch(ticker);
+            if (next.replay && location.pathname === next.path) {
+              setError("Riset langsung di situs ini butuh token pemilik; run tersimpan sudah diputar di sini.");
+              setBusy(false);
+              return;
+            }
+            navigate(next.path);
           } catch (e) {
             setError(`Riset belum bisa dimulai: ${(e as Error).message}`);
             setBusy(false);

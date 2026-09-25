@@ -3,8 +3,8 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, CircleAlert, Search } from "lucide-react";
-import { api } from "../../lib/api";
 import { usePalette } from "../CommandPalette";
+import { launch, useLiveRuns } from "../../lib/launch";
 
 const TICKER = /^[A-Za-z0-9][A-Za-z0-9.-]{0,9}$/;
 
@@ -23,6 +23,7 @@ export function Launcher({ id }: { id: string }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const mode = useLiveRuns();
   const inputId = `${id}-ticker`;
   const errorId = `${id}-error`;
 
@@ -38,8 +39,7 @@ export function Launcher({ id }: { id: string }) {
     setBusy(true);
     setError(null);
     try {
-      const job = await api.submit(value.trim().toUpperCase());
-      navigate(`/jobs/${job}`);
+      navigate((await launch(value.trim().toUpperCase())).path);
     } catch (err) {
       setError((err as Error).message || "Riset belum bisa dimulai. Coba lagi sebentar lagi.");
       setBusy(false);
@@ -72,6 +72,11 @@ export function Launcher({ id }: { id: string }) {
           </p>
         )}
       </div>
+      {mode === "token" && (
+        <p className="mt-2.5 text-[13.5px] text-ink-soft">
+          Di situs ini, emiten yang sudah diriset diputar ulang dari jejak auditnya, langkah demi langkah, tanpa memanggil model lagi.
+        </p>
+      )}
       <button type="button" onClick={() => palette.open(value.trim())}
         className="btn btn-ghost btn-sm mt-3 gap-2.5 pr-1.5 text-ink hover:text-ink-strong">
         <Search aria-hidden className="size-4 text-ink-soft" strokeWidth={2.2} />
