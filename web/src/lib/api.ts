@@ -39,7 +39,10 @@ export type ReviewField = {
 
 export type ReviewEdit = {
   path: string; label: string; year: number | null; unit: string; from: number; to: number; reason: string;
+  reviewer?: string | null; reviewed_at?: string | null;
 };
+
+export type ReviewHistory = { reviewer: string | null; reviewed_at: string | null; decision: string | null; edits: number; note: string | null };
 
 export type ReviewView = {
   state: ReviewState;
@@ -48,7 +51,10 @@ export type ReviewView = {
   reviewed_at: string | null;
   decision: "approved" | "approved_with_edits" | null;
   note: string | null;
+  /** Every change behind the approved plan, including those from earlier approvals of it. */
   edits: ReviewEdit[];
+  /** Earlier approvals, newest first. */
+  history?: ReviewHistory[];
   stale: boolean;
   enabled: boolean;
   fields: ReviewField[];
