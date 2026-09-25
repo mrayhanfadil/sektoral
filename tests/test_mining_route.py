@@ -32,9 +32,11 @@ def test_ammn_publishes_on_the_validated_interim_scenario(tmp_path):
     assert doc["meta"]["status"] == "distributable_assumption_led"
     assert doc["harness"]["blockers"] == []
     assert doc["meta"]["rating"] in {"Buy", "Hold", "Sell"} and doc["meta"]["tp"]
-    titles = {e["judul"] for e in doc["exhibits"]}
-    # The branch that raised NameError builds this table from the sales bridge.
-    assert "Volume penjualan dan net realized price per logam" in titles
+    # The branch that raised NameError builds this table from the sales bridge;
+    # it is audit detail, kept in the report's audit appendix, not printed.
+    audit = {e["judul"] for p in doc.get("lampiran_audit") or [] for e in p["exhibit"]}
+    assert "Volume penjualan dan net realized price per logam" in audit
+    assert "Volume penjualan dan net realized price per logam" not in {e["judul"] for e in doc["exhibits"]}
     text = " ".join(p["isi"] for p in doc["cover"]["paragraf"])
     assert "Q4 2027" not in text and "Risiko utama:" in text
 
