@@ -175,8 +175,8 @@ def _make_plan(chat, ticker, info, previous, problems):
             break
         found = _plan_problems(plan, info["available"])
         if not found:
-            # Stray CJK tokens are stripped here rather than failing the plan;
-            # synthesis prose, which readers see as conclusions, still rejects them.
+            # Stray CJK tokens are stripped here rather than failing the plan
+            # (synthesis prose is stripped the same way, see _strip_foreign).
             plan = {"question": _clean(plan["question"], 300),
                     "hypotheses": [_clean(h, 240) for h in plan["hypotheses"]],
                     "steps": [{"tool": s["tool"], "args": s.get("args") or {},
@@ -373,6 +373,40 @@ def _synthesis_problems(doc, signal_ids, n_hypotheses, label_numbers=frozenset()
     return problems
 
 
+_PROSE_FIELDS = ("title", "interpretation", "caveat")
+
+
+def _strip_foreign(doc):
+    """Remove stray CJK tokens from the synthesis prose; returns what was removed.
+
+    Reasoning models occasionally drop a Chinese or Japanese word into
+    Indonesian prose (BBCA: "優位", "投资者"). The sentence around it is still
+    Indonesian, so the token is removed and noted rather than the whole draft
+    rejected; prose left empty still fails the validator.
+    """
+    removed = []
+
+    def clean(text):
+        if not isinstance(text, str):
+            return text
+        removed.extend(_FOREIGN_SCRIPT.findall(text))
+        out = re.sub(r"\s{2,}", " ", _FOREIGN_SCRIPT.sub(" ", text))
+        return re.sub(r"\s+([,.;:)])", r"\1", out).strip()
+    if not isinstance(doc, dict):
+        return removed
+    doc["headline"] = clean(doc.get("headline"))
+    for item in doc.get("findings") or []:
+        if isinstance(item, dict):
+            for key in _PROSE_FIELDS:
+                item[key] = clean(item.get(key))
+    for item in doc.get("hypotheses") or []:
+        if isinstance(item, dict):
+            item["reason"] = clean(item.get("reason"))
+    if isinstance(doc.get("next_checks"), list):
+        doc["next_checks"] = [clean(x) for x in doc["next_checks"]]
+    return list(dict.fromkeys(removed))
+
+
 def _normalize_verdicts(doc):
     """Map the model's verdict spellings onto the three the host accepts. A
     partial verdict is kept as "belum terjawab" with the reason marked, so the
@@ -433,6 +467,9 @@ def _synthesize(chat, ticker, plan, all_signals, headlines, changes, problems):
         except Exception as error:
             problems.append(f"sintesis: {type(error).__name__}: {str(error)[:160]}")
             break
+        stripped = _strip_foreign(doc)
+        if stripped:
+            problems.append("sintesis: token non-Indonesia dihapus: " + ", ".join(stripped[:5]))
         found = _synthesis_problems(_normalize_verdicts(doc), ids, len(plan["hypotheses"]),
                                     label_numbers)
         if not found:
