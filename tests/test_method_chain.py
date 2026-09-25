@@ -352,7 +352,7 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path, monkeypa
         r for r in income["data"]["rows"] if r[0] == "Laba bersih")))
     kf_row = dict(zip(key_fin["data"]["cols"], next(
         r for r in key_fin["data"]["rows"] if r[0].startswith("Laba bersih"))))
-    shared = [("2024A", "2024"), ("2025A", "2025"), ("FY26F", "FY26F"), ("FY27F", "FY27F")]
+    shared = [("2024A", "2024A"), ("2025A", "2025A"), ("FY26F", "FY26F"), ("FY27F", "FY27F")]
     for is_col, kf_col in shared:
         assert abs(number(is_row[is_col]) - number(kf_row[kf_col])) <= 1, (is_col, is_row, kf_row)
     target = next(e for e in doc["exhibits"] if e["judul"].startswith("Target harga: PER"))

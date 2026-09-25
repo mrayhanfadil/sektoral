@@ -7,7 +7,7 @@ validated.
 import json
 from pathlib import Path
 
-from app import build, commodity, fx, store
+from app import build, commodity, fx, rates, store
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PLAN = json.loads((FIXTURES / "ammn_interim_plan.json").read_text())
@@ -17,11 +17,16 @@ COPPER = json.loads((FIXTURES / "commodity_prices.json").read_text())["Copper"]
 # seven days of the Report Date (Yahoo IDR=X close, 23 Sep 2026).
 USD_IDR = {"pair": "USD/IDR", "rate": 17805.0, "date": "2026-09-23",
            "source": "Yahoo Finance IDR=X daily close"}
+# The LoM discounts in US$ at UST 10Y + CRP + beta x ERP: the dated UST close.
+UST_10Y = {"name": "UST10Y", "symbol": "^TNX",
+           "source": "Yahoo Finance ^TNX daily close (imbal hasil US Treasury 10 tahun)",
+           "rows": [{"date": "2026-09-24", "yield_pct": 5.162}]}
 
 
 def test_ammn_publishes_on_the_validated_interim_scenario(tmp_path):
     store.put(commodity.COLLECTION, "Copper", COPPER)
     store.put(fx.COLLECTION, fx.KEY, USD_IDR)
+    store.put(rates.COLLECTION, rates.UST10Y, UST_10Y)
     doc = build.build("AMMN", tmp_path, as_of="2026-09-24", assumption_plan=PLAN,
                       assumption_status="validated")
     assert doc["meta"]["status"] == "distributable_assumption_led"

@@ -427,6 +427,8 @@ def run(ticker, *, chat=None, db=None, persist=True):
     plan, messages = _make_plan(chat, ticker, info, previous, problems)
     emit("plan", "Rencana siap" if plan["source"] == "agent" else "Rencana standar host dipakai",
          plan["question"], status="ok" if plan["source"] == "agent" else "warn")
+    for i, hypothesis in enumerate(plan["hypotheses"], 1):
+        emit("plan", f"Hipotesis {i}", hypothesis, tool="hypothesis", data={"index": i})
 
     state, steps, all_signals = _execute(chat, ticker, plan, messages, info["available"], problems)
     flagged = sum(1 for s in all_signals if s.get("flag"))
@@ -444,6 +446,12 @@ def run(ticker, *, chat=None, db=None, persist=True):
     emit("synthesis", "Temuan tervalidasi" if synthesis["source"] == "agent"
          else "Ringkasan host dipakai", synthesis.get("headline"),
          status="ok" if synthesis["source"] == "agent" else "warn")
+    for verdict in synthesis.get("hypotheses") or []:
+        if isinstance(verdict, dict) and isinstance(verdict.get("index"), int) and verdict.get("verdict"):
+            # Synthesis indexes hypotheses from 0; the plan events number them from 1.
+            number = verdict["index"] + 1
+            emit("synthesis", f"H{number} {verdict['verdict']}", verdict.get("reason"),
+                 tool="verdict", data={"index": number, "verdict": verdict["verdict"]})
 
     peers = state.get("peers") or {}
     result = {

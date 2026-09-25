@@ -1,337 +1,185 @@
+import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { api, reportFiles, type ReportItem } from "../lib/api";
-import { rp } from "../lib/format";
+import { Play } from "lucide-react";
+import { api } from "../lib/api";
+import { derive } from "../lib/agents";
 import { featuredReport } from "../lib/labels";
-import { ResearchFlow } from "../components/Brand";
-import { RatingBadge, ReportGrid, Stats, TickerBadge, traceHref } from "../components/Reports";
 import { useLoad } from "../components/State";
-import { Icon, type IconName } from "../components/Icon";
+import { Launcher } from "../components/landing/Launcher";
+import { Reel, useStoredRun } from "../components/landing/Reel";
+import { Pipeline } from "../components/landing/Pipeline";
+import { GateInstruments, MethodChain } from "../components/landing/Framework";
+import { EvidenceChecks, ReleaseStatuses, ReviewBand } from "../components/landing/Checks";
+import { ReportShelf } from "../components/landing/ReportShelf";
 
-const MARK: Record<string, [string, IconName]> = {
-  Terpilih: ["bg-brand text-white", "check"],
-  "Silang cek": ["bg-ok-bg text-ok-ink", "crosscheck"],
-  Dilewati: ["bg-canvas text-ink-soft", "skip"],
-};
+const SOURCES = [
+  ["Inti", "Sectors", "Fundamental, peer, harga, kepemilikan, arus asing, dan data sub-sektor."],
+  ["Rilis resmi", "Laporan emiten", "Laporan keuangan interim dan daftar pemegang saham dari IDX dan situs emiten."],
+  ["Perdagangan", "IDX", "Harga penutupan harian dan IHSG 24 bulan untuk grafik dan band valuasi."],
+  ["Konteks", "Berita bertanggal", "Artikel dibaca utuh; dampak ke laba hanya bila ada driver terukur."],
+  ["Kurs", "USD/IDR", "Kurs penutupan harian untuk emiten yang melapor dalam dolar."],
+];
 
-function HeroCard({ item }: { item?: ReportItem }) {
-  if (!item) {
-    return (
-      <figure className="m-0">
-        <div role="img" aria-label="Contoh tampilan hasil riset." className="overflow-hidden rounded-2xl border border-rule bg-surface shadow-card">
-          <div className="flex items-center justify-between gap-3 border-b border-rule-soft px-5 py-4">
-            <div className="flex items-center gap-3">
-              <TickerBadge ticker="BEI" />
-              <div><strong className="block">Riset emiten</strong><span className="text-[13px] text-ink-soft">Company update</span></div>
-            </div>
-            <span className="pill pill-live">Contoh</span>
-          </div>
-          <ol className="m-0 list-none px-5 py-2">
-            {[
-              ["ok", "Rencana & hipotesis disusun", "Agen memilih tool: peer, kuartalan, arus asing, valuasi"],
-              ["ok", "Metode valuasi dipilih gerbang framework", "Metode utama, fallback, lalu silang cek"],
-              ["warn", "Rating ditahan bila bukti kurang", "Alasannya tercatat di jejak audit"],
-            ].map(([tone, title, sub]) => (
-              <li key={title} className="grid grid-cols-[28px_1fr] gap-3 border-b border-dashed border-rule-soft py-3 last:border-0">
-                <span className={`grid size-6 place-items-center rounded-full ${tone === "ok" ? "bg-ok-bg text-ok-ink" : "bg-warn-bg text-warn-ink"}`}>
-                  <Icon name={tone === "ok" ? "check" : "alert"} className="size-3.5" />
-                </span>
-                <div><strong className="block text-[15px]">{title}</strong><span className="text-[13.5px] text-ink-soft">{sub}</span></div>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <figcaption className="mt-3 text-center text-[13px] text-ink-soft">Ilustrasi tampilan, bukan hasil riset aktual.</figcaption>
-      </figure>
-    );
-  }
-  const files = reportFiles(item.ticker);
-  const trace = traceHref(item);
+const LIMITS = [
+  ["Data bertanggal, bukan siaran langsung",
+    "Riset membaca data Sectors yang tersimpan beserta tanggalnya, tanpa panggilan data pasar langsung. Harga penutupan dan rilis resmi yang terbit sesudah tanggal laporan tidak dipakai."],
+  ["LLM untuk nalar, bukan data",
+    "Model bahasa menyusun rencana, asumsi, dan narasi bersumber. Angka finansial, rasio valuasi, dan tanggal laporan selalu diambil dari data terstruktur."],
+  ["Tanpa broker dan transaksi",
+    "Sectoral adalah alat riset. Tidak ada koneksi ke rekening efek, broker, atau jalur eksekusi pesanan dalam bentuk apa pun."],
+  ["Bukan rekomendasi investasi",
+    "Keluaran riset menyajikan informasi dan analisis untuk mendukung kerja analis, bukan ajakan membeli efek atau nasihat keuangan berlisensi."],
+];
+
+function Section({ id, title, lede, children }: { id: string; title: ReactNode; lede: ReactNode; children: ReactNode }) {
   return (
-    <figure className="m-0">
-      <div className="overflow-hidden rounded-2xl border border-rule bg-surface shadow-card">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-rule-soft px-5 py-4">
-          <TickerBadge ticker={item.ticker} />
-          <div>
-            <strong className="block text-[15.5px] leading-tight">{item.name}</strong>
-            <span className="block text-[12.5px] text-ink-soft">{item.profile} · {item.date}</span>
-          </div>
-          <RatingBadge item={item} />
+    <section id={id} aria-labelledby={`${id}-judul`} className="scroll-mt-14 border-t border-rule py-24 max-sm:py-16">
+      <div className="wrap">
+        <div className="mb-12 grid gap-x-12 gap-y-3 max-sm:mb-9 lg:grid-cols-12 lg:items-end">
+          <h2 id={`${id}-judul`} className="text-[clamp(28px,2.6vw,36px)] leading-[1.15] tracking-[-.02em] lg:col-span-6">{title}</h2>
+          <p className="m-0 max-w-[62ch] text-[16.5px] text-ink-soft lg:col-span-5 lg:col-start-8">{lede}</p>
         </div>
-        <p className="px-5 pt-3.5 pb-1 text-[17px] leading-snug font-black">{item.headline}</p>
-        <div className="mx-5 mt-2.5 mb-1"><Stats item={item} /></div>
-        <ol aria-label={`Rantai metode valuasi ${item.ticker}`} className="m-0 mt-2 list-none px-5 pt-1.5 pb-2.5">
-          {item.chain.slice(0, 5).map((step, i) => {
-            const [cls, mark] = MARK[step.decision] ?? ["bg-canvas text-ink-soft", "dot"];
-            const value = step.value !== "-" && step.value !== "ditahan" ? step.value : "";
-            // The page's one authored moment: the chain reads out in the order it was decided.
-            return (
-              <li key={step.step} style={{ animationDelay: `${250 + i * 140}ms` }}
-                className="grid animate-reveal grid-cols-[26px_1fr_auto] items-center gap-2.5 border-b border-dashed border-rule-soft py-2 text-sm last:border-0">
-                <span className={`grid size-[22px] place-items-center rounded-full ${cls}`}><Icon name={mark} className="size-3.5" /></span>
-                <span className={step.decision === "Dilewati" ? "text-ink-soft" : ""}>
-                  {step.step}<span className="block text-xs text-ink-soft">{step.decision}</span>
-                </span>
-                <span className="text-[13.5px] font-bold tabular-nums">{value}</span>
-              </li>
-            );
-          })}
-        </ol>
-        <div className="flex flex-wrap gap-2 border-t border-rule-soft bg-canvas px-5 py-3.5">
-          <a className="btn btn-sm btn-primary" href={files.pdf}>Buka PDF</a>
-          {trace.startsWith("/laporan")
-            ? <Link className="btn btn-sm btn-ghost" to={trace}>Lihat jejak audit</Link>
-            : <a className="btn btn-sm btn-ghost" href={trace}>Lihat jejak audit</a>}
-        </div>
+        {children}
       </div>
-      <figcaption className="mt-3 text-center text-[13px] text-ink-soft">
-        Hasil riset nyata dari folder laporan, data per {item.date}.
-      </figcaption>
-    </figure>
-  );
-}
-
-function Intro({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-11 max-w-[640px]">
-      <h2 id={id} className="mb-3 text-[clamp(26px,3vw,36px)] font-black tracking-[-.02em]">{title}</h2>
-      <p className="text-[17px] text-ink-soft">{children}</p>
-    </div>
-  );
-}
-
-function Section({ id, alt, labelledBy, children }: { id?: string; alt?: boolean; labelledBy: string; children: React.ReactNode }) {
-  return (
-    <section id={id} aria-labelledby={labelledBy}
-      className={`scroll-mt-16 py-[88px] max-sm:py-[60px] ${alt ? "border-y border-rule-soft bg-canvas" : ""}`}>
-      <div className="wrap">{children}</div>
     </section>
   );
 }
 
-const GATES = [
-  ["Model bisnis", "Bank ke DDM/P/BV, tambang ke NAV, holding ke SOTP"],
-  ["Kelayakan data", "Riwayat, laba usaha, leverage, ekuitas"],
-  ["Kepemilikan", "Minoritas 15-40% wajib silang cek SOTP"],
-  ["Siklus", "Komoditas atau aset yang baru ramp-up"],
-  ["Tahap usaha", "Tumbuh, matang, atau turnaround"],
-  ["Kewajaran hasil", "Potensi >100% atau <-50%: Review Required"],
-];
-
-const CHECKS = [
-  ["Angka kuantitatif", "Pendapatan, margin, valuasi, rasio utang", "Cocok dengan sumber",
-    "Setiap angka sama dengan baris dan kolom yang dibaca.", "Ditolak",
-    "Angka yang tidak terverifikasi dibuang; bagian tersebut dinyatakan tanpa dukungan data."],
-  ["Asumsi agen", "Skenario laba, risiko, katalis", "Tervalidasi", "Sumber, periode, dan besaran lolos pemeriksaan skema.",
-    "Ditolak atau diperbaiki", "Asumsi tanpa sumber tidak masuk model; alasannya tercatat."],
-  ["Metode valuasi", "Rantai dari gerbang framework", "Metode terpilih lolos", "Nilai, sensitivitas, dan silang cek ditampilkan.",
-    "Semua metode gagal", "Tidak ada tebakan; tiap metode diberi alasan."],
-  ["Rating & target harga", "Gerbang forecast dan valuasi", "Ditampilkan",
-    "Hanya setelah metode yang dipilih lolos seluruh pemeriksaan.", "Ditahan",
-    "Laporan terbit sebagai draf parsial dengan banner bukti belum lengkap dan alasan penahanan."],
-];
-
-
-const LIMITS: [IconName, string, string][] = [
-  ["clock", "Data bertanggal, bukan siaran langsung",
-    "Riset membaca data Sectors yang tersimpan beserta tanggalnya, tanpa panggilan data pasar langsung. Harga penutupan dan rilis resmi yang terbit sesudah tanggal laporan tidak dipakai."],
-  ["split", "LLM untuk nalar, bukan data",
-    "Model bahasa menyusun narasi dan asumsi bersumber. Angka finansial, rasio valuasi, dan tanggal laporan selalu diambil dari data terstruktur."],
-  ["ban", "Tanpa broker dan transaksi",
-    "Sectoral adalah alat riset. Tidak ada koneksi ke rekening efek, broker, atau jalur eksekusi pesanan dalam bentuk apa pun."],
-  ["info", "Bukan rekomendasi investasi",
-    "Keluaran riset menyajikan informasi dan analisis untuk mendukung kerja analis, bukan ajakan membeli efek atau nasihat keuangan berlisensi."],
-];
+/** A label column and a content column, the page's ledger rhythm. */
+function Ledger({ title, body, children }: { title: string; body?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="grid gap-x-12 gap-y-5 lg:grid-cols-12">
+      <div className="lg:col-span-4">
+        <h3 className="text-[20px] leading-snug">{title}</h3>
+        {body && <p className="m-0 mt-2 max-w-[48ch] text-[15px] text-ink-soft">{body}</p>}
+      </div>
+      <div className="min-w-0 lg:col-span-8">{children}</div>
+    </div>
+  );
+}
 
 export default function Landing() {
-  const { data: items = [] } = useLoad(api.reports);
-  const published = items.filter((i) => i.published);
-  const featured = featuredReport(items);
-  const th = "px-3.5 py-3 text-left text-[13px] font-bold text-ink-soft";
+  const reports = useLoad(api.reports);
+  const items = useMemo(() => reports.data ?? [], [reports.data]);
+  const featured = featuredReport(items) ?? items.find((i) => i.published);
+  const ticker = featured?.ticker;
+  const run = useStoredRun(ticker, !reports.loading);
+  // The featured run read to its end: its gate verdicts, method chain and release status.
+  const final = useMemo(() => (run.status === "ready" ? derive(run.run.events, { finished: true }) : undefined), [run]);
 
   return (
     <>
-      <section aria-labelledby="hero-title" className="relative overflow-hidden border-b border-rule-soft bg-[radial-gradient(900px_420px_at_85%_-10%,var(--color-brand-50),transparent_70%)]">
-        <div className="wrap relative grid items-center gap-14 pt-[72px] pb-20 lg:grid-cols-[1.1fr_.9fr] max-lg:gap-10 max-lg:pt-12 max-lg:pb-14">
-          <div>
-            <h1 id="hero-title" className="mb-5 max-w-[15ch] text-[clamp(34px,4.6vw,54px)] leading-[1.06] font-black tracking-[-.025em]">
-              Company update dengan metode yang tepat, bukan DCF untuk semua.
+      <section aria-labelledby="hero-judul">
+        <div className="wrap grid items-center gap-x-12 gap-y-10 pt-14 pb-20 max-sm:pt-9 max-sm:pb-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+          <div className="max-w-[580px]">
+            <h1 id="hero-judul" className="text-[clamp(31px,2.85vw,42px)] leading-[1.1] font-bold tracking-[-.025em]">
+              Lihat agen meriset emiten BEI langkah demi langkah, lalu Method Gates memilih metode valuasinya.
             </h1>
-            <p className="max-w-[54ch] text-lg text-ink-soft">
-              Sectoral membaca data Sectors dan rilis resmi emiten, menyusun skenario laba dari berita bertanggal, lalu
-              memilih metode valuasi lewat gerbang framework: DDM untuk bank, DCF FCFF untuk korporasi, SOTP untuk grup
-              beragam lini, NAV cadangan untuk tambang. Rating hanya terbit bila setiap pemeriksaan lolos.
+            <p className="m-0 mt-5 max-w-[46ch] text-[17.5px] leading-relaxed text-ink-soft">
+              Setiap panggilan tool tercatat bersama alasan dan hasilnya, dan rating di company update hanya terbit bila setiap pemeriksaan lolos.
             </p>
-            <div className="mt-[30px] flex flex-wrap gap-3 max-sm:[&>a]:flex-[1_1_100%]">
-              <Link to="/research" className="btn btn-primary">Coba riset emiten</Link>
-              <Link to="/laporan" className="btn btn-ghost">Lihat laporan</Link>
+            <div className="mt-8">
+              <Launcher id="riset-atas" />
             </div>
-            <ul aria-label="Ringkasan batasan" className="mt-7 flex list-none flex-wrap gap-x-5 gap-y-2 p-0 text-sm text-ink-soft">
-              {["Enam gerbang metode", "Risiko utama bersumber", "Tanpa eksekusi transaksi"].map((fact) => (
-                <li key={fact} className="flex items-center gap-2 before:size-1.5 before:rounded-full before:bg-teal before:content-['']">{fact}</li>
-              ))}
-            </ul>
+            {ticker && (
+              <p className="m-0 mt-6 text-[14px] text-ink-soft">
+                <Play aria-hidden className="mr-1.5 inline size-3.5 -translate-y-px text-brand-ink" strokeWidth={2.4} />
+                <Link to={`/laporan/${ticker}/putar`} className="font-semibold">Putar ulang run {ticker}</Link>{" "}
+                dari jejak auditnya, tanpa memanggil model lagi.
+              </p>
+            )}
           </div>
-          <HeroCard item={featured} />
+          <Reel load={run} ticker={ticker} item={featured} />
         </div>
       </section>
 
-      <Section id="cara-kerja" labelledBy="cara-kerja-title">
-        <Intro id="cara-kerja-title" title="Agen menalar, kode menghitung, gerbang memutuskan.">
-          Model bahasa menyusun rencana, asumsi, dan narasi. Setiap angka dihitung dari data terstruktur, dan setiap
-          keputusan terbit atau tahan diambil oleh pemeriksaan berbasis kode.
-        </Intro>
-        <ol className="m-0 grid gap-x-10 gap-y-8 pl-5 md:grid-cols-3 marker:font-black marker:text-brand-ink">
-          {[
-            ["Baca bukti bertanggal", "bg-brand",
-              "Agen analis memilih data Sectors: peer, kinerja kuartalan, harga vs IHSG, arus asing, valuasi. Rilis resmi emiten dan harga penutupan IDX melengkapi, dan berita bertanggal dibaca utuh sebagai konteks."],
-            ["Susun skenario laba", "bg-teal",
-              "Agen asumsi memakai aktual 1H resmi untuk skenario semester kedua, tahun lanjutan, tesis, katalis, dan risiko utama. Setiap asumsi wajib mengutip sumber; yang tidak lolos validasi ditolak."],
-            ["Pilih metode, lalu periksa", "bg-green",
-              "Gerbang framework menentukan rantai metode sebelum nilai dihitung. Harness memeriksa sumber, periode, dan kewajaran hasil; bila ada yang gagal, rating ditahan dan alasannya dicatat."],
-          ].map(([title, , body]) => (
-            <li key={title} className="border-t border-rule pt-5 pl-1">
-              <h3 className="mb-2.5 text-[19px]">{title}</h3>
-              <p className="text-[15px] text-ink-soft">{body}</p>
-            </li>
-          ))}
-        </ol>
-        <figure className="mt-12 rounded-xl border border-rule bg-surface p-5">
-          <ResearchFlow />
-          <figcaption className="mt-2.5 text-center text-[13px] text-ink-soft">
-            Alur riset dari bukti bertanggal hingga company update.<span className="md:hidden"> Geser diagram untuk melihat kelima tahap.</span>
-          </figcaption>
-        </figure>
+      <Section id="cara-kerja" title="Agen menalar, kode menghitung, gerbang memutuskan."
+        lede="Model bahasa menyusun rencana, memilih panggilan tool, dan menulis asumsi bersumber. Kode host yang deterministik menjalankan tool, lalu menghitung sinyal, Method Gates, valuasi, dan harness rilis; model tidak dapat mengubahnya.">
+        <Pipeline />
+        <div className="mt-16">
+          <Ledger title="Sectors di inti, setiap sumber lain diberi label."
+            body="Tool agent hanya membaca snapshot Sectors lokal, jadi tidak ada run yang memakai kredit API Sectors. Catatan sumber di bawah setiap exhibit menyebut asal angkanya.">
+            <dl className="m-0 border-t border-rule">
+              {SOURCES.map(([kind, name, body], i) => (
+                <div key={name} className="grid gap-x-6 gap-y-0.5 border-b border-rule py-4 sm:grid-cols-[112px_160px_minmax(0,1fr)] sm:items-baseline">
+                  <dt className={`text-[13px] font-bold ${i === 0 ? "text-brand-ink" : "text-ink-soft"}`}>{kind}</dt>
+                  <dd className="m-0 text-[16px] font-bold text-ink-strong">{name}</dd>
+                  <dd className="m-0 text-[14.5px] text-ink-soft">{body}</dd>
+                </div>
+              ))}
+            </dl>
+          </Ledger>
+        </div>
       </Section>
 
-      <Section id="framework" alt labelledBy="framework-title">
-        <Intro id="framework-title" title="Enam gerbang memilih metode sebelum angka dihitung.">
-          DCF bukan jawaban untuk semua emiten. Gerbang membaca model bisnis, kualitas data, kepemilikan, siklus, dan
-          tahap usaha, lalu mengurutkan metode utama, fallback, dan silang cek.
-        </Intro>
-        <ol aria-label="Method Gates 0 sampai 5" className="m-0 grid list-none grid-cols-1 overflow-hidden rounded-xl border border-rule bg-surface p-0 sm:grid-cols-3 xl:grid-cols-6">
-          {GATES.map(([title, body], i) => (
-            <li key={title} aria-label={`Method Gate ${i}: ${title}`} className={`relative border-rule px-4 pt-4 pb-5 max-sm:border-b max-sm:last:border-b-0 sm:max-xl:[&:nth-child(-n+3)]:border-b sm:[&:not(:nth-child(3n))]:border-r xl:border-r xl:last:border-r-0 ${i === 5 ? "bg-warn-bg/60" : ""}`}>
-              <span className={`block text-[40px] leading-none font-black tabular-nums tracking-[-.04em] ${i === 5 ? "text-warn-ink" : "text-brand-ink"}`}>{i}</span>
-              <strong className="mt-3 mb-1 block text-[15px]">{title}</strong>
-              <span className="block text-[13px] leading-snug text-ink-soft">{body}</span>
-            </li>
-          ))}
-        </ol>
-        <div className="mt-7 grid items-start gap-6 lg:grid-cols-[1fr_1.1fr]">
-          <div className="rounded-xl border border-rule bg-surface p-[22px]">
-            <h3 className="mb-3 text-lg">Rantai metode</h3>
-            <ol className="m-0 pl-5 text-[15px] text-ink-soft [&>li]:my-1.5 [&_b]:text-ink">
-              <li><b>Metode utama</b> dari gerbang, misalnya DCF atau DDM.</li>
-              <li><b>Fallback</b> hanya bila metode sebelumnya tidak memadai, bukan karena hasilnya tidak disukai.</li>
-              <li><b>Silang cek</b> wajib: PER peer, P/S, atau SOTP, dengan alasan tercatat.</li>
-              <li><b>Rating ditahan</b> bila tidak ada metode yang lolos.</li>
-            </ol>
-          </div>
+      <Section id="framework" title="Enam Method Gates memilih metode sebelum angka dihitung."
+        lede="DCF bukan jawaban untuk semua emiten. Gerbang membaca model bisnis, kualitas data, kepemilikan, siklus, dan tahap usaha, lalu mengurutkan metode utama, fallback, dan silang cek.">
+        <GateInstruments gates={final?.gates} ticker={ticker} />
+        <div className="mt-16">
+          <MethodChain item={featured} chain={final?.chain} />
+        </div>
+      </Section>
+
+      <Section id="pemeriksaan" title="Apa yang terjadi saat bukti lengkap, dan saat tidak."
+        lede="Validator berbasis kode memastikan tidak ada klaim yang lolos tanpa rujukan yang sahih. Bila bukti kurang, rating ditahan dan alasannya dicatat.">
+        <EvidenceChecks />
+        <div className="mt-16 grid gap-16">
+          <Ledger title="Status rilis"
+            body="Harness rilis menentukan apakah company update boleh memuat rating dan target harga.">
+            <ReleaseStatuses current={final?.release?.status} ticker={ticker} />
+          </Ledger>
           {items.length > 0 && (
-            <div role="region" aria-label="Metode terpilih per emiten" tabIndex={0} className="overflow-x-auto rounded-xl">
-              <table className="w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-rule bg-surface text-[14.5px]">
-                <thead className="bg-canvas">
-                  <tr><th scope="col" className={th}>Emiten</th><th scope="col" className={`${th} max-sm:hidden`}>Profil</th>
-                    <th scope="col" className={th}>Metode terpilih</th><th scope="col" className={th}>Hasil</th></tr>
-                </thead>
-                <tbody className="[&_td]:border-t [&_td]:border-rule-soft [&_td]:px-3.5 [&_td]:py-3 [&_td]:align-middle">
-                  {items.slice(0, 8).map((item) => (
-                    <tr key={item.ticker}>
-                      <td className="font-black whitespace-nowrap">{item.ticker}</td>
-                      <td className="max-sm:hidden">{item.profile}</td>
-                      <td>{item.published ? item.method : `Ditahan: ${item.held_reason}`}</td>
-                      <td className="whitespace-nowrap">
-                        <RatingBadge item={item} />
-                        {item.published && <span className="mt-1 block font-bold tabular-nums">Rp{rp(item.tp)}</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Ledger title="Review Required"
+              body="Potensi di atas +100% atau di bawah −50% tidak diberi Buy, Hold, atau Sell. Hasil seperti itu butuh tesis fundamental bersumber dan batasan model yang dinyatakan.">
+              <ReviewBand items={items} />
+            </Ledger>
           )}
         </div>
       </Section>
 
-      {items.length > 0 && (
-        <Section id="laporan" labelledBy="laporan-title">
-          <Intro id="laporan-title"
-            title={`${published.length} company update terbit, ${items.length - published.length} ditahan sebagai draft.`}>
-            Setiap laporan mengikuti struktur company update: sampul, tesis, industri, kinerja, katalis dan risiko,
-            valuasi dengan rantai metode, serta laporan keuangan dua tahun aktual dan tiga tahun forecast.
-          </Intro>
-          <ReportGrid items={items.slice(0, 6)} />
-          <div className="mt-6 flex justify-end"><Link className="btn btn-ghost" to="/laporan">Semua laporan</Link></div>
-        </Section>
-      )}
-
-      <Section id="sumber" alt labelledBy="sumber-title">
-        <Intro id="sumber-title" title="Sectors di inti, setiap sumber lain diberi label.">
-          Catatan sumber di bawah setiap exhibit menyebut dari mana angka itu berasal.
-        </Intro>
-        <dl className="m-0 border-t border-rule">
-          {[
-            ["Inti", "Sectors", "Fundamental, peer, harga, kepemilikan, arus asing, dan data sub-sektor."],
-            ["Rilis resmi", "Laporan emiten", "Laporan keuangan interim dan daftar pemegang saham dari IDX dan situs emiten."],
-            ["Perdagangan", "IDX", "Harga penutupan harian dan IHSG 24 bulan untuk grafik dan band valuasi."],
-            ["Konteks", "Berita bertanggal", "Artikel dibaca utuh; dampak ke laba hanya bila ada driver terukur."],
-            ["Kurs", "USD/IDR", "Kurs penutupan harian untuk emiten yang melapor dalam dolar."],
-          ].map(([kind, title, body], i) => (
-            <div key={title} className="grid gap-x-8 gap-y-1 border-b border-rule py-5 sm:grid-cols-[160px_220px_1fr] sm:items-baseline">
-              <dt className={`text-[13px] font-bold ${i === 0 ? "text-brand-ink" : "text-ink-faint"}`}>{kind}</dt>
-              <dd className="m-0 text-[17px] font-bold">{title}{i === 0 && <span className="pill pill-live ml-2 align-middle text-xs">Sumber data pasar</span>}</dd>
-              <dd className="m-0 text-[15px] text-ink-soft">{body}</dd>
+      <Section id="laporan"
+        title={items.length ? `${items.length} company update tersimpan, masing-masing bisa diputar ulang.` : "Company update tersimpan."}
+        lede="Setiap laporan menyimpan jejak auditnya. Putar ulang run-nya di Deck untuk melihat langkah agen, atau buka company update-nya langsung.">
+        {reports.loading ? (
+          <div className="panel px-5 py-10 text-center text-[14.5px] text-ink-soft">Memuat daftar laporan…</div>
+        ) : reports.error ? (
+          <div role="alert" className="panel border-err-bg bg-err-bg px-5 py-6 text-[14.5px] text-err-ink">
+            Daftar laporan belum bisa dimuat. {reports.error}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="panel px-5 py-10 text-center text-[14.5px] text-ink-soft">Belum ada company update tersimpan. Jalankan riset pertama dari kolom di atas.</div>
+        ) : (
+          <>
+            <ReportShelf items={items} />
+            <div className="mt-5 flex justify-end">
+              <Link to="/laporan" className="btn btn-ghost btn-sm">Semua laporan</Link>
             </div>
-          ))}
-        </dl>
+          </>
+        )}
       </Section>
 
-      <Section id="pemeriksaan" labelledBy="pemeriksaan-title">
-        <Intro id="pemeriksaan-title" title="Apa yang terjadi saat bukti lengkap, dan saat tidak.">
-          Validator berbasis kode memastikan tidak ada klaim yang lolos tanpa rujukan yang sahih.
-        </Intro>
-        <div role="region" aria-label="Perbandingan hasil pemeriksaan bukti" tabIndex={0} className="overflow-auto rounded-xl border border-rule bg-surface">
-          <table className="w-full min-w-[680px] border-collapse text-[15px] [&_td]:w-[37%] [&_td]:text-ink-soft">
-            <thead className="bg-canvas text-left text-sm font-bold text-ink-soft [&_th]:px-5 [&_th]:py-3.5">
-              <tr><th scope="col">Pemeriksaan</th>
-                <th scope="col">Bukti lengkap <span className="pill pill-ok ml-1.5">Terbit</span></th>
-                <th scope="col">Bukti kurang <span className="pill pill-warn ml-1.5">Draft</span></th></tr>
-            </thead>
-            <tbody className="[&_td]:border-t [&_td]:border-rule-soft [&_td]:px-5 [&_td]:py-[18px] [&_td]:align-top [&_th]:border-t [&_th]:border-rule-soft [&_th]:px-5 [&_th]:py-[18px] [&_th]:text-left [&_th]:align-top">
-              {CHECKS.map(([title, sub, okTitle, ok, noTitle, no]) => (
-                <tr key={title}>
-                  <th scope="row" className="w-[26%] font-bold">{title}<small className="mt-0.5 block text-[13px] font-normal text-ink-soft">{sub}</small></th>
-                  <td><strong className="mb-0.5 block text-ink">{okTitle}</strong>{ok}</td>
-                  <td><strong className="mb-0.5 block text-ink">{noTitle}</strong>{no}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Section>
-
-      <Section id="batasan" alt labelledBy="batasan-title">
-        <Intro id="batasan-title" title="Jelas tentang apa yang tidak kami lakukan.">
-          Kepercayaan pada analisis lahir dari kejelasan batas sistem.
-        </Intro>
-        <ul className="m-0 grid list-none gap-x-12 p-0 md:grid-cols-2">
-          {LIMITS.map(([icon, title, body]) => (
-            <li key={title} className="grid grid-cols-[40px_1fr] gap-4 border-t border-rule py-6">
-              <span className="grid size-10 place-items-center rounded-[10px] bg-brand-50 text-brand-ink"><Icon name={icon} className="size-5" /></span>
-              <div><h3 className="mb-1.5 text-[17px]">{title}</h3><p className="text-[15px] text-ink-soft">{body}</p></div>
+      <Section id="batasan" title="Jelas tentang apa yang tidak kami lakukan."
+        lede="Kepercayaan pada analisis lahir dari kejelasan batas sistem.">
+        <ul className="m-0 list-none border-t border-rule p-0">
+          {LIMITS.map(([title, body]) => (
+            <li key={title} className="grid gap-x-12 gap-y-2 border-b border-rule py-7 lg:grid-cols-12">
+              <h3 className="text-[19px] leading-snug lg:col-span-4">{title}</h3>
+              <p className="m-0 max-w-[68ch] text-[16px] text-ink-soft lg:col-span-8">{body}</p>
             </li>
           ))}
         </ul>
       </Section>
 
-      <section aria-labelledby="cta-title" className="py-[88px] max-sm:py-[60px]">
-        <div className="wrap">
-          <div className="relative flex flex-wrap items-center justify-between gap-6 overflow-hidden rounded-[20px] bg-brand p-12 text-white max-sm:px-6 max-sm:py-8">
-            <div>
-              <h2 id="cta-title" className="max-w-[22ch] text-[clamp(24px,3vw,32px)] font-black text-white">Mulai dari satu kode emiten.</h2>
-              <p className="mt-2 max-w-[52ch] text-white/85">Jalankan agen riset, ikuti prosesnya, lalu buka company update beserta jejak auditnya.</p>
-            </div>
-            <Link to="/research" className="btn bg-surface text-brand-ink hover:bg-brand-50">Coba riset emiten</Link>
+      <section aria-labelledby="mulai-judul" className="border-t border-rule">
+        <div className="wrap grid items-end gap-x-12 gap-y-8 py-24 max-sm:py-16 lg:grid-cols-12">
+          <div className="lg:col-span-5">
+            <h2 id="mulai-judul" className="text-[clamp(28px,2.6vw,36px)] leading-[1.15] tracking-[-.02em]">Mulai dari satu kode emiten.</h2>
+            <p className="m-0 mt-3 max-w-[48ch] text-[16.5px] text-ink-soft">
+              Jalankan agen riset, ikuti setiap langkahnya di Deck, lalu buka company update beserta jejak auditnya.
+            </p>
+          </div>
+          <div className="lg:col-span-6 lg:col-start-7">
+            <Launcher id="riset-akhir" />
           </div>
         </div>
       </section>

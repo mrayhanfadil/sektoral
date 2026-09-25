@@ -43,7 +43,7 @@ export function ThemeToggle() {
   return (
     <button type="button" onClick={() => setPref(NEXT[pref])} title={`${LABEL[pref]} (klik untuk ganti)`}
       aria-label={`${LABEL[pref]}. Ganti tema`}
-      className="grid size-10 cursor-pointer place-items-center rounded-lg text-ink-soft transition-colors hover:bg-canvas hover:text-ink">
+      className="grid size-9 cursor-pointer place-items-center rounded-md text-ink-soft transition-colors hover:bg-raised hover:text-ink-strong">
       <Icon name={ICON[pref]} className="size-[19px]" />
     </button>
   );

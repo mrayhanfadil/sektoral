@@ -99,8 +99,14 @@ def check_s2(intake: dict | None, forecast: dict | None) -> dict:
     # S2.5 balance reconcile.
     if applies("S2.5"):
         s2log = (forecast.get("s2") or {})
+        bank_model = forecast.get("bank_model") if isinstance(forecast.get("bank_model"), dict) else None
         if s2log.get("S2.5_neraca") == "gagal":
             checks.append(_v("S2.5", False, "neraca/ekuitas/kas tak terekonsiliasi", True))
+        elif bank_model:
+            ok = bool((bank_model.get("checks") or {}).get("ok"))
+            checks.append(_v("S2.5", ok, "neraca model driver bank seimbang (aset non-produktif "
+                             "penyeimbang yang dinyatakan)" if ok else
+                             "neraca model driver bank tidak terekonsiliasi", True))
         else:
             checks.append(_v("S2.5", True, "neraca terekonsiliasi (kas satu-satunya penyeimbang)", False))
 
@@ -124,7 +130,19 @@ def check_s2(intake: dict | None, forecast: dict | None) -> dict:
 
     # S2.8 financial_ddm: profit/retained/dividend/equity/ROE/capital consistency.
     if applies("S2.8"):
-        if profile == "financial_ddm":
+        model = forecast.get("bank_model") if isinstance(forecast.get("bank_model"), dict) else None
+        if profile == "financial_ddm" and model:
+            # Bank Driver Scenario: the model's own invariants (balance sheet,
+            # equity roll-forward, dividends, FY = 1H + H2); CAR warnings labelled.
+            found = (model.get("checks") or {})
+            ok = bool(found.get("ok")) and bool(model.get("rows"))
+            warnings = list(found.get("warnings") or [])
+            checks.append(_v("S2.8", ok,
+                             ("laba/dividen/ekuitas/ROE/CAR model driver bank konsisten"
+                              + (f"; {'; '.join(warnings)}" if warnings else ""))
+                             if ok else "; ".join(found.get("problems") or ["model tidak lengkap"]),
+                             True))
+        elif profile == "financial_ddm":
             payout = _num(intake.get("payout"))
             ok = payout is not None and 0 <= payout <= 1.5 and bool(rows)
             checks.append(_v("S2.8", ok,

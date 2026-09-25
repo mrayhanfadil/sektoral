@@ -58,3 +58,9 @@ def test_draft_profile_falls_back_to_the_run_manifest(tmp_path):
     doc["run_manifest"] = {"profile": "financial_ddm"}
     outputs.save(outputs.REPORT, tmp_path, "BBBB", doc)
     assert gallery.load(tmp_path)[0]["profile"] == "Bank"
+
+
+def test_template_harness_blockers_get_a_reader_reason():
+    assert gallery._held_reason(["T.T4.discount_rate_currency: pelapor USD"]) == \
+        "discount rate belum sesuai mata uang pelaporan"
+    assert gallery._held_reason(["T.TF.bare_na: Laba rugi"]) == "pemeriksaan format laporan belum lolos"

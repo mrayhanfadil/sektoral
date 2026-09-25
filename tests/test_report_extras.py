@@ -95,7 +95,9 @@ def test_negative_figures_render_in_brackets_and_header_repeats_on_pages():
     assert "(30,7%)" in html and "2026-06-30" in html
     css = render._running_header({"ticker": "AMMN", "rating": "Sell", "tp": 3910,
                                   "tanggal": "2026-09-24"})
-    assert '@top-left{content:"AMMN IJ | SELL · TP Rp 3.910"' in css
+    # Struktur-Template running header: report type over the publication date.
+    assert ('@top-left{content:"Equity Research - Company Update" \'\\A \' '
+            '"Kamis, 24 September 2026"') in css
     assert "@page:first" in css
 
 
@@ -135,30 +137,78 @@ def test_peer_median_and_average_use_the_valuation_band():
     assert stats["pb"][0] == 1.1  # 0.5, 0.7, 1.5, 8.5 inside 0-10x
 
 
+def test_peer_medians_need_three_valid_peers_like_the_method_chain():
+    rows = [{"is_self": False, "metrics": {"pe": pe, "pb": pb}} for pe, pb in
+            ((8.0, 2.2), (8.1, 2.3), (None, None), (None, None))]
+    rows.append({"is_self": True, "metrics": {"pe": 11.5, "pb": 2.7}})
+    stats = X._peer_stats(rows)
+    assert stats["pe"] == (None, None) and stats["pb"] == (None, None)
+    assert stats["counts"]["pe"] == 2
+    assert "kurang dari tiga peer valid (P/E 2 peer, P/B 2 peer" in X._thin_peer_note(stats)
+
+
 def test_band_and_statements_use_indonesian_format_and_hide_zero_ebitda(tmp_path):
     doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
     html_out = render.render(doc)
     cells = re.findall(r"<td class='[^']*'>([^<]*)</td>", html_out)
     assert not [c for c in cells if re.search(r"\d\.\dx", c)]
     income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi")
-    ebitda = next(r for r in income["data"]["rows"] if r[0] == "EBITDA")
-    assert "0" not in ebitda[1:]
+    # Template Exhibit 14 has no EBITDA line; EBITDA lives in Key Financials and ratios.
+    assert "EBITDA" not in [r[0] for r in income["data"]["rows"]]
+    ratios = next(e for e in doc["exhibits"] if e["judul"] == "Rasio utama")
+    margin = next(r for r in ratios["data"]["rows"] if r[0] == "Marjin EBITDA")
+    assert "0,0%" not in margin[1:]
+
+
+INCOME_LINES = ["Pendapatan", "Beban pokok pendapatan", "Laba kotor", "Beban usaha",
+                "Laba usaha (EBIT)", "Pendapatan bunga", "Beban bunga",
+                "Pendapatan (beban) lain-lain", "Laba sebelum pajak", "Pajak penghasilan",
+                "Kepentingan non-pengendali", "Laba bersih"]
+BALANCE_LINES = ["Kas dan setara kas", "Piutang usaha", "Persediaan", "Aset lancar lainnya",
+                 "Total aset lancar", "Aset tetap bersih", "Aset tidak lancar lainnya",
+                 "Total aset", "Utang jangka pendek", "Utang usaha", "Liabilitas lancar lainnya",
+                 "Total liabilitas lancar", "Utang jangka panjang",
+                 "Liabilitas tidak lancar lainnya", "Total liabilitas", "Total ekuitas",
+                 "Total liabilitas dan ekuitas"]
+CASH_LINES = ["Blok Arus kas operasi", "Laba bersih", "Depresiasi dan amortisasi",
+              "Perubahan modal kerja", "Pos operasi lainnya", "Jumlah arus kas operasi",
+              "Blok Arus kas investasi", "Belanja modal", "Pos investasi lainnya",
+              "Jumlah arus kas investasi", "Blok Arus kas pendanaan",
+              "Penarikan (pembayaran) utang", "Dividen dibayar",
+              "Penerbitan (pembelian kembali) saham", "Pos pendanaan lainnya",
+              "Jumlah arus kas pendanaan", "Blok Saldo kas", "Perubahan kas bersih", "Kas awal",
+              "Kas akhir", "Arus kas bebas (operasi - capex, memo)"]
+DISPLAY = ["2024A", "2025A", "FY26F", "FY27F", "FY28F"]
+
+
+def _table(doc, title):
+    return next(e for e in doc["exhibits"] if e["judul"] == title)
+
+
+def _cells(table):
+    return [c for r in table["data"]["rows"] if not r[0].startswith("Blok ") for c in r[1:]]
 
 
 def test_statements_follow_struktur_with_two_actual_and_three_forecast_years(tmp_path):
-    doc = _doc(tmp_path)  # AMMN draft: forecast columns are NA
-    income = next(e for e in doc["exhibits"] if e["judul"] == "Laba rugi")
-    assert income["data"]["cols"] == ["Rp miliar", "2024A", "2025A", "FY26F", "FY27F", "FY28F"]
-    labels = [r[0] for r in income["data"]["rows"]]
-    assert labels[:5] == ["Pendapatan", "Beban pokok pendapatan", "Laba kotor", "Beban usaha",
-                          "Laba usaha (EBIT)"]
-    assert labels[-1] == "Laba bersih"
-    balance = next(e for e in doc["exhibits"] if e["judul"] == "Neraca")
-    rows = {r[0]: r for r in balance["data"]["rows"]}
+    doc = _doc(tmp_path)  # AMMN draft: no validated scenario, forecast columns n.m.
+    income = _table(doc, "Laba rugi")
+    assert income["data"]["cols"] == ["Rp miliar"] + DISPLAY
+    assert [r[0] for r in income["data"]["rows"]] == INCOME_LINES
+    assert [r[0] for r in _table(doc, "Neraca")["data"]["rows"]] == BALANCE_LINES
+    assert [r[0] for r in _table(doc, "Arus kas")["data"]["rows"]] == CASH_LINES
+    rows = {r[0]: r for r in _table(doc, "Neraca")["data"]["rows"]}
     assert rows["Total aset"][1:3] == rows["Total liabilitas dan ekuitas"][1:3]
-    ratios = next(e for e in doc["exhibits"] if e["judul"] == "Rasio utama")
+    ratios = _table(doc, "Rasio utama")
     assert [r[0] for r in ratios["data"]["rows"] if r[0].startswith("Blok ")] == [
         "Blok Pertumbuhan (%)", "Blok Profitabilitas (%)", "Blok Leverage (x)"]
+    # Spec §3.1: no NA or blank; a cell that cannot be derived is n.m. with a reason.
+    for title in ("Laba rugi", "Neraca", "Arus kas", "Rasio utama"):
+        table = _table(doc, title)
+        assert not set(_cells(table)) & {"NA", "", "-"}, title
+        assert all(r[3:] == ["n.m."] * 3 for r in table["data"]["rows"]
+                   if not r[0].startswith("Blok ")), title
+        assert "belum tervalidasi" in table["catatan_sumber"], title
+    assert "Sectors tidak memisahkan piutang usaha" in _table(doc, "Neraca")["catatan_sumber"]
 
 
 def test_bank_statements_switch_to_bank_layout(tmp_path):
@@ -203,11 +253,187 @@ def test_performance_charts_are_four_narrated_exhibits(tmp_path):
     doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
     panels = [e for e in doc["exhibits"] if e.get("tipe") == "combo_panel"]
     assert [p["judul"].split(" (")[0] for p in panels] == [
-        "Pendapatan dan pertumbuhan", "EBITDA dan margin", "Laba bersih dan pertumbuhan",
+        "Pendapatan dan pertumbuhan", "EBITDA dan margin", "Laba bersih dan pertumbuhan EPS",
         "DER dan ROE"]
     assert all(p["narasi"] and any(ch.isdigit() for ch in p["narasi"]) for p in panels)
     assert [p["n"] for p in panels] == list(range(panels[0]["n"], panels[0]["n"] + 4))
+    # Draft: no validated scenario, so the charts carry the two actual years only
+    # for DER/ROE and no forecast bars anywhere.
+    assert all(p["data"]["cols"][:2] == ["2024A", "2025A"] for p in panels)
+    assert panels[3]["judul"] == "DER dan ROE (2024A-2025A)"
+    assert not any(v is not None for p in panels
+                   for v, fc in zip(p["data"]["series"][0]["bars"],
+                                    p["data"]["series"][0]["is_forecast"]) if fc)
     bank = B.build("BBRI", tmp_path / "bank", as_of="2026-09-24")
-    fourth = [e for e in bank["exhibits"] if e.get("tipe") == "combo_panel"][3]
-    assert fourth["judul"].startswith("NIM dan biaya kredit")
+    bank_panels = [e for e in bank["exhibits"] if e.get("tipe") == "combo_panel"]
+    # EBITDA means nothing for a bank: equity and ROE take its place.
+    assert [p["judul"].split(" (")[0] for p in bank_panels] == [
+        "Pendapatan dan pertumbuhan", "Laba bersih dan pertumbuhan EPS", "Ekuitas dan ROE",
+        "NIM dan biaya kredit"]
+    nim = bank_panels[3]
+    assert nim["judul"] == "NIM dan biaya kredit (2024A-2025A, aktual)"
+    assert nim["data"]["cols"] == ["2024A", "2025A"]
     assert "Rp-" not in " ".join(p for page in doc["bagian"] for p in page["paragraf"])
+
+
+# ------------------------------------------------ forecast statements and charts
+
+import json
+from pathlib import Path
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+KF_ROWS = ["Pendapatan (Rp miliar)", "EBITDA (Rp miliar)", "Pertumbuhan EBITDA (%)",
+           "Laba bersih (Rp miliar)", "EPS (Rp)", "Pertumbuhan EPS (%)", "PER (x)", "PBV (x)",
+           "EV/EBITDA (x)"]
+KF_BANK_ROWS = ["Pendapatan (Rp miliar)", "Laba bersih (Rp miliar)", "EPS (Rp)",
+                "Pertumbuhan EPS (%)", "BVPS (Rp)", "ROE (%)", "DPS (Rp)", "PER (x)", "PBV (x)"]
+
+
+def _scenario_doc(ticker, tmp_path):
+    """The stored run's validated analyst scenario (FY26F-FY30F), rebuilt offline."""
+    stored = json.loads((FIXTURES / f"{ticker.lower()}_scenario_plan.json").read_text())
+    return B.build(ticker, tmp_path / ticker, as_of="2026-09-24",
+                   assumption_plan=stored["plan"], assumption_status=stored["status"])
+
+
+def _number(cell):
+    cell = cell.replace(".", "").replace(",", ".").rstrip("%x")
+    return -float(cell.strip("()")) if cell.startswith("(") else float(cell)
+
+
+def _row(table, label):
+    rows = table["data"]["rows"]
+    row = next((r for r in rows if r[0] == label), None) or next(
+        r for r in rows if r[0].startswith(label + " ("))
+    return dict(zip(table["data"]["cols"], row))
+
+
+def test_chart_rows_carry_the_five_year_scenario():
+    from app import forecast, intake
+    doc_in, _ = intake.load("JPFA", as_of="2026-09-24")
+    stored = json.loads((FIXTURES / "jpfa_scenario_plan.json").read_text())
+    fc = forecast.build(doc_in, assumption_plan=stored["plan"])
+    rows = X.chart_forecast_rows(doc_in, fc)
+    assert [r["label"] for r in rows] == ["FY26F", "FY27F", "FY28F", "FY29F", "FY30F"]
+    assert [r["revenue"] for r in rows[1:]] == [r["revenue"] for r in fc["outyear_scenario"]["rows"]]
+    assert [r["year"] for r in rows] == [2026, 2027, 2028, 2029, 2030]
+
+
+def test_scenario_statements_fill_three_forecast_years_from_the_model(tmp_path):
+    doc = _scenario_doc("JPFA", tmp_path)
+    assert doc["meta"]["status"] == "distributable_assumption_led"
+    key_fin = _table(doc, "Key Financials")
+    assert key_fin["data"]["cols"][1:] == DISPLAY
+    assert [r[0] for r in key_fin["data"]["rows"]] == KF_ROWS
+    assert not set(_cells(key_fin)) & {"NA", "", "-"}
+    assert all(c != "n.m." for r in key_fin["data"]["rows"] for c in r[3:])
+    income, balance, cash = (_table(doc, t) for t in ("Laba rugi", "Neraca", "Arus kas"))
+    for table in (income, balance, cash, _table(doc, "Rasio utama")):
+        assert table["data"]["cols"][1:] == DISPLAY
+        assert not set(_cells(table)) & {"NA", "", "-"}
+    # A forecast n.m. is named in the note with its reason.
+    for table in (income, balance, cash):
+        for row in table["data"]["rows"]:
+            if "n.m." in row[3:]:
+                assert re.search(re.escape(row[0]) + r"[^;]*\(kolom FY26F-FY28F\): \w",
+                                 table["catatan_sumber"]), row[0]
+    # Struktur tie-outs: net profit (Key Financials = income statement = cash flow start),
+    # balance sheet balances, ending cash = balance-sheet cash, cash rolls year to year.
+    kf_net, is_net = _row(key_fin, "Laba bersih"), _row(income, "Laba bersih")
+    cf_net = _row(cash, "Laba bersih")
+    for label in DISPLAY:
+        assert abs(_number(kf_net[label]) - _number(is_net[label])) <= 1, label
+        assert is_net[label] == cf_net[label]
+    assets, total = _row(balance, "Total aset"), _row(balance, "Total liabilitas dan ekuitas")
+    ending, bs_cash = _row(cash, "Kas akhir"), _row(balance, "Kas dan setara kas")
+    opening = _row(cash, "Kas awal")
+    for label in DISPLAY[2:]:
+        assert abs(_number(assets[label]) - _number(total[label])) <= 1, label
+        assert ending[label] == bs_cash[label]
+    assert opening["FY27F"] == ending["FY26F"] and opening["FY28F"] == ending["FY27F"]
+    # Ratios are computed for forecast years wherever the inputs exist.
+    ratios = _table(doc, "Rasio utama")
+    for label in ("EBITDA", "Marjin EBITDA", "ROAE", "Net gearing (utang bersih / ekuitas)"):
+        assert "n.m." not in [_row(ratios, label)[c] for c in DISPLAY[2:]], label
+    assumptions = _table(doc, "Asumsi proyeksi laporan keuangan")
+    assert len(assumptions["data"]["rows"]) >= 3
+    # Slide 3: every chart on 2024A-FY28F, DER/ROE with forecast values from the model.
+    panels = [e for e in doc["exhibits"] if e.get("tipe") == "combo_panel"]
+    assert all(p["data"]["cols"] == DISPLAY for p in panels)
+    assert panels[3]["judul"] == "DER dan ROE (2024A-FY28F)"
+    assert all(v is not None for v in panels[3]["data"]["series"][0]["bars"][2:])
+    # Revenue bars tie out with Key Financials for the same periods.
+    revenue = _row(key_fin, "Pendapatan")
+    bars = panels[0]["data"]["series"][0]["bars"]
+    assert [round(v / 1e9, 1) for v in bars] == [_number(revenue[c]) for c in DISPLAY]
+
+
+def test_bank_scenario_drops_ebitda_and_shows_ddm_lines(tmp_path):
+    doc = _scenario_doc("BBRI", tmp_path)
+    assert doc["meta"]["status"] == "distributable_assumption_led"
+    key_fin = _table(doc, "Key Financials")
+    assert [r[0] for r in key_fin["data"]["rows"]] == KF_BANK_ROWS
+    assert not set(_cells(key_fin)) & {"NA", "", "-"}
+    # DPS is the DDM exhibit's line; ROE is the ratio table's ROAE.
+    ddm = next(e for e in doc["exhibits"] if e["judul"].startswith("Proyeksi dividen"))
+    assert [_row(key_fin, "DPS")[c] for c in DISPLAY[2:]] == \
+        [_row(ddm, "DPS")[c] for c in DISPLAY[2:]]
+    ratios = _table(doc, "Rasio utama")
+    assert [_row(key_fin, "ROE")[c] for c in DISPLAY] == [_row(ratios, "ROAE")[c] for c in DISPLAY]
+    income = _table(doc, "Laba rugi bank")
+    net = _row(income, "Laba bersih")
+    assert all(net[c] != "n.m." for c in DISPLAY)
+    assert "Skenario laba bank tidak memodelkan" in income["catatan_sumber"]
+    cash = _table(doc, "Arus kas")
+    assert "Belanja modal" not in [r[0] for r in cash["data"]["rows"]]
+    assert all(_row(cash, "Dividen dibayar")[c] != "n.m." for c in DISPLAY[2:])
+    panels = [e for e in doc["exhibits"] if e.get("tipe") == "combo_panel"]
+    equity = next(p for p in panels if p["judul"].startswith("Ekuitas dan ROE"))
+    assert equity["judul"] == "Ekuitas dan ROE (2024A-FY28F)"
+    assert all(v is not None for v in equity["data"]["series"][0]["bars"])
+    assert not any(p["judul"].startswith("EBITDA") for p in panels)
+
+
+def test_usd_reporter_statements_are_in_usd_and_tie_to_key_financials(tmp_path):
+    """Spec §2: a US$ reporter's model is in US$; its statements read the same
+    US$ figures as Key Financials and the charts (AMMN's validated plan)."""
+    from app import commodity, fx, store
+    fixtures = FIXTURES
+    store.put(commodity.COLLECTION, "Copper",
+              json.loads((fixtures / "commodity_prices.json").read_text())["Copper"])
+    store.put(fx.COLLECTION, fx.KEY, {"pair": "USD/IDR", "rate": 17805.0, "date": "2026-09-23",
+                                      "source": "Yahoo Finance IDR=X daily close"})
+    plan = json.loads((fixtures / "ammn_interim_plan.json").read_text())
+    doc = B.build("AMMN", tmp_path, as_of="2026-09-24", assumption_plan=plan,
+                  assumption_status="validated")
+    key_fin, income = _table(doc, "Key Financials"), _table(doc, "Laba rugi")
+    assert income["data"]["cols"][0] == "US$ juta"
+    for label in ("Pendapatan", "Laba bersih"):
+        kf, stmt = _row(key_fin, label), _row(income, label)
+        for period in DISPLAY:
+            assert abs(_number(kf[period]) - _number(stmt[period])) <= 0.1, (label, period)
+    # Actual lines the official US$ release does not carry are n.m. with the reason.
+    assert _row(income, "Laba kotor")["2025A"] == "n.m."
+    assert "rilis tahunan resmi US$" in income["catatan_sumber"]
+    assert "kurs yang sama dengan model" in income["catatan_sumber"]
+    panels = [e for e in doc["exhibits"] if e.get("tipe") == "combo_panel"]
+    assert panels[0]["data"]["series"][0]["label"].startswith("Pendapatan (US$)")
+
+
+def test_bank_exhibits_carry_no_ebitda_and_growth_starts_from_fy2025(tmp_path):
+    doc = _scenario_doc("BBRI", tmp_path)
+    labels = [r[0] for e in doc["exhibits"] if e.get("tipe") == "tabel"
+              for r in e["data"]["rows"] if isinstance(r, list) and r]
+    assert not [label for label in labels if "EBITDA" in str(label)]
+    ddm = next(e for e in doc["exhibits"] if e["judul"].startswith("Proyeksi dividen"))
+    growth = _row(ddm, "Pertumbuhan DPS")
+    assert growth["FY26F"] not in ("-", "n.m.")
+    assert "DPS FY2025" in ddm["catatan_sumber"]
+
+
+def test_fcff_growth_starts_from_fy2025_on_the_table_definition(tmp_path):
+    doc = _scenario_doc("JPFA", tmp_path)
+    fcff = next(e for e in doc["exhibits"] if e["judul"].startswith("Proyeksi FCFF"))
+    cells = _row(fcff, "Pertumbuhan FCFF")
+    assert "-" not in list(cells.values())[1:]
+    assert cells["FY26F"] != "n.m." and "FCFF FY2025" in fcff["catatan_sumber"]

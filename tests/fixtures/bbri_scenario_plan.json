@@ -1,0 +1,278 @@
+{
+ "status": "validated",
+ "plan": {
+  "news_effects": [
+   {
+    "article_index": 0,
+    "source_url": "https://www.bisnis.com/topic/2539/bbri",
+    "title": "Berita BBRI Terkini dan Terbaru Hari Ini | Bisnis.com",
+    "timestamp": "2026-09-23",
+    "driver": "none",
+    "change": 0,
+    "years": [],
+    "factual_basis": "Halaman topik agregator Bisnis.com yang hanya menampilkan daftar berita terkini BBRI. Cuplikan menyebut 'BRI (BBRI) Tuntaskan Buyback Saham, Serap Rp90,37 Miliar' per 16 Sep 2026, namun tidak ada teks lengkap yang dapat diambil (HTTPError).",
+    "mechanism": "Tidak ada transmisi teridentifikasi dari halaman indeks ini ke input Cost of Equity (risk-free rate, beta, atau equity risk premium) BRI. Penyelesaian buyback bersifat aksi korporasi modal yang menurunkan jumlah saham beredar tetapi tidak mengubah profil risiko ekuitas bank.",
+    "uncertainty": "Rendah untuk dampak CoE karena tidak ada bukti spesifik driver risiko bank yang berubah dari halaman indeks ini.",
+    "rationale": "Artikel berupa agregator topik tanpa teks penuh dan tanpa bukti operasional spesifik. Spec untuk financial_ddm hanya memperbolehkan coe_bps atau none. Tidak ada fakta CoE-affecting yang dapat ditransmisikan ke driver valuasi, sehingga dampak disetel none."
+   },
+   {
+    "article_index": 1,
+    "source_url": "https://www.idnfinancials.com/id/news/69252/outflow-dana-asing-rp671-63-miliar-bbri-top-net-sell",
+    "title": "Outflow dana asing Rp671,63 miliar, BBRI top net sell | IDNFinancials",
+    "timestamp": "2026-09-22",
+    "driver": "none",
+    "change": 0,
+    "years": [],
+    "factual_basis": "Teks lengkap menyebut net sell asing BBRI sebesar Rp339,4 miliar dengan volume 110 juta lembar pada sesi perdagangan 22 September 2026, sebagai bagian dari total outflow Rp671,63 miliar di pasar reguler. Daftar top sell dipimpin BBRI, TINS, BMRI, BBCA, dan TPIA.",
+    "mechanism": "Arus jual asing satu sesi adalah data aliran modal/sentimen jangka pendek, bukan perubahan driver operasional bank (NIM, NPL, CAR, fee income) atau profil risiko ekuitas. Tidak ada bukti yang mengubah input CoE BRI.",
+    "uncertainty": "Rendah: aksi jual satu hari tidak secara struktural mengubah beta atau persepsi risiko ekuitas bank.",
+    "rationale": "Sentimen aliran modal tidak memenuhi kriteria transmisi ke driver financial_ddm. Spec secara eksplisit mengecualikan pergerakan harga/sentimen sebagai dampak laba/arus kas. Driver=none, change=0."
+   },
+   {
+    "article_index": 2,
+    "source_url": "https://investor.id/market/454830/saham-bank-rakyat-indonesia-bbri-putar-arah",
+    "title": "Saham Bank Rakyat Indonesia (BBRI) Putar Arah",
+    "timestamp": "2026-09-20",
+    "driver": "none",
+    "change": 0,
+    "years": [],
+    "factual_basis": "Cuplikan menyebut saham BBRI membukukan net sell asing mingguan Rp160,59 miliar pada 14-18 September 2026, berbalik dari net buy mingguan sebelumnya 7-11 September. Teks lengkap tidak tersedia (HTTPError).",
+    "mechanism": "Pembalikan arah aliran mingguan adalah pola aliran modal/sentimen, tanpa bukti perubahan NIM, kualitas aset, atau solvabilitas bank. Tidak ada transmisi ke Cost of Equity.",
+    "uncertainty": "Rendah untuk dampak CoE; pola aliran mingguan volatil dan tidak stabil sebagai dasar perubahan struktural beta.",
+    "rationale": "Driver=none karena spec financial_ddm hanya mengizinkan coe_bps atau none, dan tidak ada bukti kausalitas dari pola aliran mingguan ke perubahan input CoE."
+   },
+   {
+    "article_index": 3,
+    "source_url": "https://www.bloombergtechnoz.com/detail-news/121645/buyback-rampung-saham-bri-bbri-melesat-16",
+    "title": "Buyback Rampung, Saham BRI (BBRI) Melesat 16% - Market",
+    "timestamp": "2026-09-16",
+    "driver": "none",
+    "change": 0,
+    "years": [],
+    "factual_basis": "Teks lengkap menyebut BBRI merealisasikan buyback 31 juta saham dengan nilai sekitar Rp90,37 miliar dari pagu awal Rp500 miliar. Program berlangsung 12 Juni 2026 hingga 11 September 2026. Harga saham disebut dari Rp2.850/lembar (12 Juni) ke Rp3.320/lembar.",
+    "mechanism": "Penyelesaian buyback adalah aksi korporasi modal yang menurunkan jumlah saham beredar dan menjadi katalis pergerakan harga, namun tidak mengubah input struktural Cost of Equity (Rf, beta, ERP) BRI. Untuk DDM, share count adalah output, bukan driver CoE.",
+    "uncertainty": "Rendah untuk dampak CoE: buyback completion tidak serta-merta mengubah persepsi risiko ekuitas bank; utilisasi hanya 18% dari pagu (Rp90,37 miliar/Rp500 miliar) mengindikasikan program tidak disruptif.",
+    "rationale": "Driver=none. Aksi korporasi modal tidak memenuhi transmisi terukur ke driver financial_ddm (hanya coe_bps atau none). Perubahan harga saham 16% masuk kategori pergerakan harga yang menurut spec berdampak nol pada driver forecast."
+   },
+   {
+    "article_index": 4,
+    "source_url": "https://investor.id/market/452513/berita-populer-prospek-saham-bbri-hingga-harga-emas-perhiasan-solid",
+    "title": "BERITA POPULER: Prospek Saham BBRI hingga Harga Emas Perhiasan Solid",
+    "timestamp": "2026-09-02",
+    "driver": "none",
+    "change": 0,
+    "years": [],
+    "factual_basis": "Cuplikan menyebut rangkuman 5 berita populer investor.id periode 1 September 2026 termasuk item 'Dividen BRI (BBRI) plus Target Sahamnya'. Teks lengkap tidak tersedia (HTTPError).",
+    "mechanism": "Halaman rangkuman populer tanpa bukti spesifik driver operasional atau perubahan profil risiko. Tidak ada transmisi terukur ke Cost of Equity BRI.",
+    "uncertainty": "Tinggi: tanpa teks lengkap, tidak dapat diverifikasi adanya transmisi ke driver manapun; asumsi default none karena tidak ada bukti.",
+    "rationale": "Artikel agregator tanpa teks lengkap dan tidak memuat bukti spesifik perubahan driver. Spec financial_ddm hanya memperbolehkan coe_bps atau none, sehingga driver=none."
+   },
+   {
+    "article_index": 5,
+    "source_url": "https://www.cnbcindonesia.com/market/20260831133723-17-763654/asing-net-buy-di-sesi-1-saham-bbri-diborong",
+    "title": "Asing Net Buy di Sesi 1, Saham BBRI Diborong",
+    "timestamp": "2026-08-31",
+    "driver": "none",
+    "change": 0,
+    "years": [],
+    "factual_basis": "Teks lengkap menyebut net buy asing BBRI Rp163,99 miliar di sesi I 31 Agustus 2026, dengan total net buy asing sesi I Rp183,56 miliar. Artikel juga menyebut BRI membukukan laba bersih Rp31,2 triliun (+17,5% YoY) pada semester I 2026. Total foreign buy sesi I Rp2,95 triliun vs foreign sell Rp2,77 triliun.",
+    "mechanism": "Arus beli asing sesi I adalah sentimen/aliran modal. Kutipan laba 1H 2026 adalah actuals resmi yang menurut spec tidak boleh digunakan sebagai dampak berita. Tidak ada bukti transmisi ke Cost of Equity.",
+    "uncertainty": "Rendah untuk dampak CoE: actuals H1 resmi dikecualikan secara eksplisit; aliran modal sesi I adalah sinyal jangka pendek.",
+    "rationale": "Driver=none. Spec melarang penggunaan actuals resmi H1 sebagai news impact, dan pergerakan aliran modal bukan driver CoE. Untuk financial_ddm hanya coe_bps atau none yang berlaku."
+   }
+  ],
+  "interim_scenario": null,
+  "outyear_scenario": [
+   {
+    "year": 2027,
+    "revenue_growth_pct": 4.5,
+    "ebitda_margin_pct": null,
+    "net_income_margin_pct": 28.8,
+    "capex_to_revenue_pct": null,
+    "rationale": "Normalisasi pasca rebound 2026 (NII +9,9% YoY); pertumbuhan kredit UMKM BRI moderat; margin laba stabil di kisaran historis 28-30%. Asumsi analis tanpa panduan resmi.",
+    "source_ids": [
+     "official"
+    ]
+   },
+   {
+    "year": 2028,
+    "revenue_growth_pct": 4.0,
+    "ebitda_margin_pct": null,
+    "net_income_margin_pct": 29.0,
+    "capex_to_revenue_pct": null,
+    "rationale": "Pertumbuhan melandai sejalan kapasitas penyaluran; biaya kredit diasumsikan stabil pasca siklus restrukturisasi; asumsi analis murni.",
+    "source_ids": [
+     "official"
+    ]
+   },
+   {
+    "year": 2029,
+    "revenue_growth_pct": 3.5,
+    "ebitda_margin_pct": null,
+    "net_income_margin_pct": 29.0,
+    "capex_to_revenue_pct": null,
+    "rationale": "Tren pertumbuhan mendekati laju jangka panjang BRI; marjin NIM stabil; tanpa panduan emiten tahun 2029-2030 sehingga sepenuhnya asumsi analis.",
+    "source_ids": [
+     "official"
+    ]
+   },
+   {
+    "year": 2030,
+    "revenue_growth_pct": 3.0,
+    "ebitda_margin_pct": null,
+    "net_income_margin_pct": 28.5,
+    "capex_to_revenue_pct": null,
+    "rationale": "Perlambatan di akhir horizon; potensi tekanan biaya kredit siklikal; margin laba kembali ke rata-rata historis 2022-2024. Skenario analis tanpa bukti operasi spesifik.",
+    "source_ids": [
+     "official"
+    ]
+   }
+  ],
+  "earnings_scenario": {
+   "h2_revenue_to_h1": 0.95,
+   "h2_net_margin_pct": 28.0,
+   "rationale": "1H26 menutup dengan laba bersih Rp31,18 triliun (+17,5% yoy) ditopang NII tumbuh 9,9% yoy, sehingga H1 sudah merepresentasikan sekitar 55% dari laba penuh 2025. Kami menetapkan rasio H2/H1 di bawah 1 untuk mencerminkan pola musiman biaya CKPN yang biasanya meningkat di paruh kedua. Margin neto H2 kami pilih sedikit di bawah margin H1 28,9% menjadi 28,0% karena tekanan provisi musiman dan belum adanya guidance resmi H2 dari manajemen. Pemilihan skenario berlabuh pada run-rate aktual H1 yang dikonfirmasi keterbukaan resmi, bukan pada proyeksi ekstrapolasi. Hasilnya FY26 revenue sekitar Rp210,5 triliun dan laba bersih sekitar Rp59,9 triliun, tumbuh moderat terhadap 2025 setelah normalisasi musiman.",
+   "source_ids": [
+    "official",
+    "news:5"
+   ],
+   "thesis_points": [
+    "Pertumbuhan NII 9,9% yoy pada 1H26 menopang ekspansi pendapatan bunga dan menjadi motor utama proyeksi FY26.",
+    "Margin neto 28,9% di H1 menyiratkan kualitas aset terjaga; skenario H2 memakai margin 28,0% sebagai kompresi musiman CKPN.",
+    "Program buyback Rp90,37 miliar yang tuntas 11 September 2026 memberi sinyal kepercayaan manajemen terhadap prospek H2."
+   ],
+   "thesis_titles": [
+    "Pertumbuhan NII menopang ekspansi pendapatan",
+    "Margin neto stabil dengan tekanan musiman CKPN",
+    "Buyback rampung sinyal keyakinan manajemen"
+   ],
+   "catalysts_risks": [
+    {
+     "item": "Rilis earnings 3Q26",
+     "timing": "Oktober-November 2026",
+     "driver_path": "Pertumbuhan kredit → NII → laba bersih",
+     "direction": "Positif",
+     "source_ids": [
+      "official"
+     ]
+    },
+    {
+     "item": "Pengumuman dividen FY26",
+     "timing": "4Q26",
+     "driver_path": "Laba ditahan → payout ratio → return pemegang saham",
+     "direction": "Positif",
+     "source_ids": [
+      "official"
+     ]
+    },
+    {
+     "item": "Kenaikan CKPN di H2",
+     "timing": "2H26",
+     "driver_path": "Kualitas aset → biaya CKPN → margin neto",
+     "direction": "Negatif",
+     "source_ids": [
+      "official"
+     ]
+    },
+    {
+     "item": "Outflow asing berlanjut",
+     "timing": "September-Oktober 2026",
+     "driver_path": "Sentimen investor → valuasi pasar → biaya ekuitas",
+     "direction": "Negatif",
+     "source_ids": [
+      "news:1",
+      "news:2"
+     ]
+    }
+   ],
+   "key_risks": [
+    {
+     "category": "Operasi",
+     "headline": "Konsentrasi portofolio UMKM rentan tekanan kualitas aset",
+     "explanation": "Segmen UMKM dan mikro adalah tulang punggung loan book BRI; perlambatan ekonomi atau gagal panen dapat mendorong NPL dan menambah CKPN, menekan margin neto H2 di bawah asumsi 28,0%.",
+     "source_ids": [
+      "official"
+     ]
+    },
+    {
+     "category": "Pendanaan",
+     "headline": "Risiko margin NIM akibat siklus suku bunga BI",
+     "explanation": "Pertumbuhan NII 9,9% yoy di 1H26 dapat tertekan oleh pemangkasan suku bunga BI yang menurunkan yield aset produktif lebih cepat dari biaya dana; setiap penurunan 25 bps NIM berpotensi menggerus margin neto 0,5-1,0pp.",
+     "source_ids": [
+      "official"
+     ]
+    },
+    {
+     "category": "Modal",
+     "headline": "Buyback terbatas tidak mengurangi tekanan permodalan",
+     "explanation": "Buyback rampung menyerap hanya Rp90,37 miliar dari pagu Rp500 miliar; rasio CAR perlu dijaga jika pertumbuhan kredit H2 melebihi asumsi, sehingga potensi ekspansi aset atau distribusi dividen dapat terbatas.",
+     "source_ids": [
+      "news:3",
+      "news:0"
+     ]
+    },
+    {
+     "category": "Pendanaan",
+     "headline": "Arus keluar asing menekan valuasi saham",
+     "explanation": "BBRI menjadi top net sell asing Rp339,4 miliar pada 22 September 2026 dan net sell mingguan Rp160,59 miliar pada 14-18 September; outflow berkelanjutan dapat menurunkan valuasi pasar dan biaya ekuitas.",
+     "source_ids": [
+      "news:1",
+      "news:2"
+     ]
+    },
+    {
+     "category": "Regulasi",
+     "headline": "Perubahan aturan permodalan atau giro wajib minimum",
+     "explanation": "RAPBN 2027 dan sinergi Kemenkeu-BI dapat membawa aturan giro wajib minimum, LTV, atau CAR baru yang memengaruhi struktur pendanaan BRI; potensi kenaikan biaya compliance belum tercermin dalam skenario H2.",
+     "source_ids": [
+      "news:3"
+     ]
+    }
+   ],
+   "source_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202608/20260831171524-64205-0/FinancialStatement-2026-II-BBRI.pdf",
+   "published_at": "2026-08-31",
+   "source_refs": {
+    "official": {
+     "title": "Rilis resmi 1H26",
+     "url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202608/20260831171524-64205-0/FinancialStatement-2026-II-BBRI.pdf",
+     "date": "2026-08-31"
+    },
+    "news:2": {
+     "title": "Saham Bank Rakyat Indonesia (BBRI) Putar Arah",
+     "url": "https://investor.id/market/454830/saham-bank-rakyat-indonesia-bbri-putar-arah",
+     "date": "2026-09-20"
+    },
+    "news:3": {
+     "title": "Buyback Rampung, Saham BRI (BBRI) Melesat 16% - Market",
+     "url": "https://www.bloombergtechnoz.com/detail-news/121645/buyback-rampung-saham-bri-bbri-melesat-16",
+     "date": "2026-09-16"
+    },
+    "news:1": {
+     "title": "Outflow dana asing Rp671,63 miliar, BBRI top net sell | IDNFinancials",
+     "url": "https://www.idnfinancials.com/id/news/69252/outflow-dana-asing-rp671-63-miliar-bbri-top-net-sell",
+     "date": "2026-09-22"
+    },
+    "news:5": {
+     "title": "Asing Net Buy di Sesi 1, Saham BBRI Diborong",
+     "url": "https://www.cnbcindonesia.com/market/20260831133723-17-763654/asing-net-buy-di-sesi-1-saham-bbri-diborong",
+     "date": "2026-08-31"
+    },
+    "news:0": {
+     "title": "Berita BBRI Terkini dan Terbaru Hari Ini | Bisnis.com",
+     "url": "https://www.bisnis.com/topic/2539/bbri",
+     "date": "2026-09-23"
+    }
+   }
+  },
+  "stage_classification": {
+   "life_cycle_stage": "mature",
+   "has_steady_state_3y": true,
+   "commodity_price_driven": false,
+   "dissimilar_segments": 1,
+   "rationale": "BRI merupakan bank BUMN terbesar di Indonesia dengan portofolio ritel, mikro, dan UMKM yang dominan. Laba bersih konsolidasian 2022-2025 stabil di kisaran Rp51,1-60,2 triliun dan NII 1H26 tumbuh 9,9% YoY menjadi Rp80,53 triliun, mencerminkan tahap matang dengan profitabilitas persisten. Bukan emiten yang digerakkan harga komoditas (eksposur ke nasabah komoditas tidak memenuhi definisi finite-reserve extractive pada spec); profil mengikuti financial_ddm. Segmen usaha seragam dalam satu bisnis perbankan, tidak terdapat unit dissimilar atau NCI material, sehingga dissimilar_segments dinilai 1.",
+   "source_ids": [
+    "official"
+   ]
+  }
+ }
+}

@@ -2,7 +2,7 @@
   "ticker": "JPFA",
   "as_of": "2026-09-25",
   "group": "Integrator pakan dan unggas",
-  "basis": "JPFA adalah integrator pakan ternak, pembibitan, unggas komersial dan pengolahan. Pembandingnya adalah integrator pakan-unggas di BEI dan Charoen Pokphand Foods di Thailand. Tabel peer Sectors juga memuat emiten kecil dengan P/E di atas 100x.",
+  "basis": "JPFA adalah integrator pakan ternak, pembibitan, unggas komersial dan pengolahan. Peer hanya emiten BEI: integrator pakan-unggas dan pakan-akuakultur. Tabel peer Sectors juga memuat emiten kecil dengan P/E di atas 100x.",
   "peers": [
     {
       "symbol": "CPIN",
@@ -31,13 +31,6 @@
       "market": "IDX",
       "reason": "Pakan dan akuakultur udang.",
       "yahoo": "CPRO.JK"
-    },
-    {
-      "symbol": "CPF",
-      "name": "Charoen Pokphand Foods",
-      "market": "SET",
-      "reason": "Integrator pakan, unggas, babi dan akuakultur regional.",
-      "yahoo": "CPF.BK"
     }
   ],
   "excluded": [
@@ -60,6 +53,10 @@
     {
       "symbol": "UDNG",
       "reason": "Rugi; tambak udang kecil."
+    },
+    {
+      "symbol": "WMUU",
+      "reason": "Pakan dan unggas; rugi 12 bulan terakhir."
     }
   ]
 }

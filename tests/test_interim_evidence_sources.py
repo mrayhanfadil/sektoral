@@ -186,3 +186,50 @@ def test_release_assessment_official_actual_blockers_cleared(ticker):
     assert "latest official interim actual has incomplete provenance" not in result["blockers"]
     assert "latest official interim revenue/net profit are missing" not in result["blockers"]
     assert "latest official interim dates are inconsistent" not in result["blockers"]
+
+
+# Audited annual D&A read from the consolidated statements: the depreciation line
+# of the segment note (fixed assets + investment properties + right-of-use), and
+# operating profit ("Laba usaha") from the income statement, full Rupiah.
+AUDITED_DEPRECIATION = {
+    "SSIA": {
+        2024: {"depreciation": 160_474_192_622, "operating_profit": 845_923_357_770},
+        2025: {"depreciation": 175_460_879_268, "operating_profit": 215_715_597_257},
+    },
+}
+
+
+@pytest.mark.parametrize("ticker", sorted(AUDITED_DEPRECIATION))
+def test_audited_annual_depreciation_carries_full_provenance(ticker):
+    pack = json.loads((EVIDENCE_DIR / f"{ticker}.json").read_text(encoding="utf-8"))
+    source = pack["annual_actuals_source"]
+    for field in ("title", "url", "published_at", "pages", "unit", "status"):
+        assert source.get(field), f"{ticker}.annual_actuals_source.{field} missing"
+    assert source["url"].startswith("https://")
+    assert "diaudit" in source["title"]
+    assert source["status"] == "aktual"
+    assert source["unit"].startswith("IDR")
+    assert "Penyusutan" in source["pages"] and "laba rugi" in source["pages"]
+    published = date.fromisoformat(source["published_at"])
+    assert published <= date.fromisoformat(REPORT_AS_OF)
+
+    rows = {row["year"]: row for row in pack["annual_actuals"]}
+    for year, expected in AUDITED_DEPRECIATION[ticker].items():
+        row = rows[year]
+        assert date(year, 12, 31) < published, f"{ticker} FY{year} published before year end"
+        for key, value in expected.items():
+            assert row[key] == value, f"{ticker} FY{year} {key}: {row[key]} != {value}"
+        for key in ("revenue", "operating_profit", "depreciation", "ebitda", "net_profit",
+                    "net_profit_attributable"):
+            assert isinstance(row[key], int) and not isinstance(row[key], bool)
+        assert row["ebitda"] == row["operating_profit"] + row["depreciation"]
+
+    # The intake takes the audited figures in place of Sectors EBITDA - EBIT, so
+    # the asset-life guard never voids them.
+    data, _ = intake.load(ticker)
+    annuals = {a["year"]: a for a in data["annuals"]}
+    for year, expected in AUDITED_DEPRECIATION[ticker].items():
+        assert annuals[year]["da"] == expected["depreciation"]
+        assert annuals[year]["da_source"] == "official"
+        assert annuals[year]["ebit"] == expected["operating_profit"]
+        assert annuals[year].get("da_implied_life") is None

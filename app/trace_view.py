@@ -93,6 +93,17 @@ def _forecast(result: dict) -> dict:
             "rationale": text(r.get("rationale"), 600),
             "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
         } for r in _list(plan.get("outyear_scenario"))[:6]],
+        # Bank Driver Scenario (financial_ddm): the interim-year H2 drivers and
+        # the four out-years, in percent.
+        "bank_drivers": [{
+            "year": text(r.get("year"), 8),
+            **{key: number(r.get(key)) for key in (
+                "loan_growth_pct", "nim_pct", "non_ii_to_nii_pct", "cost_to_income_pct",
+                "cost_of_credit_pct", "deposit_growth_pct")},
+            "rationale": text(r.get("rationale"), 600),
+            "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
+        } for r in [(plan.get("earnings_scenario") or {}).get("bank_drivers")]
+            + _list(plan.get("bank_outyear_scenario"))[:4] if isinstance(r, dict)],
     }
 
 

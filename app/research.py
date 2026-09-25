@@ -7,7 +7,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import build, fmt, intake, news_fetch, news_sources, outputs, research_context, tavily, ui
+from . import build, fmt, intake, news_fetch, news_sources, outputs, progress, research_context, tavily, ui
 from .progress import emit
 
 _TRACE_CSS = (
@@ -204,6 +204,20 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
                      f"{esc(interim.get('rationale'))}<br><small>"
                      f"{esc(interim.get('published_at'))} · {esc(interim.get('source_url'))}"
                      "</small></section>")
+    bank_rows = ([(plan.get("earnings_scenario") or {}).get("bank_drivers")]
+                 + list(plan.get("bank_outyear_scenario") or []))
+    for row in (r for r in bank_rows if isinstance(r, dict)):
+        parts.append("<section class='card'><strong>"
+                     f"{esc(row.get('year'))} · kredit {esc(row.get('loan_growth_pct'))}% · NIM "
+                     f"{esc(row.get('nim_pct'))}% · biaya kredit "
+                     f"{esc(row.get('cost_of_credit_pct'))}%</strong><br>"
+                     f"CIR {esc(row.get('cost_to_income_pct'))}% · non-bunga/NII "
+                     f"{esc(row.get('non_ii_to_nii_pct'))}%"
+                     + (f" · DPK {esc(row.get('deposit_growth_pct'))}%"
+                        if row.get("deposit_growth_pct") is not None else "")
+                     + f"<br>{esc(row.get('rationale'))}<br><small>"
+                     f"Bukti: {esc(', '.join(row.get('source_ids') or []))}"
+                     "</small></section>")
     for row in plan.get("outyear_scenario") or []:
         parts.append("<section class='card'><strong>"
                      f"{esc(row.get('year'))} · pertumbuhan revenue "
@@ -245,6 +259,24 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
     return "\n".join(parts)
 
 
+def _build_report(t, destination, want_pdf, report_as_of, illustrative_scenarios, analyst_target,
+                  assumption_plan, combined_news, combined_full, web_search, method_override,
+                  assumption_result):
+    return build.build(t, destination, want_pdf=want_pdf, as_of=report_as_of,
+                       illustrative_scenarios=illustrative_scenarios or analyst_target,
+                       assumption_plan=assumption_plan,
+                       news_evidence={"rows": combined_news, "full": combined_full,
+                                      "search": web_search},
+                       analyst_target=analyst_target,
+                       method_override=method_override,
+                       spec_sha=assumption_result.get("spec_sha256"),
+                       assumption_status=next(
+                           (assumption_result[key] for key in
+                            ("earnings_status", "interim_status")
+                            if assumption_result.get(key) not in (None, "not_run")),
+                           assumption_result.get("status")))
+
+
 def run_analyst(ticker):
     """Planning/peer agent; its failure never blocks the company update."""
     from agents.analyst.run import run as analyst_run
@@ -259,7 +291,23 @@ def run_analyst(ticker):
 def run(ticker, outdir, want_pdf=False, as_of=None,
         illustrative_scenarios=False, analyst_target=False, refresh_assumptions=False,
         method_override=None):
-    """Run research and build a report from the same dated news evidence."""
+    """Run research and build a report from the same dated news evidence.
+
+    The run's progress events are stored with its outputs so the web app can
+    play the run back (app.run_events).
+    """
+    with progress.recording() as events:
+        result = _run(ticker, outdir, want_pdf=want_pdf, as_of=as_of,
+                      illustrative_scenarios=illustrative_scenarios,
+                      analyst_target=analyst_target, refresh_assumptions=refresh_assumptions,
+                      method_override=method_override)
+    outputs.save(outputs.EVENTS, Path(outdir), result["ticker"], events)
+    return result
+
+
+def _run(ticker, outdir, want_pdf=False, as_of=None,
+         illustrative_scenarios=False, analyst_target=False, refresh_assumptions=False,
+         method_override=None):
     from agents.research.run import run_live
 
     t = str(ticker).strip().upper()
@@ -291,6 +339,8 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
         forecast_intake = {}
     intake_name = forecast_intake.get("name") or t
     intake_profile = forecast_intake.get("model_profile")
+    emit("news", "Mencari berita bertanggal", f"{intake_name} sampai {report_as_of}",
+         status="run", agent="berita")
     try:
         # Stored Tavily results remain usable when a key is not configured.
         # Profile-relevant future-driver queries run on every standard run,
@@ -335,6 +385,10 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     forecast_intake["news_register"] = register
     print(f"{t}: news Sectors+Tavily {len(combined_news)} artikel; "
           f"Tavily {web_search['status']}", flush=True)
+    emit("news", f"{len(combined_news)} artikel relevan, "
+         f"{len(register.get('rejected') or [])} ditolak", f"Tavily {web_search['status']}",
+         status="warn" if web_search["status"] in ("failed", "unavailable", "partial_failure")
+         else "ok", agent="berita")
     emit("forecast", "Agent asumsi forecast membaca berita dan rilis resmi", status="run")
     assumption_result = forecast_agent(forecast_intake, refresh=refresh_assumptions)
     reused = " (dipakai ulang untuk bukti yang sama)" if assumption_result.get("reused") else ""
@@ -342,19 +396,14 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     emit("forecast", "Asumsi forecast selesai" + reused, assumption_result.get("status"))
     assumption_plan = assumption_result.get("plan")
     emit("report", "Menyusun company update dan memeriksa gate valuasi", status="run")
-    report = build.build(t, destination, want_pdf=want_pdf, as_of=report_as_of,
-                         illustrative_scenarios=illustrative_scenarios or analyst_target,
-                         assumption_plan=assumption_plan,
-                         news_evidence={"rows": combined_news, "full": combined_full,
-                                        "search": web_search},
-                         analyst_target=analyst_target,
-                         method_override=method_override,
-                         spec_sha=assumption_result.get("spec_sha256"),
-                         assumption_status=next(
-                             (assumption_result[key] for key in
-                              ("earnings_status", "interim_status")
-                              if assumption_result.get(key) not in (None, "not_run")),
-                             assumption_result.get("status")))
+    # Record every dated market snapshot the build reads (FX, commodity series,
+    # peer snapshots) so app.rebuild can reproduce this report after a refresh.
+    from . import rebuild as rebuild_mod
+    market_used: dict = {}
+    with rebuild_mod.market_inputs(None, market_used, {}):
+        report = _build_report(t, destination, want_pdf, report_as_of, illustrative_scenarios,
+                               analyst_target, assumption_plan, combined_news, combined_full,
+                               web_search, method_override, assumption_result)
     normalized_plan = (report.get("forecast_assumptions") or {}).get("plan")
     if isinstance(normalized_plan, dict) and isinstance(assumption_plan, dict):
         if normalized_plan != assumption_plan:
@@ -375,6 +424,7 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     # reuse them so the trace and the stored manifest cannot disagree.
     evidence_register = report.get("evidence_register") or {}
     manifest = report.get("run_manifest") or {"ticker": t, "as_of": report_as_of}
+    manifest["market_inputs"] = market_used
     audit = {
         "ticker": t,
         "analyst": intel,
@@ -396,7 +446,8 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                    "target_method": report.get("method"),
                    "target_price": report["meta"].get("tp"),
                    "rating": report["meta"].get("rating"),
-                   "research_status": report["meta"].get("research_status")},
+                   "research_status": report["meta"].get("research_status"),
+                   "analyst_target": bool(analyst_target), "method_override": method_override},
     }
     trace_key = outputs.save(outputs.TRACE, destination, t, audit)
     trace_html = destination / f"{t}-trace.html"
