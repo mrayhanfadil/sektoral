@@ -1,7 +1,7 @@
 """Tool: check_output_schema — FORMAT OUTPUT §7.
 
 Validates renderer JSON contract. null = unavailable, never 0.
-rating/tp/upside only when release gate passes. log_gate internal only.
+Model-scenario label/value/difference only when release gate passes. log_gate internal only.
 """
 from __future__ import annotations
 

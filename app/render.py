@@ -10,7 +10,7 @@ import functools
 import html
 import math
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from . import cache as cache_mod
@@ -111,7 +111,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        "grid-template-rows:auto 0.5mm;column-gap:5mm;row-gap:0.4mm;"
        "align-items:center;padding:0 0 1.7mm;margin:0 0 1.7mm}"
        ".report-heading{grid-column:1;grid-row:1;min-width:0}"
-       # Header line 1: stock code + rating action (Roboto Black, blue);
+       # Header line 1: stock code + model-scenario label (Roboto Black, blue);
        # line 2: report type + date (Roboto Regular, black).
        ".report-title{font-size:9.6pt;line-height:1.17;color:" + PRIMARY + ";"
        "font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
@@ -389,20 +389,43 @@ def _month_ticks(first, last):
     return months[::step]
 
 
-def _price_chart(ticker, as_of, number=None, source=None):
+def _price_chart(ticker, as_of, number=None, source=None,
+                 latest_close=None, latest_date=None):
     """Figma cover Exhibit 1: close (left axis, Rp) and performance relative to
     IHSG (right axis, %), dashed grid, black baseline, square legend.
 
     The relative line is read against its own zero: above it the issuer beat
     the index, a reading a shared rebased scale would flatten.
     """
-    window = _price_window(ticker, as_of)
+    quote_day = None
+    chart_as_of = as_of
+    try:
+        quote_day = date.fromisoformat(str(latest_date)[:10]) if latest_date else None
+        report_day = date.fromisoformat(str(as_of)[:10])
+        if quote_day:
+            chart_as_of = min(report_day, quote_day + timedelta(days=1)).isoformat()
+    except (TypeError, ValueError):
+        quote_day = None
+    window = _price_window(ticker, chart_as_of)
     if window is None:
         return ("<p class='small'>Perbandingan harga belum tersedia: "
                 "kurang dari dua tanggal perdagangan yang sama di data Sectors.</p>")
 
-    dates, closes = window["price_dates"], window["closes"]
-    rel_dates, relative = window["rel_dates"], window["relative"]
+    dates, closes = list(window["price_dates"]), list(window["closes"])
+    rel_dates, relative = list(window["rel_dates"]), list(window["relative"])
+    if quote_day and isinstance(latest_close, (int, float)) and latest_close > 0:
+        keep = [(day, close) for day, close in zip(dates, closes) if day <= quote_day]
+        dates, closes = [day for day, _ in keep], [close for _, close in keep]
+        if dates and dates[-1] == quote_day:
+            closes[-1] = float(latest_close)
+        elif not dates or dates[-1] < quote_day:
+            dates.append(quote_day)
+            closes.append(float(latest_close))
+        aligned = [(day, value) for day, value in zip(rel_dates, relative) if day <= quote_day]
+        rel_dates, relative = [day for day, _ in aligned], [value for _, value in aligned]
+    if len(dates) < 2 or len(closes) < 2:
+        return ("<p class='small'>Perbandingan harga belum tersedia: "
+                "belum ada dua tanggal perdagangan sebelum tanggal harga laporan.</p>")
     p_lo, p_hi = _axis_scale(closes, PRICE_STEPS)
     r_lo, r_hi = _axis_scale(relative, REL_STEPS)
     # Figma frame 2611:333 (360 x 320): plot 48..292 x 24..223.
@@ -468,8 +491,11 @@ def _price_chart(ticker, as_of, number=None, source=None):
     # It goes to the source appendix with the method notes; the footer is the
     # house line like every other exhibit.
     detail = window["source"] or fmt.provenance_detail(source or "Sectors")
-    if rel_dates[0] != dates[0]:
-        detail += f"; garis relatif sejak {rel_dates[0].isoformat()} (cakupan IHSG)"
+    if rel_dates[0] != dates[0] or rel_dates[-1] != dates[-1]:
+        detail += (f"; garis relatif mencakup {rel_dates[0].isoformat()} s.d. "
+                   f"{rel_dates[-1].isoformat()} (cakupan IHSG)")
+    if quote_day and isinstance(latest_close, (int, float)) and latest_close > 0:
+        detail += f"; harga terakhir memakai kutipan laporan {quote_day.isoformat()}"
     detail += (f"; return harga dari {len(rel_dates)} tanggal perdagangan yang sama, "
                "tidak termasuk dividen")
     # The template asks for 12-24 months; say so when the data holds less.
@@ -480,8 +506,9 @@ def _price_chart(ticker, as_of, number=None, source=None):
               else f"<p class='src'>{html.escape(fmt.DEFAULT_SOURCE)}</p>")
     return (
         f"<div class='info-title'>{title}</div>"
-        f"<div class='info-note'>Return harga: {safe_ticker} {pct(issuer_return)}%, "
-        f"IHSG {pct(ihsg_return)}%. Selisih {pct(issuer_return - ihsg_return)} poin persentase"
+        f"<div class='info-note'>Return harga sampai {rel_dates[-1].isoformat()}: "
+        f"{safe_ticker} {pct(issuer_return)}%, IHSG {pct(ihsg_return)}%. "
+        f"Selisih {pct(issuer_return - ihsg_return)} poin persentase"
         f"{short_window}</div>"
         "<svg class='price-chart' viewBox='0 0 360 320' width='360' height='320' "
         "style='display:block;width:100%;height:auto' role='img' aria-labelledby='price-chart-title'>"
@@ -1373,21 +1400,21 @@ def _display_date(report_date):
 
 
 def _header_title(meta):
-    """Header line 1: stock code, then the rating action and target price.
+    """Header line 1: stock code and an informational model value.
 
-    A draft or an analysis without a released rating shows its status instead
+    A draft or an analysis without a released model value shows its status instead
     of a TP, so an unreviewed number never reaches the running header.
     """
     meta = meta or {}
     code = f"{meta.get('ticker', '')} IJ".strip()
     if meta.get("status") == "draft_non_distributable":
         return f"{code} | DRAFT"
-    rating = meta.get("rating")
-    if not rating:
+    scenario = meta.get("rating")
+    if not scenario:
         return code
     if meta.get("tp") is None:
-        return f"{code} | {str(rating).upper()}"
-    return f"{code} | {str(rating).upper()} \u00b7 TP Rp {fmt.rp(meta['tp'])}"
+        return f"{code} | SKENARIO MODEL: {str(scenario).upper()}"
+    return f"{code} | NILAI MODEL Rp {fmt.rp(meta['tp'])}"
 
 
 def _header_subtitle(report_date):
@@ -1397,7 +1424,7 @@ def _header_subtitle(report_date):
 
 
 def _report_header(report_date, meta=None):
-    """Report header (Figma node 2627:900): stock code, rating and TP in
+    """Report header (Figma node 2627:900): stock code, model value in
     Roboto Black blue; report type and date in Roboto Regular black; the logo
     top right; the blue-to-lime divider under both."""
     return ("<div class='report-header'>"
@@ -1416,7 +1443,7 @@ def _draft_banner(meta):
         return ""
     if meta.get("illustrative_scenarios"):
         return ("<div class='draft-banner'>DRAFT ILUSTRATIF: skenario memakai fakta "
-                "bersumber dan asumsi analis; belum layak sebagai target harga.</div>")
+                "bersumber dan asumsi analis; nilai model belum layak disajikan.</div>")
     return ("<div class='draft-banner'>DRAFT: BUKTI BELUM LENGKAP: "
             "skenario nilai belum disajikan sampai data dan model tervalidasi.</div>")
 
@@ -1541,7 +1568,7 @@ def _running_header(m):
 
     Section headers live inside each section's HTML, so a section that spills
     onto a second sheet would otherwise print without header or draft label.
-    Figma header content: stock code, rating and TP over the report type and
+    Figma header content: stock code and model value over the report type and
     date top left, the logo top right. app/pdf.py replaces this with the captured page-1 header; this
     text form is what browser printing of the HTML shows.
     """
@@ -1646,12 +1673,12 @@ def _render(doc):
     h.append(_report_header(m["tanggal"], m))
     h.append(_draft_banner(m))
     draft = m.get("status") == "draft_non_distributable"
-    rating_word = m.get("rating") or ("Draft" if draft else "Analisis")
+    scenario_status = m.get("rating") or ("Draft" if draft else "Analisis")
     rating_status = m.get("rating_status") or cov.get("rating_status")
     if draft:
         rating_status = rating_status or "Dalam peninjauan"
     elif m.get("rating"):
-        rating_status = rating_status or "Inisiasi"
+        rating_status = rating_status or scenario_status
     else:
         rating_status = "Skenario informasional"
     sep = (f"<img class='rating-sep' src='data:image/svg+xml;base64,{REPORT_SEPARATOR}' alt=''>")
@@ -1666,19 +1693,19 @@ def _render(doc):
     both = lambda rp, usd: f"{rp} / {usd}" if usd else rp
     h.append("<div class='cover'><div class='left'>")
     h.append("<div class='rating-block'><div class='rating-head'>"
-             f"<div class='rating-label'>{html.escape(str(rating_word))}</div>"
+             "<div class='rating-label'>Skenario nilai</div>"
              f"<div class='rating-detail'>({html.escape(str(rating_status))})</div>"
              "<div class='rating-method'>"
-             + ("Rating ditahan hingga pemeriksaan selesai.<br>" if draft else "")
+             + ("Hasil model ditahan hingga pemeriksaan selesai.<br>" if draft else "")
              + f"Valuasi: {html.escape(doc.get('method', 'DCF'))}</div></div>" + sep)
     price_label = (f"Harga Terakhir (Rp; {m['harga_tanggal']})"
                    if m.get("harga_tanggal") and m.get("harga_tanggal") != m["tanggal"]
                    else "Harga Terakhir (Rp)")
     h.append(row(price_label, fmt.rp(m["harga"]) if m.get("harga") is not None else "NA",
                  m.get("harga") is None))
-    h.append(row("Target Harga (Rp)", fmt.rp(m["tp"]) if released else "NA", not released))
-    h.append(row("TP Sebelumnya (Rp)", str(prev_tp) if prev_tp else "NA", not prev_tp))
-    h.append(row("Upside/Downside (%)", f"{m['upside_persen']:+.1f}%".replace(".", ",")
+    h.append(row("Nilai model per saham (Rp)", fmt.rp(m["tp"]) if released else "NA", not released))
+    h.append(row("Nilai model sebelumnya (Rp)", str(prev_tp) if prev_tp else "NA", not prev_tp))
+    h.append(row("Selisih dari harga (%)", f"{m['upside_persen']:+.1f}%".replace(".", ",")
                  if released and m.get("upside_persen") is not None else "NA", not released))
     h.append(row("Jumlah Saham (juta)",
                  fmt._id(dp["saham"] / 1e6, 1) if dp.get("saham") is not None else "NA"))
@@ -1699,7 +1726,8 @@ def _render(doc):
     h.append("<div class='info'>")
     h.append(_price_chart(m["ticker"], m["tanggal"],
                           number=chart["n"] if chart else None,
-                          source=(chart or {}).get("catatan_sumber")))
+                          source=(chart or {}).get("catatan_sumber"),
+                          latest_close=m.get("harga"), latest_date=m.get("harga_tanggal")))
     h.append(sep + "</div>")
     h.append("<div class='analyst'><b>Tim Riset Sektoral</b><br>Equity Analyst</div>")
     h.append("</div><div class='right'>")
@@ -1736,13 +1764,15 @@ def _render(doc):
         h.append(_render_page_content(b))
         h.append("</div>")
 
-    disclosure = ("Laporan ini memuat rekomendasi model bersyarat berdasarkan "
-                  "asumsi dan sumber yang dinyatakan; keputusan investasi menjadi "
-                  "tanggung jawab pembaca. Kinerja masa lalu tidak menjamin hasil ke depan."
+    disclosure = ("INFORMASI DAN ANALISIS, BUKAN SARAN INVESTASI. Laporan ini menyajikan "
+                  "data historis, perhitungan, dan skenario model berbasis sumber tertanggal "
+                  "serta asumsi analis. Skenario bukan rekomendasi, prediksi, atau saran "
+                  "investasi; hasil aktual dapat berbeda. Keputusan investasi sepenuhnya "
+                  "menjadi tanggung jawab pembaca. Kinerja masa lalu tidak menjamin hasil ke depan."
                   if m.get("rating") else
-                  "Dokumen ini adalah bahan riset dalam peninjauan. Rating dan target "
-                  "harga belum diterbitkan karena syarat data atau model belum terpenuhi. "
-                  "Keputusan investasi menjadi tanggung jawab pembaca.")
+                  "INFORMASI DAN ANALISIS, BUKAN SARAN INVESTASI. Dokumen ini masih dalam "
+                  "peninjauan; hasil model belum disajikan karena syarat data atau model "
+                  "belum terpenuhi. Keputusan investasi sepenuhnya menjadi tanggung jawab pembaca.")
     if SHOW_SOURCE_APPENDIX:
         h.append(_source_appendix(_NOTES.get(), m))
     h.append(f"<div class='page'>{_report_header(m['tanggal'], m)}"

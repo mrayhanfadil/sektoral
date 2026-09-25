@@ -201,7 +201,7 @@ def test_web_header_uses_the_canonical_logo_file():
     brand = (web / "src" / "components" / "Brand.tsx").read_text(encoding="utf-8")
     layout = (web / "src" / "components" / "Layout.tsx").read_text(encoding="utf-8")
     assert "app/assets/brand/sectoral-logo.svg?raw" in brand
-    assert 'aria-label="Sectoral, beranda"' in layout and "<Logo" in layout
+    assert 'aria-label="Sektoral, beranda"' in layout and "<Logo" in layout
     logo = (Path(render.__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg").read_text()
     assert "CTORAL" in logo
     for color in ("#0928B1", "#1DCD9F", "#3ED628"):
@@ -211,11 +211,11 @@ def test_web_header_uses_the_canonical_logo_file():
 def test_source_lines_open_with_the_house_line_and_keep_provenance():
     from app import fmt
     assert fmt.house_source_line("Source: Sectors, Sektoral Estimates") == \
-        "Source: Company, Sektoral Estimates; Sectors"
+        fmt.DEFAULT_SOURCE + "; Sectors"
     assert fmt.house_source_line("Sumber: PER TTM data Sectors") == \
-        "Source: Company, Sektoral Estimates; PER TTM data Sectors"
+        fmt.DEFAULT_SOURCE + "; PER TTM data Sectors"
     assert fmt.house_source_line("Source: Company, Sektoral Estimates") == \
-        "Source: Company, Sektoral Estimates"
+        fmt.DEFAULT_SOURCE
 
 
 def test_header_date_uses_dd_mon_yyyy():

@@ -12,7 +12,7 @@ const DECIDES: Record<number, string> = {
   2: "Kepemilikan minoritas 15–40% mewajibkan silang cek SOTP.",
   3: "Menandai emiten komoditas atau aset yang baru ramp-up.",
   4: "Membaca tahap usaha: tumbuh, matang, atau turnaround.",
-  5: "Potensi di atas +100% atau di bawah −50% menjadi Review Required.",
+  5: "Selisih di atas +100% atau di bawah −50% perlu ditinjau.",
 };
 
 export function GateInstruments({ gates, ticker }: { gates?: GateState[]; ticker?: string }) {
@@ -69,8 +69,8 @@ export function MethodChain({ item, chain }: { item?: ReportItem; chain?: ChainS
           {[
             ["Metode utama", "dari gerbang, misalnya DCF atau DDM."],
             ["Fallback", "hanya bila metode sebelumnya tidak memadai, bukan karena hasilnya tidak disukai."],
-            ["Silang cek", "wajib: PER peer, P/S, atau SOTP, dengan alasan tercatat. Hanya metode terpilih yang menetapkan target harga; silang cek tidak pernah dirata-rata."],
-            ["Rating ditahan", "bila tidak ada metode yang lolos."],
+            ["Silang cek", "wajib: PER peer, P/S, atau SOTP, dengan alasan tercatat. Hanya metode terpilih yang menetapkan nilai model; silang cek tidak pernah dirata-rata."],
+            ["Nilai model ditahan", "bila tidak ada metode yang lolos."],
           ].map(([term, body], i) => (
             <li key={term} className="grid grid-cols-[28px_minmax(0,1fr)] gap-x-3 border-t border-rule py-3.5">
               <span aria-hidden className="font-mono text-[13px] leading-6 font-semibold text-brand-ink">{i + 1}</span>

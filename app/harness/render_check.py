@@ -17,20 +17,22 @@ import re
 from datetime import date
 from html.parser import HTMLParser
 
+from app.fmt import DEFAULT_SOURCE  # noqa: E402
+
 BLOCKER, WARNING = "blocker", "warning"
 PASS, FAIL, NA = "lolos", "gagal", "tidak_berlaku"
-HOUSE_SOURCE = "Source: Company, Sektoral Estimates"
+HOUSE_SOURCE = DEFAULT_SOURCE
 DISCLOSURE = "See important disclosure at the back of this report"
 
 RENDER_CHECKS: dict[str, tuple[str, str, str]] = {
-    "T1.source_line": (BLOCKER, "layout", "source line tepat 'Source: Company, Sektoral Estimates' di bawah tiap exhibit"),
+    "T1.source_line": (BLOCKER, "layout", "source line memberi kredit Sectors dan Sektoral di bawah tiap exhibit"),
     "T1.numbering_rendered": (BLOCKER, "layout", "caption Exhibit N berurutan 1..N"),
     "T1.exhibit_label_rendered": (WARNING, "layout", "setiap objek punya caption 'Exhibit N. judul'"),
     "T1.nm_note_rendered": (BLOCKER, "layout", "tabel dengan sel n.m. mencetak alasannya di bawah source line"),
     "T1.source_appendix": (WARNING, "layout", "lampiran sumber di akhir laporan untuk tiap exhibit"),
-    "T1.header": (WARNING, "layout", "header 'KODE IJ | RATING · TP', 'Equity Research - Company Update | DD Mon YYYY', logo"),
+    "T1.header": (WARNING, "layout", "header kode emiten dan nilai model, tipe laporan, tanggal, logo"),
     "T1.footer": (WARNING, "layout", "footer 'sectors.app', disclosure, nomor halaman"),
-    "T2.price_box_rendered": (WARNING, "layout", "kotak harga: harga, TP, upside bertanda satu desimal"),
+    "T2.price_box_rendered": (WARNING, "layout", "kotak harga: harga, nilai model, selisih bertanda satu desimal"),
     "T2.relative_chart_rendered": (WARNING, "layout", "chart relatif IHSG 12-24 bulan, label bulan"),
     "T2.analyst_block": (WARNING, "layout", "blok analis 'Equity Analyst'"),
     "T2.company_header": (WARNING, "layout", "nama emiten + (TICKER IJ)"),
@@ -363,7 +365,7 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
     if not caps:
         r.add("T1.source_line", False, "tidak ada exhibit berlabel")
     else:
-        r.add("T1.source_line", not bad, f"{len(caps)} exhibit dengan '{HOUSE_SOURCE}'" if not bad
+        r.add("T1.source_line", not bad, f"{len(caps)} exhibit dengan atribusi Sectors dan Sektoral" if not bad
               else f"{len(bad)} exhibit: {_short(bad)}")
     bad = _labels(lines)
     r.add("T1.exhibit_label_rendered", not bad, "setiap objek berlabel" if not bad else _short(bad))
@@ -435,16 +437,16 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
 
     # Price box.
     released = bool(meta.get("rating")) and meta.get("tp") is not None
-    up_line = next((line for line in lines if re.search(r"upside|downside", line, re.I)
+    up_line = next((line for line in lines if re.search(r"upside|downside|selisih dari harga", line, re.I)
                     and re.search(r"\(%\)|%", line)), None)
     if not released:
-        r.na("T2.price_box_rendered", "tanpa TP terbit")
+        r.na("T2.price_box_rendered", "tanpa nilai model terbit")
     else:
         problems = []
         if not any(re.search(r"harga terakhir|last price", line, re.I) for line in lines):
             problems.append("tanpa baris harga terakhir")
-        if not any(re.search(r"target harga|target price", line, re.I) for line in lines):
-            problems.append("tanpa baris target harga")
+        if not any(re.search(r"nilai model per saham", line, re.I) for line in lines):
+            problems.append("tanpa baris nilai model per saham")
         m = re.search(r"([+\-−]?\d[\d.]*(?:,(\d+))?)\s*%\s*$", up_line or "")
         if not m:
             problems.append("upside tidak terbaca")
@@ -560,7 +562,7 @@ def check_pdf_text(pages: list[str], doc: dict | None = None) -> dict:
         r.add("T1.source_line.pdf", False, "tidak ada exhibit berlabel di PDF")
     else:
         problems = bad or ([f"source line lain: {_short(stray, 3)}"] if stray else [])
-        r.add("T1.source_line.pdf", not problems, f"{len(caps)} exhibit dengan '{HOUSE_SOURCE}'"
+        r.add("T1.source_line.pdf", not problems, f"{len(caps)} exhibit dengan atribusi Sectors dan Sektoral"
               if not problems else f"{len(problems)} temuan: {_short(problems)}")
     head_bad, foot_bad = [], []
     for i, page in enumerate(pages, 1):

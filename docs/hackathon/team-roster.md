@@ -35,12 +35,12 @@ If you want collaborators, post to:
 
 Or use `gh api` to invite a GitHub collaborator to this repo:
 ```bash
-gh api -X PUT repos/mrayhanfadil/sectors-hackathon/collaborators/<username>
+gh api -X PUT repos/mrayhanfadil/sektoral/collaborators/<username>
 ```
 
 ## Escalation rule
 
-If a teammate is ⚪ on onboarding for >3 days before the registration deadline (22 Sep 2026 23:59 WIB), **drop them from the team** and proceed solo or with whoever has onboarded. Rules §03 + §04 are strict: any non-onboarded member can disqualify the entire submission.
+The registration deadline is 7 Oct 2026 23:59 WIB. Verify every listed participant's onboarding in the hackathon portal before that deadline; do not infer or mark a participant complete without portal evidence. Rules §03 + §04 make onboarding an eligibility requirement.
 
 ## When this file becomes the roster for the submission portal
 
