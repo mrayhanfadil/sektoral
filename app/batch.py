@@ -7,6 +7,11 @@ ticker already runs two LLM subagents at once, so --jobs 2 means about four
 concurrent LLM calls.
 
     python -m app.batch JPFA GMFI INET --jobs 2 --out out/batch --pdf
+    python -m app.batch JPFA GMFI --as-of 2026-09-24 --refresh-data   # refresh inputs first
+
+``--refresh-data`` runs ``app.refresh`` for these tickers before the research
+runs (FX, copper and gold, closing prices, peer snapshots); a failed step is
+reported and the runs use the data already stored.
 """
 from __future__ import annotations
 
@@ -72,8 +77,14 @@ def main(argv=None):
     parser.add_argument("--refresh-assumptions", action="store_true")
     parser.add_argument("--method", default="auto")
     parser.add_argument("--timeout", type=int, default=1800, help="seconds per ticker")
+    parser.add_argument("--refresh-data", action="store_true",
+                        help="refresh FX, commodity, closing-price and peer data first")
     args = parser.parse_args(argv)
     Path(args.out).mkdir(parents=True, exist_ok=True)
+    if args.refresh_data:
+        from app import refresh
+        refresh.run(args.tickers, args.as_of, log=lambda line: print(f"refresh {line}",
+                                                                     flush=True))
     rows = []
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         futures = {pool.submit(run_one, t.upper(), args): t for t in args.tickers}

@@ -34,7 +34,7 @@ npm --prefix web ci && npm --prefix web run build
 
 For frontend work, run `npm --prefix web run dev` next to the server; Vite serves the app on port 5173 and proxies `/api` and `/files` to it.
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten**, enter a ticker, and select **Mulai riset**. Follow the status page, then open **Buka company update** or **Lihat jejak agent** when the run finishes. If evidence is incomplete, the UI says the analysis is partial. The server binds to localhost by default (the Docker port is published on localhost only). The agent needs network access to its configured LLM endpoint, but market data comes only from the local Sectors cache. The BBCA CLI and browser workflows have been end-to-end tested on this working checkout; rerun QA on the frozen submission checkout before recording or submitting.
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten**, enter a ticker, and select **Mulai riset**. Follow the status page, then open **Buka company update** or **Lihat jejak agent** when the run finishes. If evidence is incomplete, the UI says the analysis is partial. The server binds to localhost by default (the Docker port is published on localhost only). The agent needs network access to its configured LLM endpoint. Report builds do not fetch market data: they read the local Sectors cache and the dated snapshots that `app.refresh` stores (below). The BBCA CLI and browser workflows have been end-to-end tested on this working checkout; rerun QA on the frozen submission checkout before recording or submitting.
 
 **Report gallery.** `/laporan` lists every finished company update in a reports folder (rating, target, method, status, cover thumbnail, PDF, web version and audit trace), and the landing page features one real report with its method chain. Fill the folder with a batch run, then point the server at it; add `--pdf` so runs started in the browser also produce a PDF and appear in the gallery when they finish. In Docker the gallery reads `out/reports`, so a batch run there shows up without flags:
 
@@ -42,6 +42,16 @@ Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten*
 python3 -m app.batch BBCA BBRI AMMN SSIA INET POWR JPFA GMFI --jobs 2 --out out/reports --pdf
 .venv/bin/python -m app.server --reports out/reports --pdf
 ```
+
+**Refresh market data before a run.** Beside the Sectors cache, reports read four dated inputs: the USD/IDR close, copper and gold prices (used when the Sectors series is more than 45 days old), each ticker's closing prices in `data/market_quotes/`, and peer snapshots for the curated peer groups in `data/peer_groups/`. One command refreshes all of them from Yahoo Finance (network and `yfinance` required). Pass the report date and the tickers, or add `--refresh-data` to a batch run:
+
+```bash
+.venv/bin/python -m app.refresh --as-of 2026-09-24 BBCA BBRI AMMN SSIA INET POWR JPFA GMFI
+.venv/bin/python -m app.refresh --as-of 2026-09-24 AMMN --only commodity peers
+python3 -m app.batch BBCA AMMN --as-of 2026-09-24 --out out/reports --refresh-data
+```
+
+A step that fails is reported and the others still run; a report built on a stale input says so. Review the rewritten `data/market_quotes/*.json` before committing them. The single steps remain available as `python -m app.commodity`, `python -m app.market_quote`, `python -m app.peer_fundamentals --group <T>` and `python3 scripts/refresh_usd_idr.py`.
 
 For a terminal-only run, use the one-command CLI below. It writes the HTML report and trace to `out/demo/`; `--pdf` is optional and requires PDF support. Omit it to use HTML only.
 
@@ -57,9 +67,9 @@ For an internal mining draft with the historical extrapolation and valuation scr
 
 To opt into the validated FY scenario as a formal target and rating, use `--analyst-target`, for example `python3 -m app.research AMMN --out out/AMMN-formal --pdf --as-of 2026-09-24 --analyst-target`. This route requires a validated forecast agent scenario, an official interim release, a fresh post-release close and FX quote, an official balance-sheet bridge, and 6x/8x/10x sensitivity. The selected 8x multiple is an analyst assumption; the PDF discloses missing LoM/SOTP and the trace preserves its original blockers. A separate out-year agent pass supplies bounded FY+1 to FY+4 growth and margin assumptions; the deterministic engine calculates earnings from them and labels the results as analyst scenarios, not physical LoM forecasts.
 
-A validated forecast plan is stored in the app database under a fingerprint of its evidence: the official release, dated headlines, spec version and model. Rerunning a ticker on the same evidence reuses the plan, so the target price does not drift between LLM calls; new evidence triggers a fresh agent pass, and `--refresh-assumptions` forces one. The formal route needs a dated USD/IDR quote in `data/fx_usdidr.json`; refresh it with `python3 scripts/refresh_usd_idr.py` (requires `yfinance`).
+A validated forecast plan is stored in the app database under a fingerprint of its evidence: the official release, dated headlines, spec version and model. Rerunning a ticker on the same evidence reuses the plan, so the target price does not drift between LLM calls; new evidence triggers a fresh agent pass, and `--refresh-assumptions` forces one. The formal route needs a USD/IDR close dated within seven days of the report date, stored in the app database; `app.refresh` updates it.
 
-Every report also carries sections built directly from the local Sectors snapshot (`app/report_extras.py`): commodity prices and the Sectors sub-sector report, the Sectors peer table with P/E and P/B cross-checks, major shareholders and foreign flow, and multi-year income statement, balance sheet and ratios. Mining targets add a commodity-price x USD/IDR sensitivity recomputed through EBITDA, net profit and the target, and a table of interim output against full-year guidance. Pages follow the spec order and exhibits are numbered in reading order.
+Every report also carries sections built directly from the local Sectors snapshot (`app/report_extras.py`): commodity prices and the Sectors sub-sector report, a peer table with P/E and P/B cross-checks (the curated group in `data/peer_groups/` when the issuer has one, with the reason for each peer, else the Sectors peer table), major shareholders and foreign flow, and multi-year income statement, balance sheet and ratios. Mining targets add a commodity-price x USD/IDR sensitivity recomputed through EBITDA, net profit and the target, and a table of interim output against full-year guidance. Pages follow the spec order and exhibits are numbered in reading order.
 
 ## Evidence and draft policy
 
