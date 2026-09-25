@@ -150,12 +150,12 @@ class TestSourceCitationProvenanceGuards:
     """
 
     def test_default_source_citation_constant(self):
-        assert fmt.DEFAULT_SOURCE == "Source: Company, Sektoral Estimates"
+        assert fmt.DEFAULT_SOURCE == "Source: Sectors (market and financial data), issuer disclosures; Sektoral analysis and estimates."
 
     def test_source_citation_empty_defaults_to_house_standard(self):
-        assert fmt.source_citation("") == "Source: Company, Sektoral Estimates"
-        assert fmt.source_citation("   ") == "Source: Company, Sektoral Estimates"
-        assert fmt.source_citation(None) == "Source: Company, Sektoral Estimates"
+        assert fmt.source_citation("") == fmt.DEFAULT_SOURCE
+        assert fmt.source_citation("   ") == fmt.DEFAULT_SOURCE
+        assert fmt.source_citation(None) == fmt.DEFAULT_SOURCE
 
     def test_source_citation_normalizes_missing_source_prefix(self):
         res = fmt.source_citation("Company, Sektoral Estimates")

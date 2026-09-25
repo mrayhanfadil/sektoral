@@ -8,10 +8,11 @@ database under the report's folder and ticker (``app.outputs`` keys) and in
 the report's Audit Trace (``assumption_review``); it names the reviewer, the
 time, the plan fingerprint it approved and every change.
 
-An approval is tied to the plan's fingerprint (``plan_sha``). A new run
-replaces the plan, so its report is a draft again until someone reviews it.
-Edits rebuild the report offline on the edited plan (``app.rebuild``, no
-agent call); the approval then covers the rebuilt plan.
+An approval is tied to the Forecast Plan and the published result fingerprint
+(``review_sha``), including report status, model scenario label and per-share
+value. A new run or a changed published value needs a fresh analyst review.
+Edits rebuild the report offline on the edited plan (``app.rebuild``, no agent
+call); the approval then covers the rebuilt result.
 
     python -m app.assumption_review status --folder out/reports [TICKERS...]
     python -m app.assumption_review approve --folder out/reports --reviewer "Nama" \\
@@ -70,6 +71,16 @@ def plan_sha(plan) -> str | None:
                                      default=str).encode()).hexdigest()
 
 
+def review_sha(plan, report) -> str | None:
+    """Fingerprint the approved plan together with the result it publishes."""
+    sha = plan_sha(plan)
+    if sha is None or not isinstance(report, dict):
+        return None
+    payload = {"plan_sha": sha, "published_result": _verdict(report)}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False,
+                                     default=str).encode()).hexdigest()
+
+
 def report_plan(trace) -> dict | None:
     """The plan the report was built on, as ``app.rebuild.build_inputs`` reads it."""
     fa = (trace or {}).get("forecast_assumptions")
@@ -124,14 +135,18 @@ def record(folder, ticker, db=None) -> dict | None:
 
 
 def status(folder, ticker, db=None) -> dict:
-    """{"state": "approved" | "pending" | "no_plan", "plan_sha", "record"}."""
+    """Review state, keyed to both plan and published value/rating."""
     trace = outputs.load(outputs.TRACE, folder, ticker, db)
-    sha = plan_sha(report_plan(trace))
-    if sha is None:
+    plan = report_plan(trace)
+    sha = plan_sha(plan)
+    doc = outputs.load(outputs.REPORT, folder, ticker, db)
+    fingerprint = review_sha(plan, doc)
+    if sha is None or fingerprint is None:
         return {"state": "no_plan", "plan_sha": None, "record": None}
     rec = record(folder, ticker, db)
-    approved = bool(rec and rec.get("plan_sha") == sha)
+    approved = bool(rec and rec.get("review_sha") == fingerprint)
     return {"state": "approved" if approved else "pending", "plan_sha": sha,
+            "review_sha": fingerprint,
             "record": rec if approved else None,
             "stale_record": rec if rec and not approved else None}
 
@@ -204,6 +219,7 @@ def approve(folder, ticker, reviewer, note="", edits=None, *, db=None, want_pdf=
         doc = outputs.load(outputs.REPORT, folder, t, db)
         trace = outputs.load(outputs.TRACE, folder, t, db)
     rec["plan_sha"] = plan_sha(report_plan(trace))
+    rec["review_sha"] = review_sha(report_plan(trace), doc)
     rec["after"] = _verdict(doc)
     rec["history"] = history(record(folder, t, db))
     store.put(COLLECTION, _key(folder, t), rec, db)

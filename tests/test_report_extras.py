@@ -50,9 +50,8 @@ def test_cover_shows_two_actual_three_forecast_periods_and_market_data(tmp_path)
 def test_catalysts_carry_timing_driver_and_direction(tmp_path):
     doc = _doc(tmp_path)
     table = next(e for e in doc["exhibits"] if e["judul"] == "Katalis, risiko, dan indikator pemantauan")
-    assert table["data"]["cols"] == ["Katalis / risiko", "Waktu dan bukti",
-                                     "Driver dan jalur dampak", "Arah"]
-    assert all(row[3] for row in table["data"]["rows"])
+    assert table["data"]["cols"] == ["Tema", "Bukti terkini", "Implikasi yang diuji"]
+    assert all(all(cell for cell in row) for row in table["data"]["rows"])
     assert not any("Penjualan Penjualan" in cell for row in table["data"]["rows"] for cell in row)
 
 
@@ -85,6 +84,7 @@ def test_assumption_headline_is_a_short_forward_thesis():
         headline = narrative._assumption_headline(rating, "FY26F")
         assert len(headline.split()) <= 10
         assert not re.search(r"\d+x", headline)
+        assert not re.search(r"buy|hold|sell|harga|ruang naik|nilai wajar", headline, re.I)
 
 
 def test_negative_figures_render_in_brackets_and_header_repeats_on_pages():
@@ -95,8 +95,8 @@ def test_negative_figures_render_in_brackets_and_header_repeats_on_pages():
     assert "(30,7%)" in html and "2026-06-30" in html
     css = render._running_header({"ticker": "AMMN", "rating": "Sell", "tp": 3910,
                                   "tanggal": "2026-09-24"})
-    # Figma running header: code, rating and TP over the report type and date.
-    assert ('@top-left{content:"AMMN IJ | SELL · TP Rp 3.910" \'\\A \' '
+    # Header labels the informational model value without an action rating.
+    assert ('@top-left{content:"AMMN IJ | NILAI MODEL Rp 3.910" \'\\A \' '
             '"Equity Research - Company Update | 24 Sep 2026"') in css
     assert "@page:first" in css
 
@@ -116,6 +116,43 @@ def test_draft_report_carries_quantified_fallback_risks(tmp_path):
     page = next(p for p in doc["bagian"] if p["judul"] == "Katalis, risiko, dan kepemilikan")
     assert page["risks"] == doc["risks"]
     assert "Risiko utama:" in doc["cover"]["paragraf"][-1]["isi"]
+
+
+def test_non_distributable_report_withholds_candidate_value_everywhere():
+    chart = {"judul": "Harga vs IHSG", "tipe": "price_chart", "n": 1}
+    key_financials = {"judul": "Key Financials", "tipe": "tabel", "n": 2}
+    value = {"judul": "Nilai terminal dan nilai wajar per saham (DDM)",
+             "data": {"rows": [["Nilai wajar per saham", "Rp1.234"]]}}
+    doc = {
+        "meta": {"status": "draft_non_distributable"},
+        "cover": {"bullets": ["Bisnis", "Hasil", "Nilai model Rp1.234 per saham"],
+                  "paragraf": [{"judul": "Target harga berbasis DDM",
+                                "isi": "Nilai model Rp1.234 memakai DDM."}]},
+        "bagian": [{"halaman": 4, "judul": "Target harga berbasis DDM",
+                    "paragraf": ["Nilai model Rp1.234."], "exhibit": [value]},
+                   {"halaman": 5, "judul": "Operasi dan posisi keuangan",
+                    "paragraf": ["Pendapatan tumbuh."], "exhibit": []}],
+        "exhibits": [chart, key_financials, value], "method": "DDM"}
+
+    X.drop_screening_values(doc)
+
+    assert all("1.234" not in str(part) for part in
+               (doc["cover"], doc["bagian"], doc["exhibits"]))
+    assert doc["cover"]["bullets"][-1].startswith("Nilai per saham")
+    assert [page["judul"] for page in doc["bagian"]] == [
+        "Nilai model ditahan", "Operasi dan posisi keuangan"]
+    assert [ex["judul"] for ex in doc["exhibits"]] == ["Harga vs IHSG", "Key Financials"]
+
+
+def test_client_copy_uses_informational_value_language():
+    copied = narrative.client_copy({
+        "paragraph": "Kami menetapkan target Rp1.234. Target ini mengimplikasikan 8% growth. "
+                     "Pada target harga, PER menjadi 10x."})
+    text = copied["paragraph"]
+    assert "Kami menetapkan target" not in text
+    assert "Target ini mengimplikasikan" not in text
+    assert "Pada target harga" not in text
+    assert "Nilai model Rp1.234" in text
 
 
 def test_published_report_without_risks_is_blocked():
@@ -328,6 +365,7 @@ def test_chart_rows_carry_the_five_year_scenario():
 def test_scenario_statements_fill_three_forecast_years_from_the_model(tmp_path):
     doc = _scenario_doc("JPFA", tmp_path)
     assert doc["meta"]["status"] == "distributable_assumption_led"
+    assert doc["meta"]["tp"]
     key_fin = _table(doc, "Key Financials")
     assert key_fin["data"]["cols"][1:] == DISPLAY
     assert [r[0] for r in key_fin["data"]["rows"]] == KF_ROWS
@@ -376,7 +414,9 @@ def test_scenario_statements_fill_three_forecast_years_from_the_model(tmp_path):
 
 def test_bank_scenario_drops_ebitda_and_shows_ddm_lines(tmp_path):
     doc = _scenario_doc("BBRI", tmp_path)
-    assert doc["meta"]["status"] == "distributable_assumption_led"
+    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert doc["log_gate"]["release"]["status"] == "distributable_assumption_led"
+    assert "tp" not in doc["meta"]
     key_fin = _table(doc, "Key Financials")
     assert [r[0] for r in key_fin["data"]["rows"]] == KF_BANK_ROWS
     assert not set(_cells(key_fin)) & {"NA", "", "-"}
@@ -390,6 +430,11 @@ def test_bank_scenario_drops_ebitda_and_shows_ddm_lines(tmp_path):
     net = _row(income, "Laba bersih")
     assert all(net[c] != "n.m." for c in DISPLAY)
     assert "Skenario laba bank tidak memodelkan" in income["catatan_sumber"]
+    scenario_copy = doc["cover"]["paragraf"][1]["isi"].lower()
+    assert "rasio dividen/harga indikatif" in scenario_copy
+    assert not any(phrase in scenario_copy for phrase in (
+        "harga sudah memasukkan", "memasukkan sebagian besar aliran dividen",
+        "pasar belum memasukkan"))
     cash = _table(doc, "Arus kas")
     assert "Belanja modal" not in [r[0] for r in cash["data"]["rows"]]
     assert all(_row(cash, "Dividen dibayar")[c] != "n.m." for c in DISPLAY[2:])

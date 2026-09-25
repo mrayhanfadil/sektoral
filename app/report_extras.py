@@ -557,16 +557,14 @@ def peer_industry_page(intake):
            "sangat kecil." if any(row[2] == "n.m." for row in table) else ""))
     paragraphs = []
     if peer_change is not None and own.get("mcap_change_1y") is not None:
-        gap = own["mcap_change_1y"] - peer_change
-        verdict = ("mengungguli" if gap > 0.05 else "tertinggal dari" if gap < -0.05
-                   else "sejalan dengan")
         paragraphs.append(
             f"Sub-sektor {group} berisi {len(others)} peer dengan kapitalisasi total "
             f"Rp{fmt._id(total_cap / 1e12, 1)} triliun; kapitalisasi pasar peer "
             f"{'naik' if peer_change >= 0 else 'turun'} {fmt.pct(abs(peer_change))} dalam setahun "
-            f"(tertimbang kapitalisasi). {ticker} {verdict} peer: kapitalisasinya "
+            f"(tertimbang kapitalisasi). Kapitalisasi pasar {ticker} "
             f"{'naik' if own['mcap_change_1y'] >= 0 else 'turun'} "
-            f"{fmt.pct(abs(own['mcap_change_1y']))}.")
+            f"{fmt.pct(abs(own['mcap_change_1y']))}; perubahan ini juga dipengaruhi "
+            "perubahan jumlah saham dan tidak mengukur imbal hasil harga saham.")
     if own.get("roe") is not None and stats["roe"][0] is not None:
         paragraphs.append(
             f"ROE {ticker} {fmt.pct(own['roe'])} dibanding median peer {fmt.pct(stats['roe'][0])}, "
@@ -2033,8 +2031,8 @@ def drop_screening_values(doc):
     """Remove screening fair values a reader could take for the target.
 
     A draft withholds its target (unless it was built as an illustrative
-    internal draft), so it must not print a per-share value elsewhere; and when
-    a scenario DDM sets the target, a second screening DDM grid with another
+    internal draft), so it must not print its candidate valuation elsewhere.
+    When a scenario DDM sets the value, a second screening DDM grid with another
     base value only contradicts it. Runs after the harness has fixed the
     release status, then renumbers exhibits.
     """
@@ -2043,6 +2041,76 @@ def drop_screening_values(doc):
     scenario_ddm = str(doc.get("method") or "").startswith("DDM dividen skenario")
     if not (draft or scenario_ddm):
         return
+
+    if draft:
+        withheld = "Nilai per saham dan sensitivitas valuasi ditahan sampai tinjauan analis selesai."
+        cover = doc.get("cover") or {}
+        for index, bullet in enumerate(cover.get("bullets") or []):
+            if isinstance(bullet, str) and re.search(
+                    r"(?:menetapkan target|target harga|target Rp|nilai model Rp)",
+                    bullet, flags=re.I):
+                cover["bullets"][index] = withheld
+        for paragraph in cover.get("paragraf") or []:
+            if not isinstance(paragraph, dict):
+                continue
+            text = " ".join(str(paragraph.get(key) or "") for key in ("judul", "isi"))
+            if re.search(r"(?:menetapkan target|target harga|target Rp|nilai model Rp)",
+                         text, flags=re.I):
+                paragraph["judul"], paragraph["isi"] = "Status nilai model", withheld
+
+        valuation_titles = ("target harga", "nilai model berbasis", "valuasi dan kelengkapan",
+                            "cross-check dan bukti lanjutan", "skenario nilai")
+        input_exhibits = {
+            "kelengkapan sebelum rilis",
+            "pemeriksaan model sebelum rilis",
+            "bukti lanjutan untuk menguji nilai model",
+            "input sotp yang belum lengkap",
+            "komponen cost of equity",
+            "proyeksi dividen",
+        }
+        for page in doc.get("bagian") or []:
+            title = str(page.get("judul") or "").strip().lower()
+            if any(title.startswith(prefix) for prefix in valuation_titles):
+                if title.startswith(("target harga", "nilai model berbasis", "skenario nilai")):
+                    page["judul"] = "Nilai model ditahan"
+                page["paragraf"] = [withheld]
+                page["exhibit"] = [exhibit for exhibit in page.get("exhibit") or []
+                                   if (str(exhibit.get("judul") or "").lower()
+                                       in input_exhibits or
+                                       str(exhibit.get("judul") or "").lower().startswith(
+                                           "proyeksi dividen"))]
+
+        # A method-chain table may sit outside the valuation page. Keep the
+        # gate evidence, but never leave its selected per-share value or an
+        # engine-side "issued" statement visible in a final draft.
+        exhibits = list(doc.get("exhibits") or []) + [
+            exhibit for page in doc.get("bagian") or []
+            for exhibit in page.get("exhibit") or []]
+        for exhibit in exhibits:
+            if not str(exhibit.get("judul") or "").lower().startswith("rantai metode"):
+                continue
+            data = exhibit.get("data") or {}
+            cols = data.get("cols") or []
+            value_columns = [i for i, col in enumerate(cols)
+                             if re.search(r"(?:nilai|harga|target).*(?:saham|share)|"
+                                          r"(?:saham|share).*(?:nilai|harga|target)",
+                                          str(col), re.I)]
+            for row in data.get("rows") or []:
+                if not isinstance(row, list) or not row:
+                    continue
+                label = str(row[0]).strip().lower()
+                if label.startswith("keputusan rilis") and len(row) > 1:
+                    row[1] = "Nilai model ditahan sampai seluruh pemeriksaan selesai."
+                if re.search(r"nilai (?:wajar|model) per saham|nilai per saham|target harga", label):
+                    for index in range(1, len(row)):
+                        row[index] = "Ditahan"
+                for index in value_columns:
+                    if index < len(row):
+                        row[index] = "Ditahan"
+
+        for key in ("rating", "tp", "upside_persen", "tp_sebelumnya"):
+            meta.pop(key, None)
+
     keep = lambda e: e.get("judul") not in SCREENING_GRIDS
     doc["exhibits"] = [e for e in doc["exhibits"] if keep(e)]
     for page in doc.get("bagian") or []:
@@ -2576,7 +2644,10 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
     hist_rev = [a.get("revenue") for a in history[-5:]]
     hist_cagr = cagr(hist_rev)
     fc_rev = rev_bars[n_act:]
-    fc_cagr = cagr(rev_bars[n_act - 1:]) if any(num(v) for v in fc_rev) else None
+    # The accompanying label starts at the first forecast year.  Starting the
+    # calculation at the last actual adds an extra year to the denominator and
+    # makes the displayed FY26F-FY28F CAGR describe FY25A-FY28F instead.
+    fc_cagr = cagr(rev_bars[n_act:]) if any(num(v) for v in fc_rev) else None
     years = f"{history[-5:][0].get('year')}-{history[-1].get('year')}"
     move = lambda g: f"{'naik' if g >= 0 else 'turun'} {fmt.pct(abs(g) / 100)}"
     last_g = rev_g[n_act - 1]
@@ -2639,7 +2710,7 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
         text += "."
     else:
         text = "Pertumbuhan laba bersih belum dapat dibandingkan dengan pendapatan."
-    net_cagr = cagr(net_bars[n_act - 1:]) if any(num(v) for v in net_bars[n_act:]) else None
+    net_cagr = cagr(net_bars[n_act:]) if any(num(v) for v in net_bars[n_act:]) else None
     if net_cagr is not None and fc_cagr is not None:
         text += (f" Pada {labels[n_act]}-{labels[-1]} laba bersih tumbuh CAGR {fmt.pct(net_cagr)} "
                  f"dibanding pendapatan {fmt.pct(fc_cagr)}.")
@@ -2731,11 +2802,12 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
         cols = labels if has_fc else labels[:n_act]
         parts = []
         if der[n_act - 1] is not None and roe[n_act - 1] is not None:
-            parts.append(f"DER {labels[n_act - 1]} {fmt.mult(der[n_act - 1])} dengan ROE "
+            parts.append(f"Liabilitas terhadap ekuitas {labels[n_act - 1]} "
+                         f"{fmt.mult(der[n_act - 1])} dengan ROE "
                          f"{fmt.pct(roe[n_act - 1] / 100)}: " +
                          ("pertumbuhan didanai leverage yang meningkat"
                           if der[n_act - 2] and der[n_act - 1] > der[n_act - 2] * 1.1
-                          else "leverage tidak naik material"))
+                          else "rasio tidak naik material"))
         elif any(num(a.get("equity")) is not None and a["equity"] <= 0 for a in sectors_annuals):
             parts.append("Ekuitas aktual sempat negatif, sehingga DER dan ROE aktual tidak "
                          "bermakna")
@@ -3088,7 +3160,9 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if va:
         attach_method_chain(doc, va)
         attach_rate_benchmarks(pages, intake, va)
-        attach_consensus(pages, intake, va)
+        meta = doc.get("meta") or {}
+        released_value = meta.get("tp") if meta.get("rating") else None
+        attach_consensus(pages, intake, va, released_value=released_value)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     slim_mining(doc, intake)
@@ -3101,9 +3175,8 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
 RATE_EXHIBITS = ("Komponen WACC", "Komponen Cost of Equity")
 
 
-def attach_consensus(pages, intake, va):
-    """House target vs the dated analyst consensus (app.consensus), just
-    before the method chain on the target page."""
+def attach_consensus(pages, intake, va, *, released_value=None):
+    """Informational model value vs dated analyst consensus, before method chain."""
     for page in pages:
         exhibits = page.get("exhibit") or []
         at = next((i for i, e in enumerate(exhibits)
@@ -3112,7 +3185,7 @@ def attach_consensus(pages, intake, va):
             continue
         if not any(e.get("judul") == consensus.TITLE for e in exhibits):
             exhibits.insert(at, consensus.exhibit(
-                intake.get("ticker"), intake.get("as_of"), _num((va or {}).get("tp")),
+                intake.get("ticker"), intake.get("as_of"), _num(released_value),
                 (va or {}).get("rating"), _num(intake.get("price"))))
         return
 

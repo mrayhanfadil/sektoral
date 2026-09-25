@@ -730,8 +730,10 @@ def sotp_result(intake, res):
         "source_date": cash_row.get("source_date"), "page": "4-6", "unit": "raw IDR",
         "financial_source_date": actual.get("published_at"),
         "fx_date": cash_row.get("fx_date"), "fx_rate": fx,
-        "basis": (f"PV beban pemasaran, umum dan administrasi 1H26 x2 (US${inp['ga_usd'] / 1e6:.1f} "
-                  f"juta per tahun) sampai {last_year} pada WACC {fmt.pct(inp['discount'])}.")}
+        "basis": (f"PV = jumlah beban pemasaran, umum dan administrasi tahunan yang didiskonto "
+                  f"dari 2026 sampai {last_year}; run-rate memakai 1H26 x2 "
+                  f"(US${inp['ga_usd'] / 1e6:.1f} juta per tahun), pada WACC "
+                  f"{fmt.pct(inp['discount'])}.")}
     result["bridge_evidence"] = evidence
     return result
 

@@ -31,7 +31,9 @@ def test_ammn_publishes_on_the_validated_interim_scenario(tmp_path):
                       assumption_status="validated")
     assert doc["meta"]["status"] == "distributable_assumption_led"
     assert doc["harness"]["blockers"] == []
-    assert doc["meta"]["rating"] in {"Buy", "Hold", "Sell"} and doc["meta"]["tp"]
+    assert doc["meta"]["rating"] in {
+        "Di atas harga pasar", "Setara harga pasar", "Di bawah harga pasar"}
+    assert doc["meta"]["tp"]
     # The branch that raised NameError builds this table from the sales bridge;
     # it is audit detail, kept in the report's audit appendix, not printed.
     audit = {e["judul"] for p in doc.get("lampiran_audit") or [] for e in p["exhibit"]}

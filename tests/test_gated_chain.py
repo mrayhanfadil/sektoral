@@ -189,7 +189,7 @@ def test_draft_cover_never_claims_a_maintained_rating(tmp_path, monkeypatch):
         '{"history": [{"date": "2026-06-01", "rating": "Buy", "tp": 5000}]}')
     doc = build.build("BBRI", tmp_path, as_of="2026-09-24")
     assert doc["meta"]["status"] == "draft_non_distributable"
-    assert doc["meta"]["rating_status"] == "Dalam peninjauan (rating terakhir Buy)"
+    assert doc["meta"]["rating_status"] == "Dalam peninjauan"
 
 
 def test_draft_method_note_uses_chain_label():
@@ -225,17 +225,17 @@ def test_holding_sotp_values_listed_stakes_at_market_and_the_rest_at_book():
     assert MC.holding_sotp([], 5000.0, 10.0)["status"] == "insufficient"
 
 
-def test_ssia_nci_band_runs_holding_sotp_as_cross_check_not_target(tmp_path):
+def test_ssia_nci_band_holds_unreviewed_sotp_value_in_draft(tmp_path):
     from app import build as B
     doc = B.build("SSIA", tmp_path, as_of="2026-09-24")
-    chain = doc["exhibits"]
-    sotp = next(e for e in chain if e["judul"].startswith("Cross-check SOTP holding"))
-    labels = [r[0] for r in sotp["data"]["rows"]]
-    assert labels[0].startswith("PT Nusa Raya Cipta Tbk (NRCA)")
-    assert "Total nilai SOTP" in labels
-    table = next(e for e in chain if e["judul"] == "Rantai metode valuasi")
-    assert any(r[0].startswith("x. ") and "Method Gate 2" in r[3] for r in table["data"]["rows"])
-    assert doc["meta"].get("method") != "Holding SOTP"
+    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert "tp" not in doc["meta"] and "rating" not in doc["meta"]
+    assert not any(e["judul"].startswith("Cross-check SOTP holding")
+                   for e in doc["exhibits"])
+    balance = next(e for e in doc["exhibits"] if e["judul"] == "Posisi neraca interim")
+    rows = {r[0]: r[1] for r in balance["data"]["rows"]}
+    assert rows["Kepentingan nonpengendali (Rp miliar)"] == "2.698,0"
+    assert rows["Saham beredar yang digunakan model (juta)"] == "4.705,2"
 
 
 def test_bank_chain_puts_justified_pbv_before_peer_per():
@@ -439,10 +439,10 @@ def test_inet_and_gmfi_ramping_stage_moves_the_chain_off_dcf(tmp_path, monkeypat
         assert f"{len(peers)}/{len(peers)} peer belum tersedia" in first["reasons"][0]
 
 
-def test_ramping_going_concern_publishes_on_forward_ev_ebitda_peer(tmp_path, monkeypatch):
+def test_ramping_going_concern_withholds_value_when_template_gate_fails(tmp_path, monkeypatch):
     """JPFA under a ramping stage with Sectors peer EV cached (synthetic here):
-    the forward EV/EBITDA peer values the agent's FY EBITDA scenario behind
-    its own gate and sets the target; DCF and PER stay out of the chain."""
+    the release engine selects the forward EV/EBITDA route, while a failed
+    forecast-template check keeps its per-share value out of the draft."""
     import itertools
     from app import build, intake as I
     multiples = itertools.cycle([6.0, 7.0, 8.0, 9.0, 10.0])
@@ -480,26 +480,15 @@ def test_ramping_going_concern_publishes_on_forward_ev_ebitda_peer(tmp_path, mon
                       assumption_status="validated")
     chain = doc["log_gate"]["release"]["method_chain"]
     assert chain == {"selected": "ev_ebitda_peer", "route": "primary"}
-    assert doc["meta"]["status"] == "distributable_assumption_led"
-    assert doc["harness"]["status"] == "distributable_assumption_led"
-    assert doc["meta"]["tp"] and doc["meta"]["rating"] in {"Buy", "Hold", "Sell"}
+    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert doc["log_gate"]["release"]["status"] == "distributable_assumption_led"
+    assert "tp" not in doc["meta"] and "rating" not in doc["meta"]
     assert doc["method"].startswith("FY26F EV/EBITDA median peer x EBITDA skenario analis")
     titles = [e["judul"] for e in doc["exhibits"]]
-    assert "Target harga: EV/EBITDA peer x EBITDA FY26F" in titles
-    assert "Target harga: PER peer x EPS FY26F" not in titles
-    target = next(e for e in doc["exhibits"] if e["judul"].startswith("Target harga: EV/EBITDA"))
-    assert [r[0] for r in target["data"]["rows"]] == ["Kuartil bawah", "Median (basis)", "Kuartil atas"]
-    assert target["catatan_sumber"].startswith(
-        "Sumber: EV/EBITDA terakhir tiap peer (12 bulan terakhir bila tersedia, selain itu FY "
-        "terakhir) dari data Sectors")
-    rows = next(e for e in doc["exhibits"] if e["judul"] == "Rantai metode valuasi")["data"]["rows"]
-    assert rows[0][0] == "1. EV/EBITDA peer (utama)" and rows[0][1] == "Terpilih"
-    assert not any("DCF" in r[0] for r in rows)
-    cover = doc["cover"]["paragraf"][2]
-    assert cover["judul"] == "Target harga berbasis EV/EBITDA peer"
-    assert "EV/EBITDA peer forward" in cover["isi"] and "PER median" not in cover["isi"]
-    page = next(p for p in doc["bagian"] if p["judul"] == "Target harga berbasis EV/EBITDA peer")
-    assert page["exhibit"][1]["judul"] == "Target harga: EV/EBITDA peer x EBITDA FY26F"
+    assert not any("target harga" in title.lower() for title in titles)
+    assert not any("nilai wajar per saham" in str(e).lower() for e in doc["exhibits"])
+    assert doc["cover"]["paragraf"][2]["judul"] == "Status nilai model"
+    assert "ditahan" in doc["cover"]["paragraf"][2]["isi"].lower()
 
 
 # ------------------------------------------- Yahoo Finance peer fallback

@@ -362,7 +362,6 @@ function Outcome({ deck, item, chosen, reduce }: { deck: DeckState; item?: Repor
   const checks = deck.chain.filter((c) => c.decision === "Silang cek").length;
   const release = deck.release;
   const rated = Boolean(release?.rating);
-  const down = (release?.upside ?? "").startsWith("−") || (release?.upside ?? "").startsWith("-");
   const swap = reduce ? {} : { initial: { opacity: 0, y: 6 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0 }, transition: SPRING };
   return (
     <div className="grid min-h-[62px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 border-t border-rule bg-raised px-3.5 py-2.5">
@@ -383,14 +382,14 @@ function Outcome({ deck, item, chosen, reduce }: { deck: DeckState; item?: Repor
       <AnimatePresence mode="wait" initial={false}>
         {rated && release ? (
           <motion.div key="rated" {...swap} className="flex items-center gap-3">
-            {item ? <RatingBadge item={item} /> : <span className="pill">{release.rating}</span>}
+            {item ? <RatingBadge item={item} /> : <span className="pill">Skenario nilai</span>}
             <div className="text-right leading-tight">
-              <p className="m-0 font-mono text-[13.5px] font-semibold text-ink-strong tabular-nums">TP {release.tp}</p>
-              {release.upside && <p className={`m-0 font-mono text-[12px] tabular-nums ${down ? "text-err-ink" : "text-ok-ink"}`}>{release.upside}</p>}
+              <p className="m-0 font-mono text-[13.5px] font-semibold text-ink-strong tabular-nums">Nilai model Rp{release.tp}</p>
+              {release.upside && <p className="m-0 font-mono text-[12px] text-ink-soft tabular-nums">Selisih dari harga {release.upside}</p>}
             </div>
           </motion.div>
         ) : (
-          <motion.span key="wait" {...swap} className="text-[13px] text-ink-faint">Rating belum terbit</motion.span>
+          <motion.span key="wait" {...swap} className="text-[13px] text-ink-faint">Nilai model belum tersedia</motion.span>
         )}
       </AnimatePresence>
     </div>

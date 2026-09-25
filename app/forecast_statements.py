@@ -717,6 +717,12 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 f"sumber {_source(nwc_basis)}; kenaikan modal kerja = intensitas x kenaikan "
                 "pendapatan, sama dengan DCF skenario; persediaan, aset lancar lain dan "
                 "liabilitas lancar non-utang bergerak proporsional.")
+            if nwc_ratio == 0 and any(term in str(nwc_basis or "").lower()
+                                      for term in ("negatif", "tidak tersedia")):
+                nwc_sentence += (
+                    " Basis historis negatif atau tidak tersedia tidak membuktikan kebutuhan "
+                    "modal kerja masa depan tetap nol; arus kas bebas dapat lebih rendah jika "
+                    "pertumbuhan operasi memerlukan modal kerja positif.")
     income_ok = da_list is not None and has_ebitda
     fcff_ok = income_ok and has_capex and dnwc_list is not None
     if income_ok:

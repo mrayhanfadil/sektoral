@@ -7,15 +7,17 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app import render  # noqa: E402
+from app.fmt import DEFAULT_SOURCE  # noqa: E402
 from app.harness import render_check as R  # noqa: E402
 
-SRC = "Source: Company, Sektoral Estimates"
+SRC = DEFAULT_SOURCE
 DOC = {"meta": {"ticker": "TEST", "emiten": "PT Uji Coba Tbk", "tanggal": "2026-09-24",
-                "rating": "Buy", "tp": 1200, "status": "distributable_assumption_led"}}
+                "rating": "Di atas harga pasar", "tp": 1200,
+                "status": "distributable_assumption_led"}}
 CSS = ("@page{@bottom-left{content:'sectors.app'}"
        "@bottom-right{content:'See important disclosure at the back of this report' 'Page ' counter(page)"
        " ' of ' counter(pages)}}"
-       "@page{margin-top:19mm;@top-left{content:\"TEST IJ | BUY · TP Rp 1.200\"}"
+       "@page{margin-top:19mm;@top-left{content:\"TEST IJ | NILAI MODEL Rp 1.200\"}"
        "@top-right{content:\"Equity Research - Company Update | 24 Sep 2026\"}}")
 
 
@@ -29,13 +31,13 @@ def html(**over):
     n = o["numbers"]
     s = o["src"]
     parts = [f"<html><head><style>{o['css']}</style></head><body>",
-             "<div class='report-header'><div class='report-title'>TEST IJ | BUY · TP Rp 1.200</div>"
+             "<div class='report-header'><div class='report-title'>TEST IJ | NILAI MODEL Rp 1.200</div>"
              f"<div class='report-subtitle'>Equity Research - Company Update | {o['date']}</div>"
              + ("<img class='report-wordmark' alt='Sektoral' src='x.png'>" if o["logo"] else "") + "</div>",
              "<div class='cover'><div class='left'>",
              "<div class='rating-row'><span>Harga Terakhir (Rp)</span><b>1.000</b></div>",
-             "<div class='rating-row'><span>Target Harga (Rp)</span><b>1.200</b></div>",
-             f"<div class='rating-row'><span>Upside/Downside (%)</span><b>{o['upside']}</b></div>",
+             "<div class='rating-row'><span>Nilai model per saham (Rp)</span><b>1.200</b></div>",
+             f"<div class='rating-row'><span>Selisih dari harga (%)</span><b>{o['upside']}</b></div>",
              f"<div class='info-title'>Exhibit {n[0]}. TEST relative to IHSG ({o['window']}, Sep-25 - Sep-26)</div>",
              "<svg class='price-chart'><title>akses</title><text>Nov-25</text><text>Jan-26</text>"
              "<text>Mar-26</text></svg>",
@@ -131,7 +133,7 @@ def test_header_date_format_and_weekday():
 
 
 def test_header_needs_the_stock_code():
-    page = html().replace("TEST IJ | BUY · TP Rp 1.200</div>", "BUY · TP Rp 1.200</div>")
+    page = html().replace("TEST IJ | NILAI MODEL Rp 1.200</div>", "NILAI MODEL Rp 1.200</div>")
     assert "TEST IJ" in failed(page)["T1.header"]["message"]
 
 
@@ -170,7 +172,7 @@ def test_negative_numbers_in_brackets():
 
 
 def _pages(src=SRC, footer="sectors.app See important disclosure at the back of this report Page {i} of 2"):
-    head = "TEST IJ | BUY · TP Rp 1.200 Equity Research - Company Update | 24 Sep 2026"
+    head = "TEST IJ | NILAI MODEL Rp 1.200 Equity Research - Company Update | 24 Sep 2026"
     return [f"{footer.format(i=1)}\n{head}\nExhibit 1. TEST relative to IHSG\n{src}\nExhibit 2. Key Financials\n"
             f"Laba bersih 110\n{src}",
             f"{footer.format(i=2)}\n{head}\nExhibit 3. Laba rugi\nPendapatan 1.000\n{src}"]

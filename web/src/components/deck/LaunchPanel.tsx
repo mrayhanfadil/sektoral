@@ -12,7 +12,7 @@ import { IssuerLogo } from "../IssuerLogo";
 import { keepRunToken, launch, readRunToken, useLiveRuns } from "../../lib/launch";
 
 const TICKER = /^[A-Za-z0-9][A-Za-z0-9.-]{0,9}$/;
-const RATING_INK = { buy: "text-ok-ink", hold: "text-ink-strong", sell: "text-err-ink", review: "text-warn-ink" };
+const RATING_INK = { above: "text-ink-strong", below: "text-ink-strong", equal: "text-ink-strong", review: "text-warn-ink" };
 
 export function LaunchPanel() {
   return (
@@ -152,7 +152,7 @@ function StoredRun({ r }: { r: ReportItem }) {
         </span>
         <span className="flex items-baseline gap-2.5 font-mono text-[13px] tabular-nums">
           <span className={`font-semibold ${RATING_INK[ratingTone(r)]}`}>{rating}</span>
-          {r.published && r.tp !== null && <span className="text-ink max-sm:hidden">TP Rp{rp(r.tp)}</span>}
+          {r.published && r.tp !== null && <span className="text-ink max-sm:hidden">Model Rp{rp(r.tp)}</span>}
         </span>
         <Play aria-hidden className="size-3.5 text-ink-faint transition-colors group-hover:text-brand-ink" strokeWidth={2.4} fill="currentColor" />
       </Link>
