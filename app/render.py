@@ -1337,28 +1337,46 @@ def _topbar(report_date):
 
 
 def _display_date(report_date):
-    """Struktur header date, "Hari, DD Bulan YYYY" (Kamis, 24 September 2026)."""
+    """Header date as in the Figma header, "DD Mon YYYY" (24 Sep 2026)."""
     try:
         day = date.fromisoformat(str(report_date)[:10])
     except (TypeError, ValueError):
         return str(report_date)
-    weekdays = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
-    months = ("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli",
-              "Agustus", "September", "Oktober", "November", "Desember")
-    return f"{weekdays[day.weekday()]}, {day.day:02d} {months[day.month - 1]} {day.year}"
+    return f"{day.day:02d} {_MONTHS_ID[day.month - 1]} {day.year}"
+
+
+def _header_title(meta):
+    """Header line 1: stock code, then the rating action and target price.
+
+    A draft or an analysis without a released rating shows its status instead
+    of a TP, so an unreviewed number never reaches the running header.
+    """
+    meta = meta or {}
+    code = f"{meta.get('ticker', '')} IJ".strip()
+    if meta.get("status") == "draft_non_distributable":
+        return f"{code} | DRAFT"
+    rating = meta.get("rating")
+    if not rating:
+        return code
+    if meta.get("tp") is None:
+        return f"{code} | {str(rating).upper()}"
+    return f"{code} | {str(rating).upper()} \u00b7 TP Rp {fmt.rp(meta['tp'])}"
+
+
+def _header_subtitle(report_date):
+    """Header line 2: report type and publication date. (Hyphen, not an en
+    dash: rendered text carries no U+2013, see clean_dashes.)"""
+    return f"Equity Research - Company Update | {_display_date(report_date)}"
 
 
 def _report_header(report_date, meta=None):
-    """Report header: Figma type styles, Struktur-Template content."""
-    display_date = _display_date(report_date)
-
-    # Struktur-Template header: report type top left, the publication date
-    # on the line under it, the logo top right, then the divider. (Hyphen,
-    # not an en dash: rendered text carries no U+2013, see clean_dashes.)
+    """Report header (Figma node 2627:900): stock code, rating and TP in
+    Roboto Black blue; report type and date in Roboto Regular black; the logo
+    top right; the blue-to-lime divider under both."""
     return ("<div class='report-header'>"
             "<div class='report-heading'>"
-            "<div class='report-title'>Equity Research - Company Update</div>"
-            f"<div class='report-subtitle'>{html.escape(display_date)}</div></div>"
+            f"<div class='report-title'>{html.escape(_header_title(meta))}</div>"
+            f"<div class='report-subtitle'>{html.escape(_header_subtitle(report_date))}</div></div>"
             f"<img class='report-wordmark' src='data:image/png;base64,{REPORT_WORDMARK}' "
             "alt='Sektoral'>"
             f"<img class='report-divider' src='data:image/svg+xml;base64,{REPORT_DIVIDER}' "
@@ -1496,14 +1514,14 @@ def _running_header(m):
 
     Section headers live inside each section's HTML, so a section that spills
     onto a second sheet would otherwise print without header or draft label.
-    Struktur-Template content: report type over the date top left, the logo
-    top right. app/pdf.py replaces this with the captured page-1 header; this
+    Figma header content: stock code, rating and TP over the report type and
+    date top left, the logo top right. app/pdf.py replaces this with the captured page-1 header; this
     text form is what browser printing of the HTML shows.
     """
     box = ("font-family:'Roboto',sans-serif;font-size:7.7pt;line-height:1.3;"
            "vertical-align:bottom;padding-bottom:2mm;")
-    left = (f"{_css_string('Equity Research - Company Update')} '\\A ' "
-            f"{_css_string(_display_date(m.get('tanggal')))}")
+    left = (f"{_css_string(_header_title(m))} '\\A ' "
+            f"{_css_string(_header_subtitle(m.get('tanggal')))}")
     # Two-colour rule under the header, as in the design divider: blue, then lime.
     return ("@page{margin-top:19mm;"
             f"@top-left{{content:{left};white-space:pre;font-weight:900;color:{PRIMARY};{box}"
