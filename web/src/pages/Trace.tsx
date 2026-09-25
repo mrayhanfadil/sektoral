@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
 import { api, reportFiles, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
+import { validatorNote } from "../lib/labels";
 import { AGENT, derive, type AgentId, type Status } from "../lib/agents";
 import { LiveMark } from "../components/Mark";
 import {
@@ -157,8 +158,23 @@ function Problems({ title, items }: { title: string; items: string[] }) {
         <p className="flex items-center gap-2 text-[13.5px] font-medium text-warn-ink">
           <TriangleAlert aria-hidden className="size-3.5 flex-none" strokeWidth={2.2} />{title} <span className="data">{items.length}</span>
         </p>
-        <ul className="mt-1.5 grid gap-1 pl-[18px] font-mono text-[12.5px] leading-relaxed break-words text-ink">
-          {items.map((p, i) => <li key={i}>{p}</li>)}
+        <ul className="mt-1.5 grid gap-1.5 pl-[22px] text-[13.5px] leading-relaxed break-words text-ink">
+          {items.map((p, i) => {
+            const { message, removed } = validatorNote(p);
+            return (
+              <li key={i}>
+                {message}{/[.!?]$/.test(message) ? "" : "."}
+                {removed.length > 0 && (
+                  <span className="ml-1 text-ink-soft">
+                    Dihapus dari prosa:{" "}
+                    {removed.map((v, j) => (
+                      <span key={v}>{j > 0 && ", "}<code className="font-mono text-[12.5px] text-ink-strong">{v}</code></span>
+                    ))}
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>
@@ -243,7 +259,7 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
           {item?.chain.length ? <MethodChain chain={item.chain} /> : <span />}
           {counts && (
-            <p className="data text-ink-soft">
+            <p className="text-[13px] text-ink-soft tabular-nums">
               Run {run?.source === "recorded" ? "terekam" : "disusun ulang dari jejak"}: {counts.events} event, {counts.calls} tool call
             </p>
           )}
@@ -348,7 +364,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                 {research.endpoints.map((e) => (
                   <li key={e} id={epId(e)} className="flex scroll-mt-28 items-center justify-between gap-3 rounded-[inherit] px-3 py-2 target:animate-hold">
                     <code className="min-w-0 font-mono text-[13px] break-all text-brand-ink">{e}</code>
-                    <span className="data whitespace-nowrap text-ink-faint">{cited[e] ? `${cited[e]} sitasi` : "dibaca"}</span>
+                    <span className="text-[12.5px] whitespace-nowrap text-ink-faint tabular-nums">{cited[e] ? `${cited[e]} sitasi` : "dibaca"}</span>
                   </li>
                 ))}
               </ul>
@@ -396,7 +412,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
         <AgentGroup agent="berita" status={searched ? "ok" : "warn"}
           chip={<StatusWord status={searched ? "ok" : "idle"}>{searched ? "Pencarian dijalankan" : "Pencarian tidak dijalankan"}</StatusWord>}>
           <Section id="berita" title={LABEL.berita}
-            aside={<span className="data text-ink-soft">{news.articles.length} diterima, {news.rejected_total} ditolak</span>}>
+            aside={<span className="text-[13px] text-ink-soft tabular-nums">{news.articles.length} diterima, {news.rejected_total} ditolak</span>}>
             <p className="text-[14.5px] text-ink-soft">
               Status pencarian: <code className="font-mono text-[13px] text-ink">{news.search.status ?? "tidak dijalankan"}</code>
               {news.search.as_of && <>, per <span className="font-mono text-ink">{news.search.as_of}</span></>}.
@@ -440,7 +456,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                   {news.rejected.map((r, i) => (
                     <li key={i} className="px-3 py-2">
                       {r.title}
-                      {r.reason && <span className="mt-0.5 block font-mono text-[12px] text-ink-soft">{r.reason}</span>}
+                      {r.reason && <span className="mt-0.5 block text-[13px] text-ink-soft">{r.reason}</span>}
                     </li>
                   ))}
                   {news.rejected_total > news.rejected.length && (
@@ -452,7 +468,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
           </Section>
 
           <Section id="deep-dive" title={LABEL["deep-dive"]}
-            aside={trace.deepdive.length > 0 && <span className="data text-ink-soft">{fetched} dari {trace.deepdive.length} teks terbaca</span>}>
+            aside={trace.deepdive.length > 0 && <span className="text-[13px] text-ink-soft tabular-nums">{fetched} dari {trace.deepdive.length} teks terbaca</span>}>
             {trace.deepdive.length ? (
               <div className="grid divide-y divide-rule-soft">
                 {trace.deepdive.map((item, i) => {

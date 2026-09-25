@@ -45,3 +45,23 @@ export function progressStep(state: string, stages: string[]): number {
   if (state === "completed") return 5;
   return stages.reduce((at, stage) => Math.max(at, STEP_OF[stage] ?? 0), 0);
 }
+
+/**
+ * A validator note read for people: the message, and the tokens it asked the
+ * model to remove, cleaned. The analyst validator lists raw prose tokens
+ * ("11,", "2026:"), so stray punctuation is stripped and repeats dropped.
+ */
+export function validatorNote(text: string): { message: string; removed: string[] } {
+  const clean = text.replace(/\s*…$/, "").trim();
+  const m = clean.match(/^(.*?);\s*hapus(?:\s+kata)?:\s*(.*)$/s);
+  const message = (m ? m[1] : clean).trim();
+  // A leading plain word starts a sentence; a leading field name ("hypotheses[0]") stays as written.
+  const sentence = /^[a-z]+(\s|$)/.test(message) ? message.charAt(0).toUpperCase() + message.slice(1) : message;
+  if (!m) return { message: sentence, removed: [] };
+  const removed: string[] = [];
+  for (const raw of m[2].split(/,\s+|\s+/)) {
+    const token = raw.replace(/^[^\p{L}\p{N}+−-]+|[^\p{L}\p{N}%]+$/gu, "");
+    if (token && !removed.includes(token)) removed.push(token);
+  }
+  return { message: sentence, removed };
+}

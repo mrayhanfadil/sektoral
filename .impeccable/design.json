@@ -1,0 +1,1075 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-25T06:03:37+00:00",
+  "title": "Design System: Sectoral",
+  "extensions": {
+    "colorMeta": {
+      "brand": {
+        "role": "primary",
+        "displayName": "Sectoral Blue",
+        "canonical": "#0928B1",
+        "tonalRamp": [
+          "#000035",
+          "#020475",
+          "#0724AD",
+          "#204CD3",
+          "#3C70FA",
+          "#6E9AFE",
+          "#AAC4FB",
+          "#E7EFFF"
+        ]
+      },
+      "brand-hover": {
+        "role": "primary",
+        "displayName": "Sectoral Blue, pressed",
+        "canonical": "#071F8A",
+        "tonalRamp": [
+          "#010036",
+          "#030276",
+          "#11309A",
+          "#2C53BF",
+          "#4975E4",
+          "#739BF6",
+          "#AAC4FB",
+          "#E8EFFD"
+        ]
+      },
+      "brand-ink": {
+        "role": "primary",
+        "displayName": "Blue Ink",
+        "canonical": "#0928B1",
+        "tonalRamp": [
+          "#000035",
+          "#020475",
+          "#0724AD",
+          "#204CD3",
+          "#3C70FA",
+          "#6E9AFE",
+          "#AAC4FB",
+          "#E7EFFF"
+        ]
+      },
+      "brand-50": {
+        "role": "primary",
+        "displayName": "Blue Wash",
+        "canonical": "#F1F4FF",
+        "tonalRamp": [
+          "#090B12",
+          "#22242B",
+          "#3D3F48",
+          "#5B5D66",
+          "#7A7D86",
+          "#9B9EA8",
+          "#C1C4CE",
+          "#EBEEF9"
+        ]
+      },
+      "brand-100": {
+        "role": "primary",
+        "displayName": "Blue Wash, deep",
+        "canonical": "#E0E7FF",
+        "tonalRamp": [
+          "#070A19",
+          "#1E2334",
+          "#3A3F52",
+          "#575D71",
+          "#767C92",
+          "#979EB4",
+          "#BCC3DA",
+          "#E9EEFE"
+        ]
+      },
+      "tint": {
+        "role": "primary",
+        "displayName": "Table Tint",
+        "canonical": "#B4C7FF",
+        "tonalRamp": [
+          "#03042D",
+          "#151F4B",
+          "#2F3C6B",
+          "#4C5B8C",
+          "#6A7BAE",
+          "#8A9CD2",
+          "#AFC2FA",
+          "#E8EEFF"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "#F2F4F9",
+        "tonalRamp": [
+          "#0A0B0E",
+          "#232428",
+          "#3E4044",
+          "#5C5D62",
+          "#7B7D82",
+          "#9C9EA3",
+          "#C2C4C9",
+          "#ECEEF3"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Console White",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#7D7D7D",
+          "#9E9E9E",
+          "#C4C4C4",
+          "#EEEEEE"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Lifted Row",
+        "canonical": "#F7F8FC",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#232427",
+          "#3F4043",
+          "#5D5D61",
+          "#7C7D80",
+          "#9D9EA2",
+          "#C3C4C8",
+          "#EDEEF2"
+        ]
+      },
+      "ink-strong": {
+        "role": "neutral",
+        "displayName": "Ink, strong",
+        "canonical": "#14182A",
+        "tonalRamp": [
+          "#07091A",
+          "#1E2336",
+          "#393F53",
+          "#575D72",
+          "#767C93",
+          "#979DB5",
+          "#BCC3DC",
+          "#E9EEFF"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Brand Charcoal",
+        "canonical": "#333333",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#7D7D7D",
+          "#9E9E9E",
+          "#C4C4C4",
+          "#EEEEEE"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Ink, soft",
+        "canonical": "#565B69",
+        "tonalRamp": [
+          "#070B15",
+          "#1F2430",
+          "#3B3F4D",
+          "#585D6B",
+          "#787D8C",
+          "#989EAE",
+          "#BEC4D4",
+          "#E8EEFF"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Ink, faint",
+        "canonical": "#676D7E",
+        "tonalRamp": [
+          "#070A17",
+          "#1F2332",
+          "#3A3F4F",
+          "#575D6E",
+          "#777D8E",
+          "#989EB0",
+          "#BDC4D7",
+          "#E8EEFE"
+        ]
+      },
+      "rule-soft": {
+        "role": "neutral",
+        "displayName": "Rule, soft",
+        "canonical": "#E6E9F0",
+        "tonalRamp": [
+          "#090B0F",
+          "#222429",
+          "#3D4045",
+          "#5B5E63",
+          "#7A7D83",
+          "#9C9EA5",
+          "#C1C4CB",
+          "#EBEEF5"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Brand Rule Grey",
+        "canonical": "#D9D9D9",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#7D7D7D",
+          "#9E9E9E",
+          "#C4C4C4",
+          "#EEEEEE"
+        ]
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Rule, strong",
+        "canonical": "#B9BDC6",
+        "tonalRamp": [
+          "#090B11",
+          "#21242B",
+          "#3C4047",
+          "#5A5E65",
+          "#7A7D86",
+          "#9A9EA7",
+          "#C0C4CD",
+          "#EAEEF8"
+        ]
+      },
+      "wordmark": {
+        "role": "neutral",
+        "displayName": "Wordmark Black",
+        "canonical": "#000000",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#404040",
+          "#5D5D5D",
+          "#7D7D7D",
+          "#9E9E9E",
+          "#C4C4C4",
+          "#EEEEEE"
+        ]
+      },
+      "teal": {
+        "role": "secondary",
+        "displayName": "E-mark Teal",
+        "canonical": "#1DCD9F",
+        "tonalRamp": [
+          "#000F09",
+          "#012C1F",
+          "#084B39",
+          "#1A6D55",
+          "#259172",
+          "#25B890",
+          "#43E2B3",
+          "#C0FEE6"
+        ]
+      },
+      "live": {
+        "role": "secondary",
+        "displayName": "Live Green",
+        "canonical": "#3ED628",
+        "tonalRamp": [
+          "#011000",
+          "#052D02",
+          "#114E09",
+          "#157204",
+          "#1E9706",
+          "#39BD26",
+          "#54E840",
+          "#CCFFC5"
+        ]
+      },
+      "done": {
+        "role": "secondary",
+        "displayName": "Done Teal",
+        "canonical": "#0B7A5A",
+        "tonalRamp": [
+          "#010F08",
+          "#042B1F",
+          "#024C37",
+          "#126E52",
+          "#30916F",
+          "#56B390",
+          "#7DDAB5",
+          "#C4FEE4"
+        ]
+      },
+      "ok-bg": {
+        "role": "tertiary",
+        "displayName": "Pass Wash",
+        "canonical": "#E6F8F1",
+        "tonalRamp": [
+          "#030E0A",
+          "#1A2723",
+          "#35433E",
+          "#52625C",
+          "#71827B",
+          "#92A39C",
+          "#B7C9C2",
+          "#E1F3EC"
+        ]
+      },
+      "ok-ink": {
+        "role": "tertiary",
+        "displayName": "Pass Ink",
+        "canonical": "#0B6B50",
+        "tonalRamp": [
+          "#010F09",
+          "#042B1F",
+          "#014C37",
+          "#116E53",
+          "#3C8F72",
+          "#60B193",
+          "#86D8B8",
+          "#C3FEE5"
+        ]
+      },
+      "warn-bg": {
+        "role": "tertiary",
+        "displayName": "Caution Wash",
+        "canonical": "#FFF4DB",
+        "tonalRamp": [
+          "#110A00",
+          "#2B230F",
+          "#483F2A",
+          "#665D47",
+          "#867C66",
+          "#A89D86",
+          "#CEC3AB",
+          "#F9EED5"
+        ]
+      },
+      "warn-ink": {
+        "role": "tertiary",
+        "displayName": "Caution Ink",
+        "canonical": "#7A4B00",
+        "tonalRamp": [
+          "#130800",
+          "#341F03",
+          "#5B3600",
+          "#81520D",
+          "#A37235",
+          "#C79357",
+          "#EEB97C",
+          "#FEEBD6"
+        ]
+      },
+      "warn-rule": {
+        "role": "tertiary",
+        "displayName": "Caution Amber",
+        "canonical": "#E3A21A",
+        "tonalRamp": [
+          "#120900",
+          "#322001",
+          "#543A07",
+          "#7C5501",
+          "#A17420",
+          "#CC9321",
+          "#F9B73B",
+          "#FFECCF"
+        ]
+      },
+      "err-bg": {
+        "role": "tertiary",
+        "displayName": "Fault Wash",
+        "canonical": "#FDECEC",
+        "tonalRamp": [
+          "#120808",
+          "#2C2121",
+          "#493C3C",
+          "#685A5A",
+          "#887979",
+          "#AA9A9A",
+          "#D0C0C0",
+          "#FBEAEA"
+        ]
+      },
+      "err-ink": {
+        "role": "tertiary",
+        "displayName": "Fault Red",
+        "canonical": "#9B1C1C",
+        "tonalRamp": [
+          "#1E0101",
+          "#480607",
+          "#7B060C",
+          "#A62825",
+          "#CC4D45",
+          "#F37066",
+          "#FCACA3",
+          "#FFE9E6"
+        ]
+      },
+      "brand-dark": {
+        "role": "primary",
+        "displayName": "Sectoral Blue (dark)",
+        "canonical": "#3552F0",
+        "tonalRamp": [
+          "#020231",
+          "#0C0075",
+          "#1A0DBA",
+          "#2B42E0",
+          "#496DFA",
+          "#7698FF",
+          "#ADC3FB",
+          "#E8EEFF"
+        ]
+      },
+      "brand-hover-dark": {
+        "role": "primary",
+        "displayName": "Sectoral Blue, pressed (dark)",
+        "canonical": "#4A66F6",
+        "tonalRamp": [
+          "#030131",
+          "#0F096E",
+          "#1F1BAF",
+          "#3346D5",
+          "#4E6BFB",
+          "#7C98F7",
+          "#AFC2FB",
+          "#E9EEFD"
+        ]
+      },
+      "brand-ink-dark": {
+        "role": "primary",
+        "displayName": "Blue Ink (dark)",
+        "canonical": "#9DB1FF",
+        "tonalRamp": [
+          "#050131",
+          "#15195A",
+          "#2D387B",
+          "#48579D",
+          "#6678C1",
+          "#8699E5",
+          "#B1C1FB",
+          "#E9EEFF"
+        ]
+      },
+      "brand-50-dark": {
+        "role": "primary",
+        "displayName": "Blue Wash (dark)",
+        "canonical": "#172A68",
+        "tonalRamp": [
+          "#010034",
+          "#0C1C59",
+          "#253A7A",
+          "#415A9C",
+          "#5F7AC0",
+          "#7F9CE4",
+          "#ACC3FA",
+          "#E7EEFF"
+        ]
+      },
+      "brand-100-dark": {
+        "role": "primary",
+        "displayName": "Blue Wash, deep (dark)",
+        "canonical": "#20367F",
+        "tonalRamp": [
+          "#020231",
+          "#0A1860",
+          "#223881",
+          "#3D58A4",
+          "#5B79C8",
+          "#7B9BED",
+          "#ACC3FB",
+          "#E7EEFF"
+        ]
+      },
+      "tint-dark": {
+        "role": "primary",
+        "displayName": "Table Tint (dark)",
+        "canonical": "#2C4190",
+        "tonalRamp": [
+          "#020133",
+          "#0D1563",
+          "#243785",
+          "#3F57A8",
+          "#5C78CC",
+          "#7C9AF1",
+          "#ACC2FE",
+          "#E8EEFE"
+        ]
+      },
+      "canvas-dark": {
+        "role": "neutral",
+        "displayName": "Navy Field (dark)",
+        "canonical": "#0A1640",
+        "tonalRamp": [
+          "#02042D",
+          "#12204B",
+          "#2C3D6B",
+          "#495C8C",
+          "#677CAE",
+          "#889DD2",
+          "#ACC3FA",
+          "#E7EEFF"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Console Navy (dark)",
+        "canonical": "#0D1B4B",
+        "tonalRamp": [
+          "#010230",
+          "#101F4F",
+          "#2A3C70",
+          "#465B91",
+          "#657BB4",
+          "#859DD8",
+          "#ACC3FA",
+          "#E7EEFF"
+        ]
+      },
+      "raised-dark": {
+        "role": "neutral",
+        "displayName": "Lifted Row (dark)",
+        "canonical": "#122258",
+        "tonalRamp": [
+          "#020034",
+          "#0F1E53",
+          "#283C74",
+          "#445B96",
+          "#627BB9",
+          "#829CDD",
+          "#ADC3FA",
+          "#E8EEFE"
+        ]
+      },
+      "ink-strong-dark": {
+        "role": "neutral",
+        "displayName": "Ink, strong (dark)",
+        "canonical": "#F6F8FD",
+        "tonalRamp": [
+          "#0A0B0E",
+          "#232427",
+          "#3E4044",
+          "#5C5D62",
+          "#7B7D82",
+          "#9C9EA3",
+          "#C2C4C9",
+          "#ECEEF3"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Brand Charcoal (dark)",
+        "canonical": "#E6EBF7",
+        "tonalRamp": [
+          "#080B12",
+          "#20242D",
+          "#3C4049",
+          "#595D68",
+          "#797D88",
+          "#9A9EA9",
+          "#BFC4D0",
+          "#E9EEFA"
+        ]
+      },
+      "ink-soft-dark": {
+        "role": "neutral",
+        "displayName": "Ink, soft (dark)",
+        "canonical": "#AEB9D9",
+        "tonalRamp": [
+          "#05091F",
+          "#1B223B",
+          "#363F59",
+          "#535D79",
+          "#727C9A",
+          "#939EBD",
+          "#B8C3E4",
+          "#E8EEFE"
+        ]
+      },
+      "ink-faint-dark": {
+        "role": "neutral",
+        "displayName": "Ink, faint (dark)",
+        "canonical": "#95A2CC",
+        "tonalRamp": [
+          "#040725",
+          "#192142",
+          "#343D61",
+          "#505C82",
+          "#6F7BA3",
+          "#909DC7",
+          "#B5C3EE",
+          "#E9EEFE"
+        ]
+      },
+      "rule-soft-dark": {
+        "role": "neutral",
+        "displayName": "Rule, soft (dark)",
+        "canonical": "#1B2B63",
+        "tonalRamp": [
+          "#020035",
+          "#101D54",
+          "#293B75",
+          "#455A97",
+          "#637ABA",
+          "#839CDE",
+          "#ADC3FA",
+          "#E8EEFF"
+        ]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Brand Rule Grey (dark)",
+        "canonical": "#26377A",
+        "tonalRamp": [
+          "#030132",
+          "#101A5B",
+          "#28397C",
+          "#43589F",
+          "#6179C2",
+          "#819BE7",
+          "#AEC2FC",
+          "#E8EEFE"
+        ]
+      },
+      "rule-strong-dark": {
+        "role": "neutral",
+        "displayName": "Rule, strong (dark)",
+        "canonical": "#3A4E98",
+        "tonalRamp": [
+          "#030034",
+          "#0F185E",
+          "#273880",
+          "#4257A2",
+          "#6078C6",
+          "#809AEB",
+          "#AFC2F9",
+          "#E8EEFE"
+        ]
+      },
+      "wordmark-dark": {
+        "role": "neutral",
+        "displayName": "Wordmark Black (dark)",
+        "canonical": "#F2F4FA",
+        "tonalRamp": [
+          "#0A0B0F",
+          "#222428",
+          "#3E4044",
+          "#5C5D62",
+          "#7B7D82",
+          "#9C9EA4",
+          "#C2C4CA",
+          "#ECEEF4"
+        ]
+      },
+      "done-dark": {
+        "role": "secondary",
+        "displayName": "Done Teal (dark)",
+        "canonical": "#4FE0B6",
+        "tonalRamp": [
+          "#000F09",
+          "#042B20",
+          "#004C3A",
+          "#106E56",
+          "#179273",
+          "#06B991",
+          "#50E1B7",
+          "#C3FEE8"
+        ]
+      },
+      "ok-bg-dark": {
+        "role": "tertiary",
+        "displayName": "Pass Wash (dark)",
+        "canonical": "#0C3340",
+        "tonalRamp": [
+          "#000E14",
+          "#012935",
+          "#204553",
+          "#3E6472",
+          "#5E8493",
+          "#7EA5B5",
+          "#A3CBDC",
+          "#D9F4FF"
+        ]
+      },
+      "ok-ink-dark": {
+        "role": "tertiary",
+        "displayName": "Pass Ink (dark)",
+        "canonical": "#6EE7C0",
+        "tonalRamp": [
+          "#010F09",
+          "#042B20",
+          "#014C39",
+          "#126E55",
+          "#1A9273",
+          "#36B792",
+          "#64DEB7",
+          "#C3FDE7"
+        ]
+      },
+      "warn-bg-dark": {
+        "role": "tertiary",
+        "displayName": "Caution Wash (dark)",
+        "canonical": "#33290F",
+        "tonalRamp": [
+          "#110A00",
+          "#2D2308",
+          "#493F24",
+          "#685D41",
+          "#887C60",
+          "#A99D80",
+          "#CFC3A5",
+          "#FAEECE"
+        ]
+      },
+      "warn-ink-dark": {
+        "role": "tertiary",
+        "displayName": "Caution Ink (dark)",
+        "canonical": "#F5C45A",
+        "tonalRamp": [
+          "#110A00",
+          "#302101",
+          "#513C07",
+          "#775801",
+          "#9C7721",
+          "#C59621",
+          "#EDBC52",
+          "#FDEDCC"
+        ]
+      },
+      "warn-rule-dark": {
+        "role": "tertiary",
+        "displayName": "Caution Amber (dark)",
+        "canonical": "#B8871F",
+        "tonalRamp": [
+          "#120900",
+          "#302104",
+          "#543B03",
+          "#785711",
+          "#A0751A",
+          "#C79532",
+          "#EEBB5D",
+          "#FEECCE"
+        ]
+      },
+      "err-bg-dark": {
+        "role": "tertiary",
+        "displayName": "Fault Wash (dark)",
+        "canonical": "#3A1630",
+        "tonalRamp": [
+          "#1A0113",
+          "#39152F",
+          "#57314B",
+          "#774E6A",
+          "#996D8B",
+          "#BC8EAC",
+          "#E3B3D3",
+          "#FEE6F6"
+        ]
+      },
+      "err-ink-dark": {
+        "role": "tertiary",
+        "displayName": "Fault Red (dark)",
+        "canonical": "#FF9A9A",
+        "tonalRamp": [
+          "#1E0003",
+          "#49040E",
+          "#721A23",
+          "#963C40",
+          "#BA5D5F",
+          "#E07E7F",
+          "#FEABAA",
+          "#FDE9E8"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Landing hero headline only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Landing section heads, paired with an ink-soft lede."
+      },
+      "ticker": {
+        "displayName": "Ticker",
+        "purpose": "The run header ticker; the one large mono reading per screen."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Sub-section and panel titles, 19-22px."
+      },
+      "region": {
+        "displayName": "Region",
+        "purpose": "Heading of a console region, paired with a mono reading."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Page prose at 48-72ch."
+      },
+      "body-sm": {
+        "displayName": "Body small",
+        "purpose": "Console rows, reasons and table cells."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Clocks, counters, durations, indices; tabular mono."
+      },
+      "status": {
+        "displayName": "Status",
+        "purpose": "Uppercase mono machine state words (ANTRI / JALAN / SELESAI) only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-card",
+        "value": "0 1px 2px rgba(16,24,40,.05), 0 8px 24px -12px rgba(16,24,40,.12)",
+        "dark": "0 1px 2px rgba(2,6,24,.45), 0 16px 32px -18px rgba(2,6,24,.75)",
+        "purpose": "Defined token with no consumer in the shipped build; only for a card that genuinely lifts off the canvas."
+      },
+      {
+        "name": "shadow-pop",
+        "value": "0 2px 6px rgba(9,18,60,.08), 0 24px 48px -16px rgba(9,18,60,.28)",
+        "dark": "0 2px 8px rgba(2,6,24,.55), 0 28px 60px -20px rgba(2,6,24,.9)",
+        "purpose": "Overlays only: the Cmd-K palette and the PDF cover preview."
+      },
+      {
+        "name": "primary-sheen",
+        "value": "inset 0 1px 0 rgb(255 255 255 / .14)",
+        "purpose": "Top highlight on filled blue buttons."
+      },
+      {
+        "name": "focus-halo",
+        "value": "0 0 0 3px var(--color-brand-100)",
+        "purpose": "Text inputs on focus, with the border turning brand-ink."
+      },
+      {
+        "name": "key-cap",
+        "value": "inset 0 -1px 0 var(--color-rule)",
+        "purpose": "Bottom lip of kbd caps."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "Default easing: button states, reveals, tweened numbers, hold light."
+      },
+      {
+        "name": "ease-in-out-quart",
+        "value": "cubic-bezier(.76, 0, .24, 1)",
+        "purpose": "Looping indicators: E-mark bars, tool-call sweep."
+      },
+      {
+        "name": "button-transition",
+        "value": ".18s ease-out-expo",
+        "purpose": "Button background, border, color and press transform."
+      },
+      {
+        "name": "press",
+        "value": "translateY(1px) scale(.985)",
+        "purpose": "Active state of every button."
+      },
+      {
+        "name": "spring",
+        "value": "spring stiffness 420, damping 40, mass 0.8",
+        "purpose": "Sliding selections (tabs, rail press, filters, palette), result rows opening. The deck never bounces."
+      },
+      {
+        "name": "spring-soft",
+        "value": "spring stiffness 240, damping 34, mass 1",
+        "purpose": "Verdict pills and gentler entries."
+      },
+      {
+        "name": "gate-settle",
+        "value": "spring stiffness 90, damping 26, mass 1 (overdamped)",
+        "purpose": "Gate needles easing to their reading without overshoot."
+      },
+      {
+        "name": "reveal",
+        "value": "reveal .5s ease-out-expo (opacity 0 + translateY 6px to rest)",
+        "purpose": "Entry of new content."
+      },
+      {
+        "name": "bars",
+        "value": "bars 1.1s ease-in-out-quart infinite, bars staggered .18s",
+        "purpose": "The E-mark live indicator breathing while running."
+      },
+      {
+        "name": "sweep",
+        "value": "sweep 1.6s ease-in-out-quart infinite",
+        "purpose": "A thin brand-ink line under a tool call that is still out."
+      },
+      {
+        "name": "hold",
+        "value": "hold 2.6s ease-out-expo (status wash held to 55%, then transparent)",
+        "purpose": "A row that changed state in view holds its light, then settles."
+      },
+      {
+        "name": "tween",
+        "value": "0.45s ease-out-expo",
+        "purpose": "Numbers ease to new values instead of jumping."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "durations .01ms, one iteration",
+        "purpose": "Global prefers-reduced-motion override; tweened values jump."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "deck-split",
+        "value": "1100px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "container",
+        "value": "1320px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single filled action per region: run research, open the company update.",
+      "html": "<button class=\"ds-btn ds-btn-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/></svg>Buka company update</button>",
+      "css": ".ds-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:0 16px; border:1px solid transparent; border-radius:6px; font-family:var(--font-sans, Roboto, sans-serif); font-size:15px; font-weight:700; cursor:pointer; transition:background-color .18s cubic-bezier(.16,1,.3,1), border-color .18s cubic-bezier(.16,1,.3,1), color .18s, transform .18s cubic-bezier(.16,1,.3,1); } .ds-btn:active { transform:translateY(1px) scale(.985); } .ds-btn:focus-visible { outline:2px solid var(--color-brand-ink, #0928B1); outline-offset:2px; } .ds-btn-primary { background:var(--color-brand, #0928B1); color:#fff; box-shadow:inset 0 1px 0 rgb(255 255 255 / .14); } .ds-btn-primary:hover { background:var(--color-brand-hover, #071F8A); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary actions beside a primary: trace, PDF, all reports.",
+      "html": "<button class=\"ds-btn-ghost\">Lihat jejak agent</button>",
+      "css": ".ds-btn-ghost { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 16px; border:1px solid var(--color-rule, #D9D9D9); border-radius:6px; background:var(--color-surface, #fff); color:var(--color-brand-ink, #0928B1); font-family:var(--font-sans, Roboto, sans-serif); font-size:15px; font-weight:700; cursor:pointer; transition:background-color .18s cubic-bezier(.16,1,.3,1), border-color .18s cubic-bezier(.16,1,.3,1), transform .18s; } .ds-btn-ghost:hover { border-color:var(--color-brand-ink, #0928B1); background:var(--color-brand-50, #F1F4FF); } .ds-btn-ghost:active { transform:translateY(1px) scale(.985); } .ds-btn-ghost:focus-visible { outline:2px solid var(--color-brand-ink, #0928B1); outline-offset:2px; }"
+    },
+    {
+      "name": "Ticker Input",
+      "kind": "input",
+      "refersTo": "input-ticker",
+      "description": "Mono uppercase IDX ticker entry with the brand focus halo.",
+      "html": "<label class=\"ds-ticker\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m9 18 6-6-6-6\"/></svg><input placeholder=\"Kode emiten, misalnya AMMN\" /></label>",
+      "css": ".ds-ticker { display:flex; align-items:center; gap:8px; height:56px; padding:0 8px 0 12px; border:1px solid var(--color-rule, #D9D9D9); border-radius:6px; background:var(--color-raised, #F7F8FC); color:var(--color-brand-ink, #0928B1); transition:border-color .2s, box-shadow .2s; } .ds-ticker:focus-within { border-color:var(--color-brand-ink, #0928B1); box-shadow:0 0 0 3px var(--color-brand-100, #E0E7FF); } .ds-ticker input { flex:1; min-width:0; border:0; outline:0; background:transparent; font-family:var(--font-mono, \"Roboto Mono\", monospace); font-size:22px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--color-ink-strong, #14182A); } .ds-ticker input::placeholder { font-family:var(--font-sans, Roboto, sans-serif); font-size:15px; font-weight:400; letter-spacing:normal; text-transform:none; color:var(--color-ink-faint, #676D7E); }"
+    },
+    {
+      "name": "Deck Bar",
+      "kind": "nav",
+      "refersTo": "deck-bar",
+      "description": "52px sticky bar: wordmark, F-key tabs with kbd caps, Cmd-K search.",
+      "html": "<nav class=\"ds-deckbar\"><strong class=\"ds-word\">S<span class=\"ds-e\"><i></i><i></i><i></i></span>CTORAL</strong><a class=\"ds-fkey is-active\" href=\"#\"><kbd class=\"ds-kbd\">F1</kbd>Riset</a><a class=\"ds-fkey\" href=\"#\"><kbd class=\"ds-kbd\">F2</kbd>Laporan</a><a class=\"ds-fkey\" href=\"#\"><kbd class=\"ds-kbd\">F3</kbd>Cara kerja</a><button class=\"ds-search\">Cari emiten <kbd class=\"ds-kbd\">⌘K</kbd></button></nav>",
+      "css": ".ds-deckbar { display:flex; align-items:stretch; gap:4px; height:52px; padding:0 24px; background:var(--color-surface, #fff); border-bottom:1px solid var(--color-rule, #D9D9D9); font-family:var(--font-sans, Roboto, sans-serif); } .ds-word { display:flex; align-items:center; gap:1px; margin-right:16px; font-weight:900; color:var(--color-wordmark, #000); } .ds-e { display:inline-flex; flex-direction:column; justify-content:space-between; width:12px; height:12px; } .ds-e i { display:block; height:22%; border-radius:9px; } .ds-e i:nth-child(1){ background:var(--color-brand, #0928B1); } .ds-e i:nth-child(2){ background:var(--color-teal, #1DCD9F); width:70%; } .ds-e i:nth-child(3){ background:var(--color-live, #3ED628); } .ds-fkey { position:relative; display:flex; align-items:center; gap:8px; padding:0 10px; font-size:14px; font-weight:500; color:var(--color-ink-soft, #565B69); text-decoration:none; transition:color .15s; } .ds-fkey:hover, .ds-fkey.is-active { color:var(--color-ink-strong, #14182A); } .ds-fkey.is-active::after { content:\"\"; position:absolute; left:8px; right:8px; bottom:-1px; height:2px; border-radius:9px; background:var(--color-brand-ink, #0928B1); } .ds-fkey.is-active .ds-kbd { border-color:rgb(9 40 177 / .4); color:var(--color-brand-ink, #0928B1); } .ds-fkey:focus-visible { outline:2px solid var(--color-brand-ink, #0928B1); outline-offset:2px; border-radius:4px; } .ds-kbd { display:inline-flex; align-items:center; justify-content:center; height:22px; min-width:22px; padding:0 6px; border:1px solid var(--color-rule, #D9D9D9); border-radius:4px; background:var(--color-raised, #F7F8FC); box-shadow:inset 0 -1px 0 var(--color-rule, #D9D9D9); font-family:var(--font-mono, \"Roboto Mono\", monospace); font-size:11px; font-weight:600; line-height:1; color:var(--color-ink-soft, #565B69); } .ds-search { margin-left:auto; align-self:center; display:flex; align-items:center; gap:10px; height:36px; padding:0 6px 0 12px; border:1px solid var(--color-rule, #D9D9D9); border-radius:6px; background:var(--color-raised, #F7F8FC); color:var(--color-ink-soft, #565B69); font:inherit; font-size:14px; cursor:pointer; } .ds-search:hover { border-color:var(--color-rule-strong, #B9BDC6); color:var(--color-ink-strong, #14182A); }"
+    },
+    {
+      "name": "Status Pills",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Verdict and state pills; tone always paired with a word.",
+      "html": "<span class=\"ds-pill ds-pill-ok\">didukung</span> <span class=\"ds-pill ds-pill-warn\">Parsial</span> <span class=\"ds-pill ds-pill-err\">tidak didukung</span> <span class=\"ds-pill ds-pill-live\">berjalan</span>",
+      "css": ".ds-pill { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:9999px; background:var(--color-raised, #F7F8FC); color:var(--color-ink-soft, #565B69); font-family:var(--font-sans, Roboto, sans-serif); font-size:13px; font-weight:700; line-height:1.5; } .ds-pill-ok { background:var(--color-ok-bg, #E6F8F1); color:var(--color-ok-ink, #0B6B50); } .ds-pill-warn { background:var(--color-warn-bg, #FFF4DB); color:var(--color-warn-ink, #7A4B00); } .ds-pill-err { background:var(--color-err-bg, #FDECEC); color:var(--color-err-ink, #9B1C1C); } .ds-pill-live { background:var(--color-brand-50, #F1F4FF); color:var(--color-brand-ink, #0928B1); }"
+    },
+    {
+      "name": "Run-State Chip",
+      "kind": "chip",
+      "refersTo": "state-chip-running",
+      "description": "Mono uppercase run state led by the breathing E-mark.",
+      "html": "<span class=\"ds-state\"><span class=\"ds-bars\"><i></i><i></i><i></i></span>JALAN</span>",
+      "css": ".ds-state { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 8px; border:1px solid rgb(9 40 177 / .4); border-radius:5px; background:var(--color-brand-50, #F1F4FF); color:var(--color-brand-ink, #0928B1); font-family:var(--font-mono, \"Roboto Mono\", monospace); font-size:12px; font-weight:600; letter-spacing:.08em; } .ds-bars { display:inline-flex; flex-direction:column; justify-content:space-between; width:12px; height:10px; } .ds-bars i { display:block; height:22%; border-radius:9px; transform-origin:left; animation:ds-bars 1.1s cubic-bezier(.76,0,.24,1) infinite; } .ds-bars i:nth-child(1){ background:var(--color-brand, #0928B1); } .ds-bars i:nth-child(2){ width:70%; background:var(--color-teal, #1DCD9F); animation-delay:.18s; } .ds-bars i:nth-child(3){ background:var(--color-live, #3ED628); animation-delay:.36s; } @keyframes ds-bars { 0%,100% { transform:scaleX(1); } 50% { transform:scaleX(.45); } } @media (prefers-reduced-motion: reduce) { .ds-bars i { animation:none; } }"
+    },
+    {
+      "name": "Engine Tag",
+      "kind": "chip",
+      "refersTo": "engine-tag-llm",
+      "description": "Marks whether a model (LLM) or deterministic host code decided a step.",
+      "html": "<span class=\"ds-eng ds-eng-llm\">LLM</span> <span class=\"ds-eng ds-eng-host\">host</span>",
+      "css": ".ds-eng { display:inline-flex; align-items:center; height:18px; padding:0 6px; border-radius:4px; font-family:var(--font-mono, \"Roboto Mono\", monospace); font-size:10.5px; font-weight:600; line-height:1; } .ds-eng-llm { background:var(--color-brand-50, #F1F4FF); color:var(--color-brand-ink, #0928B1); } .ds-eng-host { border:1px solid var(--color-rule-soft, #E6E9F0); color:var(--color-ink-soft, #565B69); }"
+    },
+    {
+      "name": "Console Region",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A ruled region of the console: 14px bold head, mono reading, ruled rows.",
+      "html": "<section class=\"ds-panel\"><header class=\"ds-head\"><h2>Method Gates</h2><span class=\"ds-data\">4/6 dinilai</span></header><div class=\"ds-row\"><span class=\"ds-data\">G1</span> Kelayakan data <span class=\"ds-ok\">lolos</span></div><div class=\"ds-row is-hold\"><span class=\"ds-data\">G2</span> Struktur kepemilikan <span class=\"ds-run\">menilai</span></div></section>",
+      "css": ".ds-panel { border:1px solid var(--color-rule, #D9D9D9); border-radius:8px; background:var(--color-surface, #fff); font-family:var(--font-sans, Roboto, sans-serif); color:var(--color-ink, #333); overflow:hidden; } .ds-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:12px 20px; border-bottom:1px solid var(--color-rule, #D9D9D9); } .ds-head h2 { margin:0; font-size:14px; font-weight:700; color:var(--color-ink-strong, #14182A); } .ds-data { font-family:var(--font-mono, \"Roboto Mono\", monospace); font-size:12px; font-weight:500; letter-spacing:.02em; font-variant-numeric:tabular-nums; color:var(--color-ink-soft, #565B69); } .ds-row { display:grid; grid-template-columns:28px 1fr auto; gap:8px; padding:10px 20px; font-size:13.5px; border-bottom:1px solid var(--color-rule-soft, #E6E9F0); transition:background-color .2s; } .ds-row:last-child { border-bottom:0; } .ds-row:hover { background:var(--color-raised, #F7F8FC); } .ds-row.is-hold { animation:ds-hold 2.6s cubic-bezier(.16,1,.3,1) both; } .ds-ok { color:var(--color-done, #0B7A5A); font-weight:500; } .ds-run { color:var(--color-brand-ink, #0928B1); font-weight:500; } @keyframes ds-hold { 0%,55% { background-color:var(--color-brand-50, #F1F4FF); } 100% { background-color:transparent; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Command Deck",
+    "overview": "**Creative North Star: \"The Command Deck\"**\n\nSectoral is a research desk seen through one console. Every agent, tool call and Method Gate decision lands as a ruled row in a single instrument an analyst could audit, and the interface's job is to make that work legible while it happens. The grammar is a trading terminal's: function-key tabs (F1 Riset, F2 Laporan, F3 Cara kerja), a Cmd-K ticker palette, an agent rail that reads ANTRI / JALAN / SELESAI, and mono readings for tool names, endpoints, clocks and Rupiah figures. The materials are Sectoral's own: primary blue, Roboto, the E-mark's three bars, and the brand chart series.\n\nThe system runs in two grounds. Light is paper: a cool grey canvas under white console panels. Dark is the console: a navy field drawn along the brand blue's hue, with surfaces that lift by lightness rather than shadow. Density is high but ruled; regions are divided by 1px lines inside one bordered console, never scattered as a card grid. Motion is damped and informational: a changed row holds its light and then settles, a gate needle eases to its reading without overshoot, and nothing bounces.\n\nThe system rejects the category defaults it was built against: a chat transcript, or a spinner with a step list.",
+    "keyCharacteristics": [
+      "One console, ruled regions: 1px rules and small corners, not floating cards.",
+      "Two voices: Roboto for prose and headings, Roboto Mono for every machine reading.",
+      "Status as color with a word: blue running, teal done, amber warning, red error, and green only as the live pulse.",
+      "The E-mark's three bars are the running indicator.",
+      "Light and dark are peers; every token has a dark counterpart.",
+      "Damped, overdamped motion that respects reduced-motion."
+    ],
+    "rules": [
+      {
+        "name": "The Green Is Only Alive Rule",
+        "body": "`live` marks something running right now, as a bar or a dot. It is never text, never a background, never \"success\". Finished is `done` teal.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Blue Rule",
+        "body": "Blue means the brand, the active thing, or the primary action. Status never borrows blue except for \"running\".",
+        "section": "colors"
+      },
+      {
+        "name": "The Paired Ground Rule",
+        "body": "Every color role ships a light and a dark value; a new surface that only works in one theme is not done.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Means Machine Rule",
+        "body": "Anything the system measured, read or named from code (tool names, endpoints, tickers, clocks, Rp values, method codes) is Roboto Mono with tabular numerals. Human sentences are Roboto.",
+        "section": "typography"
+      },
+      {
+        "name": "The Balanced Head Rule",
+        "body": "Headings are bold, `ink-strong`, 1.2 line-height, -0.01em by default, and `text-wrap: balance`; paragraphs use `text-wrap: pretty`.",
+        "section": "typography"
+      },
+      {
+        "name": "The Floats Only Rule",
+        "body": "Only overlays (palette, previews) cast a shadow. Console regions, rows and panels are separated by rules and tone, never by drop shadows.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** put every measured value (tickers, tool names, endpoints, clocks, counts, Rp) in Roboto Mono 500–600 with tabular numerals.",
+      "**Do** build new regions as ruled parts of the console: 1px `rule` borders, 8px outer corners, 20px padding, a 14px bold region head with a mono reading on the right.",
+      "**Do** pair every status color with a status word or icon; color alone never carries meaning.",
+      "**Do** use the E-mark three-bar live indicator for \"running\", and damped springs (stiffness 420, damping 40) or ease-out-expo for state changes.",
+      "**Do** give every new token a dark value along the brand blue's hue, keeping body and secondary ink at 4.5:1 or better.",
+      "**Do** honour reduced motion: the global media query flattens durations, and tweened numbers jump straight to their value."
+    ],
+    "donts": [
+      "**Don't** use `live` green for text, fills or \"success\"; finished is `done` teal.",
+      "**Don't** use amber for anything but warnings.",
+      "**Don't** lay out Deck content as a grid of shadowed cards or as a chat transcript; it is one ruled console.",
+      "**Don't** cast shadows on console regions or rows; only overlays float.",
+      "**Don't** let motion overshoot or bounce; gate needles and springs are critically or over-damped.",
+      "**Don't** uppercase anything except machine state words and ticker codes."
+    ]
+  }
+}

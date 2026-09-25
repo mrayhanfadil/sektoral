@@ -119,7 +119,7 @@ export function MethodChain({ chain, className = "" }: { chain: ChainStep[]; cla
           </li>
         );
       })}
-      {skipped > 0 && <li className="data text-ink-faint sm:hidden">+{skipped} tidak dijalankan</li>}
+      {skipped > 0 && <li className="text-[12.5px] text-ink-faint tabular-nums sm:hidden">+{skipped} tidak dijalankan</li>}
     </ol>
   );
 }

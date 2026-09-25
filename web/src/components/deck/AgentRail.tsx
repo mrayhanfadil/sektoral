@@ -36,7 +36,7 @@ export function AgentRail({ state, filter, onFilter }: Props) {
   return (
     <div ref={scroller} className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] max-[1099px]:snap-x max-[1099px]:snap-mandatory max-[1099px]:scroll-px-3">
       <div role="group" aria-label="Agent, klik untuk menyaring aliran kerja"
-        className="grid min-w-max grid-cols-[repeat(4,minmax(148px,1fr))_minmax(300px,2.1fr)_repeat(2,minmax(148px,1fr))] px-2 py-2 min-[1100px]:min-w-0 min-[1100px]:grid-cols-[repeat(4,minmax(0,1fr))_minmax(296px,2.1fr)_repeat(2,minmax(0,1fr))]">
+        className="grid min-w-max grid-cols-[repeat(7,minmax(156px,1fr))] px-2 py-2 min-[1100px]:min-w-0 min-[1100px]:grid-cols-7">
         {AGENTS.map((agent, i) => {
           const next = AGENTS[i + 1];
           return (
@@ -75,8 +75,6 @@ function RailNode({ id, state, pressed, leftLine, rightLine, onPress }: {
           <span className="grid size-[22px] flex-none place-items-center">
             <Glyph status={agent.status} />
           </span>
-          {/* Forecast subagents sit on the rail line as sub-stations. */}
-          {id === "forecast" && <SubChips state={state} />}
         </span>
         <span className="flex items-center gap-2">
           <span className={`min-w-0 flex-1 truncate text-[14px] leading-tight font-bold ${agent.status === "idle" ? "text-ink-soft" : "text-ink-strong"}`}>{meta.short}</span>
@@ -86,6 +84,8 @@ function RailNode({ id, state, pressed, leftLine, rightLine, onPress }: {
           <span className={`data text-[10.5px] uppercase ${STATUS_INK[agent.status]}`}>{STATUS_WORD[agent.status]}</span>
           {count && <span className="data truncate text-[10.5px] tracking-normal text-ink-soft" title={count}>{count}</span>}
         </span>
+        {/* Forecast subagents: a sub-row inside the node's own width, off the rail line. */}
+        {id === "forecast" && <SubChips state={state} />}
       </button>
     </div>
   );
@@ -93,7 +93,7 @@ function RailNode({ id, state, pressed, leftLine, rightLine, onPress }: {
 
 function SubChips({ state }: { state: DeckState }) {
   return (
-    <span className="relative flex gap-[3px]">
+    <span className="-mt-0.5 flex flex-wrap gap-[2px]">
       {SUBAGENTS.map((s) => {
         const status = state.subagents[s.id] ?? "idle";
         return <SubChip key={s.id} name={s.name} short={SUB_SHORT[s.id] ?? s.name} status={status} />;
@@ -114,7 +114,7 @@ function SubChip({ name, short, status }: { name: string; short: string; status:
   const changed = useChangeCount(status);
   return (
     <span title={`Subagent ${name}: ${STATUS_WORD[status]}`}
-      className={`relative isolate inline-flex h-[18px] items-center gap-1 rounded-[4px] border px-[4px] font-mono text-[10px] leading-none font-medium whitespace-nowrap transition-colors duration-300 ${CHIP[status]}`}>
+      className={`relative isolate inline-flex h-4 items-center gap-1 rounded-[3px] border px-[3px] text-[10.5px] leading-none font-medium whitespace-nowrap transition-colors duration-300 ${CHIP[status]}`}>
       <Hold n={changed} tone={status} />
       {status === "run" && <i aria-hidden className="size-1.5 animate-pulse rounded-full bg-live" />}
       {short}

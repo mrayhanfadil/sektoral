@@ -1,7 +1,7 @@
 // The landing's one orchestrated moment: a miniature of the Deck replaying a
 // stored run from its audit trace, on loop. It pauses when off-screen, when
 // the reader asks, and under reduced motion (then it shows the finished run).
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, Pause, Play } from "lucide-react";
@@ -133,6 +133,25 @@ function Frame({ frameRef, deck, ticker, name, item, reduce, recorded = false, f
   const chosen = deck.chain.find((c) => c.decision === "Terpilih");
   // Announce phases, not rows: a polite summary that changes a handful of times per run.
   const summary = !playing ? "" : at >= 0 ? `Fase ${at + 1} dari ${deck.phases.length}: ${deck.phases[at].title}` : "";
+  const pane = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLOListElement>(null);
+  const [over, setOver] = useState(false);
+  // Rows fill from the top; once they overflow the window, it keeps the newest in view
+  // (and only then fades the oldest out at the top edge).
+  useLayoutEffect(() => {
+    const el = pane.current;
+    const inner = list.current;
+    if (!el || !inner) return;
+    const stick = () => {
+      setOver(inner.offsetHeight > el.clientHeight + 1);
+      el.scrollTop = el.scrollHeight;
+    };
+    stick();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(stick);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [message]);
 
   return (
     <figure className="m-0" aria-labelledby={captionId}>
@@ -161,16 +180,16 @@ function Frame({ frameRef, deck, ticker, name, item, reduce, recorded = false, f
             <Rail deck={deck} />
             <Plan deck={deck} reduce={reduce} />
           </div>
-          <div className="relative h-full overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,#000_26px)] max-sm:h-[232px]">
+          <div ref={pane} className={`relative h-full overflow-hidden max-sm:h-[232px] ${over ? "[mask-image:linear-gradient(to_bottom,transparent,#000_26px)]" : ""}`}>
             {message ?? (
-              <ol aria-label="Langkah terbaru" className="m-0 flex h-full list-none flex-col justify-end p-0 max-sm:[&>li:nth-last-child(n+5)]:hidden">
+              <ol ref={list} aria-label="Langkah terbaru" className="m-0 list-none p-0 max-sm:[&>li:nth-last-child(n+5)]:hidden">
                 <AnimatePresence initial={false} mode="popLayout">
                   {rows.map((step) => (
                     <motion.li key={step.id} layout={!reduce}
                       initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
                       exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10, transition: { duration: 0.2 } }}
                       transition={SPRING}
-                      className="relative overflow-hidden border-t border-rule-soft">
+                      className="relative overflow-hidden border-b border-rule-soft">
                       <StreamRow step={step} recorded={recorded} reduce={reduce} />
                     </motion.li>
                   ))}
@@ -241,7 +260,7 @@ function Plan({ deck, reduce }: { deck: DeckState; reduce: boolean }) {
   const fade = reduce ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.24 } };
   return (
     <div className="flex-1 border-t border-rule-soft px-3.5 pt-3 pb-3.5 max-sm:hidden">
-      <p className="data text-[11px] text-ink-faint">Pertanyaan riset</p>
+      <p className="text-[11.5px] font-medium text-ink-faint">Pertanyaan riset</p>
       <AnimatePresence mode="wait" initial={false}>
         {question ? (
           <motion.p key="q" {...fade} className="mt-1 line-clamp-3 text-[12.5px] leading-[1.45] text-ink">{question}</motion.p>
@@ -329,7 +348,7 @@ function GateBoard({ deck }: { deck: DeckState }) {
             <span className="line-clamp-2 min-h-[30px] text-[11.5px] leading-[15px] font-medium text-ink max-sm:hidden">{g.name}</span>
           </p>
           <GateMeter status={g.status} className="relative mt-2 h-[3px]" />
-          <p aria-hidden className={`relative m-0 mt-1.5 truncate font-mono text-[10.5px] font-medium max-sm:hidden ${GATE_TONE[g.status].text}`}>
+          <p aria-hidden className={`relative m-0 mt-1.5 truncate text-[11.5px] font-medium max-sm:hidden ${GATE_TONE[g.status].text}`}>
             {g.verdict || "antri"}
           </p>
           <span className="sr-only">Method Gate {g.n}, {g.name}: {g.verdict || "belum dinilai"}</span>
@@ -348,7 +367,7 @@ function Outcome({ deck, item, chosen, reduce }: { deck: DeckState; item?: Repor
   return (
     <div className="grid min-h-[62px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 border-t border-rule bg-raised px-3.5 py-2.5">
       <div className="min-w-0">
-        <p className="data m-0 text-[11px] text-ink-faint">Metode terpilih</p>
+        <p className="m-0 text-[11.5px] font-medium text-ink-faint">Metode terpilih</p>
         <AnimatePresence mode="wait" initial={false}>
           {chosen ? (
             <motion.p key={chosen.method} {...swap} className="m-0 flex min-w-0 items-baseline gap-2">

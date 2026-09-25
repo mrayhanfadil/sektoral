@@ -55,8 +55,9 @@ export function Pipeline() {
       {(["llm", "host"] as Lane[]).map((lane) => (
         <div key={lane} aria-hidden
           className={`hidden border-t border-r border-rule px-4 py-4 lg:block lg:col-start-1 ${ROW[lane]} ${lane === "llm" ? "bg-brand-50/60" : "bg-raised"}`}>
-          <EngineTag lane={lane} />
-          <p className="m-0 mt-2.5 text-[14.5px] font-bold text-ink-strong">{LANES[lane].title}</p>
+          <p className="m-0 text-[14.5px] leading-6 font-bold text-ink-strong">
+            {LANES[lane].title} <EngineTag lane={lane} className="align-[1px]" />
+          </p>
           <p className="m-0 mt-1.5 text-[12.5px] leading-snug text-ink-soft">{LANES[lane].body}</p>
         </div>
       ))}

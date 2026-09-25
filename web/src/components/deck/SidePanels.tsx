@@ -1,10 +1,10 @@
 // The right column of the Deck: the research plan and its verdicts, the six
 // Method Gates as fixed instruments, the method chain, and the result.
-import type { ReactNode } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useSpring } from "motion/react";
 import { GATES, type DeckState, type GateState, type Hypothesis } from "../../lib/agents";
-import { Clamp, Hold, RegionHead } from "./kit";
-import { EXPO, SPRING, SPRING_SOFT, useChangeCount, verdictStatus, verdictTone } from "./read";
+import { Clamp, Glyph, Hold, RegionHead } from "./kit";
+import { GATE_SETTLE, SPRING, SPRING_SOFT, isJudged, useChangeCount, verdictGlyph, verdictStatus, verdictTone } from "./read";
 
 const REGION = "border-b border-rule px-5 py-4 max-sm:px-4";
 
@@ -14,10 +14,11 @@ function Empty({ children }: { children: ReactNode }) {
 
 export function PlanPanel({ state, loading }: { state: DeckState; loading?: boolean }) {
   const { question, hypotheses } = state.plan;
-  const judged = hypotheses.filter((h) => h.verdict).length;
+  // Only a real verdict counts; "belum terjawab" was tried but not answered.
+  const judged = hypotheses.filter((h) => isJudged(h.verdict)).length;
   return (
     <section aria-labelledby="plan-title" className={REGION}>
-      <RegionHead id="plan-title" title="Rencana riset" reading={hypotheses.length ? `${judged}/${hypotheses.length} diuji` : undefined} />
+      <RegionHead id="plan-title" title="Rencana riset" reading={hypotheses.length ? `${judged}/${hypotheses.length} terjawab` : undefined} />
       {loading ? <Lines n={3} /> : question ? (
         <div className="mt-2">
           <Clamp lines={3} className="text-[15px] leading-snug font-medium text-ink-strong" title={question}>{question}</Clamp>
@@ -48,6 +49,7 @@ function HypothesisRow({ h }: { h: Hypothesis }) {
         <div className="min-w-0">
           <p className="line-clamp-3 text-[13.5px] leading-snug text-ink" title={text}>{text}</p>
           <div className="mt-1.5 flex min-h-[22px] flex-wrap items-center gap-2">
+            <Glyph status={verdictGlyph(h.verdict)} />
             <AnimatePresence mode="popLayout" initial={false}>
               {h.verdict ? (
                 <motion.span key={h.verdict} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
@@ -55,7 +57,7 @@ function HypothesisRow({ h }: { h: Hypothesis }) {
                   {h.verdict}
                 </motion.span>
               ) : (
-                <motion.span key="wait" exit={{ opacity: 0 }} className="data text-ink-faint">menunggu uji</motion.span>
+                <motion.span key="wait" exit={{ opacity: 0 }} className="text-[12.5px] text-ink-faint">menunggu uji</motion.span>
               )}
             </AnimatePresence>
           </div>
@@ -65,7 +67,7 @@ function HypothesisRow({ h }: { h: Hypothesis }) {
   );
 }
 
-/** Each verdict word keeps one look: the gate's single truth. */
+/** Each verdict word keeps one look and one needle position: the gate's single truth. */
 type Reading = "idle" | "pass" | "fail" | "unknown" | "skip";
 function reading(g: GateState): Reading {
   if (g.status === "idle") return "idle";
@@ -79,13 +81,22 @@ function reading(g: GateState): Reading {
 const READING_INK: Record<Reading, string> = {
   idle: "text-ink-faint", pass: "text-done", fail: "text-warn-ink", unknown: "text-warn-ink", skip: "text-ink-soft",
 };
+const READING_WORD: Record<Reading, string> = {
+  idle: "belum dinilai", pass: "lolos", fail: "gagal", unknown: "tidak dapat dinilai", skip: "tidak berlaku",
+};
+/** Short gate names for the instrument strip; the full name is in the title and for screen readers. */
+const GATE_SHORT = ["Bisnis", "Data", "Kepemilikan", "Siklus", "Siklus hidup", "Kewajaran"];
 
+/**
+ * The six Method Gates as a fixed strip of instruments, pinned above the
+ * scrolling plan and chain so every gate stays in view for the whole run.
+ */
 export function GateBoard({ state }: { state: DeckState }) {
   const settled = state.gates.filter((g) => g.status !== "idle").length;
   return (
-    <section aria-labelledby="gates-title" className={REGION}>
+    <section aria-labelledby="gates-title" className="border-b border-rule px-5 pt-3 pb-3.5 max-sm:px-4">
       <RegionHead id="gates-title" title="Method Gates" reading={`${settled}/${GATES.length} dinilai`} />
-      <ol className="m-0 mt-3 grid list-none grid-cols-3 gap-px overflow-hidden rounded-md border border-rule bg-rule p-0 max-sm:grid-cols-2">
+      <ol className="m-0 mt-2.5 grid list-none grid-cols-6 gap-px overflow-hidden rounded-md border border-rule bg-rule p-0 max-sm:grid-cols-3">
         {state.gates.map((g) => <Gate key={g.n} g={g} />)}
       </ol>
     </section>
@@ -95,58 +106,75 @@ export function GateBoard({ state }: { state: DeckState }) {
 function Gate({ g }: { g: GateState }) {
   const r = reading(g);
   const changed = useChangeCount(r);
-  const tone = r === "pass" ? "ok" : r === "skip" ? "ok" : r === "idle" ? "idle" : "warn";
+  const tone = r === "pass" || r === "skip" ? "ok" : r === "idle" ? "idle" : "warn";
+  const word = r === "idle" || !g.verdict ? READING_WORD[r] : g.verdict;
   return (
-    <li className="relative isolate min-w-0 bg-surface px-3 pt-2.5 pb-3" title={g.detail ? `Gate ${g.n}, ${g.name}: ${g.verdict}. ${g.detail}` : undefined}>
+    <li className="relative isolate min-w-0 bg-surface px-1.5 pt-2 pb-2" title={`Gate ${g.n}, ${g.name}: ${word}${g.detail ? `. ${g.detail}` : ""}`}>
       <Hold n={changed} tone={tone} />
-      <div className="flex items-start justify-between gap-2">
-        <span className="data text-ink-soft">G{g.n}</span>
-        <GateMark r={r} />
+      <div aria-hidden className="flex items-start justify-center gap-1">
+        <span className="data -ml-0.5 text-[10.5px] leading-none text-ink-soft">G{g.n}</span>
+        <Dial r={r} />
       </div>
-      <p className={`mt-1 text-[13px] leading-tight font-bold ${r === "idle" ? "text-ink-soft" : "text-ink-strong"}`}>{g.name}</p>
-      <p className={`data mt-1 ${READING_INK[r]}`}>{r === "idle" ? "belum dinilai" : g.verdict}</p>
-      {g.detail && <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-ink-soft">{g.detail}</p>}
+      <p aria-hidden className={`mt-1 truncate text-center text-[11.5px] leading-4 font-bold tracking-[-.005em] ${r === "idle" ? "text-ink-soft" : "text-ink-strong"}`}>{GATE_SHORT[g.n] ?? g.name}</p>
+      <p aria-hidden className={`line-clamp-2 min-h-8 text-center text-[11.5px] leading-4 font-medium ${READING_INK[r]}`}>{word}</p>
+      <span className="sr-only">Method Gate {g.n}, {g.name}: {word}</span>
     </li>
   );
 }
 
-/** The gate's instrument face: an empty ring until the gate settles, then its verdict drawn in. */
-function GateMark({ r }: { r: Reading }) {
+/*
+ * The dial: a half scale of four segments, left to right gagal, tidak dapat
+ * dinilai, tidak berlaku, lolos. The needle rests flat on the left until the
+ * gate is judged, then settles on the centre of its verdict's segment on an
+ * overdamped spring (no bounce), and that segment takes the verdict's colour.
+ */
+const CX = 32;
+const CY = 30;
+const R = 24;
+const SEGMENTS: { r: Exclude<Reading, "idle">; from: number; to: number; stroke: string; dash?: string }[] = [
+  { r: "fail", from: -90, to: -45, stroke: "var(--color-warn-rule)" },
+  { r: "unknown", from: -45, to: 0, stroke: "var(--color-warn-rule)", dash: "2.2 2" },
+  { r: "skip", from: 0, to: 45, stroke: "var(--color-ink-faint)" },
+  { r: "pass", from: 45, to: 90, stroke: "var(--color-teal)" },
+];
+const ANGLE: Record<Reading, number> = { idle: -90, fail: -67.5, unknown: -22.5, skip: 22.5, pass: 67.5 };
+const NEEDLE_INK: Record<Reading, string> = {
+  idle: "var(--color-rule-strong)", fail: "var(--color-warn-ink)", unknown: "var(--color-warn-ink)",
+  skip: "var(--color-ink-soft)", pass: "var(--color-done)",
+};
+
+function point(deg: number, radius = R): string {
+  const a = (deg * Math.PI) / 180;
+  return `${(CX + radius * Math.sin(a)).toFixed(2)} ${(CY - radius * Math.cos(a)).toFixed(2)}`;
+}
+const arc = (from: number, to: number) => `M${point(from + 3)} A${R} ${R} 0 0 1 ${point(to - 3)}`;
+
+function Dial({ r }: { r: Reading }) {
+  const reduce = useReducedMotion();
+  const needle = useRef<SVGGElement>(null);
+  // Mounts at its reading (a finished run opens settled); later changes settle on the spring.
+  const angle = useSpring(ANGLE[r], GATE_SETTLE);
+  const turn = (a: number) => needle.current?.setAttribute("transform", `rotate(${a.toFixed(2)} ${CX} ${CY})`);
+  useLayoutEffect(() => { turn(angle.get()); });
+  useMotionValueEvent(angle, "change", turn);
+  useEffect(() => {
+    if (reduce) angle.jump(ANGLE[r]);
+    else angle.set(ANGLE[r]);
+  }, [r, reduce, angle]);
   return (
-    <svg viewBox="0 0 22 22" aria-hidden className="size-[22px] flex-none">
-      <circle cx="11" cy="11" r="9.25" className="fill-none stroke-rule-strong" strokeWidth="1.5" strokeDasharray={r === "idle" ? "2.4 2.6" : undefined} />
-      <AnimatePresence initial={false}>
-        {r !== "idle" && (
-          <motion.g key={r} initial={{ opacity: 0, scale: 0.55 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, transition: { duration: 0.12 } }}
-            transition={SPRING_SOFT} style={{ originX: "11px", originY: "11px" }}>
-            {r === "pass" && (
-              <>
-                <circle cx="11" cy="11" r="9.25" className="fill-ok-bg stroke-done" strokeWidth="1.5" />
-                <motion.path d="M6.8 11.3l2.8 2.8 5.6-6" className="fill-none stroke-done" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.42, ease: EXPO, delay: 0.08 }} />
-              </>
-            )}
-            {r === "fail" && (
-              <>
-                <circle cx="11" cy="11" r="9.25" className="fill-warn-bg stroke-warn-rule" strokeWidth="1.5" />
-                <motion.path d="M11 6.4v5.4" className="fill-none stroke-warn-ink" strokeWidth="2.2" strokeLinecap="round"
-                  initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.36, ease: EXPO, delay: 0.08 }} />
-                <circle cx="11" cy="15.2" r="1.25" className="fill-warn-ink" />
-              </>
-            )}
-            {r === "unknown" && (
-              <>
-                <circle cx="11" cy="11" r="9.25" className="fill-none stroke-warn-rule" strokeWidth="1.5" />
-                <circle cx="11" cy="11" r="2" className="fill-warn-rule" />
-              </>
-            )}
-            {r === "skip" && (
-              <motion.path d="M7 11h8" className="fill-none stroke-ink-faint" strokeWidth="2" strokeLinecap="round"
-                initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.36, ease: EXPO }} />
-            )}
-          </motion.g>
-        )}
-      </AnimatePresence>
+    <svg viewBox="0 0 64 34" aria-hidden className="block h-[26px] w-[49px] flex-none overflow-visible">
+      {SEGMENTS.map((s) => {
+        const lit = s.r === r;
+        return (
+          <path key={s.r} d={arc(s.from, s.to)} fill="none" strokeLinecap="round" strokeDasharray={lit ? undefined : s.dash}
+            strokeWidth={lit ? 4 : 2.5} style={{ stroke: lit ? s.stroke : "var(--color-rule)", transition: "stroke .5s var(--ease-out-expo), stroke-width .5s var(--ease-out-expo)" }} />
+        );
+      })}
+      <g ref={needle}>
+        <line x1={CX} y1={CY} x2={CX} y2={CY - R + 6} strokeWidth="2" strokeLinecap="round"
+          style={{ stroke: NEEDLE_INK[r], transition: "stroke .5s var(--ease-out-expo)" }} />
+      </g>
+      <circle cx={CX} cy={CY} r="2.6" style={{ fill: NEEDLE_INK[r], transition: "fill .5s var(--ease-out-expo)" }} />
     </svg>
   );
 }

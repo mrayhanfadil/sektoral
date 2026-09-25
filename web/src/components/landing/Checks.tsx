@@ -80,8 +80,8 @@ export function ReleaseStatuses({ current, ticker }: { current?: string; ticker?
         const here = current === r.code;
         return (
           <li key={r.code} className={`flex flex-col px-5 pt-4 pb-5 ${here ? "bg-brand-50" : "bg-surface"}`}>
-            <code className="font-mono text-[12px] text-ink-soft">{r.code}</code>
-            <h4 className="mt-2 text-[17px]">{r.title}</h4>
+            <h4 className="text-[17px]">{r.title}</h4>
+            <code className="mt-1 font-mono text-[12px] break-all text-ink-soft">{r.code}</code>
             <p className="m-0 mt-1.5 text-[14px] leading-snug text-ink-soft">{r.body}</p>
             <p className="m-0 mt-auto flex items-center gap-2 pt-4 text-[14px] font-medium text-ink">
               {r.held
@@ -89,7 +89,7 @@ export function ReleaseStatuses({ current, ticker }: { current?: string; ticker?
                 : <CircleCheck aria-hidden className="size-4 flex-none text-done" strokeWidth={2.2} />}
               {r.outcome}
             </p>
-            {here && ticker && <p className="m-0 mt-2 font-mono text-[12px] font-medium text-brand-ink">Run {ticker} berakhir di sini</p>}
+            {here && ticker && <p className="m-0 mt-2 text-[13px] font-medium text-brand-ink">Run <span className="font-mono">{ticker}</span> berakhir di sini</p>}
           </li>
         );
       })}

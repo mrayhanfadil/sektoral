@@ -25,7 +25,7 @@ export function PhaseBar({ state }: { state: DeckState }) {
               <span className={`truncate text-[13.5px] leading-tight font-bold transition-colors duration-300 ${TITLE_INK[p.status]}`}>{p.title}</span>
               <span className="sr-only">, {WORD[p.status]}</span>
             </div>
-            <p className="mt-0.5 truncate pl-[15px] text-[12.5px] leading-snug text-ink-soft max-lg:hidden">{p.sub}</p>
+            <p className="mt-0.5 truncate pl-[15px] text-[12.5px] leading-snug text-ink-soft max-lg:hidden [@media(max-height:959px)]:hidden">{p.sub}</p>
           </li>
         ))}
       </ol>
