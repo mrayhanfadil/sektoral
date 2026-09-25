@@ -636,6 +636,8 @@ function TraceBody({ trace }: { trace: TraceView }) {
           )}
         </AgentGroup>
 
+        {(trace.audit_appendix?.length ?? 0) > 0 && <AuditAppendix pages={trace.audit_appendix!} />}
+
         <p className="text-[13px] text-ink-soft">Materi informasi dan analisis; bukan rekomendasi investasi.</p>
       </div>
     </div>
@@ -643,6 +645,58 @@ function TraceBody({ trace }: { trace: TraceView }) {
 }
 
 /* ------------------------------------------------------------------ */
+
+/** Report sections kept out of the printed company update, shown here for audit. */
+function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix"]> }) {
+  return (
+    <section id="lampiran-audit" aria-labelledby="lampiran-audit-title" className="panel scroll-mt-20">
+      <header className="px-6 py-5 max-sm:px-4">
+        <h2 id="lampiran-audit-title" className="text-[20px]">Lampiran audit</h2>
+        <p className="text-[14px] text-ink-soft">
+          Bagian rekonstruksi dan uji rekonsiliasi yang tidak dicetak di company update karena hampir tidak menggerakkan target.
+          Angkanya sama dengan yang dihitung saat laporan dibangun.
+        </p>
+      </header>
+      <div className="border-t border-rule">
+        {pages.map((page, i) => (
+          <details key={`${page.title}-${i}`} className="group border-b border-rule-soft last:border-b-0">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-3 text-[15px] font-medium text-ink-strong max-sm:px-4">
+              <span>{page.title}</span>
+              <span className="data text-ink-soft">{page.exhibits.length} tabel</span>
+            </summary>
+            <div className="grid gap-4 px-6 pb-5 max-sm:px-4 [&>*]:min-w-0">
+              {page.paragraphs.map((text, j) => <p key={j} className="max-w-[80ch] text-[14.5px] text-ink">{text}</p>)}
+              {page.exhibits.map((e, j) => (
+                <figure key={j} className="m-0">
+                  <figcaption className="mb-2 text-[14px] font-semibold text-ink-strong">{e.title}</figcaption>
+                  <div className="overflow-x-auto rounded-md border border-rule">
+                    <table className="w-full border-collapse text-[13.5px]">
+                      {e.cols.length > 0 && (
+                        <thead>
+                          <tr className="bg-raised text-left text-[12.5px] text-ink-soft">
+                            {e.cols.map((c, k) => <th key={k} scope="col" className={`px-3 py-2 font-medium ${k ? "text-right" : ""}`}>{c}</th>)}
+                          </tr>
+                        </thead>
+                      )}
+                      <tbody>
+                        {e.rows.map((row, r) => (
+                          <tr key={r} className="border-t border-rule-soft align-top">
+                            {row.map((c, k) => <td key={k} className={`px-3 py-1.5 ${k ? "text-right font-mono tabular-nums" : "text-ink"}`}>{c}</td>)}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {e.note && <p className="mt-1.5 max-w-[90ch] text-[12.5px] text-ink-soft">{e.note}</p>}
+                </figure>
+              ))}
+            </div>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function ReportTrace() {
   const { ticker = "" } = useParams();

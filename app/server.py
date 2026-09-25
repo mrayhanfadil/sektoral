@@ -73,6 +73,31 @@ def _history(reports: Path) -> list[dict]:
             for r in rows]
 
 
+def _audit_appendix(doc) -> list[dict]:
+    """Report sections kept out of the printed report (``lampiran_audit``):
+    their prose and tables, as plain text, bounded."""
+    cell = lambda v: str(v if v is not None else "")[:300]
+    out = []
+    for page in ((doc or {}).get("lampiran_audit") or [])[:40]:
+        if not isinstance(page, dict):
+            continue
+        exhibits = []
+        for e in (page.get("exhibit") or [])[:8]:
+            data = e.get("data") if isinstance(e.get("data"), dict) else {}
+            if e.get("tipe") != "tabel" or not isinstance(data.get("rows"), list):
+                continue
+            exhibits.append({"title": cell(e.get("judul")),
+                             "cols": [cell(c) for c in (data.get("cols") or [])[:12]],
+                             "rows": [[cell(c) for c in row[:12]] for row in data["rows"][:60]
+                                      if isinstance(row, list)],
+                             "note": str(e.get("catatan_sumber") or "")[:1500]})
+        out.append({"title": cell(page.get("judul")),
+                    "paragraphs": [str(x)[:2000] for x in (page.get("paragraf") or [])[:8]
+                                   if isinstance(x, str)],
+                    "exhibits": exhibits})
+    return out
+
+
 def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = None,
                want_pdf: bool = False, static_dir: str | Path | None = STATIC_DIR) -> FastAPI:
     jobs = ResearchJobs(outdir, reports, want_pdf)
@@ -107,6 +132,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
                                 if TICKER.fullmatch(ticker.upper()) else None)
         if view is None:
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
+        view["audit_appendix"] = _audit_appendix(outputs.load(outputs.REPORT, jobs.reports, ticker.upper()))
         # A gallery report is published only once its plan is approved.
         review = assumption_review.status(jobs.reports, ticker.upper())
         view["review_state"] = review["state"]

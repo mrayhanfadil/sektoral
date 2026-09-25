@@ -36,7 +36,7 @@ COMMODITY_UNITS = {"Copper": ("Tembaga", "USD/ton"), "Gold": ("Emas", "USD/oz"),
 PAGE_ORDER = ("Tesis investasi", "Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
               "Skenario operasi", "Skenario laba", "Berita", "Sensitivitas", "Katalis",
               "Konteks historis", "Target harga", "Cross-check", "Skenario nilai",
-              "Perbandingan peer", "Valuasi", "Data keuangan")
+              "Perbandingan peer", "Valuasi", "Data keuangan", "Lampiran valuasi")
 
 
 def _day(value):
@@ -3071,6 +3071,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
         attach_consensus(pages, intake, va)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
+    slim_mining(doc, intake)
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2
     renumber(doc)
@@ -3111,6 +3112,63 @@ def attach_rate_benchmarks(pages, intake, va):
         if table:
             exhibits.insert(at + 1, table)
         return
+
+
+# A mining report argues its target in the main body and keeps a short
+# valuation appendix. The FY26 H2 reconstruction (Q2 rebuild, revenue and
+# monetisation tests, provisional settlement, inventory and debt-flow
+# diagnostics) and a cross-check on an assumed multiple barely move a
+# life-of-mine target: they leave the PDF and stay in the report document's
+# audit appendix (``lampiran_audit``), which the web trace page shows.
+MINING_AUDIT_ONLY = (
+    "Persediaan, penjualan, dan batas rekonsiliasi", "Produksi dan penjualan aktual H1",
+    "Rekonstruksi aktual Q2", "Jembatan revenue H2", "Output dan penjualan H2",
+    "Net realized price", "Harga komoditas dan asumsi realisasi", "Estimasi FY26 dan pembanding",
+    "Uji antar-tahap", "Saldo settlement provisional", "Komposisi biaya aktual",
+    "Persediaan, gross profit", "Batas bukti kontrak", "Arus kas pinjaman", "Uji monetisasi",
+    "Uji realized price", "Uji kapasitas", "Cross-check")
+# Side exhibits of the target page that move to the valuation appendix page.
+MINING_TARGET_SIDE = ("Komponen WACC", rate_benchmarks.TITLE, "Uji tambahan SOTP/LoM",
+                      "Asumsi analis dalam SOTP/LoM", "Bukti lanjutan")
+VALUATION_APPENDIX = "Lampiran valuasi: tingkat diskonto, uji dan asumsi"
+
+
+def slim_mining(doc, intake):
+    """Mining reports only: audit-only sections to ``lampiran_audit``, the
+    target page's side exhibits to one valuation appendix page."""
+    if intake.get("model_profile") != "finite_life_mining":
+        return
+    kept, audit = [], list(doc.get("lampiran_audit") or [])
+    for page in doc.get("bagian") or []:
+        (audit if str(page.get("judul") or "").startswith(MINING_AUDIT_ONLY) else kept).append(page)
+    target = next((p for p in kept if str(p.get("judul") or "").startswith("Target harga")), None)
+    if target:
+        side = [e for e in target["exhibit"] if str(e.get("judul") or "").startswith(MINING_TARGET_SIDE)]
+        if side:
+            target["exhibit"] = [e for e in target["exhibit"] if e not in side]
+            at = next((i for i, p in enumerate(kept) if str(p.get("judul") or "").startswith("Data keuangan")),
+                      len(kept) - 1)
+            kept.insert(at + 1, _page(
+                VALUATION_APPENDIX,
+                ["Komponen tingkat diskonto dan pembandingnya, uji tambahan dan daftar asumsi analis "
+                 "di balik target SOTP/LoM. Lampiran berikutnya memuat royalti, capex, cadangan, "
+                 "Elang, jadwal tambang dan jembatan korporat."], side))
+    appendix = next((p for p in kept if p.get("judul") == VALUATION_APPENDIX), None)
+    if audit and appendix:
+        appendix["paragraf"].append(
+            f"Rekonstruksi H2 FY26 dan uji rekonsiliasinya ({len(audit)} bagian: Q2 2026, jembatan "
+            "revenue dan harga realisasi, settlement provisional, persediaan dan arus pinjaman) "
+            "tidak dicetak karena hampir tidak menggerakkan target umur tambang; semuanya tersimpan "
+            "di jejak audit laporan.")
+    for index, page in enumerate(kept):
+        page["halaman"] = index + 2
+    doc["bagian"] = kept
+    seen = set()
+    for page in audit:  # two builders can title a section the same way
+        if page["judul"] in seen:
+            page["judul"] = f"{page['judul']} (lanjutan)"
+        seen.add(page["judul"])
+    doc["lampiran_audit"] = audit
 
 
 def valuation_inputs(intake, fc, va):
