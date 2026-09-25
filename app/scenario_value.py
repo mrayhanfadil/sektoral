@@ -25,7 +25,7 @@ import re
 from datetime import date
 from statistics import median
 
-from . import fmt
+from . import bank_model, fmt
 
 KD_PRETAX = 0.09          # market cost of debt, policy parameter (as the screen)
 STATUTORY_TAX = 0.22      # Indonesian corporate income tax, fallback only
@@ -494,6 +494,11 @@ def ddm(intake, fc, coe, g):
 
     DPS = FY parent profit x Sectors historical payout / official shares,
     discounted at the Cost of Equity; Gordon terminal on the last DPS.
+
+    On the Bank Driver Scenario each year's payout is the bank model's own
+    (``app.bank_model``: lowered where the capital floor binds), and the
+    terminal DPS pays the sustainable payout 1 - g / ROE of the last year,
+    capped at the historical payout (``bank_model.terminal_payout``).
     """
     rows = path(fc)
     if not rows:
@@ -513,21 +518,34 @@ def ddm(intake, fc, coe, g):
         reasons.append("cost of equity tidak melebihi pertumbuhan jangka panjang")
     if reasons:
         return None, reasons
+    model = fc.get("bank_model") if isinstance(fc.get("bank_model"), dict) else None
+    constrained = bool(model and model.get("constraints"))
+    model_payout = {r["year"]: _num(r.get("payout")) for r in (model or {}).get("rows") or []}
 
     def value(rate, growth):
         timing = _schedule(rows, when, 1.0, dividends=True)
         lines, pv = [], 0.0
         for row, (share, t) in zip(rows, timing):
-            dps = max(row["net_profit_attributable"], 0.0) * fx * payout / shares
+            ratio = model_payout.get(row["year"]) if constrained else None
+            ratio = payout if ratio is None else ratio
+            eps = max(row["net_profit_attributable"], 0.0) * fx / shares
+            dps = eps * ratio
             factor = 1 / (1 + rate) ** t
             pv += dps * share * factor
             lines.append({"label": row["label"], "net_attr": row["net_profit_attributable"] * fx,
-                          "dps": dps, "t": t, "factor": factor, "pv": dps * share * factor})
-        terminal_dps = lines[-1]["dps"] * (1 + growth)
+                          "payout": ratio, "dps": dps, "t": t, "factor": factor,
+                          "pv": dps * share * factor})
+        terminal, terminal_basis = (bank_model.terminal_payout(model, growth) if constrained
+                                    else (None, None))
+        if terminal is None:
+            terminal_dps = lines[-1]["dps"] * (1 + growth)
+        else:
+            terminal_dps = eps * (1 + growth) * terminal
         tv = terminal_dps / (rate - growth)
         pv_tv = tv * lines[-1]["factor"]
         return {"lines": lines, "pv_dps": pv, "terminal_dps": terminal_dps, "tv": tv,
-                "pv_tv": pv_tv, "per_share": pv + pv_tv}
+                "pv_tv": pv_tv, "per_share": pv + pv_tv, "terminal_payout": terminal,
+                "terminal_payout_basis": terminal_basis}
 
     base = value(coe, g)
     grid = {(round(d, 3), gg): (value(coe + d, gg)["per_share"] if coe + d > gg else None)
@@ -547,6 +565,8 @@ def ddm(intake, fc, coe, g):
               "valuation_date": when.isoformat(), "fx": fx if fx != 1.0 else None,
               "lines": base["lines"], "pv_dps": base["pv_dps"],
               "terminal_dps": base["terminal_dps"], "tv": base["tv"], "pv_tv": base["pv_tv"],
+              "terminal_payout": base["terminal_payout"],
+              "terminal_payout_basis": base["terminal_payout_basis"],
               "tv_share": base["pv_tv"] / base["per_share"] if base["per_share"] else None,
               "per_share": base["per_share"], "grid": grid,
               "per_share_down": grid.get((0.01, 0.025)),

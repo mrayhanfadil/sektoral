@@ -125,7 +125,7 @@ def test_projection_balances_and_rolls_equity_forward():
     result = _project()
     rows, payout = result["rows"], 0.8
     assert result["checks"]["ok"] and len(rows) == 5
-    prev_equity, prev_parent = 281.7 * T, 57.5 * T
+    prev_equity, prev_parent, prev_payout = 281.7 * T, 57.5 * T, payout
     for r in rows:
         assert r["total_assets"] == pytest.approx(r["total_liabilities"] + r["total_equity"])
         assert r["total_assets"] == pytest.approx(
@@ -133,19 +133,21 @@ def test_projection_balances_and_rolls_equity_forward():
             + r["non_earning_assets"])
         # Dividends paid in year t = payout x parent profit of t-1 (final
         # dividend after the AGM), the DDM's DPS convention a year earlier.
-        assert r["dividends_paid"] == pytest.approx(payout * prev_parent)
+        assert r["dividends_paid"] == pytest.approx(prev_payout * prev_parent)
         assert r["total_equity"] - prev_equity == pytest.approx(
             r["net_cons"] - r["dividends_paid"])
-        assert r["dps"] * BALANCE["shares_outstanding"] == pytest.approx(payout * r["earnings"])
+        assert r["dps"] * BALANCE["shares_outstanding"] == pytest.approx(
+            r["payout"] * r["earnings"])
         assert r["bvps"] * BALANCE["shares_outstanding"] == pytest.approx(r["stockholders_equity"])
         assert r["total_deposit"] == pytest.approx(r["net_loan"] / result["parameters"]["ldr"])
         # Non-earning assets keep the base year's share; securities balance.
         assert r["non_earning_assets"] == pytest.approx(
             r["total_assets"] * result["parameters"]["non_earning_share"])
+        # RWA grows with the loan book (placements and bonds carry little weight).
         assert r["capital_adequacy_ratio"] == pytest.approx(
             r["total_equity"] * result["parameters"]["capital_to_equity"]
-            / (r["total_assets"] * result["parameters"]["rwa_density"]))
-        prev_equity, prev_parent = r["total_equity"], r["earnings"]
+            / (r["gross_loan"] * result["parameters"]["rwa_per_loan"]))
+        prev_equity, prev_parent, prev_payout = r["total_equity"], r["earnings"], r["payout"]
     assert rows[1]["gross_loan"] == pytest.approx(rows[0]["gross_loan"] * 1.06)
     assert rows[1]["net_interest_margin"] == pytest.approx(0.057)
     assert rows[1]["cost_of_credit"] == pytest.approx(0.004)
@@ -180,7 +182,7 @@ def test_deposit_growth_overrides_the_historical_ldr():
 
 def test_capital_warning_when_payout_outruns_retained_earnings():
     fast = _project(_drivers(first=(12.0, 5.6, 33.0, 33.0, 0.4),
-                             later=(12.0, 5.6, 33.0, 33.0, 0.4)), payout=1.0)
+                             later=(12.0, 5.6, 33.0, 33.0, 0.4)), payout=1.0, constrain=False)
     assert fast["checks"]["ok"]
     assert any("CAR screening" in w for w in fast["checks"]["warnings"])
     assert fast["rows"][-1]["capital_adequacy_ratio"] < fast["rows"][0]["capital_adequacy_ratio"]
@@ -191,10 +193,89 @@ def test_funding_that_cannot_carry_the_loan_book_is_a_problem():
     # balancing item) run out and the model says so instead of inventing
     # funding; before that, the LDR climbs past its record with a warning.
     broken = _project(_drivers(first=(25.0, 5.6, 33.0, 33.0, 0.4),
-                               later=(25.0, 5.6, 33.0, 33.0, 0.4), deposit_growth_pct=2.0))
+                               later=(25.0, 5.6, 33.0, 33.0, 0.4), deposit_growth_pct=2.0),
+                      constrain=False)
     assert not broken["checks"]["ok"]
     assert any("selain kredit" in p and "negatif" in p for p in broken["checks"]["problems"])
     assert any(w.startswith("LDR di atas rekor") for w in broken["checks"]["warnings"])
+
+
+FAST = dict(first=(12.0, 5.6, 33.0, 33.0, 0.4), later=(12.0, 5.6, 33.0, 33.0, 0.4))
+
+
+def test_limits_are_the_issuers_own_capital_low_and_ldr_high():
+    lim = B.limits(HISTORY, 2025)
+    cars = {y["year"]: y["ratios"]["car"] for y in B.history(HISTORY)}
+    ldrs = {y["year"]: y["ratios"]["ldr"] for y in B.history(HISTORY)}
+    assert lim["car_floor"] == pytest.approx(min(cars.values()))
+    assert lim["ldr_cap"] == pytest.approx(max(ldrs.values()))
+    assert "CAR terendah FY" in lim["car_floor_basis"] and "LDR tertinggi FY" in lim["ldr_cap_basis"]
+
+
+def test_a_capital_breach_lowers_the_payout_until_car_holds_the_floor():
+    # Loans +12% a year at a 100% payout: unconstrained, CAR falls below the
+    # issuer's historical low; constrained, the payout on the prior year's
+    # profit is cut and CAR sits at or above the floor every year.
+    free = _project(_drivers(**FAST), payout=1.0, constrain=False)
+    held = _project(_drivers(**FAST), payout=1.0)
+    floor = held["constraints"]["car_floor"]
+    assert min(r["capital_adequacy_ratio"] for r in free["rows"]) < floor
+    assert held["checks"]["ok"]
+    for r in held["rows"][1:]:
+        assert r["capital_adequacy_ratio"] >= floor - 1e-6
+    cuts = [a for a in held["constraints"]["applied"] if a["lever"] == "payout"]
+    assert cuts and all(a["rule"] == "car_floor" and a["to_pct"] < a["from_pct"] for a in cuts)
+    for a in cuts:
+        row = next(r for r in held["rows"] if r["label"] == a["label"])
+        assert row["payout"] == pytest.approx(a["to_pct"] / 100)
+    # A cut is stated in the assumptions, and dividends still follow the rule.
+    text = " ".join(held["assumptions"])
+    assert "Batas modal mengikat: payout atas laba" in text
+    assert not any("CAR screening di bawah" in w for w in held["checks"]["warnings"])
+
+
+def test_the_first_year_caps_loans_since_its_dividend_is_declared():
+    held = _project(_drivers(first=(30.0, 5.6, 33.0, 33.0, 0.4)), payout=1.0)
+    first = held["rows"][0]
+    assert first["dividends_paid"] == pytest.approx(1.0 * 57.5 * T)
+    capped = [a for a in held["constraints"]["applied"]
+              if a["label"] == first["label"] and a["lever"] == "loan_growth"]
+    assert capped and capped[0]["to_pct"] < 30.0
+    assert first["capital_adequacy_ratio"] >= held["constraints"]["car_floor"] - 1e-6
+    # Never below the official 30 June loan book.
+    assert first["gross_loan"] >= BALANCE["loans"] - 1
+
+
+def test_an_ldr_breach_caps_loan_growth_at_the_funding_limit():
+    held = _project(_drivers(first=(12.0, 5.6, 33.0, 33.0, 0.4),
+                             later=(15.0, 5.6, 33.0, 33.0, 0.4), deposit_growth_pct=4.0))
+    cap = held["constraints"]["ldr_cap"]
+    assert held["checks"]["ok"]
+    assert all(r["loan_to_deposit_ratio"] <= cap + 1e-9 for r in held["rows"])
+    capped = [a for a in held["constraints"]["applied"] if a["rule"] == "ldr_cap"]
+    assert capped and all(a["lever"] == "loan_growth" for a in capped)
+    assert not any(w.startswith("LDR di atas") for w in held["checks"]["warnings"])
+
+
+def test_the_ddm_pays_each_years_constrained_payout_and_a_sustainable_terminal():
+    intake = _intake()
+    intake["payout"] = 1.0
+    plan = _plan()
+    for row in [plan["earnings_scenario"]["bank_drivers"]] + plan["bank_outyear_scenario"]:
+        row.update(loan_growth_pct=12.0)
+    fc = forecast.build(intake, 5, plan)
+    model = fc["bank_model"]
+    assert any(a["lever"] == "payout" for a in model["constraints"]["applied"])
+    detail, reasons = scenario_value.ddm(intake, fc, 0.109, 0.035)
+    assert reasons == []
+    shares = BALANCE["shares_outstanding"]
+    for line, row in zip(detail["lines"], model["rows"]):
+        assert line["payout"] == pytest.approx(row["payout"])
+        assert line["dps"] == pytest.approx(row["payout"] * row["earnings"] / shares)
+    roe = model["rows"][-1]["roe"]
+    assert detail["terminal_payout"] == pytest.approx(min(1.0, 1 - 0.035 / roe))
+    assert detail["terminal_dps"] == pytest.approx(
+        model["rows"][-1]["earnings"] / shares * 1.035 * detail["terminal_payout"])
 
 
 def test_missing_capital_history_leaves_car_out_with_a_reason():
