@@ -100,7 +100,7 @@ def summary(doc, folder: Path, stored_ticker: str, require_review: bool = True) 
         "review": {"state": review["state"], "reviewer": reviewed.get("reviewer"),
                    "reviewed_at": reviewed.get("reviewed_at"),
                    "decision": reviewed.get("decision"),
-                   "edits": len(reviewed.get("edits") or [])},
+                   "edits": len(assumption_review.plan_edits(reviewed))},
         "files": {**{kind: (folder / pattern.format(t=ticker)).is_file()
                       for kind, (pattern, _) in FILES.items()},
                   "trace_json": outputs.exists(outputs.TRACE, folder, ticker)},

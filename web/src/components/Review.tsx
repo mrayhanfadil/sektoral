@@ -39,7 +39,7 @@ export function ReviewPanel({ ticker, onApproved }: { ticker: string; onApproved
         </div>
         {view.state === "approved" ? (
           <Chip tone="ok"><CircleCheck aria-hidden className="size-3.5" strokeWidth={2.4} />
-            {view.decision === "approved_with_edits" ? `Disetujui, ${view.edits.length} perubahan` : "Disetujui"}
+            {view.edits.length ? `Disetujui, ${view.edits.length} perubahan` : "Disetujui"}
           </Chip>
         ) : (
           <Chip tone="warn"><TriangleAlert aria-hidden className="size-3.5" strokeWidth={2.4} />Menunggu review</Chip>
@@ -52,9 +52,12 @@ export function ReviewPanel({ ticker, onApproved }: { ticker: string; onApproved
   );
 }
 
+const stamp = (at: string | null | undefined) => at ? new Date(at).toLocaleString("id-ID", {
+  dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }) + " WIB" : "—";
+
 function Approved({ view }: { view: ReviewView }) {
-  const when = view.reviewed_at ? new Date(view.reviewed_at).toLocaleString("id-ID", {
-    dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }) : "—";
+  const when = stamp(view.reviewed_at).replace(/ WIB$/, "");
+  const history = view.history ?? [];
   return (
     <div className="grid gap-4 border-t border-rule px-6 py-5 max-sm:px-4">
       <p className="text-[14.5px] text-ink">
@@ -63,14 +66,15 @@ function Approved({ view }: { view: ReviewView }) {
       </p>
       {view.edits.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-[14px]">
+          <table className="w-full min-w-[720px] border-collapse text-[14px]">
             <thead>
               <tr className="border-b border-rule text-left text-[12.5px] text-ink-soft">
                 <th scope="col" className="py-2 pr-4 font-medium">Driver</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Tahun</th>
                 <th scope="col" className="py-2 pr-4 text-right font-medium">Agent</th>
                 <th scope="col" className="py-2 pr-4 text-right font-medium">Analis</th>
-                <th scope="col" className="py-2 font-medium">Alasan</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Alasan</th>
+                <th scope="col" className="py-2 font-medium">Diubah oleh</th>
               </tr>
             </thead>
             <tbody>
@@ -80,12 +84,27 @@ function Approved({ view }: { view: ReviewView }) {
                   <td className="data py-2 pr-4 text-ink-soft">{e.year ?? "berjalan"}</td>
                   <td className="data py-2 pr-4 text-right text-ink-soft line-through decoration-ink-faint">{show(e.from, e.unit)}</td>
                   <td className="data py-2 pr-4 text-right font-semibold text-ink-strong">{show(e.to, e.unit)}</td>
-                  <td className="py-2 text-ink">{e.reason}</td>
+                  <td className="py-2 pr-4 text-ink">{e.reason}</td>
+                  <td className="py-2 text-[13px] whitespace-nowrap text-ink-soft">{e.reviewer ?? view.reviewer}<br />{stamp(e.reviewed_at ?? view.reviewed_at)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+      {history.length > 0 && (
+        <details className="text-[14px]">
+          <summary className="cursor-pointer text-ink-soft">Persetujuan sebelumnya <span className="data">{history.length}</span></summary>
+          <ol className="m-0 mt-2 grid list-none gap-1.5 border-l border-rule pl-4">
+            {history.map((h, i) => (
+              <li key={`${h.reviewed_at}-${i}`} className="text-ink-soft">
+                <span className="text-ink-strong">{h.reviewer ?? "—"}</span>, {stamp(h.reviewed_at)}:{" "}
+                {h.edits ? `disetujui dengan ${h.edits} perubahan` : "disetujui tanpa perubahan"}
+                {h.note && <>. {h.note}</>}
+              </li>
+            ))}
+          </ol>
+        </details>
       )}
     </div>
   );
