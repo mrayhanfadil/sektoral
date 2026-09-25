@@ -1537,6 +1537,12 @@ def _exhibit_number(n):
         return 10 ** 6
 
 
+# The per-exhibit source appendix is hidden for now: exhibit footers keep the
+# house source line, and each exhibit's full note stays in the report
+# document and its audit trace. Set True to print it again.
+SHOW_SOURCE_APPENDIX = False
+
+
 def _source_appendix(notes, meta):
     """Spec §5.5: exhibit footers carry only the house line; each exhibit's
     provenance, dates, method and caveats are listed here, in exhibit order."""
@@ -1673,7 +1679,8 @@ def _render(doc):
                   "Dokumen ini adalah bahan riset dalam peninjauan. Rating dan target "
                   "harga belum diterbitkan karena syarat data atau model belum terpenuhi. "
                   "Keputusan investasi menjadi tanggung jawab pembaca.")
-    h.append(_source_appendix(_NOTES.get(), m))
+    if SHOW_SOURCE_APPENDIX:
+        h.append(_source_appendix(_NOTES.get(), m))
     h.append(f"<div class='page'>{_report_header(m['tanggal'], m)}"
              f"{_draft_banner(m)}"
              "<h2 class='sec'>Pengungkapan</h2>"

@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from app import render  # noqa: E402
 from app.harness import render_check as R  # noqa: E402
 
 SRC = "Source: Company, Sektoral Estimates"
@@ -104,7 +105,8 @@ def test_numbering_gap_blocks():
     assert failed(html(numbers=[1, 2, 4, 5, 6]))["T1.numbering_rendered"]["blocker"]
 
 
-def test_appendix_without_known_heading_is_not_a_numbering_break():
+def test_appendix_without_known_heading_is_not_a_numbering_break(monkeypatch):
+    monkeypatch.setattr(render, "SHOW_SOURCE_APPENDIX", True)
     text = html(appendix=False).replace(
         "</body>", "<div><h2>Catatan</h2>" + "".join(f"<p>Exhibit {i}. Rincian</p>" for i in range(1, 6))
         + "</div></body>")
@@ -113,7 +115,8 @@ def test_appendix_without_known_heading_is_not_a_numbering_break():
     assert "judul lampiran" in checks(text)["T1.source_appendix"]["message"]
 
 
-def test_missing_appendix_warns():
+def test_missing_appendix_warns(monkeypatch):
+    monkeypatch.setattr(render, "SHOW_SOURCE_APPENDIX", True)
     assert failed(html(appendix=False))["T1.source_appendix"]["severity"] == R.WARNING
 
 
@@ -182,3 +185,9 @@ def test_pdf_text_checks():
 def test_render_error_result_is_a_blocker():
     out = R.error_result(KeyError("cover"))
     assert out["blocker"] and out["check"] == "R.render_error"
+
+
+def test_a_hidden_appendix_is_not_applicable(monkeypatch):
+    monkeypatch.setattr(render, "SHOW_SOURCE_APPENDIX", False)
+    checks = {c["check"]: c for c in R.check_rendered("<html><body><p>x</p></body></html>")["checks"]}
+    assert checks["T1.source_appendix"]["status"] == R.NA

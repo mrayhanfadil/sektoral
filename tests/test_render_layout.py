@@ -106,7 +106,8 @@ def _doc():
     }
 
 
-def test_every_exhibit_footer_is_the_house_line_and_detail_moves_to_the_appendix():
+def test_every_exhibit_footer_is_the_house_line_and_detail_moves_to_the_appendix(monkeypatch):
+    monkeypatch.setattr(render, "SHOW_SOURCE_APPENDIX", True)
     out = render.render(_doc())
     footers = re.findall(r"<p class='src'>([^<]*)</p>", out)
     assert footers and set(footers) == {HOUSE}
