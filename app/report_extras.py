@@ -176,6 +176,12 @@ def holding_sotp_exhibit(va):
            if primary else "Cross-check, bukan dasar target harga."))
 
 
+def _rp_signed(value):
+    """Per-share amount with the tables' convention: negatives in brackets."""
+    amount = f"Rp{fmt.rp(abs(round(value)))}"
+    return f"({amount})" if round(value) < 0 else amount
+
+
 def landbank_exhibits(va):
     """RNAV of the landbank behind the holding SOTP: inputs and a pace x price grid."""
     chain = (va or {}).get("method_chain") or {}
@@ -209,7 +215,7 @@ def landbank_exhibits(va):
          f"terjual habis dalam {land['years']} tahun"],
         [f"Tambahan nilai porsi SSIA ({fmt.pct(li['stake'])})",
          f"Rp{bn(land['uplift_attributable'])} miliar",
-         f"Rp{fmt.rp(round(land['uplift_attributable'] / shares))} per saham"],
+         f"{_rp_signed(land['uplift_attributable'] / shares)} per saham"],
     ]
     appraisal = ev.get("appraisal") or {}
     if appraisal.get("fair_value_idr") and appraisal.get("area_m2"):
@@ -220,7 +226,7 @@ def landbank_exhibits(va):
                      f"{appraisal.get('appraisal_date')} (tanah mentah, sebelum pengembangan)"])
     growths = sorted({g for (_, g) in land["grid"]})
     grid_rows = [[f"{fmt._id(p, 0)} ha/tahun" + (" (target 2026)" if p == 135 else "")]
-                 + [f"Rp{fmt.rp(round(land['grid'][(p, g)] / shares))}" for g in growths]
+                 + [_rp_signed(land["grid"][(p, g)] / shares) for g in growths]
                  for p in sorted({p for (p, _) in land["grid"]})]
     return [
         _exhibit("RNAV landbank Suryacipta: dasar perhitungan", ["Komponen", "Nilai", "Dasar"],
