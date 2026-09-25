@@ -4,6 +4,7 @@ import sqlite3
 import time
 from datetime import date
 from . import cache
+from . import fmt
 from . import fx
 from . import mineops
 from . import market_quote
@@ -13,6 +14,7 @@ from . import analyst_scenario
 from . import news as news_context
 from . import news_fetch
 from . import peer_fundamentals
+from . import peer_groups
 from . import research_context
 
 
@@ -191,7 +193,9 @@ def _driver_evidence_inputs(official_evidence, payout, payout_basis,
             else:
                 has_dps = isinstance(dps_hist, list) and len(dps_hist) > 0
                 evidence["payout"] = {
-                    "source": "sectors_cache dividend payout_ratio"
+                    "source": ("sectors_cache dividend dividend_ttm + historical_financials earnings"
+                               if payout_basis.startswith("DPS 12 bulan") else
+                               "sectors_cache dividend payout_ratio")
                               + (" + historical_dividends" if has_dps else ""),
                     "source_date": str(report_date or source_date)[:10],
                     "page": None, "unit": "fraction",
@@ -217,6 +221,79 @@ def _driver_evidence_inputs(official_evidence, payout, payout_basis,
         if isinstance(metrics.get(key), (int, float)):
             evidence[series] = _row(labels[series])
     return evidence or None
+
+
+# Sectors derives D&A as EBITDA - EBIT. When that implies fixed assets lasting
+# longer than this, the EBITDA line has lost most of the depreciation (JPFA
+# FY2025: Rp236 miliar against Rp1.265 miliar in the audited segment note).
+MAX_IMPLIED_ASSET_LIFE = 40
+
+
+def _official_annual_depreciation(annuals, evidence):
+    """Replace Sectors D&A and EBITDA with audited annual figures where the
+    issuer evidence pack carries them (``annual_actuals`` rows with
+    ``depreciation`` and ``operating_profit``, rupiah reporters only)."""
+    evidence = evidence or {}
+    if evidence.get("reporting_currency") not in (None, "IDR"):
+        return []
+    source = evidence.get("annual_actuals_source") or {}
+    rows = {r.get("year"): r for r in evidence.get("annual_actuals") or []}
+    notes = []
+    for a in annuals:
+        row = rows.get(a["year"]) or {}
+        da, operating = _num(row.get("depreciation")), _num(row.get("operating_profit"))
+        if da is None or da < 0 or operating is None:
+            continue
+        before = a.get("ebitda")
+        a.update(da=da, ebit=operating, ebitda=operating + da, da_source="official",
+                 ebitda_sectors=before)
+        notes.append(
+            f"D&A dan EBITDA FY{a['year']} memakai {source.get('title') or 'laporan audit emiten'}"
+            f" (penyusutan Rp{da / 1e9:,.0f} miliar, laba usaha Rp{operating / 1e9:,.0f} miliar);"
+            f" EBITDA Sectors Rp{(before or 0) / 1e9:,.0f} miliar tidak dipakai."
+            .replace(",", "."))
+    return notes
+
+
+def _implausible_depreciation(annuals):
+    """Void Sectors-derived D&A whose implied asset life is not credible."""
+    voided = []
+    for a in annuals:
+        da, fixed = a.get("da"), a.get("fixed_assets")
+        if (a.get("da_source") != "official" and da and da > 0 and fixed
+                and fixed / da > MAX_IMPLIED_ASSET_LIFE):
+            voided.append(f"FY{a['year']} ({fixed / da:,.0f} tahun)".replace(",", "."))
+            a.update(da=None, da_implied_life=fixed / da)
+    if not voided:
+        return []
+    return [f"D&A data Sectors (EBITDA - EBIT) tidak dipakai untuk {', '.join(voided)}: "
+            f"umur aset tetap tersirat di atas {MAX_IMPLIED_ASSET_LIFE} tahun, sehingga EBITDA "
+            "Sectors kehilangan sebagian besar penyusutan."]
+
+
+def _historical_ev_ebitda(val, annuals):
+    """Own-history EV/EBITDA from Sectors, on the same EBITDA as the annuals.
+
+    Sectors divides by its own EBITDA, so a year whose D&A was rejected as not
+    credible carries an overstated multiple and is dropped; a year whose EBITDA
+    was replaced by audited figures is rescaled to it. The latest (current)
+    point has no annual row to check and is kept as reported.
+    """
+    by_year = {a.get("year"): a for a in annuals}
+    out = []
+    for h in val.get("historical_valuation") or []:
+        if not isinstance(h, dict):
+            continue
+        value = _num(h.get("enterprise_to_ebitda"))
+        if value is None or not 0 < value <= 100:
+            continue
+        a = by_year.get(h.get("year")) or {}
+        if a.get("da_implied_life") or a.get("da_invalid"):
+            continue
+        if a.get("ebitda_sectors") and a.get("ebitda"):
+            value = value * a["ebitda_sectors"] / a["ebitda"]
+        out.append({"year": h.get("year"), "value": value})
+    return out[-5:]
 
 
 def _cache_close_provenance(ticker, price, price_date):
@@ -342,6 +419,7 @@ def load(ticker, as_of=None):
             "cash": cash_val,
             "equity": _num(h.get("total_equity")),
             "assets": _num(h.get("total_assets")),
+            "fixed_assets": _num(h.get("fixed_assets")),
             "liab": _num(h.get("total_liabilities")),
             "shares": _num(h.get("outstanding_shares")),
             # Working-capital lines for the scenario FCFF (ΔNWC); None when absent.
@@ -352,6 +430,11 @@ def load(ticker, as_of=None):
         })
     if len(annuals) < 3:
         raise ValueError(f"only {len(annuals)} usable annuals for {t}, need >= 3")
+    for a in annuals:
+        if a["year"] in da_invalid_years:
+            a["da_invalid"] = True
+    notes.extend(_official_annual_depreciation(annuals, official_evidence))
+    notes.extend(_implausible_depreciation(annuals))
 
     base = annuals[-1]
     share_row = next((row for row in reversed(annuals) if row["shares"]), None)
@@ -437,9 +520,17 @@ def load(ticker, as_of=None):
     )
     latest_quarter = quarterly_rows[-1] if quarterly_rows else None
 
-    peers, peer_median_pe, peer_median_pb = _peers(rep, t)
-    peer_basis = None
-    if not peers:
+    curated = peer_groups.companies(t)
+    if curated:
+        peers, peer_median_pe, peer_median_pb = _curated_peers(curated)
+        own_row, rows, missing, group = curated
+        peer_basis = (f"grup peer kurasi Sektoral ({group['group']}; data/peer_groups/{t}.json)"
+                      + (f"; tanpa data: {', '.join(missing)}" if missing else ""))
+    else:
+        peers, peer_median_pe, peer_median_pb = _peers(rep, t)
+        note = peer_groups.unusable_note(t)
+        peer_basis = f"tabel peer Sectors; {note}" if note else None
+    if not peers and not curated:
         borrowed, lender = _borrowed_peer_report(t)
         if borrowed:
             peers, peer_median_pe, peer_median_pb = _peers(borrowed, t)
@@ -449,6 +540,16 @@ def load(ticker, as_of=None):
         payout, payout_basis = 0.25, "asumsi analis 25% (tanpa payout historis di data Sectors)"
     else:
         payout_basis = "payout ratio historis di data Sectors"
+    # Sectors' payout_ratio divides trailing dividends by trailing earnings that
+    # already include the new year's interim profit (BBRI: 83% against the 92%
+    # of FY2025 profit actually paid). Dividends of the last twelve months are
+    # the payout of the last fiscal year, so they are set against its EPS.
+    dps_ttm, base_earn = _num(div.get("dividend_ttm")), _num(base.get("earnings"))
+    eps_fy = base_earn / shares if base_earn and shares else None
+    if dps_ttm and eps_fy and eps_fy > 0 and 0 < dps_ttm / eps_fy <= 1.5:
+        payout = dps_ttm / eps_fy
+        payout_basis = (f"DPS 12 bulan terakhir Rp{fmt._id(dps_ttm, 1)} atas EPS "
+                        f"FY{base['year']} Rp{fmt._id(eps_fy, 1)} (data Sectors)")
     dps_hist, dps_years = [], []
     hist_div = div.get("historical_dividends") or {}
     if isinstance(hist_div, dict):
@@ -457,6 +558,14 @@ def load(ticker, as_of=None):
             if tot is not None:
                 dps_hist.append(tot)
                 dps_years.append(str(y))
+    # Dated cash dividends (ex-date, Rp per share) for the EV-to-equity bridge:
+    # a dividend paid after the balance-sheet date has left the company.
+    dividend_events = sorted(
+        ({"date": str(b.get("date"))[:10], "dps": _num(b.get("total"))}
+         for year in (hist_div.values() if isinstance(hist_div, dict) else [])
+         for b in ((year or {}).get("breakdown") or [])
+         if isinstance(b, dict) and b.get("date") and _num(b.get("total"))),
+        key=lambda e: e["date"])
     dps_basis = (f"DPS historis {dps_years[0]}-{dps_years[-1]} di data Sectors"
                  if dps_hist else "tanpa DPS historis di data Sectors")
 
@@ -472,6 +581,7 @@ def load(ticker, as_of=None):
         "annuals": annuals, "base_year": base["year"],
         "payout": payout, "payout_basis": payout_basis,
         "dps_hist": dps_hist, "dps_basis": dps_basis,
+        "dividend_events": dividend_events,
         "industry": ov.get("industry"), "sub_sector": ov.get("sub_sector"),
         "major_holders": (own.get("major_shareholders") or [])[:5],
         "free_float": None,
@@ -488,14 +598,10 @@ def load(ticker, as_of=None):
         "peers": peers, "peer_median_pe": peer_median_pe, "peer_basis": peer_basis,
         # Own-history EV/EBITDA (Sectors valuation.historical_valuation) for the
         # Method Gate 5 implied-exit check; the Sectors peer tables carry no EV.
-        "historical_ev_ebitda": [
-            {"year": h.get("year"), "value": _num(h.get("enterprise_to_ebitda"))}
-            for h in (val.get("historical_valuation") or [])
-            if isinstance(h, dict) and _num(h.get("enterprise_to_ebitda")) is not None
-            and 0 < _num(h.get("enterprise_to_ebitda")) <= 100][-5:],
+        "historical_ev_ebitda": _historical_ev_ebitda(val, annuals),
         "peer_median_pb": peer_median_pb,
         "forward_pe_cache": _num(val.get("forward_pe")),
-        "mineops": mineops.load(t),
+        "mineops": mineops.load(t, report_date),
         "quarterly_actuals": quarterly_rows,
         "latest_quarterly_actual": latest_quarter,
         "official_evidence": official_evidence,
@@ -598,10 +704,31 @@ def _peer_ev_yahoo(ticker, market_cap):
     year = snapshot["fiscal_year"]
     ev = market_cap + debt - cash
     meaningful = ev > 0 and ebitda > 0
-    return {"ev": ev, "ev_year": year, "ev_status": "ok" if meaningful else "not_meaningful",
+    return {"ev": ev, "ev_year": year, "ev_period": snapshot.get("period_label"),
+            "ev_status": "ok" if meaningful else "not_meaningful",
             "ev_ebitda": ev / ebitda if meaningful else None, "ev_source_kind": "yahoo",
             "ev_source": (f"market cap tabel peer Sectors + total_debt, kas, EBITDA "
                           f"{snapshot['source']} (diambil {snapshot.get('fetched_at')})")}
+
+
+def _curated_peers(curated):
+    """Valuation peer rows from a curated group (app.peer_groups): Sectors rows
+    value EV as before; Yahoo rows carry EV/EBITDA in their own currency."""
+    _own, rows, _missing, _group = curated
+    out = []
+    for c in rows:
+        mcap, revenue = _num(c.get("market_cap")), _num(c.get("total_revenue"))
+        ev = (c.get("ev") or {"ev_status": "report_not_cached"}) if c.get("source_kind") == "yahoo" \
+            else _peer_ev(c.get("symbol"), mcap)
+        out.append({"symbol": c.get("symbol"), "name": c.get("company_name", ""),
+                    "pe": _num(c.get("pe_ttm")), "pb": _num(c.get("pb_mrq")),
+                    "mcap": mcap, "revenue": revenue,
+                    "ps": mcap / revenue if mcap and revenue and revenue > 0 else None,
+                    "source_kind": c.get("source_kind"), **ev})
+    pes = sorted(p for p in (c["pe"] for c in out) if p and p > 0)
+    pbs = sorted(p for p in (c["pb"] for c in out) if p and p > 0)
+    med = lambda s: s[len(s) // 2] if s else None
+    return out[:12], med(pes), med(pbs)
 
 
 def _peers(rep, t):

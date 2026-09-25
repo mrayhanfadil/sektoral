@@ -62,7 +62,7 @@ def test_tavily_multi_query_merges_and_dedups(tmp_path):
     ring = tavily.KeyRing(["test-key"])
     result = tavily.news_context(
         "BBRI", "Bank Rakyat Indonesia", "2026-09-23",
-        profile="financial_ddm", post=post, ring=ring, store_dir=tmp_path)
+        profile="financial_ddm", post=post, ring=ring, db=tmp_path)
     urls = [i["url"] for i in result["items"]]
     # Look-ahead filtered, URL deduped (utm stripped logically via lower/strip).
     assert "https://kontan.co.id/future" not in urls
@@ -289,7 +289,7 @@ def test_tavily_hint_query_failure_keeps_base_results(tmp_path):
 
     result = tavily.news_context("BBRI", "Bank Rakyat Indonesia", "2026-09-23",
                                  profile="financial_ddm", post=post,
-                                 ring=tavily.KeyRing(["k"]), store_dir=tmp_path)
+                                 ring=tavily.KeyRing(["k"]), db=tmp_path)
     assert len(result["items"]) == 1
     assert result["partial_failures"]
     assert not list(tmp_path.glob("*.json"))  # partial results are not cached

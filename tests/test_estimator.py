@@ -472,12 +472,12 @@ def test_live_invalid_json_stops_after_repair_attempt(monkeypatch, tmp_path):
     from agents.estimator import tools
     monkeypatch.setattr(tools, "cache_endpoints", lambda ticker: [])
     monkeypatch.setattr(tools, "cache_get", lambda *args: None)
-    monkeypatch.setattr(tools, "DRIVERS_DIR", tmp_path)
     monkeypatch.setattr(run, "_chat", lambda messages, **kwargs: "not json")
     result = run.run_live("AMMN", ["2026F", "2027F", "2028F"])
     assert result["ok"] is False
     assert "JSON" in result["error"]
-    assert not (tmp_path / "AMMN.json").exists()
+    from app import store
+    assert store.get(tools.DRIVERS_COLLECTION, "AMMN") is None
 
 
 def test_news_cache_is_ticker_filtered_and_cut_off_at_cached_as_of(monkeypatch, tmp_path):

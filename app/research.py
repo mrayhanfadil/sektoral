@@ -7,7 +7,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import build, fmt, intake, news_fetch, news_sources, research_context, tavily, ui
+from . import build, fmt, intake, news_fetch, news_sources, outputs, research_context, tavily, ui
 from .progress import emit
 
 _TRACE_CSS = (
@@ -372,7 +372,7 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
     }
     emit("report", "Company update tersusun", report["meta"].get("status"))
     # build.build already assembled both from the same register and plan;
-    # reuse them so the trace and <T>-manifest.json cannot disagree.
+    # reuse them so the trace and the stored manifest cannot disagree.
     evidence_register = report.get("evidence_register") or {}
     manifest = report.get("run_manifest") or {"ticker": t, "as_of": report_as_of}
     audit = {
@@ -398,26 +398,21 @@ def run(ticker, outdir, want_pdf=False, as_of=None,
                    "rating": report["meta"].get("rating"),
                    "research_status": report["meta"].get("research_status")},
     }
-    trace_json = destination / f"{t}-trace.json"
+    trace_key = outputs.save(outputs.TRACE, destination, t, audit)
     trace_html = destination / f"{t}-trace.html"
-    trace_json.write_text(json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
     trace_html.write_text(_trace_html(t, safe_research, f"{t}.html",
                                       assumption_result,
                                       forecast_intake.get("news_full"),
                                       analyst=intel,
                                       news_sources=audit["news_sources"],
                                       report=audit["report"]), encoding="utf-8")
-    try:
-        (destination / f"{t}-manifest.json").write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    except OSError:
-        pass
+    outputs.save(outputs.MANIFEST, destination, t, manifest)
     emit("done", "Selesai")
     return {"ticker": t, "research_ok": safe_research["ok"], "intel": intel,
             "report_status": report["meta"].get("status"),
             "report_html": str(destination / f"{t}.html"),
             "report_pdf": str(destination / f"{t}.pdf") if want_pdf else None,
-            "trace_html": str(trace_html), "trace_json": str(trace_json)}
+            "trace_html": str(trace_html), "trace_key": trace_key}
 
 
 def main(argv=None):

@@ -1,14 +1,14 @@
 """Cache-backed news filtering and validation of agent-written context."""
 from __future__ import annotations
 
-import json
 import re
 from datetime import date
-from pathlib import Path
+
+from . import store
 
 
-ROOT = Path(__file__).resolve().parent.parent
-NEWS_ANALYSIS_DIR = ROOT / "data" / "news_analysis"
+# Validated news narrative per ticker (the estimator agent writes it).
+NEWS_ANALYSIS_COLLECTION = "news_analysis"
 _ADVICE = re.compile(
     r"\b(buy|sell|hold|recommend\w*|beli|jual|tahan|rekomendasi|target price|price target|"
     r"target harga|harga target|nilai wajar|fair value)\b", re.I)
@@ -85,14 +85,13 @@ def validate_analysis(ticker, rows, news_rows, as_of=None):
     return valid
 
 
-def load_analysis(ticker, news_rows, as_of=None, analysis_dir=None):
+def load_analysis(ticker, news_rows, as_of=None, db=None):
     """Load only source-checked narrative; ignores cached/offline stale artifacts."""
-    directory = Path(analysis_dir) if analysis_dir is not None else NEWS_ANALYSIS_DIR
-    path = directory / f"{str(ticker).upper()}.json"
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError):
-        return [], {"status": "missing", "path": str(path)}
+    key = str(ticker).upper()
+    path = f"{NEWS_ANALYSIS_COLLECTION}/{key}"
+    document = store.get(NEWS_ANALYSIS_COLLECTION, key, db)
+    if document is None:
+        return [], {"status": "missing", "path": path}
     if not isinstance(document, dict) or \
             str(document.get("ticker") or "").strip().upper() != str(ticker).upper():
         return [], {"status": "invalid", "path": str(path),

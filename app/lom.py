@@ -21,11 +21,15 @@ from __future__ import annotations
 
 import re
 
+from . import commodity, fmt
+
 OZ_PER_T = 32150.7466
 G_PER_OZ = 31.1034768
 LB_PER_T = 2204.62262
 PAYABLE_CU, PAYABLE_AU = 0.9655, 0.97   # HPM payable rules (Kepmen ESDM 144.K/2026)
-CAPACITY_PAGE = 10  # H1 2026 presentation: "up to 220,000 tonnes ... and 579,000 oz"
+CAPACITY_PAGE = 10
+# Sensitivity only: mine Elang until its reserve is exhausted, not to 2050.
+LICENCE_EXTENSION_END = 2100  # H1 2026 presentation: "up to 220,000 tonnes ... and 579,000 oz"
 
 
 def _num(value):
@@ -78,6 +82,8 @@ def inputs(intake, fc):
     inventory = ev.get("inventory_and_sales_detail") or {}
     elang = ev.get("elang_development_economics") or {}
     mineops = intake.get("mineops") or {}
+    permit_expired = ((ev.get("quarterly_actuals") or {}).get("q1_2026") or {}).get(
+        "temporary_concentrate_export_permit_expired")
 
     throughput = _num(_metric(om, "Mill throughput (juta ton)").get("current"))
     cu_grade = _num(_metric(om, "Kadar tembaga (%)").get("current"))
@@ -151,6 +157,15 @@ def inputs(intake, fc):
         "au_price": _num((mineops.get("au_price") or {}).get("avg12")),
         "cu_price_date": (mineops.get("cu_price") or {}).get("date"),
         "au_price_date": (mineops.get("au_price") or {}).get("date"),
+        "deck_basis": deck_basis(mineops),
+        "export_permit_expired": permit_expired,
+        # No export after the temporary permit lapsed, unless evidence shows a renewal.
+        "export_base": not (permit_expired and permit_expired <= str(intake.get("as_of"))[:10]),
+        "deck_source": "; ".join(dict.fromkeys(
+            f"https://finance.yahoo.com/quote/{commodity.SERIES[name][0]}/history/"
+            if (mineops.get(metal) or {}).get("source") == "yahoo"
+            else "sectors_cache /mining/commodities"
+            for metal, name in (("cu_price", "Copper"), ("au_price", "Gold")))),
         "reserve_cu_price": (_num(mlc.get("reserve_cu_price_usd_per_lb")) or 0) * LB_PER_T or None,
         "reserve_au_price": _num(mlc.get("reserve_au_price_usd_per_oz")),
         "discount": _num(lom.get("discount_rate_usd")),
@@ -171,11 +186,32 @@ def inputs(intake, fc):
                 "stockpile_capex_share", "licence_end", "pit_end", "elang_first_ore"):
         if not values.get(key):
             gaps.append(key)
+    for metal in ("cu_price", "au_price"):
+        if (mineops.get(metal) or {}).get("stale"):
+            gaps.append(f"{metal}_stale")
     if not values["elang_capex"]:
         gaps.append("elang_capex")
     if not rates.get("copper_cathode_by_hma_usd_per_tonne"):
         gaps.append("royalty")
     return values, gaps
+
+
+def deck_basis(mineops):
+    """Reader label of the base deck: window and source of each metal."""
+    parts = []
+    for metal, name in (("cu_price", "Cu"), ("au_price", "Au")):
+        stats = mineops.get(metal) or {}
+        if stats.get("avg12") is None:
+            continue
+        window = stats.get("window") or ["?", "?"]
+        text = (f"{name} rata-rata {window[0]} s.d. {window[1]}, {stats.get('source_label')}"
+                f" (data terakhir {stats.get('date')})")
+        replaced = stats.get("replaced")
+        if replaced:
+            text += (f"; seri Sectors berhenti {replaced['date']} "
+                     f"({replaced['age_days']} hari sebelum tanggal laporan) sehingga tidak dipakai")
+        parts.append(text)
+    return "; ".join(parts)
 
 
 def deck(inp, name="base"):
@@ -187,7 +223,14 @@ def deck(inp, name="base"):
 
 
 def schedule(inp, prices, export=True):
-    """Annual physical and cash rows per asset (Batu Hijau / Elang), USD."""
+    """Annual physical and cash rows per asset (Batu Hijau / Elang), USD.
+
+    With ``export`` the metal the smelter and refinery cannot take is sold as
+    concentrate. Without it (the temporary export permit expired on 30 Apr
+    2026) the plant is fed only as much ore as the smelter can smelt; ore left
+    in the pit or stockpile is processed later, and concentrate produced above
+    smelter capacity in 2H26 is smelted first in the next year.
+    """
     cu_price, au_price = prices
     rates = inp["royalty"]
     roy_cathode = _band(rates["copper_cathode_by_hma_usd_per_tonne"], cu_price)
@@ -204,9 +247,16 @@ def schedule(inp, prices, export=True):
     ]
     rows = []
     end = int(inp["licence_end"])
+    carry = {"cu": 0.0, "au": 0.0}           # recovered metal awaiting the smelter
+    concentrate = {"asset": "bh", "kind": "concentrate"}
     for year in range(2026, end + 1):
         share = 0.5 if year == 2026 else 1.0          # valuation from 30 Jun 2026
         draws = []
+        smelter_cap = inp["smelter_t"] * inp["utilization"] * share
+        if not export and carry["cu"] > 0 and year > 2026:
+            draws.append({"pool": concentrate, "mt": 0.0, "cu": carry["cu"] / inp["recovery_cu"],
+                          "au": carry["au"] / inp["recovery_au"]})
+            carry = {"cu": 0.0, "au": 0.0}
         if year == 2026:
             # 2H26: FY guidance less the 1H actual, from the pit at the 1H grade.
             cu_rec = inp["fy_guidance_cu_t"] - inp["h1_cu_t"]
@@ -219,10 +269,16 @@ def schedule(inp, prices, export=True):
             draws.append({"pool": pit, "mt": tonnes / 1e6, "cu": cu_cont, "au": au_cont})
         else:
             room = inp["plant_mtpa"]
+            # Contained copper the smelter can still take this year (no export).
+            cu_room = (max(smelter_cap - sum(d["cu"] for d in draws) * inp["recovery_cu"], 0.0)
+                       / inp["recovery_cu"]) if not export else float("inf")
             for pool in pools:
-                if room <= 1e-9 or pool["mt"] <= 1e-9 or year < pool["from"]:
+                if (room <= 1e-9 or cu_room <= 1e-9 or pool["mt"] <= 1e-9
+                        or year < pool["from"]):
                     continue
-                take = min(room, pool["mt"])
+                grade = pool["cu"] / pool["mt"]              # contained Cu t per Mt
+                take = min(room, pool["mt"], cu_room / grade if grade else room)
+                cu_room -= take * grade
                 frac = take / pool["mt"]
                 draw = {"pool": pool, "mt": take, "cu": pool["cu"] * frac,
                         "au": pool["au"] * frac}
@@ -234,9 +290,11 @@ def schedule(inp, prices, export=True):
             break
         cu_rec_total = sum(d["cu"] for d in draws) * inp["recovery_cu"]
         au_rec_total = sum(d["au"] for d in draws) * inp["recovery_au"]
-        cathode = min(cu_rec_total, inp["smelter_t"] * inp["utilization"] * share)
+        cathode = min(cu_rec_total, smelter_cap)
         smelted = cathode / cu_rec_total if cu_rec_total else 0.0
         refined = min(au_rec_total * smelted, inp["pmr_oz"] * share)
+        if not export and year == 2026:
+            carry = {"cu": cu_rec_total - cathode, "au": au_rec_total * (1 - smelted)}
         for d in draws:
             pool = d["pool"]
             part = d["cu"] / sum(x["cu"] for x in draws)
@@ -278,6 +336,23 @@ def schedule(inp, prices, export=True):
                   "conc_au": roy_conc_au}
 
 
+def elang_capex_schedule(inp, rows):
+    """Elang development capex, dated to this schedule's own first Elang feed.
+
+    The broker profile (2029-2030) belongs to a first ore in 2031. The issuer
+    starts Elang after the Batu Hijau mine life, and at the plant's 85 Mtpa the
+    pit and stockpile fill it until later, so the same profile is moved to end
+    the year before Elang's first feed here: capex is never spent years before
+    the ore it pays for.
+    """
+    capex = dict(sorted(inp["elang_capex"].items()))
+    feed = sorted({r["year"] for r in rows if r["asset"] == "elang" and r["feed_mt"] > 0})
+    if not capex or not feed:
+        return capex
+    shift = max(0, (feed[0] - 1) - max(capex))
+    return {year + shift: amount for year, amount in capex.items()}
+
+
 def cash_flows(inp, rows):
     """Per asset and year: EBITDA -> tax -> NTGR -> capex -> FCFF."""
     by = {}
@@ -297,7 +372,8 @@ def cash_flows(inp, rows):
         if row["kind"] not in acc["kinds"]:
             acc["kinds"].append(row["kind"])
     elang_years = sorted({y for (a, y) in by if a == "elang"})
-    elang_dev = sum(inp["elang_capex"].values())
+    elang_capex = elang_capex_schedule(inp, rows)
+    elang_dev = sum(elang_capex.values())
     out = []
     for (asset, year), acc in sorted(by.items(), key=lambda kv: (kv[0][1], kv[0][0])):
         share = acc["share"]
@@ -317,7 +393,7 @@ def cash_flows(inp, rows):
         ntgr = max(taxable - tax, 0.0) * inp["ntgr_rate"]
         out.append({**acc, "da": da, "tax": tax, "ntgr": ntgr, "capex": capex,
                     "fcff": acc["ebitda"] - tax - ntgr - capex})
-    for year, amount in sorted(inp["elang_capex"].items()):
+    for year, amount in sorted(elang_capex.items()):
         out.append({"asset": "elang", "year": year, "share": 1.0, "ebitda": 0.0,
                     "revenue": 0.0, "feed_mt": 0.0, "cathode_t": 0.0, "refined_oz": 0.0,
                     "conc_cu_t": 0.0, "conc_au_oz": 0.0, "royalties": 0.0, "costs": 0.0,
@@ -341,8 +417,9 @@ def navs(inp, flows, rate):
     return nav, overhead
 
 
-def value(inp, bridge_idr, fx, deck_name="base", rate=None, risk=None, export=True):
+def value(inp, bridge_idr, fx, deck_name="base", rate=None, risk=None, export=None):
     """Per-share value and its components for one scenario."""
+    export = inp.get("export_base", True) if export is None else export
     rate = inp["discount"] if rate is None else rate
     risk = inp["elang_risk"] if risk is None else risk
     rows, royalty = schedule(inp, deck(inp, deck_name), export=export)
@@ -353,7 +430,9 @@ def value(inp, bridge_idr, fx, deck_name="base", rate=None, risk=None, export=Tr
         - bridge_idr["minority"]
     return {"rows": rows, "flows": flows, "royalty": royalty, "nav": nav,
             "overhead_usd": overhead, "per_share": equity_idr / bridge_idr["shares"],
-            "equity_idr": equity_idr}
+            "equity_idr": equity_idr, "elang_capex": elang_capex_schedule(inp, rows),
+            "elang_feed_years": sorted({r["year"] for r in rows
+                                        if r["asset"] == "elang" and r["feed_mt"] > 0})}
 
 
 def _bridge_value(entry):
@@ -382,12 +461,79 @@ def build(intake, fc):
     for rate in (inp["discount"] - 0.02, inp["discount"], inp["discount"] + 0.02):
         for name in ("reserve", "down20", "base", "up20"):
             grid[(round(rate, 3), name)] = value(inp, b, fx, name, rate)["per_share"]
-    no_export = value(inp, b, fx, export=False)["per_share"]
+    other_export = value(inp, b, fx, export=not inp.get("export_base", True))["per_share"]
     risk_range = {r: value(inp, b, fx, risk=r)["per_share"] for r in (0.0, 0.25, 0.75, 1.0)}
-    return {"inputs": inp, "base": base, "grid": grid, "no_export": no_export,
-            "risk_range": risk_range, "bridge_idr": b, "fx": fx,
+    # The issuer states Elang runs "at least" to 2050; the reserve lasts longer.
+    extended = value({**inp, "licence_end": LICENCE_EXTENSION_END}, b, fx)
+    extension = {"end": max(extended["elang_feed_years"] or [inp["licence_end"]]),
+                 "per_share": extended["per_share"]}
+    return {"inputs": inp, "base": base, "grid": grid, "other_export": other_export,
+            "risk_range": risk_range, "licence_extension": extension, "bridge_idr": b, "fx": fx,
             "per_share": base["per_share"],
             "per_share_down": grid[(round(inp["discount"] + 0.02, 3), "base")]}, []
+
+
+def forward_rows(intake, res, anchor_year, attributable_share=1.0, years=4):
+    """FY rows after the interim year from the same LoM schedule as the value.
+
+    Revenue, EBITDA and capex are the schedule's annual totals (Batu Hijau and,
+    once it feeds, Elang). Net profit deducts the schedule's D&A, interest at
+    twice the 1H finance cost, and tax and non-tax government revenue at the
+    1H effective rates, so the Key Financials read off the valuation's own
+    physical plan instead of a separate earnings scenario.
+    """
+    inp, base = res["inputs"], res["base"]
+    actual = ((intake.get("official_evidence") or {}).get("latest_actual") or {})
+    income = ((actual.get("financial_statements_usd_thousand") or {})
+              .get("income_statement") or {})
+    interest = -(_num(income.get("finance_costs")) or 0.0) * 1000 * 2
+    by_year = {}
+    for f in base["flows"]:
+        acc = by_year.setdefault(f["year"], {"revenue": 0.0, "ebitda": 0.0, "da": 0.0,
+                                             "capex": 0.0})
+        for key in acc:
+            acc[key] += f.get(key) or 0.0
+    phys = {}
+    for r in base["rows"]:
+        acc = phys.setdefault(r["year"], {"feed": 0.0, "cathode": 0.0, "gold": 0.0,
+                                          "kinds": []})
+        acc["feed"] += r["feed_mt"]
+        acc["cathode"] += r["cathode_t"]
+        acc["gold"] += r["refined_oz"]
+        label = {"pit": "pit", "stockpile": "stockpile", "concentrate": "konsentrat 2H26"}.get(
+            r["kind"], r["kind"])
+        name = f"{'Elang' if r['asset'] == 'elang' else 'Batu Hijau'} {label}"
+        if r["feed_mt"] > 0 or r["kind"] == "concentrate":
+            if name not in acc["kinds"]:
+                acc["kinds"].append(name)
+    rows, previous = [], None
+    for year in range(anchor_year + 1, anchor_year + 1 + years):
+        acc = by_year.get(year)
+        if not acc or not acc["revenue"]:
+            break
+        pre_tax = acc["ebitda"] - acc["da"] - interest
+        tax = max(pre_tax, 0.0) * inp["tax_rate"]
+        ntgr = max(pre_tax - tax, 0.0) * inp["ntgr_rate"]
+        net = pre_tax - tax - ntgr
+        p = phys.get(year) or {}
+        rows.append({
+            "year": year, "label": f"FY{year % 100:02d}F", "revenue": acc["revenue"],
+            "ebitda": acc["ebitda"], "net_profit": net,
+            "net_profit_attributable": net * attributable_share, "capex": acc["capex"],
+            "revenue_growth_pct": (acc["revenue"] / previous - 1) * 100 if previous else None,
+            "ebitda_margin_pct": acc["ebitda"] / acc["revenue"] * 100,
+            "net_income_margin_pct": net / acc["revenue"] * 100,
+            "capex_to_revenue_pct": acc["capex"] / acc["revenue"] * 100,
+            "rationale": (f"Jadwal LoM: umpan {fmt._id(p.get('feed', 0), 0)} Mt "
+                          f"({', '.join(p.get('kinds') or [])}), katoda "
+                          f"{fmt._id(p.get('cathode', 0) / 1000, 0)} kt, emas murni "
+                          f"{fmt._id(p.get('gold', 0) / 1000, 0)} koz; dek Cu "
+                          f"US${fmt._id(inp['cu_price'], 0)}/t dan Au US${fmt._id(inp['au_price'], 0)}"
+                          "/oz; bunga 2x beban keuangan 1H26; pajak dan PNBP pada tarif efektif "
+                          "1H26."),
+            "source_ids": ["official"]})
+        previous = acc["revenue"]
+    return rows
 
 
 def _ref(title, url):
@@ -412,12 +558,12 @@ def sotp_result(intake, res):
          "source": mlc.get("source_url") or release,
          "provenance": ("Cadangan 30 Jun 2026, recovery tersirat 1H26, kapasitas pabrik 85 Mtpa, "
                         "smelter 220 kt x utilisasi Juni 93%, biaya unit 1H26, royalti PP 19/2025; "
-                        "harga rata-rata 12 bulan data Sectors."),
+                        f"dek harga: {inp.get('deck_basis') or 'rata-rata 12 bulan'}."),
          "source_date": actual.get("published_at"), "page": "3-7",
          "nav_idr": base["nav"]["bh"] * fx, "ownership_pct": 100.0},
         {"name": "Elang (pengembangan, pra-FID)", "stage": "development",
          "method": (f"LoM DCF USD {inp['discount'] * 100:.0f}% sampai {int(inp['licence_end'])}, "
-                    f"faktor risiko {inp['elang_risk'] * 100:.0f}%"),
+                    f"probabilitas pengembangan {inp['elang_risk'] * 100:.0f}%"),
          "source": mlc.get("source_url") or release,
          "provenance": ("Cadangan Elang resmi 30 Jun 2026; capex pengembangan dan pemeliharaan "
                         "dari " + str(lom.get("broker_source_title")) + " (" +
@@ -506,9 +652,10 @@ def operating_bridge(intake, res):
         "product_sales_mix": row("Pendapatan 1H26 per produk", "katoda, emas murni, konsentrat",
                                  "US$", "1H26", "reported actual", rel, rel_date, 4),
         "realized_price_netback": row(
-            "Dek harga: rata-rata 12 bulan data Sectors, payable HPM",
+            "Dek harga: rata-rata 12 bulan kalender, payable HPM ("
+            + (inp.get("deck_basis") or "data Sectors") + ")",
             f"Cu US${inp['cu_price']:,.0f}/t; Au US${inp['au_price']:,.0f}/oz", "USD",
-            "LoM", "analyst price deck", "sectors_cache /mining/commodities",
+            "LoM", "analyst price deck", inp.get("deck_source") or "sectors_cache /mining/commodities",
             rel_date, None),
         "revenue": row("Pendapatan bersih 1H26", (actual.get("metrics") or {}).get("revenue"),
                        "USD", "1H26", "reported actual", rel, rel_date, 3),
@@ -522,7 +669,8 @@ def operating_bridge(intake, res):
                       "1H26", "reported actual", rel, rel_date, 3),
         "capex": row("Capex: 1H26 resmi; Elang asumsi analis dari riset broker",
                      f"1H26 US${inp['h1_capex_usd'] / 1e6:.0f} juta; Elang "
-                     f"US${sum(inp['elang_capex'].values()) / 1e9:.2f} miliar",
+                     f"US${sum(inp['elang_capex'].values()) / 1e9:.2f} miliar "
+                     "(dijadwalkan sebelum bijih pertama Elang dalam jadwal LoM)",
                      "USD", "LoM", "analyst assumption", lom.get("broker_source_url"),
                      lom.get("broker_source_date"), lom.get("broker_source_page")),
         "nwc": row("Modal kerja", "Perubahan modal kerja tidak dimodelkan; persediaan 30 Jun "

@@ -1,0 +1,73 @@
+{
+  "ticker": "SSIA",
+  "as_of": "2026-09-25",
+  "group": "Pengembang kawasan industri dan kontraktor gedung",
+  "basis": "Nilai SSIA terutama berasal dari lahan kawasan industri (Suryacipta) dan porsinya di kontraktor NRCA. Pembanding lahan adalah pengelola kawasan industri tercatat di BEI; pembanding konstruksi adalah kontraktor gedung swasta yang untung. Tabel peer Sectors ('Heavy Constructions') hanya berisi kontraktor, termasuk anak usaha SSIA sendiri.",
+  "peers": [
+    {
+      "symbol": "DMAS",
+      "name": "Puradelta Lestari",
+      "market": "IDX",
+      "reason": "Kawasan industri Kota Deltamas di koridor Cikarang-Karawang.",
+      "yahoo": "DMAS.JK"
+    },
+    {
+      "symbol": "BEST",
+      "name": "Bekasi Fajar Industrial Estate",
+      "market": "IDX",
+      "reason": "Kawasan industri MM2100 Cibitung.",
+      "yahoo": "BEST.JK"
+    },
+    {
+      "symbol": "KIJA",
+      "name": "Kawasan Industri Jababeka",
+      "market": "IDX",
+      "reason": "Kawasan industri Cikarang serta infrastruktur dan pembangkit.",
+      "yahoo": "KIJA.JK"
+    },
+    {
+      "symbol": "TOTL",
+      "name": "Total Bangun Persada",
+      "market": "IDX",
+      "reason": "Kontraktor gedung swasta, pembanding segmen konstruksi.",
+      "yahoo": "TOTL.JK"
+    },
+    {
+      "symbol": "PBSA",
+      "name": "Paramita Bangun Sarana",
+      "market": "IDX",
+      "reason": "Kontraktor gedung swasta, pembanding segmen konstruksi.",
+      "yahoo": "PBSA.JK"
+    }
+  ],
+  "excluded": [
+    {
+      "symbol": "NRCA",
+      "reason": "Anak usaha SSIA sendiri, sudah dinilai pada nilai pasar di SOTP."
+    },
+    {
+      "symbol": "WIKA",
+      "reason": "BUMN karya dalam restrukturisasi utang; rugi."
+    },
+    {
+      "symbol": "WSKT",
+      "reason": "BUMN karya dalam restrukturisasi utang; rugi."
+    },
+    {
+      "symbol": "BUKK",
+      "reason": "Manufaktur baja dan jembatan, bukan kontraktor gedung atau kawasan."
+    },
+    {
+      "symbol": "ASLI",
+      "reason": "Rugi."
+    },
+    {
+      "symbol": "ACST",
+      "reason": "Rugi."
+    },
+    {
+      "symbol": "RONY",
+      "reason": "Laba nyaris nol (P/E tidak bermakna)."
+    }
+  ]
+}

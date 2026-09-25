@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app import render, web  # noqa: E402
+from app import render  # noqa: E402
 
 SPEC_SERIES = ["#0928B1", "#B4C7FF", "#3ED628", "#1DCD9F", "#0047AB", "#7596FF"]
 
@@ -112,17 +112,14 @@ def test_roboto_font_files_exist_and_embed():
         assert (fonts_dir / name).is_file(), name
 
 
-def test_web_shell_uses_roboto_and_spec_tokens_not_poppins():
-    page = web._page().decode("utf-8")
-    assert "Roboto" in page
-    assert "Poppins" not in page
-    assert "Arial" not in page
-    assert "system-ui" not in page
-    assert "@font-face{font-family:Roboto" in page
-    assert "data:font/ttf;base64," in page
-    assert "#0928B1" in page
-    assert "#D9D9D9" in page
-    assert "#333333" in page
+def test_web_app_uses_roboto_and_spec_tokens_not_poppins():
+    web = Path(render.__file__).resolve().parent.parent / "web"
+    css = (web / "src" / "index.css").read_text(encoding="utf-8")
+    assert "--font-sans: Roboto" in css
+    assert "Poppins" not in css and "Arial" not in css and "system-ui" not in css
+    assert "font-family: Roboto" in css and "app/assets/fonts/Roboto-Regular.ttf" in css
+    for token in ("#0928B1", "#D9D9D9", "#333333", "#B4C7FF", "#1DCD9F", "#3ED628"):
+        assert token in css, token
 
 
 # ------------------------------------------------------------------ chart
@@ -199,14 +196,16 @@ def test_report_logo_matches_canonical_asset_exactly():
     assert 'fill="#3ED628"' in render.LOGO_SVG
 
 
-def test_web_header_shows_logo_wordmark_and_title():
-    page = web._page().decode("utf-8")
-    assert "<title>Sectoral | Company update</title>" in page
-    assert "CTORAL" in page
-    assert "#0928B1" in web._LOGO_SVG
-    assert "#1DCD9F" in web._LOGO_SVG
-    assert "#3ED628" in web._LOGO_SVG
-    assert "Sectoral" in page
+def test_web_header_uses_the_canonical_logo_file():
+    web = Path(render.__file__).resolve().parent.parent / "web"
+    brand = (web / "src" / "components" / "Brand.tsx").read_text(encoding="utf-8")
+    layout = (web / "src" / "components" / "Layout.tsx").read_text(encoding="utf-8")
+    assert "app/assets/brand/sectoral-logo.svg?raw" in brand
+    assert 'aria-label="Sectoral, beranda"' in layout and "<Logo" in layout
+    logo = (Path(render.__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg").read_text()
+    assert "CTORAL" in logo
+    for color in ("#0928B1", "#1DCD9F", "#3ED628"):
+        assert color in logo
 
 
 def test_source_lines_open_with_the_house_line_and_keep_provenance():

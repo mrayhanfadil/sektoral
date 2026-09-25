@@ -1,4 +1,4 @@
-"""Report gallery: public summaries, confined file serving, landing integration."""
+"""Report gallery: public summaries and confined file serving."""
 from __future__ import annotations
 
 import json
@@ -7,8 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from app import gallery, landing  # noqa: E402
-from test_landing_routes import Server, get  # noqa: E402
+from app import gallery, outputs  # noqa: E402
 
 
 def _report(folder: Path, ticker: str, published: bool = True, chain=True):
@@ -25,7 +24,7 @@ def _report(folder: Path, ticker: str, published: bool = True, chain=True):
                ["1. DCF FCFF (utama)", "Dilewati", "-", "forecast"],
                ["2. PER FY skenario", "Terpilih", "Rp1.100", "ok"],
                ["3. P/BV buku", "Silang cek", "Rp900", "ok"]]}}] if chain else [])}
-    (folder / f"{ticker}.json").write_text(json.dumps(doc))
+    outputs.save(outputs.REPORT, folder, ticker, doc)
     (folder / f"{ticker}.pdf").write_bytes(b"%PDF-1.4 test")
     (folder / f"{ticker}-trace.html").write_text("<html>trace</html>")
 
@@ -33,7 +32,7 @@ def _report(folder: Path, ticker: str, published: bool = True, chain=True):
 def test_summaries_hold_drafts_and_read_the_method_chain(tmp_path):
     _report(tmp_path, "AAAA")
     _report(tmp_path, "BBBB", published=False)
-    (tmp_path / "notes.json").write_text("{}")
+    outputs.save(outputs.REPORT, tmp_path, "NOTES", {})  # not a report
     items = gallery.load(tmp_path)
     assert [i["ticker"] for i in items] == ["AAAA", "BBBB"]
     first, held = items
@@ -52,27 +51,10 @@ def test_artifacts_are_confined_to_the_reports_folder(tmp_path):
     assert gallery.artifact(tmp_path, "ZZZZ", "pdf") is None
 
 
-def test_landing_features_a_real_report_and_lists_coverage(tmp_path):
-    _report(tmp_path, "AAAA")
+def test_draft_profile_falls_back_to_the_run_manifest(tmp_path):
     _report(tmp_path, "BBBB", published=False)
-    page = landing.render_landing(gallery.load(tmp_path))
-    assert "Hasil riset nyata" in page and 'href="/laporan/AAAA/pdf"' in page
-    assert "1 company update terbit, 1 ditahan sebagai draft." in page
-    empty = landing.render_landing([])
-    assert "Ilustrasi tampilan" in empty and 'id="laporan"' not in empty
-
-
-def test_gallery_routes_serve_pages_and_files(tmp_path):
-    reports = tmp_path / "reports"
-    reports.mkdir()
-    _report(reports, "AAAA")
-    server = Server(tmp_path)
-    try:
-        status, _, body = get(server.base, "/laporan")
-        assert status == 200 and b"AAAA" in body
-        status, headers, body = get(server.base, "/laporan/AAAA/pdf")
-        assert status == 200 and headers.get_content_type() == "application/pdf"
-        assert get(server.base, "/laporan/AAAA/secrets")[0] == 404
-        assert get(server.base, "/laporan/..%2FAAAA/pdf")[0] == 404
-    finally:
-        server.close()
+    doc = outputs.load(outputs.REPORT, tmp_path, "BBBB")
+    del doc["meta"]["model_profile"]
+    doc["run_manifest"] = {"profile": "financial_ddm"}
+    outputs.save(outputs.REPORT, tmp_path, "BBBB", doc)
+    assert gallery.load(tmp_path)[0]["profile"] == "Bank"

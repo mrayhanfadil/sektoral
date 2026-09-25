@@ -1,9 +1,7 @@
 """Tests for explicit USD/IDR refresh and cache behavior."""
-import json
-
 import pytest
 
-from app import fx
+from app import fx, store
 
 
 def quote(rate=16_250.5):
@@ -16,26 +14,25 @@ def quote(rate=16_250.5):
 
 
 def test_refresh_persists_yfinance_rate_and_loads_it(tmp_path):
-    cache = tmp_path / "fx_usdidr.json"
     fetched = quote()
 
-    saved = fx.refresh_usd_idr(cache_path=cache, fetcher=lambda: fetched)
+    saved = fx.refresh_usd_idr(db=tmp_path, fetcher=lambda: fetched)
 
     assert saved == fetched
-    assert json.loads(cache.read_text()) == fetched
-    assert fx.load_cached_rate(cache_path=cache) == fetched
+    assert store.get(fx.COLLECTION, fx.KEY, tmp_path) == fetched
+    assert fx.load_cached_rate(db=tmp_path) == fetched
 
 
 def test_invalid_or_missing_cache_is_not_used(tmp_path):
-    cache = tmp_path / "fx_usdidr.json"
-    assert fx.load_cached_rate(cache_path=cache) is None
-    cache.write_text('{"pair":"USD/IDR","rate":0,"date":"2026-09-23","source":"bad"}')
-    assert fx.load_cached_rate(cache_path=cache) is None
+    assert fx.load_cached_rate(db=tmp_path) is None
+    store.put(fx.COLLECTION, fx.KEY, {"pair": "USD/IDR", "rate": 0, "date": "2026-09-23",
+                                      "source": "bad"}, tmp_path)
+    assert fx.load_cached_rate(db=tmp_path) is None
 
 
 def test_refresh_refuses_empty_or_invalid_rate(tmp_path):
     with pytest.raises(ValueError, match="valid USD/IDR"):
-        fx.refresh_usd_idr(cache_path=tmp_path / "fx.json", fetcher=lambda: None)
+        fx.refresh_usd_idr(db=tmp_path, fetcher=lambda: None)
 
 
 def test_fetch_reads_yahoo_idr_per_usd_close():

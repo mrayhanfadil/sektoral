@@ -453,7 +453,7 @@ def test_failed_scenario_subagent_is_not_cached(tmp_path, monkeypatch):
     monkeypatch.setattr(agent, "run_live", lambda intake: dict(failed))
     intake_ = {"ticker": "UJI", "as_of": "2026-09-24", "model_profile": "going_concern_fcff",
                "latest_official_actual": {}, "official_evidence": {}, "news": []}
-    agent.run_cached(intake_, store_dir=tmp_path)
+    agent.run_cached(intake_, db=tmp_path)
     assert not list(tmp_path.glob("UJI-*.json"))
 
 
@@ -489,5 +489,6 @@ def test_issuer_without_sectors_peers_borrows_the_table_that_lists_it():
     symbols = [p["symbol"] for p in doc_in["peers"]]
     assert "BBRI.JK" in symbols and "BBCA.JK" not in symbols
     assert len([p for p in doc_in["peers"] if 0 < p["pe"] <= 50]) >= 3
+    # JPFA has a curated group; four of its peers sit in its own Sectors table.
     own, _ = intake.load("JPFA", as_of="2026-09-24")
-    assert own["peer_basis"] is None
+    assert own["peer_basis"].startswith("grup peer kurasi")

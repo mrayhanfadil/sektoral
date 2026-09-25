@@ -101,7 +101,37 @@ def _row_from_report(ticker, report, is_self=False):
                       year=financials.get("year"), is_self=is_self)
 
 
+def _curated(ticker):
+    """Rows from a curated peer group (app.peer_groups), or None."""
+    from app import peer_groups
+    curated = peer_groups.companies(ticker)
+    if not curated:
+        return None
+    own, others, missing, group = curated
+
+    def row(c, is_self):
+        return S.peer_row(
+            c.get("symbol"), c.get("company_name"), market_cap=c.get("market_cap"),
+            pe=c.get("pe_ttm"), pb=c.get("pb_mrq"), net_income=c.get("net_income"),
+            revenue=c.get("total_revenue"), equity=c.get("total_equity"),
+            assets=c.get("total_assets"), liabilities=c.get("total_liabilities"),
+            mcap_change_1y=c.get("yearly_mcap_chg"), year=c.get("year"), is_self=is_self)
+
+    kinds = sorted({c.get("source_kind") for c in others})
+    source = " dan ".join({"sectors": f"tabel peer Sectors {ticker}",
+                           "yahoo": "snapshot Yahoo Finance"}[k] for k in kinds if k)
+    return {"source": f"grup peer kurasi Sektoral data/peer_groups/{ticker}.json ({source})",
+            "basis": "peer dipilih menurut model bisnis; alasan tiap peer dan yang dikeluarkan "
+                     "ada di paket grup"
+                     + (f"; tanpa data: {', '.join(missing)}" if missing else ""),
+            "group": group.get("group") or "", "curated": group,
+            "rows": [row(own, True)] + [row(c, False) for c in others]}
+
+
 def find_peers(ticker):
+    curated = _curated(ticker)
+    if curated:
+        return curated
     report = cache.company_report(ticker) or {}
     table = _peer_table(report)
     if table:

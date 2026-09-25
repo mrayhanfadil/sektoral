@@ -4,6 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agents.research import run as research
+from app import store
 
 
 def test_live_reads_cache_then_saves_validated_brief(monkeypatch, tmp_path):
@@ -34,13 +35,13 @@ def test_live_reads_cache_then_saves_validated_brief(monkeypatch, tmp_path):
         raise AssertionError("agent should stop after final")
 
     monkeypatch.setattr(research, "_chat", chat)
-    result = research.run_live("test", output_dir=tmp_path)
+    result = research.run_live("test", db=tmp_path)
 
     assert result["ok"] is True
     assert result["document"]["ticker"] == "TEST"
     assert result["agent_trace"]["selected_cache_endpoints"] == [endpoint]
     assert result["document"]["insights"][0]["citations"][0]["value"] == 1250
-    saved = json.loads((tmp_path / "TEST.json").read_text())
+    saved = store.get("research_analysis", "TEST", tmp_path)
     assert saved == result["document"]
     clean, problems = research.validate_against_cache("TEST", saved)
     assert problems == []
@@ -80,12 +81,12 @@ def test_agent_rejected_tool_call_returns_useful_insufficient_brief(monkeypatch,
     monkeypatch.setattr(research, "_chat", lambda messages: json.dumps({
         "tool": "cache_get", "args": ["OTHER", endpoint]}))
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is False
     assert result["document"]["status"] == "insufficient_evidence"
     assert result["document"]["summary"]
     assert result["agent_trace"]["validation"]["rejected_claims"]
-    assert (tmp_path / "TEST.json").exists()
+    assert store.get("research_analysis", "TEST", tmp_path) is not None
 
 
 def test_validator_requires_same_cached_report_as_of(monkeypatch):
@@ -181,7 +182,7 @@ def test_invalid_final_gets_one_repair_and_host_enriches_path_only_citation(monk
         return responses.pop(0)
 
     monkeypatch.setattr(research, "_chat", chat)
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 3
     assert result["agent_trace"]["validation"]["repair_attempted"] is True
@@ -322,7 +323,7 @@ def test_two_failed_repairs_fall_back_to_deterministic_non_claiming_brief(monkey
                 [json.dumps(invalid_final) for _ in range(3)]
     monkeypatch.setattr(research, "_chat", lambda messages: responses.pop(0))
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is False
     assert len(result["document"]["insights"]) == 0
     assert result["document"]["summary"] == "Belum ada temuan yang lolos validasi."
@@ -352,7 +353,7 @@ def test_empty_final_nudges_agent_to_read_relevant_cache_before_final(monkeypatc
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 3
     assert result["agent_trace"]["selected_cache_endpoints"] == [endpoint]
@@ -379,10 +380,10 @@ def test_invalid_json_gets_final_only_format_repair_and_raw_text_is_not_persiste
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 3
-    persisted = (tmp_path / "TEST.json").read_text()
+    persisted = json.dumps(store.get("research_analysis", "TEST", tmp_path), ensure_ascii=False)
     assert raw_garbage not in persisted
     assert result["document"]["insights"][0]["citations"][0]["value"] == 1250
 
@@ -397,7 +398,7 @@ def test_format_repair_tool_request_is_never_executed(monkeypatch, tmp_path):
         "tool": "cache_get", "args": ["TEST", endpoint]})]
     monkeypatch.setattr(research, "_chat", lambda messages: responses.pop(0))
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is False
     assert calls == []
     assert result["document"]["status"] == "insufficient_evidence"
@@ -421,7 +422,7 @@ def test_wrong_shape_json_gets_one_final_only_schema_repair(monkeypatch, tmp_pat
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 3
     schema_prompt = seen[2][-1]["content"]
@@ -441,7 +442,7 @@ def test_wrong_shape_schema_repair_tool_call_is_rejected_without_execution(monke
                  json.dumps({"tool": "cache_get", "args": ["TEST", endpoint]})]
     monkeypatch.setattr(research, "_chat", lambda messages: responses.pop(0))
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is False
     assert calls == [endpoint]
     assert "schema repair attempted a tool call" in " ".join(
@@ -607,7 +608,7 @@ def test_news_citation_triggers_single_quarterly_cache_nudge_and_connects_metric
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 4
     assert result["agent_trace"]["selected_cache_endpoints"] == [report, news, quarterly]
@@ -637,7 +638,7 @@ def test_news_quarterly_nudge_does_not_loop_when_final_stays_news_only(monkeypat
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 4
     assert result["agent_trace"]["selected_cache_endpoints"] == [report, news, quarterly]
@@ -681,7 +682,7 @@ def test_failed_quarterly_followup_preserves_only_prior_valid_news_candidate(mon
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is False
     assert len(seen) == 6
     assert result["document"]["insights"] == []
@@ -882,7 +883,7 @@ def test_quarter_only_final_checks_news_and_accepts_when_no_relevant_article(mon
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 2
     assert result["agent_trace"]["selected_cache_endpoints"] == [report, quarter, news]
@@ -921,7 +922,7 @@ def test_quarter_only_final_checks_relevant_news_and_requires_connected_insight(
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 4
     continuation_prompt = seen[2][-1]["content"]
@@ -976,7 +977,7 @@ def test_model_read_news_and_quarter_split_final_uses_compact_join_repair(monkey
     seen = []
     monkeypatch.setattr(research, "_chat", lambda messages: (seen.append(messages), responses.pop(0))[1])
 
-    result = research.run_live("TEST", output_dir=tmp_path)
+    result = research.run_live("TEST", db=tmp_path)
     assert result["ok"] is True
     assert len(seen) == 4
     assert [message["role"] for message in seen[3]] == ["system", "user", "user"]

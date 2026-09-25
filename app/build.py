@@ -1,11 +1,10 @@
 """Pipeline v3: cache market data, local official source packs, report build."""
 import argparse
-import json
 import sys
 from datetime import date
 from pathlib import Path
 
-from . import evidence as evidence_mod, forecast, intake, narrative, render, report_contract, report_extras, run_manifest, scrub, valuation
+from . import evidence as evidence_mod, forecast, intake, narrative, outputs, render, report_contract, report_extras, run_manifest, scrub, valuation
 
 PDF_OK = True
 try:
@@ -73,6 +72,9 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         doc["meta"].pop("rating", None)
         doc["meta"].pop("tp", None)
         doc["meta"].pop("upside_persen", None)
+    # With the release status final, drop screening values that would read as
+    # a withheld or second target.
+    report_extras.drop_screening_values(doc)
     # Cover rating status (Inisiasi/Dipertahankan/Naik/Turun), set after the
     # harness so it reflects the final release. A draft publishes no rating,
     # so it never claims one is maintained; history is shown as context only.
@@ -110,7 +112,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     report_contract.validate_or_raise(doc)
     outdir.mkdir(parents=True, exist_ok=True)
     t = doc["meta"]["ticker"]
-    (outdir / f"{t}.json").write_text(json.dumps(doc, indent=1))
+    outputs.save(outputs.REPORT, outdir, t, doc)
     (outdir / f"{t}.html").write_text(render.render(doc))
     gates = {"S1": s1["S1"], "S2": fc["s2"], "S3": va["s3"]}
     print(f"{t} {doc['meta'].get('status', 'analysis')} "

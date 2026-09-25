@@ -13,7 +13,8 @@
     "metrics": {
       "revenue": 274783475,
       "operating_profit": 60493834,
-      "net_profit": 37140130
+      "net_profit": 37140130,
+      "depreciation": 32558403
     },
     "prior_year": {
       "period": "1H25",
@@ -24,12 +25,20 @@
   },
   "balance_sheet": {
     "period_end": "2026-06-30",
-    "source_pages": [1, 2],
+    "source_pages": [
+      1,
+      2
+    ],
     "cash": 123951821,
     "total_assets": 1191787007,
     "total_liabilities": 486253919,
     "total_equity": 705533088,
-    "shares_issued": 16087156000
+    "shares_issued": 16087156000,
+    "short_term_investments": 174244573,
+    "notes_payable": 343571896,
+    "lease_current": 792121,
+    "lease_noncurrent": 268777,
+    "total_debt": 344632794
   },
   "operating_context": []
 }

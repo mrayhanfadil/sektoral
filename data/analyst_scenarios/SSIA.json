@@ -1,0 +1,15 @@
+{
+  "ticker": "SSIA",
+  "as_of": "2026-09-24",
+  "basis": "Asumsi analis untuk RNAV landbank dalam SOTP holding; bukan panduan emiten. Fakta lahan, harga, penjualan dan margin ada di paket bukti emiten.",
+  "landbank_assumptions": {
+    "net_saleable_ratio": 0.65,
+    "net_saleable_basis": "Emiten tidak mengungkapkan porsi lahan yang dapat dijual dari 1.683 ha bruto. 65% adalah asumsi analis untuk kawasan industri (sisanya jalan, utilitas, ruang hijau dan fasilitas); sensitivitas pada tabel.",
+    "final_tax_rate": 0.025,
+    "final_tax_basis": "PPh final atas pengalihan hak atas tanah dan bangunan 2,5% dari nilai bruto (PP 34/2016).",
+    "pace_basis": "Rata-rata penjualan marketing lahan industri Suryacipta Karawang dan Subang Smartpolitan 2021-2025 (presentasi 1H26, hlm. 46). Target emiten 135 ha untuk 2026 hanya ditampilkan sebagai sensitivitas karena 1H26 baru 9,4 ha.",
+    "growth_basis": "CAGR harga jual marketing 2021-2025 tanpa 2024 (transaksi besar BYD di bawah harga rata-rata), presentasi 1H26, hlm. 44.",
+    "margin_basis": "Margin kas = margin laba kotor segmen properti ditambah biaya buku lahan per m2 jual (sudah tercatat dalam beban pokok, sunk), dikurangi beban usaha segmen (laba kotor dikurangi EBITDA) dan PPh final; data segmen 2021-1H26, presentasi 1H26 hlm. 49.",
+    "discount_basis": "Cost of Equity kebijakan analis (rf INDOGB 10Y 6,5% + beta 1,1 x ERP 4%), sama dengan metode lain; tanpa premi tambahan."
+  }
+}

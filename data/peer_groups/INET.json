@@ -1,0 +1,67 @@
+{
+  "ticker": "INET",
+  "as_of": "2026-09-25",
+  "group": "Jaringan serat optik dan akses internet",
+  "basis": "INET membangun jaringan serat optik dan layanan internet. Pembandingnya adalah penyedia jaringan serat, broadband dan telekomunikasi di BEI. Emiten tidak aktif atau sangat kecil tidak dipakai.",
+  "peers": [
+    {
+      "symbol": "LINK",
+      "name": "Link Net",
+      "market": "IDX",
+      "reason": "Broadband rumah tangga berbasis serat; EBITDA positif meski rugi bersih.",
+      "yahoo": "LINK.JK"
+    },
+    {
+      "symbol": "MORA",
+      "name": "Ekamas Mora Republik",
+      "market": "IDX",
+      "reason": "Jaringan serat optik (Moratelindo).",
+      "yahoo": "MORA.JK"
+    },
+    {
+      "symbol": "KETR",
+      "name": "Ketrosden Triasmitra",
+      "market": "IDX",
+      "reason": "Jaringan serat optik dan kabel laut.",
+      "yahoo": "KETR.JK"
+    },
+    {
+      "symbol": "DATA",
+      "name": "Remala Abadi",
+      "market": "IDX",
+      "reason": "Serat optik dan layanan data.",
+      "yahoo": "DATA.JK"
+    },
+    {
+      "symbol": "TLKM",
+      "name": "Telkom Indonesia",
+      "market": "IDX",
+      "reason": "Operator jaringan tetap dan broadband terbesar.",
+      "yahoo": "TLKM.JK"
+    },
+    {
+      "symbol": "ISAT",
+      "name": "Indosat",
+      "market": "IDX",
+      "reason": "Operator seluler dan broadband.",
+      "yahoo": "ISAT.JK"
+    },
+    {
+      "symbol": "SUPR",
+      "name": "Solusi Tunas Pratama",
+      "market": "IDX",
+      "reason": "Menara dan serat optik.",
+      "yahoo": "SUPR.JK"
+    }
+  ],
+  "excluded": [
+    {
+      "symbol": "KBLV",
+      "reason": "First Media: rugi dan kapitalisasi Rp0,2 triliun, tanpa skala usaha jaringan yang sebanding."
+    },
+    {
+      "symbol": "JAST",
+      "reason": "Kapitalisasi Rp0,1 triliun; rugi."
+    }
+  ]
+}
