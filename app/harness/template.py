@@ -1195,7 +1195,8 @@ def _primary_per_share(ctx):
     elif ctx.option == "C":
         exs = ctx.find_all(r"sotp|rnav|\bnav\b", exclude=r"sensitivitas|rantai|uji|asumsi|jadwal|jembatan korporat")
     else:
-        exs = [e for e in ctx.exs if re.search(r"^target harga|sotp", _title(e).lower())]
+        exs = [e for e in ctx.exs if re.search(r"^(?:nilai model|target harga)|sotp",
+                                              _title(e).lower())]
     for e in exs:
         rows = _rows(e)
         cols = [_clean(c).lower() for c in _cols(e)]

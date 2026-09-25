@@ -182,11 +182,8 @@ def test_stage_citations_must_be_supplied_and_consistent():
     assert not ok and any("not supplied" in e for e in errors)
 
 
-def test_draft_cover_never_claims_a_maintained_rating(tmp_path, monkeypatch):
-    from app import build, rating_history
-    monkeypatch.setattr(rating_history, "DIR", tmp_path)
-    (tmp_path / "BBRI.json").write_text(
-        '{"history": [{"date": "2026-06-01", "rating": "Buy", "tp": 5000}]}')
+def test_draft_cover_never_claims_a_rating(tmp_path):
+    from app import build
     doc = build.build("BBRI", tmp_path, as_of="2026-09-24")
     assert doc["meta"]["status"] == "draft_non_distributable"
     assert doc["meta"]["rating_status"] == "Dalam peninjauan"
@@ -439,10 +436,9 @@ def test_inet_and_gmfi_ramping_stage_moves_the_chain_off_dcf(tmp_path, monkeypat
         assert f"{len(peers)}/{len(peers)} peer belum tersedia" in first["reasons"][0]
 
 
-def test_ramping_going_concern_withholds_value_when_template_gate_fails(tmp_path, monkeypatch):
+def test_ramping_going_concern_publishes_validated_forward_multiple(tmp_path, monkeypatch):
     """JPFA under a ramping stage with Sectors peer EV cached (synthetic here):
-    the release engine selects the forward EV/EBITDA route, while a failed
-    forecast-template check keeps its per-share value out of the draft."""
+    the release engine selects and publishes the forward EV/EBITDA route."""
     import itertools
     from app import build, intake as I
     multiples = itertools.cycle([6.0, 7.0, 8.0, 9.0, 10.0])
@@ -480,15 +476,15 @@ def test_ramping_going_concern_withholds_value_when_template_gate_fails(tmp_path
                       assumption_status="validated")
     chain = doc["log_gate"]["release"]["method_chain"]
     assert chain == {"selected": "ev_ebitda_peer", "route": "primary"}
-    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert doc["meta"]["status"] == "distributable_assumption_led"
     assert doc["log_gate"]["release"]["status"] == "distributable_assumption_led"
-    assert "tp" not in doc["meta"] and "rating" not in doc["meta"]
+    assert doc["meta"]["tp"] > 0 and doc["meta"]["rating"]
     assert doc["method"].startswith("FY26F EV/EBITDA median peer x EBITDA skenario analis")
     titles = [e["judul"] for e in doc["exhibits"]]
     assert not any("target harga" in title.lower() for title in titles)
     assert not any("nilai wajar per saham" in str(e).lower() for e in doc["exhibits"])
-    assert doc["cover"]["paragraf"][2]["judul"] == "Status nilai model"
-    assert "ditahan" in doc["cover"]["paragraf"][2]["isi"].lower()
+    assert doc["cover"]["paragraf"][2]["judul"].startswith("Nilai model")
+    assert "ditahan" not in doc["cover"]["paragraf"][2]["isi"].lower()
 
 
 # ------------------------------------------- Yahoo Finance peer fallback

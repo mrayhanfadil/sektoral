@@ -31,6 +31,11 @@ export function ratingTone(item: ScenarioLabelInput): RatingTone {
   return upside > 0 ? "above" : "below";
 }
 
+/** Explain why the gallery is withholding a model value. */
+export function heldReason(item: ScenarioLabelInput): string {
+  return item.held_reason || "bukti belum lengkap";
+}
+
 /** The featured landing report: primary method selected, most cross-checks. */
 export function featuredReport(items: ReportItem[]): ReportItem | undefined {
   const score = (item: ReportItem): [number, number, number] => {

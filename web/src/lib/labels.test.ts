@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { featuredReport, progressStep, ratingLabel, ratingTone, validatorNote } from "./labels";
+import { featuredReport, heldReason, progressStep, ratingLabel, ratingTone, validatorNote } from "./labels";
 import { pct, rp } from "./format";
 import type { ReportItem } from "./api";
 
@@ -19,6 +19,11 @@ describe("model scenario labels", () => {
     expect(ratingLabel(item({ rating: null, held_reason: "forecast belum tervalidasi" }))).toBe("Draf");
     expect(ratingLabel(item({ rating: null, held_reason: "Method Gate 5, hasil ekstrem (Review Required)" }))).toBe("Perlu ditinjau");
     expect(ratingTone(item({ rating: null }))).toBe("review");
+  });
+  it("shows the actual reason a model value is withheld", () => {
+    expect(heldReason(item({ held_reason: "menunggu persetujuan asumsi oleh analis" })))
+      .toBe("menunggu persetujuan asumsi oleh analis");
+    expect(heldReason(item({ held_reason: "" }))).toBe("bukti belum lengkap");
   });
 });
 

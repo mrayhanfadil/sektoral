@@ -76,8 +76,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # With the release status final, drop screening values that would read as
     # a withheld or second target.
     report_extras.drop_screening_values(doc)
-    # State that the published value is an analyst model scenario. Legacy
-    # investment-action history is retained internally, never copied to the cover.
+    # State that the published value is an analyst model scenario.
     meta = doc["meta"]
     rating_status = ("Skenario nilai indikatif"
                      if meta.get("status") != "draft_non_distributable" else
