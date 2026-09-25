@@ -36,6 +36,9 @@ STATIC_DIR = ROOT / "web" / "dist"
 _REPORT_FILE = re.compile(r"^([A-Z0-9]{2,6})(\.html|\.pdf|-trace\.html)$")
 _KIND = {".html": "html", ".pdf": "pdf", "-trace.html": "trace"}
 _NO_STORE = {"Cache-Control": "no-store"}
+# A republish rewrites report files in place under the same URL, so a proxy or
+# browser must revalidate (ETag) before reusing a copy; Cloudflare then skips caching.
+_REVALIDATE = {"Cache-Control": "no-cache"}
 
 
 class JobRequest(BaseModel):
@@ -228,7 +231,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
             png = None
         if png is None:
             raise HTTPException(404)
-        return FileResponse(png, media_type="image/png")
+        return FileResponse(png, media_type="image/png", headers=_REVALIDATE)
 
     @app.get("/files/reports/{name}")
     def report_file(name: str):
@@ -236,7 +239,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         found = gallery.artifact(jobs.reports, match.group(1), _KIND[match.group(2)]) if match else None
         if found is None:
             raise HTTPException(404)
-        return FileResponse(found[0], media_type=found[1])
+        return FileResponse(found[0], media_type=found[1], headers=_REVALIDATE)
 
     @app.get("/files/jobs/{job_id}/{name}")
     def job_file(job_id: str, name: str):
