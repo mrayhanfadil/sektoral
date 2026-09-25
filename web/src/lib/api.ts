@@ -153,6 +153,9 @@ export type TraceView = {
   ticker: string;
   /** Gallery reports only: whether an analyst approved the Forecast Plan. */
   review_state?: ReviewState;
+  /** Gallery reports only: sections kept out of the printed report (mining audit detail). */
+  audit_appendix?: { title: string; paragraphs: string[];
+    exhibits: { title: string; cols: string[]; rows: string[][]; note: string }[] }[];
   report: {
     release_status: string | null;
     published: boolean;
