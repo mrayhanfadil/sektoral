@@ -2,6 +2,46 @@
   "schema_version": 1,
   "ticker": "POWR",
   "reporting_currency": "USD",
+  "annual_source_title": "PT Cikarang Listrindo Tbk Consolidated Financial Statements 31 December 2025 (audited, auditor's report 27 February 2026)",
+  "annual_source_url": "https://www.listrindo.com/uploads/financial_statement/file_1772365395_1772367235__96f048104d7ff834114072843f332adf.pdf",
+  "annual_actuals_source": {
+    "title": "PT Cikarang Listrindo Tbk Consolidated Financial Statements 31 December 2025 (audited, auditor's report 27 February 2026)",
+    "url": "https://www.listrindo.com/uploads/financial_statement/file_1772365395_1772367235__96f048104d7ff834114072843f332adf.pdf",
+    "published_at": "2026-02-27",
+    "pages": [
+      1,
+      2,
+      3
+    ],
+    "unit": "USD",
+    "note": "EBITDA = operating profit + depreciation expense (fixed assets, investment property and right-of-use assets, notes 8, 9, 19c); no non-controlling interest, so profit and equity are wholly attributable to the parent."
+  },
+  "annual_actuals": [
+    {
+      "year": 2024,
+      "revenue": 547019675,
+      "operating_profit": 111320943,
+      "depreciation": 59771588,
+      "ebitda": 171092531,
+      "net_profit": 75344585,
+      "net_profit_attributable": 75344585,
+      "equity": 708044164,
+      "equity_attributable": 708044164,
+      "shares_issued": 16087156000
+    },
+    {
+      "year": 2025,
+      "revenue": 553495788,
+      "operating_profit": 105497311,
+      "depreciation": 61795694,
+      "ebitda": 167293005,
+      "net_profit": 72056309,
+      "net_profit_attributable": 72056309,
+      "equity": 714983142,
+      "equity_attributable": 714983142,
+      "shares_issued": 16087156000
+    }
+  ],
   "latest_actual": {
     "period": "1H26",
     "period_end": "2026-06-30",

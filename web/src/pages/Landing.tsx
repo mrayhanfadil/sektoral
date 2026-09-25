@@ -11,6 +11,7 @@ import { Pipeline } from "../components/landing/Pipeline";
 import { GateInstruments, MethodChain } from "../components/landing/Framework";
 import { EvidenceChecks, ReleaseStatuses, ReviewBand } from "../components/landing/Checks";
 import { ReportShelf } from "../components/landing/ReportShelf";
+import { LiveMark } from "../components/Mark";
 
 const SOURCES = [
   ["Inti", "Sectors", "Fundamental, peer, harga, kepemilikan, arus asing, dan data sub-sektor."],
@@ -40,6 +41,37 @@ function Section({ id, title, lede, children }: { id: string; title: ReactNode; 
           <p className="m-0 max-w-[62ch] text-[16.5px] text-ink-soft lg:col-span-5 lg:col-start-8">{lede}</p>
         </div>
         {children}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The one section drawn in the Deck's console grammar: a ruled panel with a
+ * region bar (mark, name, mono reading), because the Method Gates are the
+ * part of the product a visitor meets again, live, in the Deck.
+ */
+function ConsoleSection({ id, title, lede, region, reading, children }:
+  { id: string; title: ReactNode; lede: ReactNode; region: string; reading: ReactNode; children: ReactNode }) {
+  return (
+    <section id={id} aria-labelledby={`${id}-judul`} className="scroll-mt-14 border-t border-rule bg-surface py-24 max-sm:py-16">
+      <div className="wrap">
+        <div className="panel overflow-hidden bg-canvas shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-rule bg-surface px-6 py-3 max-sm:px-4">
+            <span className="flex items-center gap-2.5">
+              <LiveMark status="ok" className="h-3 w-3.5" />
+              <span className="text-[14px] font-bold text-ink-strong">{region}</span>
+            </span>
+            <span className="data text-ink-soft">{reading}</span>
+          </div>
+          <div className="px-6 pt-10 pb-12 max-sm:px-4 max-sm:pt-7 max-sm:pb-8">
+            <div className="mb-10 grid gap-x-12 gap-y-3 lg:grid-cols-12 lg:items-end">
+              <h2 id={`${id}-judul`} className="text-[clamp(28px,2.6vw,36px)] leading-[1.15] tracking-[-.02em] lg:col-span-6">{title}</h2>
+              <p className="m-0 max-w-[62ch] text-[16.5px] text-ink-soft lg:col-span-5 lg:col-start-8">{lede}</p>
+            </div>
+            {children}
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -112,13 +144,17 @@ export default function Landing() {
         </div>
       </Section>
 
-      <Section id="framework" title="Enam Method Gates memilih metode sebelum angka dihitung."
-        lede="DCF bukan jawaban untuk semua emiten. Gerbang membaca model bisnis, kualitas data, kepemilikan, siklus, dan tahap usaha, lalu mengurutkan metode utama, fallback, dan silang cek.">
+      <ConsoleSection id="framework" title="Enam Method Gates memilih metode sebelum angka dihitung."
+        lede="DCF bukan jawaban untuk semua emiten. Gerbang membaca model bisnis, kualitas data, kepemilikan, siklus, dan tahap usaha, lalu mengurutkan metode utama, fallback, dan silang cek."
+        region="Method Gates"
+        reading={final?.gates.some((g) => g.status !== "idle")
+          ? `${final.gates.filter((g) => g.status !== "idle").length}/${final.gates.length} dinilai, run ${ticker}`
+          : "6 gerbang, urut 0 sampai 5"}>
         <GateInstruments gates={final?.gates} ticker={ticker} />
-        <div className="mt-16">
+        <div className="mt-12 border-t border-rule pt-10">
           <MethodChain item={featured} chain={final?.chain} />
         </div>
-      </Section>
+      </ConsoleSection>
 
       <Section id="pemeriksaan" title="Apa yang terjadi saat bukti lengkap, dan saat tidak."
         lede="Validator berbasis kode memastikan tidak ada klaim yang lolos tanpa rujukan yang sahih. Bila bukti kurang, rating ditahan dan alasannya dicatat.">

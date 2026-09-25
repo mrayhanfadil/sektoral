@@ -191,3 +191,30 @@ def test_annual_reporter_uses_its_fiscal_year_net_income():
     assert snap["equity"] == 900.0 and snap["market_cap_reporting"] == pytest.approx(1_800.0)
     assert snap["fx_reporting_to_idr"] == 17_800.0 and snap["symbol"] == "PGEO"
     json.dumps(snap)                                      # storable as a document
+
+
+def test_regional_references_stay_out_of_the_valuation_peers(tmp_path, monkeypatch):
+    # GMFI keeps foreign MRO listings in a separate context list: they are
+    # never peers, never in companies() and must name their non-IDX market.
+    group = peer_groups.load("GMFI")
+    regional = {e["symbol"] for e in group.get("regional_reference") or []}
+    assert regional and not regional & {p["symbol"] for p in group["peers"]}
+    for entry in group["regional_reference"]:
+        assert entry["market"] != "IDX" and entry["reason"].strip() and entry["yahoo"]
+    pack = json.loads((peer_groups.ROOT / "GMFI.json").read_text(encoding="utf-8"))
+    pack["regional_reference"][0]["market"] = "IDX"
+    (tmp_path / "GMFI.json").write_text(json.dumps(pack), encoding="utf-8")
+    monkeypatch.setattr(peer_groups, "ROOT", tmp_path)
+    with pytest.raises(ValueError, match="non-IDX market"):
+        peer_groups.regional("GMFI")
+
+
+def test_regional_rows_come_from_their_snapshots_with_market_and_reason():
+    store.put(peer_fundamentals.COLLECTION, "AIR", {
+        **_snapshot("AIR", 4_800.0, 190.0, 1_700.0), "yahoo_symbol": "AIR",
+        "source": "Yahoo Finance AIR quarterly statements"})
+    rows, missing, basis = peer_groups.regional("GMFI")
+    air = next(r for r in rows if r["symbol"] == "AIR")
+    assert air["market"] == "NYSE" and air["group"] == ["regional_reference"]
+    assert air["pe_ttm"] == pytest.approx(4_800.0 / 190.0)
+    assert "IDX-only" in basis

@@ -34,6 +34,28 @@ def _issuer_match(ticker, company_name, item):
     return bool(len(words) >= 2 and " ".join(words[:2]) in text.lower())
 
 
+# Topic, tag, search and quote pages list many stories under one headline
+# ("Berita BBRI Terkini dan Terbaru Hari Ini | Bisnis.com"): no single dated
+# event, so they are rejected rather than read as an article.
+_INDEX_PATH = re.compile(
+    r"/(?:topic|topik|tag|tags|search|cari|indeks|index|kategori|category|categories|"
+    r"quote|quotes|symbols?|saham-hari-ini|terpopuler|berita-terkini)(?:/|$)", re.I)
+_INDEX_TITLE = re.compile(
+    r"\b(?:berita\s+(?:\S+\s+){0,2}(?:terkini|terbaru)|terkini\s+dan\s+terbaru|"
+    r"terbaru\s+hari\s+ini|kumpulan\s+berita|arsip\s+berita|latest\s+news\s+(?:on|about)|"
+    r"news\s+and\s+updates|stock\s+price\s+today)\b", re.I)
+
+
+def index_page(url, title):
+    """Why a result is a topic, tag, search or quote page, or None."""
+    path = urlsplit(str(url or "")).path
+    if _INDEX_PATH.search(path):
+        return f"halaman topik/indeks, bukan artikel ({path})"
+    if _INDEX_TITLE.search(str(title or "")):
+        return "judul halaman topik/indeks, bukan artikel"
+    return None
+
+
 def _event_key(title):
     """Normalized event key for syndication dedup; keeps disagreements visible.
 
@@ -86,6 +108,10 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
         if not key:
             _reject(row, "unverifiable URL")
             continue
+        page = index_page(row.get("source"), row.get("title"))
+        if page:
+            _reject(row, page)
+            continue
         candidates.append({**row, "origin": "sectors", "origins": ["sectors"],
                            "event_key": _event_key(row.get("title"))})
     for item in tavily_items or []:
@@ -103,6 +129,10 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
             continue
         if not _issuer_match(str(ticker).upper(), company_name, item):
             _reject(item, "issuer identity not verified in title/snippet")
+            continue
+        page = index_page(item.get("url"), item.get("title"))
+        if page:
+            _reject(item, page)
             continue
         candidates.append({"title": item["title"], "timestamp": item["date"],
                            "source": item["url"], "body": item.get("snippet") or "",

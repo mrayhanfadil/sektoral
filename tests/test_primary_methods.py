@@ -219,6 +219,43 @@ def test_lom_value_ties_to_the_sotp_bridge_and_moves_the_right_way():
     assert not release._check_operating_bridge({"operating_bridge": bridge})
 
 
+def test_lom_reconciliation_walks_cumulatively_from_the_target():
+    import pytest
+    from app import lom
+    doc_in, _, (res, gaps) = _ammn_lom()
+    if res is None:
+        pytest.skip(f"AMMN LoM inputs unavailable: {gaps}")
+    rows = {r["key"]: r for r in res["reconciliation"]}
+    assert [r["key"] for r in res["reconciliation"]] == [
+        "target", "export", "elang", "horizon", "deck", "rate"]
+    assert rows["target"]["per_share"] == pytest.approx(res["per_share"])
+    # Each cumulative step adds one assumption to the one before it.
+    assert rows["export"]["per_share"] == pytest.approx(res["other_export"])
+    for prev, key in (("target", "export"), ("export", "elang"), ("elang", "horizon")):
+        assert rows[key]["step"] == pytest.approx(rows[key]["per_share"] - rows[prev]["per_share"])
+        assert rows[key]["per_share"] > rows[prev]["per_share"]
+    # The two closing levers each sit on the walked value, not on each other.
+    for key in ("deck", "rate"):
+        assert rows[key]["alternative"]
+        assert rows[key]["step"] == pytest.approx(
+            rows[key]["per_share"] - rows["horizon"]["per_share"])
+
+
+def test_lom_unit_cost_is_cash_cost_after_the_gold_credit_per_pound():
+    import pytest
+    from app import lom
+    inp = {"cu_price": 10_000.0, "au_price": 2_000.0}
+    rows = [{"year": 2026, "share": 0.5, "mining": 1, "rehandle": 0, "processing": 1,
+             "smelting": 1, "refined_oz": 1, "conc_au_oz": 0, "cathode_t": 1, "conc_cu_t": 0},
+            {"year": 2027, "share": 1.0, "mining": 300e6, "rehandle": 0.0, "processing": 200e6,
+             "smelting": 100e6, "refined_oz": 200_000, "conc_au_oz": 100_000,
+             "cathode_t": 80_000, "conc_cu_t": 20_000}]
+    cost = lom.unit_cost(inp, rows)
+    assert 2026 not in cost  # part year: no full-year cost
+    gold = (200_000 + 100_000 * lom.PAYABLE_AU) * 2_000.0
+    assert cost[2027] == pytest.approx((600e6 - gold) / (100_000 * lom.LB_PER_T))
+
+
 def test_lom_gate_needs_sourced_analyst_assumptions():
     import pytest
     doc_in, fc, (res, gaps) = _ammn_lom()

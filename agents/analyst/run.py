@@ -32,8 +32,25 @@ _ADVICE = re.compile(
 # Market-flow descriptions ("net sell", "aksi beli") are removed before the check.
 _FLOW_PHRASES = re.compile(
     r"\b(?:(?:aksi|tekanan|net|posisi)\s+(?:beli|jual|buy|sell)|"
-    r"(?:buy|sell)(?:\s+bersih|\s+asing|\s+neto|ing|-off|back))\b", re.I)
+    r"(?:buy|sell)(?:\s+bersih|\s+asing|\s+neto|ing|-off|back)|"
+    # "akumulasi asing", "pola akumulasi": what investors did, not a call to act.
+    r"(?:akumulasi|distribusi)\s+(?:oleh\s+)?(?:asing|investor|institusi|domestik|lokal|"
+    r"bersih|dana|bandar)|"
+    r"(?:aksi|pola|fase|tren|tanda|sinyal|periode)\s+(?:akumulasi|distribusi))\b", re.I)
 _DIGIT = re.compile(r"\S*\d\S*")
+# Dates, years and period labels are references, not figures: "2026",
+# "2026-09-22", "1H26", "FY2025", "Q2".
+_DATE_TOKEN = re.compile(
+    r"^(?:(?:19|20)\d{2}(?:-\d{2}(?:-\d{2})?)?|\d{1,2}[HQ]\d{2,4}|[HQ][1-4](?:\d{2,4})?|"
+    r"FY\d{2,4}[AF]?|\d[HQ])$", re.I)
+# Verdict spellings the model uses for the three the host accepts.
+_VERDICT_ALIASES = {
+    "didukung": "didukung", "terdukung": "didukung", "terkonfirmasi": "didukung",
+    "tidak didukung": "tidak didukung", "tidak terdukung": "tidak didukung",
+    "ditolak": "tidak didukung", "terbantah": "tidak didukung",
+    "belum terjawab": "belum terjawab", "belum dapat disimpulkan": "belum terjawab",
+    "inkonklusif": "belum terjawab", "tidak dapat disimpulkan": "belum terjawab"}
+_PARTIAL = re.compile(r"^(?:sebagian\s+didukung|didukung\s+sebagian|didukung\s+parsial)$", re.I)
 # Valuation verdicts that read as a call to act rather than a comparison.
 _JUDGEMENT = re.compile(r"\b(?:valuasi\s+(?:\w+\s+){0,2}menarik|layak\s+(?:dibeli|dikoleksi|dimiliki)|"
                         r"peluang\s+(?:beli|masuk)|titik\s+masuk|entry\s+point)\b", re.I)
@@ -340,8 +357,10 @@ def _synthesis_problems(doc, signal_ids, n_hypotheses, label_numbers=frozenset()
     # label ("20 sesi") are references, not figures the model invented.
     for signal_id in sorted(signal_ids, key=len, reverse=True):
         joined = joined.replace(signal_id, " ")
-    numbers = sorted(token for token in set(_DIGIT.findall(joined))
-                     if re.sub(r"\D", "", token) not in label_numbers)
+    tokens = {re.sub(r"^[^\w+−-]+|[^\w%]+$", "", token) for token in _DIGIT.findall(joined)}
+    numbers = sorted(token for token in tokens
+                     if token and not _DATE_TOKEN.match(token)
+                     and re.sub(r"\D", "", token) not in label_numbers)
     if numbers:
         problems.append("prosa tidak boleh memuat angka (angka ditampilkan dari sinyal yang "
                         "dicite); hapus: " + ", ".join(numbers[:8]))
@@ -352,6 +371,24 @@ def _synthesis_problems(doc, signal_ids, n_hypotheses, label_numbers=frozenset()
         problems.append("tulis dalam bahasa Indonesia saja; hapus: " +
                         ", ".join(_FOREIGN_SCRIPT.findall(joined)[:5]))
     return problems
+
+
+def _normalize_verdicts(doc):
+    """Map the model's verdict spellings onto the three the host accepts. A
+    partial verdict is kept as "belum terjawab" with the reason marked, so the
+    draft is not rejected for wording alone."""
+    for item in (doc or {}).get("hypotheses") or []:
+        if not isinstance(item, dict) or not isinstance(item.get("verdict"), str):
+            continue
+        said = re.sub(r"\s+", " ", item["verdict"]).strip().strip(".").lower()
+        if said in _VERDICT_ALIASES:
+            item["verdict"] = _VERDICT_ALIASES[said]
+        elif _PARTIAL.match(said):
+            item["verdict"] = "belum terjawab"
+            reason = str(item.get("reason") or "").strip()
+            if reason and not reason.lower().startswith("sebagian didukung"):
+                item["reason"] = f"Sebagian didukung: {reason[0].lower()}{reason[1:]}"
+    return doc
 
 
 def _fallback_synthesis(all_signals, hypotheses):
@@ -396,7 +433,8 @@ def _synthesize(chat, ticker, plan, all_signals, headlines, changes, problems):
         except Exception as error:
             problems.append(f"sintesis: {type(error).__name__}: {str(error)[:160]}")
             break
-        found = _synthesis_problems(doc, ids, len(plan["hypotheses"]), label_numbers)
+        found = _synthesis_problems(_normalize_verdicts(doc), ids, len(plan["hypotheses"]),
+                                    label_numbers)
         if not found:
             _replace_ids(doc, labels)
             doc["next_checks"] = [str(x)[:200] for x in (doc.get("next_checks") or [])

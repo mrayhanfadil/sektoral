@@ -18,7 +18,8 @@ from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
-               mineops, scenario_value)
+               mineops, rate_benchmarks, scenario_value)
+from . import consensus, peer_groups
 from . import lom as lom_mod
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
@@ -80,6 +81,9 @@ def _page(title, paragraphs, exhibits):
 _DECISION = {"selected": "Terpilih", "stop_extreme": "Terpilih, ekstrem (rantai berhenti)",
              "skipped": "Dilewati", "cross_check": "Silang cek", "not_needed": "Tidak dijalankan",
              "not_available": "Belum tersedia"}
+
+
+METHOD_CHAIN_TITLE = "Rantai metode valuasi"
 
 
 def method_chain_exhibit(va):
@@ -633,6 +637,48 @@ def _thin_peer_note(stats, keys=("pe", "pb", "roe", "net_margin", "leverage")):
             "rantai metode." if thin else "")
 
 
+REGIONAL_TITLE = "Referensi regional (konteks, bukan peer valuasi)"
+
+
+def regional_reference_exhibit(ticker):
+    """Non-IDX listings of the curated pack (``regional_reference``), shown
+    for context: they never enter the peer medians, the cross-checks or the
+    method chain, which stay IDX-only."""
+    try:
+        rows, missing, basis = peer_groups.regional(ticker)
+    except ValueError:
+        return None
+    if not rows:
+        return None
+    x = lambda v: fmt.mult(v, cap=fmt.MULT_CAP) if isinstance(v, (int, float)) and v > 0 else "n.m."
+    table = []
+    for row in rows:
+        ev = (row.get("ev") or {}).get("ev_ebitda")
+        table.append([f"{row['company_name']} ({row['symbol']})", row["market"],
+                      _rp_bn(row["market_cap"]) if row.get("market_cap") else "-",
+                      x(row.get("pe_ttm")), x(row.get("pb_mrq")), x(ev),
+                      str(row.get("year") or "-")])
+
+    def median(values):
+        values = sorted(v for v in values if isinstance(v, (int, float)) and v > 0)
+        if not values:
+            return None
+        mid = len(values) // 2
+        return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
+    table.append(["Median referensi regional", "", "",
+                  x(median(r.get("pe_ttm") for r in rows)), x(median(r.get("pb_mrq") for r in rows)),
+                  x(median((r.get("ev") or {}).get("ev_ebitda") for r in rows)), ""])
+    fetched = sorted({str(r.get("source") or "").rsplit("diambil ", 1)[-1] for r in rows})
+    return _exhibit(
+        REGIONAL_TITLE,
+        ["Perusahaan", "Bursa", "Kap. pasar (Rp miliar)", "P/E (x)", "P/B (x)", "EV/EBITDA (x)",
+         "Periode laba"], table,
+        f"Sumber: Yahoo Finance (laporan keuangan dan kapitalisasi pasar, diambil "
+        f"{', '.join(fetched)}), dikonversi ke Rp; data/peer_groups/{ticker}.json. "
+        + (basis or "Hanya konteks; tidak dipakai dalam valuasi.")
+        + (f" Tanpa snapshot: {', '.join(missing)}." if missing else ""))
+
+
 def peer_page(intake, valuation_inputs=None):
     ticker = intake["ticker"]
     peers = peer_tools.find_peers(ticker)
@@ -710,7 +756,9 @@ def peer_page(intake, valuation_inputs=None):
         + "Emiten yang dibahas disorot '(emiten)'."
         + _thin_peer_note(stats, ("market_cap", "pe", "pb") + (() if bank else ("ev_ebitda",))
                           + ("roe", "net_margin", "leverage")))]
-    caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
+    regional = regional_reference_exhibit(ticker)
+    if regional:
+        exhibits.append(regional)
     caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
     subject = next(r for r in rows if r["is_self"])
     paragraphs = [
@@ -1162,7 +1210,41 @@ _SECTORS_ABSENT = {
     "securities": "Sectors tidak memisahkan obligasi pemerintah dan surat berharga",
     "npl": "Sectors tidak memuat kredit bermasalah (NPL)",
     "payout": "Sectors tidak memuat dividen tahunan pada laporan keuangan historis",
+    "revolver": "pinjaman penyeimbang kas adalah pos model forecast; utang aktual seluruhnya di "
+                "utang jangka pendek dan jangka panjang",
+    "revolver_flow": "pinjaman penyeimbang kas adalah pos model forecast; utang aktual seluruhnya "
+                     "di penarikan (pembayaran) utang",
 }
+# Memo lines under short-term debt and debt raised: the part the model draws
+# to keep cash at its minimum (``forecast_statements`` revolver). The harness
+# (T6.balancing_debt_share) reads the balance-sheet memo line.
+REVOLVER_LINE = "Termasuk pinjaman penyeimbang kas (memo)"
+
+
+def _revolver_note(modeled, money):
+    """Why the model draws short-term debt: the years operating cash flow
+    falls short of capex and dividends, and how large the balance gets
+    against equity."""
+    balance = [(f.get("label"), _num(f.get("revolver"))) for f in modeled
+               if _num(f.get("revolver"))]
+    short = []
+    for f in modeled:
+        cfo, capex, paid = (_num(f.get(k)) for k in ("operating_cash_flow", "capital_expenditure",
+                                                      "dividends_paid"))
+        if None not in (cfo, capex) and (_num(f.get("revolver_flow")) or 0.0) > 0.5:
+            short.append(f"{f.get('label')} arus kas operasi {money(cfo)} terhadap belanja modal "
+                         f"{money(abs(capex))}" + (f" dan dividen {money(abs(paid))}" if paid else ""))
+    last = modeled[-1] if modeled else {}
+    share = (_num(last.get("revolver")) / _num(last.get("total_equity"))
+             if _num(last.get("revolver")) and _num(last.get("total_equity")) else None)
+    return (" Baris 'Termasuk pinjaman penyeimbang kas' adalah bagian utang jangka pendek forecast "
+            "yang ditarik model agar kas tidak turun di bawah kas minimum (asumsi screening, tanpa "
+            "fasilitas atau jadwal pelunasan dari emiten): "
+            + "; ".join(f"{label} {money(v)}" for label, v in balance) + "."
+            + (" Penarikan terjadi karena " + "; ".join(short) + "." if short else "")
+            + (f" Saldonya {fmt.pct(share)} dari total ekuitas {last.get('label')}; pembiayaan "
+               "sebenarnya (utang bank, obligasi atau penundaan capex) belum dimodelkan."
+               if share is not None else ""))
 
 
 def financials_page(intake, fc=None, va=None, statements=None):
@@ -1218,6 +1300,7 @@ def financials_page(intake, fc=None, va=None, statements=None):
         keep = {"year", "label", "eps", "dps", "bvps", "payout", "roe", "interest_coverage"}
         modeled = [{k: (v / fx if k not in keep and isinstance(v, (int, float)) else v)
                     for k, v in r.items()} for r in modeled]
+    drawn = any(abs(_num(f.get("revolver")) or 0.0) > 0.5 for f in modeled)
     start = int(modeled[-1]["year"]) if modeled else int(actual[-1]["year"])
     forecast = modeled + [{"year": start + i}
                           for i in range(1, DISPLAY_FORECAST_YEARS - len(modeled) + 1)]
@@ -1497,8 +1580,9 @@ def financials_page(intake, fc=None, va=None, statements=None):
              lambda r: minus(get(r, "total_assets"), get(r, "current_assets"),
                              get(r, "fixed_assets")), money),
             ("Total aset", lambda r: get(r, "total_assets"), money),
-            ("Utang jangka pendek", lambda r: get(r, "short_term_debt"), money),
-            ("Utang usaha", forecast_only("trade_payables"), money),
+            ("Utang jangka pendek", lambda r: get(r, "short_term_debt"), money)]
+            + ([(REVOLVER_LINE, forecast_only("revolver"), money)] if drawn else [])
+            + [("Utang usaha", forecast_only("trade_payables"), money),
             ("Liabilitas lancar lainnya",
              lambda r: minus(get(r, "current_liabilities"), _num(r.get("short_term_debt")) or 0,
                              _num(r.get("trade_payables")) or 0), money),
@@ -1623,8 +1707,9 @@ def financials_page(intake, fc=None, va=None, statements=None):
         ("Pos investasi lainnya", other_investing, money),
         ("Jumlah arus kas investasi", lambda r: get(r, "investing_cash_flow"), money),
         "Blok Arus kas pendanaan",
-        ("Penarikan (pembayaran) utang", forecast_only("debt_raised"), money),
-        ("Dividen dibayar", forecast_only("dividends_paid", neg), money),
+        ("Penarikan (pembayaran) utang", forecast_only("debt_raised"), money)]
+        + ([(REVOLVER_LINE, forecast_only("revolver_flow"), money)] if drawn else [])
+        + [("Dividen dibayar", forecast_only("dividends_paid", neg), money),
         ("Penerbitan (pembelian kembali) saham", forecast_only("equity_raised"), money),
         ("Pos pendanaan lainnya", other_financing, money),
         ("Jumlah arus kas pendanaan", lambda r: get(r, "financing_cash_flow"), money),
@@ -1710,11 +1795,7 @@ def financials_page(intake, fc=None, va=None, statements=None):
     interest_note = (f" Pendapatan (beban) lain-lain {', '.join(bundled)} termasuk beban bunga "
                      "bersih, karena skenario tidak memisahkan bunga (laba sebelum pajak dikurangi "
                      "laba usaha)." if bundled else "")
-    revolver = [(f.get("label"), _num(f.get("revolver"))) for f in modeled
-                if _num(f.get("revolver"))]
-    revolver_note = (" Utang jangka pendek forecast termasuk pinjaman penyeimbang kas (revolver, "
-                     "asumsi screening): " + "; ".join(f"{label} {money(v)}" for label, v in revolver)
-                     + "." if revolver else "")
+    revolver_note = _revolver_note(modeled, money) if drawn else ""
     official_note = ((" Pendapatan, EBITDA, laba usaha dan D&A aktual mengikuti laporan resmi "
                       "yang sama dengan Key Financials; beban usaha " + ", ".join(derived)
                       + " = laba kotor Sectors dikurangi laba usaha resmi (termasuk pendapatan dan "
@@ -2696,9 +2777,8 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
                   "forecast hanya tampil bila skenario tervalidasi."], exhibits)
 
 
-_MINING_C1_GAP = ("model LoM menghitung biaya tambang, olah dan smelter per ton bijih, bukan "
-                  "Adjusted C1 per pon tembaga terjual setelah kredit emas dan perak, sehingga "
-                  "C1 forecast tidak dihitung")
+_MINING_C1_GAP = ("jadwal LoM valuasi hanya memuat sebagian tahun ini (2H), sehingga biaya "
+                  "tunai setahun penuh per pon tidak dihitung")
 _MINING_VOLUME_GAP = "jadwal LoM atau panduan emiten untuk tahun ini tidak tersedia"
 
 
@@ -2707,8 +2787,9 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
     concentrate (Mlbs, bars) against Adjusted C1 (US$/lb, line). Actual years
     from the issuer's annual operations (``annual_operations.rows``); forecast
     volumes from the valued LoM schedule (a part year adds the reported 1H),
-    else FY guidance for its year; the C1 line stays actual-only because the
-    LoM has no by-product-credit unit cost."""
+    else FY guidance for its year. The line is Adjusted C1 for actual years
+    and the LoM's own cash cost after the gold credit (``lom.unit_cost``) for
+    full forecast years, labelled as a different definition."""
     if intake.get("model_profile") != "finite_life_mining":
         return None
     evidence = intake.get("official_evidence") or {}
@@ -2734,6 +2815,8 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
             part_year.add(row["year"])
     guidance = {str(g.get("period")): g for g in evidence.get("management_guidance") or []
                 if isinstance(g, dict) and g.get("name") == "Tembaga dalam konsentrat (Mlbs)"}
+    model_cost = {int(k): v for k, v in (lom.get("unit_cost") or {}).items()}
+    fc_cost = [model_cost.get(int(r["year"])) if r.get("year") else None for r in frows]
     fc_volume, basis = [], []
     for r in frows:
         year = int(r["year"]) if r.get("year") else None
@@ -2765,6 +2848,11 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
              zip(basis, [v for v in fc_volume if v is not None])]
     if known:
         text += ". Volume forecast (juta pon): " + ", ".join(known)
+    costed = [(r.get("label"), v) for r, v in zip(frows, fc_cost) if v is not None]
+    if costed:
+        text += (". Biaya tunai model setelah kredit emas (US$/lb): "
+                 + ", ".join(f"{label} {'(' + fmt._id(-v, 2) + ')' if v < 0 else fmt._id(v, 2)}"
+                             for label, v in costed))
     text += "."
     sources = "; ".join(dict.fromkeys(
         f"{by_year[y].get('source_title')}, hlm. {by_year[y].get('page')}" for y in years
@@ -2772,11 +2860,16 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
     note = ((f" Volume dan C1 aktual: {sources}." if sources else "")
             + " Tembaga = kandungan logam dalam konsentrat yang diproduksi; Adjusted C1 per pon "
             "tembaga terjual, negatif (dalam kurung) bila kredit emas dan perak melebihi biaya "
-            "tunai.")
+            "tunai."
+            + (" Garis forecast adalah biaya tunai jadwal LoM valuasi per pon tembaga diproduksi: "
+               "biaya tambang, olah dan smelter dikurangi pendapatan emas pada dek dasar, tanpa "
+               "royalti, bea keluar, G&A korporat dan kredit perak; definisinya bukan Adjusted C1 "
+               "emiten, sehingga dibaca sebagai arah, bukan angka yang sebanding."
+               if any(v is not None for v in fc_cost) else ""))
     cols = labels
     return (f"Produksi tembaga dan biaya unit C1 ({cols[0]}-{cols[-1]})",
             {"label": "Produksi tembaga (juta pon) & Adjusted C1",
-             "bars": volume + fc_volume, "line": c1 + [None] * len(frows),
+             "bars": volume + fc_volume, "line": c1 + fc_cost,
              "is_forecast": is_fc[:len(cols)], "line_unit": "US$/lb", "source_note": note},
             cols, text)
 
@@ -2974,12 +3067,50 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
             pages.append(page)
     if va:
         attach_method_chain(doc, va)
+        attach_rate_benchmarks(pages, intake, va)
+        attach_consensus(pages, intake, va)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2
     renumber(doc)
     return doc
+
+
+RATE_EXHIBITS = ("Komponen WACC", "Komponen Cost of Equity")
+
+
+def attach_consensus(pages, intake, va):
+    """House target vs the dated analyst consensus (app.consensus), just
+    before the method chain on the target page."""
+    for page in pages:
+        exhibits = page.get("exhibit") or []
+        at = next((i for i, e in enumerate(exhibits)
+                   if e.get("judul") == METHOD_CHAIN_TITLE), None)
+        if at is None:
+            continue
+        if not any(e.get("judul") == consensus.TITLE for e in exhibits):
+            exhibits.insert(at, consensus.exhibit(
+                intake.get("ticker"), intake.get("as_of"), _num((va or {}).get("tp")),
+                (va or {}).get("rating"), _num(intake.get("price"))))
+        return
+
+
+def attach_rate_benchmarks(pages, intake, va):
+    """The policy-vs-benchmark table (app.rate_benchmarks) right after the
+    first WACC or Cost of Equity exhibit; nothing when the report has none."""
+    for page in pages:
+        exhibits = page.get("exhibit") or []
+        at = next((i for i, e in enumerate(exhibits)
+                   if str(e.get("judul") or "").startswith(RATE_EXHIBITS)), None)
+        if at is None:
+            continue
+        if any(e.get("judul") == rate_benchmarks.TITLE for e in exhibits):
+            return
+        table = rate_benchmarks.exhibit(intake.get("ticker"), intake.get("as_of"), va)
+        if table:
+            exhibits.insert(at + 1, table)
+        return
 
 
 def valuation_inputs(intake, fc, va):

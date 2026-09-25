@@ -540,8 +540,70 @@ def build(intake, fc):
                  "per_share": extended["per_share"]}
     return {"inputs": inp, "base": base, "grid": grid, "other_export": other_export,
             "risk_range": risk_range, "licence_extension": extension, "bridge_idr": b, "fx": fx,
+            "reconciliation": reconciliation(inp, b, fx, base["per_share"]),
+            "unit_cost": unit_cost(inp, base["rows"]),
             "per_share": base["per_share"],
             "per_share_down": grid[(round(inp["discount"] + 0.02, 3), "base")]}, []
+
+
+def unit_cost(inp, rows):
+    """{year: US$/lb}: the mine plan's cash cost per pound of copper after the
+    gold credit, full schedule years only (a part year has no full-year cost).
+
+    (mining + rehandle + processing + smelting - gold revenue) / copper
+    produced (cathode + copper in concentrate), gold at the base deck, payable
+    in concentrate. Excludes royalties, export duty and corporate G&A, so it
+    is the model's own measure, not the issuer's Adjusted C1.
+    """
+    _, au_price = deck(inp, "base")
+    by = {}
+    for row in rows:
+        if (row.get("share") or 1.0) < 1.0:
+            by.setdefault(row["year"], None)
+            continue
+        acc = by.get(row["year"], {"cost": 0.0, "gold": 0.0, "cu_t": 0.0})
+        if acc is None:
+            continue
+        acc["cost"] += row["mining"] + row["rehandle"] + row["processing"] + row["smelting"]
+        acc["gold"] += (row["refined_oz"] + row["conc_au_oz"] * PAYABLE_AU) * au_price
+        acc["cu_t"] += row["cathode_t"] + row["conc_cu_t"]
+        by[row["year"]] = acc
+    return {year: (acc["cost"] - acc["gold"]) / (acc["cu_t"] * LB_PER_T)
+            for year, acc in by.items() if acc and acc["cu_t"] > 0}
+
+
+def reconciliation(inp, bridge, fx, base):
+    """Cumulative walk from the target to the value on the market's usual
+    assumptions (plan 1.3): export permit extended, Elang at full value,
+    mining to reserve exhaustion; then the two levers that could close what
+    is left, each on top of the walk (a price deck 20% above the base deck,
+    or a discount rate 2pp lower). Rows: (key, label, per share, step)."""
+    export = not inp.get("export_base", True)
+    longer = {**inp, "licence_end": LICENCE_EXTENSION_END}
+    steps = [
+        ("target", "Target SOTP/LoM", base),
+        ("export", ("Izin ekspor konsentrat diperpanjang" if export else
+                    "Tanpa izin ekspor konsentrat"),
+         value(inp, bridge, fx, export=export)["per_share"]),
+        ("elang", "Elang dinilai penuh (probabilitas pengembangan 100%)",
+         value(inp, bridge, fx, export=export, risk=1.0)["per_share"]),
+        ("horizon", f"Penambangan sampai cadangan habis, bukan batas {int(inp['licence_end'])}",
+         value(longer, bridge, fx, export=export, risk=1.0)["per_share"])]
+    rows, prev = [], None
+    for key, label, per_share in steps:
+        rows.append({"key": key, "label": label, "per_share": per_share,
+                     "step": None if prev is None else per_share - prev})
+        prev = per_share
+    walked = rows[-1]["per_share"]
+    for key, label, kw in (
+            ("deck", "Lalu dek harga +20% (alternatif penutup sisa selisih)",
+             {"deck_name": "up20"}),
+            ("rate", f"Lalu tingkat diskonto -2pp ke {fmt.pct(inp['discount'] - 0.02)} "
+                     "(alternatif penutup sisa selisih)", {"rate": inp["discount"] - 0.02})):
+        per_share = value(longer, bridge, fx, export=export, risk=1.0, **kw)["per_share"]
+        rows.append({"key": key, "label": label, "per_share": per_share,
+                     "step": per_share - walked, "alternative": True})
+    return rows
 
 
 def forward_rows(intake, res, anchor_year, attributable_share=1.0, years=4):

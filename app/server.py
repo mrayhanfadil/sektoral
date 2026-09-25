@@ -16,16 +16,17 @@ from __future__ import annotations
 
 import argparse
 from contextlib import asynccontextmanager
+import hmac
 import logging
 import os
 from pathlib import Path
 import re
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import gallery, outputs, run_events, trace_view
+from . import assumption_review, gallery, outputs, run_events, trace_view
 from .jobs import ResearchJobs, TICKER, available_tickers
 from agents.analyst import memory as agent_memory
 
@@ -39,6 +40,25 @@ _NO_STORE = {"Cache-Control": "no-store"}
 
 class JobRequest(BaseModel):
     ticker: str
+
+
+class ReviewEdit(BaseModel):
+    path: str
+    value: float
+    reason: str
+
+
+class ReviewRequest(BaseModel):
+    reviewer: str
+    note: str = ""
+    edits: list[ReviewEdit] = []
+
+
+def review_token_ok(given: str | None) -> bool:
+    """Approvals need the reviewer token the server was started with
+    (``SECTORAL_REVIEW_TOKEN``); without one, approving is switched off."""
+    expected = os.environ.get("SECTORAL_REVIEW_TOKEN") or ""
+    return bool(expected) and hmac.compare_digest(str(given or ""), expected)
 
 
 def _history(reports: Path) -> list[dict]:
@@ -87,7 +107,37 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
                                 if TICKER.fullmatch(ticker.upper()) else None)
         if view is None:
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
+        # A gallery report is published only once its plan is approved.
+        review = assumption_review.status(jobs.reports, ticker.upper())
+        view["review_state"] = review["state"]
+        if review["state"] != "approved" and view["report"].get("published"):
+            view["report"].update(published=False, rating=None, target_price=None, method=None,
+                                  held_reason="menunggu persetujuan asumsi oleh analis")
         return data(view)
+
+    @app.get("/api/reports/{ticker}/review")
+    def report_review(ticker: str):
+        t = ticker.upper()
+        if not TICKER.fullmatch(t) or not outputs.exists(outputs.REPORT, jobs.reports, t):
+            raise HTTPException(404, "Laporan tidak ditemukan.")
+        return data({**assumption_review.public(jobs.reports, t),
+                     "enabled": bool(os.environ.get("SECTORAL_REVIEW_TOKEN"))})
+
+    @app.post("/api/reports/{ticker}/review")
+    def report_approve(ticker: str, body: ReviewRequest,
+                       x_review_token: str | None = Header(default=None)):
+        t = ticker.upper()
+        if not TICKER.fullmatch(t) or not outputs.exists(outputs.REPORT, jobs.reports, t):
+            raise HTTPException(404, "Laporan tidak ditemukan.")
+        if not review_token_ok(x_review_token):
+            raise HTTPException(403, "Token reviewer tidak valid atau review belum diaktifkan.")
+        try:
+            record = assumption_review.approve(
+                jobs.reports, t, body.reviewer, body.note,
+                [edit.model_dump() for edit in body.edits])
+        except assumption_review.ReviewError as error:
+            raise HTTPException(400, str(error)) from None
+        return data({"record": record, **assumption_review.public(jobs.reports, t)})
 
     @app.get("/api/reports/{ticker}/run")
     def report_run(ticker: str):

@@ -75,5 +75,9 @@ def test_ammn_lom_grid_has_five_rate_steps_and_chart_four_reads_the_mine_plan(tm
     # FY2024/FY2025 from the issuer's annual operations; FY26F = 1H actual +
     # the LoM's 2H, which equals the FY2026 guidance (485 Mlbs).
     assert series["bars"][:2] == [395.0, 209.0] and round(series["bars"][2]) == 485
-    assert all(v is not None for v in series["bars"][2:]) and series["line"][2:] == [None] * 3
-    assert "C1 forecast tidak dihitung" in chart["narasi"]
+    assert all(v is not None for v in series["bars"][2:])
+    # The line: Adjusted C1 for actual years, the LoM cash cost after the gold
+    # credit for full forecast years; FY26F is a part year in the schedule.
+    assert series["line"][2] is None and all(v is not None for v in series["line"][3:])
+    assert "biaya tunai setahun penuh per pon tidak dihitung" in chart["narasi"]
+    assert "bukan Adjusted C1" in chart["catatan_sumber"]
