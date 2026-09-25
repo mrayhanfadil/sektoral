@@ -91,7 +91,7 @@ Every report also carries sections built directly from the local Sectors snapsho
 | `agents/research/` | Cache-constrained research agent, evidence checks, and trace data |
 | `data/sectors_cache.db` | Local Sectors cache used as the only market-data source |
 | `data/issuer_evidence/` | Dated local copies of metrics transcribed from official issuer releases |
-| `data/sectoral.db` | App database (git-ignored): agent memory, forecast plans, fetched news, peer and FX snapshots, and the report, trace and manifest of every run. Import older JSON caches with `python -m app.store_import` |
+| `data/sectoral.db` | App database (git-ignored): agent memory, forecast plans, fetched news, peer and FX snapshots, and the report, trace and manifest of every run. Import older JSON caches with `python -m app.store_import`. Run outputs are keyed by folder relative to the project (`out/reports::AMMN`), so the host and the Docker image share them; rewrite keys written by older versions once with `python -m app.outputs --migrate --root /app --root <host checkout path>` |
 | `spec/` | Report and output requirements |
 | `docs/` | Sectors API/MCP reference, recipes, and implementation notes |
 | `docs/hackathon/` | Rules, submission checklist, and team operations |
