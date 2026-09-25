@@ -123,6 +123,13 @@ def peer_ev_sales(peers) -> list[float]:
 PEER_EV_SOURCE_NAMES = {"sectors": "data Sectors", "yahoo": "Yahoo Finance"}
 
 
+def peer_multiple_source(intake) -> str:
+    """Where the peer P/E and P/B come from: a curated group or the Sectors table."""
+    basis = str((intake or {}).get("peer_basis") or "")
+    return ("grup peer kurasi (tabel peer Sectors dan snapshot Yahoo Finance)"
+            if basis.startswith("grup peer kurasi") else "data Sectors")
+
+
 def peer_ev_sources(peers) -> str:
     """Where the peer EVs in the median come from: Sectors, Yahoo Finance, or both.
 
@@ -242,9 +249,9 @@ def ev_ebitda_peer(peers, ebitda_fwd, shares, market_cap, net_debt=0.0,
     return candidate(
         "ev_ebitda_peer", per_share=ps, per_share_down=down,
         reasons=scale_reasons(ps, shares, market_cap) if _finite(ps) else [],
-        labels=[f"EV/EBITDA peer dari {peer_ev_sources(peers)} (market cap tabel peer Sectors "
-                "+ utang - kas, EBITDA terakhir laporan peer, 12 bulan terakhir bila tersedia) diterapkan ke EBITDA forward; "
-                "peer dianggap sebanding", _bridge_label(net_debt_source)],
+        labels=[f"EV/EBITDA peer dari {peer_ev_sources(peers)} (kapitalisasi pasar + utang - kas, "
+                "EBITDA terakhir laporan peer, 12 bulan terakhir bila tersedia) diterapkan ke "
+                "EBITDA forward; peer dianggap sebanding", _bridge_label(net_debt_source)],
         detail={"median_ev_ebitda": median, "q1_ev_ebitda": q1,
                 "peer_count": len(mults), "ebitda_fwd": ebitda_fwd, "net_debt": nd,
                 "net_debt_source": net_debt_source, "peer_source": peer_ev_sources(peers)})

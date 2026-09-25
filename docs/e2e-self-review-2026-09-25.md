@@ -1,6 +1,6 @@
 # Self review e2e sembilan emiten — 25 September 2026
 
-Riset end-to-end untuk AMMN, BBCA, BBRI, GMFI, INET, JPFA, POWR, SIDO dan SSIA pada tanggal laporan 24 September 2026, diperiksa dalam tiga putaran: cacat penyajian, kesalahan data yang ditemukan lewat sumber luar, lalu koherensi tiap laporan dibaca utuh. Dokumen ini mencatat keadaan terakhir (run `out/e2e-2026-09-25/all9-sense`), apa yang diperbaiki di tiap putaran, dugaan yang ternyata salah, dan penilaian analis yang masih menentukan hasil.
+Riset end-to-end untuk AMMN, BBCA, BBRI, GMFI, INET, JPFA, POWR, SIDO dan SSIA pada tanggal laporan 24 September 2026, diperiksa dalam empat putaran: cacat penyajian, kesalahan data yang ditemukan lewat sumber luar, koherensi tiap laporan dibaca utuh, lalu grup peer. Dokumen ini mencatat keadaan terakhir (run `out/e2e-2026-09-25/all9-peers`), apa yang diperbaiki di tiap putaran, dugaan yang ternyata salah, dan penilaian analis yang masih menentukan hasil.
 
 ## Hasil terkini
 
@@ -16,7 +16,7 @@ Riset end-to-end untuk AMMN, BBCA, BBRI, GMFI, INET, JPFA, POWR, SIDO dan SSIA p
 | SIDO | Buy | Rp448 | Rp350 | +28,0% | DCF FCFF skenario | draft | Hold Rp394 (Kiwoom), Accumulate Rp650 (Panin) |
 | SSIA | Sell | Rp1.370 | Rp1.750 | −21,7% | SOTP holding + RNAV landbank | Sell Rp1.235 | Rp2.080–2.579 |
 
-Kesembilan laporan kini terbit sebagai `distributable_assumption_led` dan lolos pemeriksa otomatis; 590 tes lolos. Harga memakai penutupan 24 September dan kurs Rp17.893/USD. Target publik adalah pembanding, bukan kebenaran: perbedaan dengannya adalah sinyal untuk memeriksa (bagian "Perbandingan dengan target publik").
+Kesembilan laporan kini terbit sebagai `distributable_assumption_led` dan lolos pemeriksa otomatis; 601 tes lolos. Harga memakai penutupan 24 September dan kurs Rp17.893/USD. Target publik adalah pembanding, bukan kebenaran: perbedaan dengannya adalah sinyal untuk memeriksa (bagian "Perbandingan dengan target publik").
 
 | Run | Isi | Laporan bercacat |
 |---|---|---|
@@ -24,6 +24,7 @@ Kesembilan laporan kini terbit sebagai `distributable_assumption_led` dan lolos 
 | `out/e2e-2026-09-25/all9-fixed` | putaran 1: cacat penyajian; dokumen di `data/sectoral.db` | 0 dari 9 |
 | `out/e2e-2026-09-25/all9-validated` | putaran 2: kesalahan data dari validasi eksternal | 0 dari 9 |
 | `out/e2e-2026-09-25/all9-sense` | putaran 3: koherensi laporan | 0 dari 9 |
+| `out/e2e-2026-09-25/all9-peers` | putaran 4: grup peer kurasi | 0 dari 9 |
 
 ## Putaran 1: cacat penyajian
 
@@ -109,6 +110,27 @@ EV/EBITDA historis Sectors dibagi EBITDA Sectors yang sama. Tahun yang D&A-nya d
 - AMMN menulis "jembatan produksi ... belum lengkap untuk membangun proyeksi umur aset" di halaman yang targetnya justru proyeksi umur aset; kalimat itu kini menjelaskan dasar LoM, dan paragraf target menyebut batasan izin ekspor.
 - Butir cover SSIA kini menyebut landbank pada RNAV.
 
+## Putaran 4: grup peer
+
+Tabel peer Sectors adalah sub-sektor emiten, bukan model bisnisnya. GMFI (perawatan pesawat) dibandingkan dengan jalan tol, pelabuhan dan BREN di grup "Airport Operators"; POWR (listrik gas untuk kawasan industri) dengan pengembang energi terbarukan ber-P/E 50–190x; SSIA (pemilik kawasan industri) hanya dengan kontraktor, termasuk anak usahanya sendiri; AMMN dengan penambang emas, nikel dan timah; JPFA dengan emiten kecil ber-P/E 132–1.270x. Median dan cross-check dari grup itu tidak berarti apa-apa.
+
+Kini tiap emiten punya paket grup peer di `data/peer_groups/<T>.json` yang ditinjau di git: peer dipilih menurut model bisnis, dan setiap peer yang dipakai maupun dikeluarkan tercatat dengan alasannya. Peer yang ada di tabel Sectors emiten tetap memakai baris Sectors; peer lain (termasuk bursa luar negeri) memakai snapshot Yahoo Finance bertanggal (`python -m app.peer_fundamentals --group <T>`): P/E, P/B dan EV/EBITDA dihitung dalam mata uang laporan peer sendiri, kapitalisasi dikonversi ke rupiah hanya untuk tampilan, dan periodenya tertulis (12 bulan terakhir, atau tahun buku terakhir bagi emiten yang melapor semesteran). Valuasi dan halaman peer membaca satu set yang sama, dan halaman peer memuat tabel "Grup peer: alasan pemilihan". Bila kurang dari tiga peer punya data, laporan memakai tabel Sectors dan menyebut alasannya. BBCA dan BBRI tetap memakai tabel bank Sectors, yang memang berisi bank.
+
+| Emiten | Grup peer kurasi | Median P/E | P/B | EV/EBITDA | Dampak |
+|---|---|---|---|---|---|
+| AMMN | MDKA + produsen tembaga regional dan global (Freeport, Southern Copper, Antofagasta, Lundin, Hudbay, Zijin, MMG, CMOC, Sandfire) | 20,9x | 3,4x | 8,9x | cross-check P/E naik dari Rp2.510 (9,2x) ke Rp5.700 dan P/B dari Rp3.010 ke Rp4.780, jauh di atas target LoM Rp2.990 |
+| GMFI | MRO: SIA Engineering, ST Engineering, AAR, VSE | 23,4x (dua peer valid) | 2,1x | 20,7x | cross-check PER gugur karena dua peer di atas 50x; P/BV Rp24 menjadi Rp43; EV/EBITDA peer jauh di atas multiple GMFI sendiri |
+| POWR | PGEO, B.Grimm, GPSC, RATCH, EGCO, Gulf | 19,4x | 1,3x | 11,9x | PER FY kini dapat dihitung (Rp1.755) dan berada di atas target DCF Rp1.445; P/BV Rp990 |
+| SSIA | DMAS, BEST, KIJA, TOTL, PBSA | 8,7x | 1,3x | 6,6x | cross-check PER Rp825 menjadi Rp740 |
+| JPFA | CPIN, MAIN, SIPD, CPRO, CP Foods | 8,0x | 0,7x | 6,3x | cross-check PER Rp2.440 menjadi Rp2.870, 13% di bawah target DCF Rp3.280 |
+| INET | LINK, MORA, KETR, DATA, TLKM, ISAT, SUPR | 18,3x | 2,1x | 12,8x | target tidak berubah (KBLV dan JAST tidak punya EV yang dapat dipakai) |
+| SIDO | KLBF, TSPC, SOHO, DVLA, MERK, PYFA, KAEF | 9,7x | 1,4x | 5,8x | cross-check PER Rp268 menjadi Rp274 |
+
+Target utama tidak berubah karena hanya INET yang dinilai dengan multiple peer. Yang berubah adalah apa yang dikatakan cross-check:
+
+- **POWR dan GMFI kini didukung peer.** Produsen listrik industri diperdagangkan pada EV/EBITDA 11,9x dan P/E 19,4x, sedangkan DCF POWR menyiratkan exit 7,2x; MRO global pada EV/EBITDA 20,7x, sedangkan DCF GMFI menyiratkan sekitar 12x. Selisih dengan harga tetap berasal dari kebijakan tingkat diskonto, bukan dari peer.
+- **AMMN kini bertentangan dengan peer.** Produsen tembaga diperdagangkan pada P/E 20,9x; target LoM Rp2.990 setara sekitar 7x laba FY27F. Selisihnya adalah asumsi LoM (tanpa izin ekspor, probabilitas Elang 50%, izin sampai 2050, diskonto USD 10%) berbanding cara pasar menilai produsen tembaga berumur panjang. Cross-check ini tampil di laporan dan tidak dirata-ratakan dengan target.
+
 ## Perbandingan dengan target publik
 
 | Emiten | Sektoral | Target publik | Sumber selisih |
@@ -160,18 +182,19 @@ Semua penilaian ini diberi label di laporan beserta sensitivitasnya.
 - **AMMN:** probabilitas pengembangan Elang (0% memberi Rp2.360, 100% Rp3.620) dan status izin ekspor (diperpanjang: Rp3.800).
 - **SSIA:** porsi lahan dapat dijual (65%) dan laju penjualan.
 - **GMFI:** upside +98,2% tepat di bawah ambang Review Required (+100%); ekuitas tipis sesudah konversi utang membuat nilai per saham sangat peka terhadap EV.
-- **Kualitas grup peer Sectors:** GMFI dan POWR memuat BREN; cross-check PER dan P/BV GMFI (Rp34 dan Rp24) karena itu tidak bermakna. INET: PER tidak bermakna selama laba masih ramping.
+- **AMMN berbanding peer tembaga:** cross-check P/E Rp5.700 dan P/B Rp4.780 jauh di atas target LoM Rp2.990 (lihat putaran 4).
+- **Grup peer:** paket di `data/peer_groups/` adalah penilaian analis dan snapshot Yahoo-nya bertanggal 25 September 2026; GMFI hanya punya dua peer dengan P/E di bawah 50x. INET: PER tidak bermakna selama laba masih ramping.
 
 ## Verifikasi
 
 - Pemeriksa otomatis membaca dokumen laporan dan menguji setiap cacat di atas, ditambah: dek tembaga basi, D&A tidak kredibel di DCF, dividen sesudah neraca, payout BBRI, penutupan basi, label beta/ERP, kode templat yang tidak dirender, kalimat cover yang bertentangan dengan valuasi, dan butir cover SSIA. Kesembilan laporan bersih.
-- 590 tes lolos, termasuk tes baru untuk D&A tidak kredibel, D&A audit, dividen sesudah neraca, payout, tingkat diskonto tersirat, paket harga, kurs, EBITDA peer 12 bulan terakhir, kelipatan historis, jadwal LoM tanpa ekspor, capex Elang, filter arus asing dan aturan pertumbuhan agen.
+- 601 tes lolos, termasuk tes baru untuk grup peer kurasi (paket valid, peer asing dinilai dalam mata uangnya sendiri, fallback ke tabel Sectors, laba tahunan untuk emiten semesteran), D&A tidak kredibel, D&A audit, dividen sesudah neraca, payout, tingkat diskonto tersirat, paket harga, kurs, EBITDA peer 12 bulan terakhir, kelipatan historis, jadwal LoM tanpa ekspor, capex Elang, filter arus asing dan aturan pertumbuhan agen.
 - Laporan, jejak dan manifest tiap run tersimpan di `data/sectoral.db`; tidak ada file JSON di folder output.
-- Perintah pembaruan data (butuh jaringan, dijalankan eksplisit): `python -m app.commodity`, `python -m app.market_quote --as-of 2026-09-24 <ticker>...`, `python -m app.peer_fundamentals --peers-of INET`; kurs lewat `app.fx.refresh_usd_idr()`.
+- Perintah pembaruan data (butuh jaringan, dijalankan eksplisit): `python -m app.commodity`, `python -m app.market_quote --as-of 2026-09-24 <ticker>...`, `python -m app.peer_fundamentals --peers-of INET`, `python -m app.peer_fundamentals --group <T>`; kurs lewat `app.fx.refresh_usd_idr()`.
 
 ## Sumber
 
-- Harga, laporan keuangan, kurs dan komoditas: Yahoo Finance melalui yfinance (`.JK`, `IDR=X`, `HG=F`, `GC=F`), diambil 25 September 2026.
+- Harga, laporan keuangan, kurs dan komoditas: Yahoo Finance melalui yfinance (`.JK`, `IDR=X`, `HG=F`, `GC=F`), diambil 25 September 2026; peer luar negeri (`S59.SI`, `S63.SI`, `AIR`, `VSEC`, `BGRIM.BK`, `GPSC.BK`, `RATCH.BK`, `EGCO.BK`, `GULF.BK`, `CPF.BK`, `FCX`, `SCCO`, `ANTO.L`, `LUN.TO`, `HBM`, `2899.HK`, `1208.HK`, `3993.HK`, `SFR.AX`) dan kurs silangnya pada tanggal yang sama.
 - [Laporan keuangan audit JPFA 31 Desember 2025](https://d1be5sn7lppxuh.cloudfront.net/assets/files/files/financial_report/01-2026/pt-japfa-tbk-cfs-as-of-31-december-2025-audited.pdf) (hlm. 16 dan 148–149)
 - [Laporan keuangan interim POWR 30 Juni 2026](https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf)
 - SSIA: [Laporan Tahunan 2025](https://suryainternusa.com/assets/source/files/annual-report/ar-surya-2025---spread_compressed-low_22.05.2026.pdf) (PDF hlm. 56 dan 187), [presentasi 1H26](https://suryainternusa.com/assets/source/files/corporate-persentation/2026.09.01---ssia_1h26_-ads_v2.pdf) (hlm. 43, 44, 46, 49), [rilis 1H26](https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf)

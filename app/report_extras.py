@@ -508,12 +508,17 @@ def peer_industry_page(intake):
         ["Liabilitas/ekuitas (median)", mult(stats["leverage"][0]), mult(own.get("leverage"))]]
     group = peers.get("group") or intake.get("sub_sector") or "sub-sektor"
     exhibit = _exhibit(
-        f"Kondisi sub-sektor {group}: peer dibanding {ticker}",
+        (f"Kondisi grup peer {group}: peer dibanding {ticker}" if peers.get("curated") else
+         f"Kondisi sub-sektor {group}: peer dibanding {ticker}"),
         ["Metrik", f"Peer ({len(others)} emiten, tanpa {ticker})", ticker], table,
-        f"Sumber: {peers['source']} ({peers['basis']}), tahun buku "
-        f"{subject.get('year') or own.get('year') or '-'}; "
-        "perubahan kapitalisasi peer ditimbang kapitalisasi pasar; median P/E dan P/B memakai "
-        "rentang yang sama dengan valuasi.")
+        f"Sumber: {peers['source']} ({peers['basis']}), "
+        + ("laporan terakhir tiap peer (12 bulan terakhir, atau tahun buku terakhir bila "
+           "emiten melapor semesteran); perubahan kapitalisasi 1 tahun hanya untuk peer dari "
+           "tabel Sectors, ditimbang kapitalisasi pasar; "
+           if peers.get("curated") else
+           f"tahun buku {subject.get('year') or own.get('year') or '-'}; "
+           "perubahan kapitalisasi peer ditimbang kapitalisasi pasar; ")
+        + "median P/E dan P/B memakai rentang yang sama dengan valuasi.")
     paragraphs = []
     if peer_change is not None and own.get("mcap_change_1y") is not None:
         gap = own["mcap_change_1y"] - peer_change
@@ -616,7 +621,16 @@ def peer_page(intake, valuation_inputs=None):
                        fmt.mult(avg) if kind == "x" else _rp_bn(avg))
         rank_row.append(f"{signal['rank']}/{signal['n']}" if signal.get("rank") else "-")
     table += [median_row, avg_row, rank_row]
+    curated = peers.get("curated")
     exhibits = [_exhibit(
+        "Grup peer: alasan pemilihan",
+        ["Emiten", "Bursa", "Status", "Alasan"],
+        [[p.get("name") or p["symbol"], p.get("market") or "-", "dipakai", p["reason"]]
+         for p in curated["peers"]]
+        + [[x["symbol"], "BEI", "dikeluarkan", x["reason"]] for x in curated.get("excluded") or []],
+        f"Sumber: data/peer_groups/{ticker}.json (kurasi Sektoral, {curated.get('as_of')}). "
+        + curated["basis"])] if curated else []
+    exhibits += [_exhibit(
         f"Perbandingan peer {peers.get('group') or ''}".strip(),
         ["Emiten", "Kap. pasar (Rp miliar)", "P/E (x)", "P/B (x)", "ROE", "Margin bersih",
          "Liabilitas/ekuitas (x)"], table,
@@ -670,7 +684,7 @@ def peer_page(intake, valuation_inputs=None):
         exhibits.append(_exhibit(
             "Cross-check nilai per saham dengan multiple peer",
             ["Basis", "Multiple", "Nilai per saham"], cross,
-            "Sumber: tabel peer Sectors dan estimasi Sektoral. Cross-check tidak dirata-ratakan "
+            f"Sumber: {peers['source']} dan estimasi Sektoral. Cross-check tidak dirata-ratakan "
             "dengan metode utama; P/E dan P/B peer bukan EV/EBITDA dan berbeda struktur modal."))
         peer_ev = [p for p in intake.get("peers") or []
                    if isinstance(p.get("ev_ebitda"), (int, float))]
@@ -679,9 +693,9 @@ def peer_page(intake, valuation_inputs=None):
             f"laporan tiap peer ({method_chain.peer_ev_sources(intake.get('peers'))}) dan "
             f"tersedia untuk {len(peer_ev)} peer; ia dipakai di rantai metode, bukan di tabel "
             "ini." if peer_ev else
-            "Multiple peer di bawah ini hanya cross-check: tabel peer Sectors tidak memuat "
-            "EBITDA dan utang bersih, dan laporan tiap peer (Sectors atau snapshot Yahoo "
-            "Finance) belum tersedia, sehingga EV/EBITDA peer belum dapat diverifikasi.")
+            "Multiple peer di bawah ini hanya cross-check: EBITDA dan utang bersih peer belum "
+            "tersedia dari laporan peer (Sectors atau snapshot Yahoo Finance), sehingga "
+            "EV/EBITDA peer belum dapat diverifikasi.")
     # 1-year own-history P/E and P/BV bands (mean, median, current, percentile).
     band = own_history_bands(intake)
     if band:

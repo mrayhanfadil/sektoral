@@ -14,6 +14,7 @@ from . import analyst_scenario
 from . import news as news_context
 from . import news_fetch
 from . import peer_fundamentals
+from . import peer_groups
 from . import research_context
 
 
@@ -519,9 +520,17 @@ def load(ticker, as_of=None):
     )
     latest_quarter = quarterly_rows[-1] if quarterly_rows else None
 
-    peers, peer_median_pe, peer_median_pb = _peers(rep, t)
-    peer_basis = None
-    if not peers:
+    curated = peer_groups.companies(t)
+    if curated:
+        peers, peer_median_pe, peer_median_pb = _curated_peers(curated)
+        own_row, rows, missing, group = curated
+        peer_basis = (f"grup peer kurasi Sektoral ({group['group']}; data/peer_groups/{t}.json)"
+                      + (f"; tanpa data: {', '.join(missing)}" if missing else ""))
+    else:
+        peers, peer_median_pe, peer_median_pb = _peers(rep, t)
+        note = peer_groups.unusable_note(t)
+        peer_basis = f"tabel peer Sectors; {note}" if note else None
+    if not peers and not curated:
         borrowed, lender = _borrowed_peer_report(t)
         if borrowed:
             peers, peer_median_pe, peer_median_pb = _peers(borrowed, t)
@@ -700,6 +709,26 @@ def _peer_ev_yahoo(ticker, market_cap):
             "ev_ebitda": ev / ebitda if meaningful else None, "ev_source_kind": "yahoo",
             "ev_source": (f"market cap tabel peer Sectors + total_debt, kas, EBITDA "
                           f"{snapshot['source']} (diambil {snapshot.get('fetched_at')})")}
+
+
+def _curated_peers(curated):
+    """Valuation peer rows from a curated group (app.peer_groups): Sectors rows
+    value EV as before; Yahoo rows carry EV/EBITDA in their own currency."""
+    _own, rows, _missing, _group = curated
+    out = []
+    for c in rows:
+        mcap, revenue = _num(c.get("market_cap")), _num(c.get("total_revenue"))
+        ev = (c.get("ev") or {"ev_status": "report_not_cached"}) if c.get("source_kind") == "yahoo" \
+            else _peer_ev(c.get("symbol"), mcap)
+        out.append({"symbol": c.get("symbol"), "name": c.get("company_name", ""),
+                    "pe": _num(c.get("pe_ttm")), "pb": _num(c.get("pb_mrq")),
+                    "mcap": mcap, "revenue": revenue,
+                    "ps": mcap / revenue if mcap and revenue and revenue > 0 else None,
+                    "source_kind": c.get("source_kind"), **ev})
+    pes = sorted(p for p in (c["pe"] for c in out) if p and p > 0)
+    pbs = sorted(p for p in (c["pb"] for c in out) if p and p > 0)
+    med = lambda s: s[len(s) // 2] if s else None
+    return out[:12], med(pes), med(pbs)
 
 
 def _peers(rep, t):
