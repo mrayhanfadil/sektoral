@@ -218,6 +218,7 @@ def test_source_lines_open_with_the_house_line_and_keep_provenance():
         "Source: Company, Sektoral Estimates"
 
 
-def test_header_date_uses_day_dd_month_yyyy():
+def test_header_date_uses_dd_mon_yyyy():
     html_out = render._report_header("2026-09-24", {"ticker": "JPFA"})
-    assert "Kamis, 24 September 2026" in html_out
+    assert "Company Update | 24 Sep 2026" in html_out
+    assert "| 03 Agu 2026" in render._report_header("2026-08-03", {"ticker": "JPFA"})

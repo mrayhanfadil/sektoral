@@ -95,9 +95,9 @@ def test_negative_figures_render_in_brackets_and_header_repeats_on_pages():
     assert "(30,7%)" in html and "2026-06-30" in html
     css = render._running_header({"ticker": "AMMN", "rating": "Sell", "tp": 3910,
                                   "tanggal": "2026-09-24"})
-    # Struktur-Template running header: report type over the publication date.
-    assert ('@top-left{content:"Equity Research - Company Update" \'\\A \' '
-            '"Kamis, 24 September 2026"') in css
+    # Figma running header: code, rating and TP over the report type and date.
+    assert ('@top-left{content:"AMMN IJ | SELL · TP Rp 3.910" \'\\A \' '
+            '"Equity Research - Company Update | 24 Sep 2026"') in css
     assert "@page:first" in css
 
 

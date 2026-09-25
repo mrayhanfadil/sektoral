@@ -597,23 +597,34 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
 
     revenue_breakdown = evidence.get("revenue_breakdown") or {}
     if revenue_breakdown and actual:
-        breakdown_rows = []
-        for group, heading in (("segments", "Segmen"),
-                               ("major_customers", "Pelanggan utama")):
-            for row in revenue_breakdown.get(group) or []:
-                breakdown_rows.append([f"{heading}: {row['name']}",
-                                       money(row.get("prior")),
-                                       money(row.get("current")),
-                                       pct_change(row.get("current"), row.get("prior"))])
+        items = [(f"{heading}: {row['name']}", row)
+                 for group, heading in (("segments", "Segmen"),
+                                        ("major_customers", "Pelanggan utama"))
+                 for row in revenue_breakdown.get(group) or []]
+        # A release that splits only the current period gets a one-period table,
+        # not a column of blanks for the prior period and yoy.
+        with_prior = any(row.get("prior") is not None for _, row in items)
+        prior_period = (actual.get("prior_year") or {}).get("period", "Periode lalu")
+        breakdown_rows = [
+            [label, money(row.get("prior")) if row.get("prior") is not None else "n.m.",
+             money(row.get("current")),
+             pct_change(row.get("current"), row.get("prior"))
+             if row.get("prior") is not None else "n.m."] if with_prior else
+            [label, money(row.get("current"))]
+            for label, row in items]
         add(f"Komposisi pendapatan {actual['period']}" if mining else
             "Jembatan pendapatan menurut layanan dan pelanggan",
-            ["Uraian", (actual.get("prior_year") or {}).get("period", "Periode lalu"),
-             actual["period"], "yoy"], breakdown_rows,
+            (["Uraian", prior_period, actual["period"], "yoy"] if with_prior
+             else ["Uraian", actual["period"]]), breakdown_rows,
             f"Sumber: {actual['source_title']}, hlm. "
             f"{revenue_breakdown['source_page']}. " +
              ("Angka merupakan penjualan produk, bukan forecast tahunan."
              if mining else "Segmen dan pelanggan adalah dua pemotongan pendapatan "
-             "yang berbeda; jangan dijumlahkan bersama."))
+             "yang berbeda; jangan dijumlahkan bersama.")
+            + (f" Rilis tidak merinci {prior_period} untuk sebagian baris, sehingga "
+               "angka periode lalu dan yoy baris itu n.m." if with_prior and any(
+                   row.get("prior") is None for _, row in items) else "")
+            + ("" if with_prior else f" Rilis tidak merinci komposisi {prior_period}."))
 
     inventory_sales = evidence.get("inventory_and_sales_detail") or {}
     if mining and inventory_sales:
@@ -2709,7 +2720,7 @@ def _lom_exhibits(intake, va, detail):
         ["Persediaan logam dan konsentrat", usd(inp["inventory_usd"]),
          bn(inp["inventory_usd"] * fx), "nilai buku 30 Jun 2026"],
         # Template Option C rows: ownership, sum of NAV and the discount to RNAV.
-        ["Porsi kepemilikan emiten atas aset", "100,0%", "100,0%",
+        ["Porsi kepemilikan emiten atas aset", "100%", "100%",
          "aset dikonsolidasi; kepentingan nonpengendali dikurangkan di bawah"],
         ["Jumlah NAV aset", usd(nav_bh + nav_el * risk + inp["inventory_usd"]),
          bn((nav_bh + nav_el * risk + inp["inventory_usd"]) * fx), ""],
@@ -2792,13 +2803,13 @@ def _lom_exhibits(intake, va, detail):
                    "tambang emiten)" if not inp.get("export_base", True) else
                    "Tanpa izin ekspor konsentrat (umpan dibatasi kapasitas smelter)")
     extra_rows = [[export_case, f"Rp{fmt.rp(fmt.tick(lom_res['other_export']))}"]]
-    extra_rows += [[f"Probabilitas pengembangan Elang {fmt.pct(r)}", f"Rp{fmt.rp(fmt.tick(v))}"]
+    extra_rows += [[f"Probabilitas pengembangan Elang {fmt.pct(r, 0)}", f"Rp{fmt.rp(fmt.tick(v))}"]
                    for r, v in sorted(lom_res["risk_range"].items())]
     ext = lom_res.get("licence_extension")
     if ext and ext["end"] > inp["licence_end"]:
         extra_rows.append([f"Elang ditambang sampai cadangan habis ({ext['end']}), bukan "
                            f"{int(inp['licence_end'])}", f"Rp{fmt.rp(fmt.tick(ext['per_share']))}"])
-    extra_rows += [[f"USD/IDR {'+' if s > 0 else ''}{fmt.pct(s)}",
+    extra_rows += [[f"Kurs USD/IDR {'+' if s > 0 else MINUS}{fmt.pct(abs(s), 0)}",
                     f"Rp{fmt.rp(fmt.tick(per_share * (1 + s)))}"] for s in (-0.05, 0.05)]
     tests = {"n": 0, "judul": "Uji tambahan SOTP/LoM", "tipe": "tabel",
              "data": {"cols": ["Skenario", "Nilai per saham"], "rows": extra_rows},
@@ -2822,7 +2833,7 @@ def _lom_exhibits(intake, va, detail):
             ["Bobot ekuitas (nilai pasar)", fmt.pct(1 - (rate.get("weight_debt") or 0))],
             ["WACC US$ (Batu Hijau dan Elang)", fmt.pct(inp["discount"])]]},
         "catatan_sumber": (
-            f"Sumber: model US$; Rf = UST 10Y ({re.sub(r' [(].*$', '', str(rate.get('rf_source') or 'Yahoo Finance ^TNX'))}, "
+            f"Sumber: model US$; Rf = UST 10Y ({_rf_source(rate.get('rf_source'))}, "
             f"{rate.get('rf_date')}); CRP Indonesia, beta dan ERP mature market parameter "
             f"kebijakan analis, sama dengan DCF lain; biaya utang {rate.get('kd_basis')}; bobot "
             f"dari utang finansial jembatan SOTP US${fmt._id((rate.get('debt_usd') or 0) / 1e6, 0)} "
@@ -2910,6 +2921,16 @@ def _lom_exhibits(intake, va, detail):
             "text": text, "notes": notes}
 
 
+MINUS = "\u2212"
+
+
+def _rf_source(source):
+    """Reader name of the UST 10Y source: 'Yahoo Finance, imbal hasil UST 10Y
+    harian', without the ticker symbol or the provider's own label."""
+    text = re.sub(r" [(].*$", "", str(source or "Yahoo Finance ^TNX"))
+    return text.replace("^TNX daily close", "imbal hasil UST 10Y harian").replace("^TNX", "UST 10Y")
+
+
 def _lom_reconciliation(intake, lom_res):
     """Plan 1.3: the target walked, one assumption at a time, towards the
     value on the market's usual assumptions, then to the dated consensus."""
@@ -2923,8 +2944,10 @@ def _lom_reconciliation(intake, lom_res):
     doc, why = consensus.load(intake.get("ticker"), intake.get("as_of"))
     if doc:
         avg = doc["target_avg"]
+        # The consensus average as published (not rounded to a price tick), so
+        # it reads the same as in the consensus table.
         table.append([f"Rata-rata target konsensus ({doc['analysts']} analis, {doc['as_of']})",
-                      rp(avg), f"sisa sesudah tiga langkah {step(avg - walked)}"])
+                      f"Rp{fmt.rp(avg)}", f"sisa sesudah tiga langkah {step(avg - walked)}"])
     else:
         table.append(["Rata-rata target konsensus", "n.a.", why])
     return {"n": 0, "judul": "Rekonsiliasi target ke asumsi pasar dan konsensus", "tipe": "tabel",
@@ -3945,7 +3968,7 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
             ["WACC", fmt.pct(dcf_s["wacc"])]]},
         "catatan_sumber": (
             (f"Sumber: model US$; Rf = UST 10Y {fmt.pct(dcf_s['rf'])} "
-             f"({re.sub(r' [(].*$', '', str(dcf_s.get('rf_source') or 'Yahoo Finance ^TNX'))}, "
+             f"({_rf_source(dcf_s.get('rf_source'))}, "
              f"{dcf_s.get('rf_date')}); CRP Indonesia {fmt.pct(dcf_s['crp'])}, beta dan ERP "
              f"{fmt.pct(dcf_s['erp'], 0)} (mature market) parameter kebijakan analis; biaya utang "
              f"{dcf_s.get('kd_basis')}; bobot dari kapitalisasi pasar (harga {intake['price_date']}, "

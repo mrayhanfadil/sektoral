@@ -140,7 +140,7 @@ def exhibit(ticker, as_of, va, data=None):
             sources.append(f"Rf: {rf['source_title']}")
     else:
         rows.append(["Risk-free (UST 10Y)", pct(rates["rf"]), "sama dengan nilai kebijakan",
-                     "Yahoo Finance ^TNX, tanggal laporan"])
+                     "Yahoo Finance (UST 10Y), tanggal laporan"])
     if usd and isinstance(rates.get("crp"), (int, float)):
         rows.append(["Country risk premium Indonesia", pct(rates["crp"]),
                      crp["label"] if crp else "tidak tersedia pada tanggal laporan",
