@@ -263,27 +263,53 @@ def check_narrative(doc: dict | None) -> dict:
               f"Key Financials {len(cols)-1} periode (2A+3F)" if len(cols) >= 6
               else f"Key Financials hanya {len(cols)-1} periode", False,
               None if len(cols) >= 6 else "peringatan")
-            # Forecast gaps must be belum dimodelkan/- , never empty or screening numbers without provenance.
+            # Every cell filled (spec §3.1, Struktur-Template): a forecast cell
+            # is a figure or n.m. with the reason in the note; bare NA, N/A,
+            # n.a., "-" or "belum dimodelkan" is missing. Actual cells: never empty.
+            from .template import classify_cell, parse_period, _explains_nm, _note
             rows = ((kf.get("data") or {}).get("rows") or [])
+            fc_idx = [i for i, c in enumerate(cols) if i and (parse_period(c) or (0, None))[1] == "F"]
+            reason = _explains_nm(_note(kf))
             empty = sum(1 for r in rows for c in (r[1:] if isinstance(r, list) else [])
                         if isinstance(c, str) and c.strip() == "")
-            v("N.keyfin_belum", empty == 0,
-              "forecast gaps belum dimodelkan/-" if empty == 0
-              else f"{empty} sel kosong; pakai belum dimodelkan", True)
+            bare = 0
+            for r in rows:
+                if not isinstance(r, list):
+                    continue
+                for i in fc_idx:
+                    kind = classify_cell(r[i] if i < len(r) else None)
+                    if kind in ("blank", "text") and not (isinstance(r[i] if i < len(r) else None, str)
+                                                         and (r[i] or "").strip() == ""):
+                        bare += 1
+                    elif kind == "nm" and not reason:
+                        bare += 1
+            missing = empty + bare
+            v("N.keyfin_belum", missing == 0,
+              "sel Key Financials terisi (angka atau n.m. beralasan)" if missing == 0
+              else f"{missing} sel Key Financials kosong/NA/-/n.m. tanpa alasan "
+                   "(lihat T.TF.forecast_cells)", True)
         else:
             v("N.keyfin_periode", True, "tanpa Key Financials; dilabeli", False, "dilabeli")
             v("N.keyfin_belum", True, "tanpa Key Financials; dilabeli", False, "dilabeli")
-        # Combo chart tie-out: labels overlap Key Financials periods when both present.
+        # Combo chart tie-out: the charts' values equal Key Financials for the
+        # same period (same comparison as T3.tieout_key_financials).
         combo = next((e for e in _exhibits(doc)
                       if (e.get("tipe") or "") in ("combo_chart", "combo_panel")), None)
         if combo and kf:
+            from .template import tieout_key_financials
+            mismatch, compared = tieout_key_financials(doc)
             ccols = ((combo.get("data") or {}).get("cols") or [])
             kcols = ((kf.get("data") or {}).get("cols") or [])[1:]
             overlap = len(set(map(str, ccols)) & set(map(str, kcols)))
-            v("N.tieout", overlap >= 2,
-              f"tie-out Key Financials/combo {overlap} periode" if overlap >= 2
-              else "tie-out Key Financials/combo <2 periode", False,
-              None if overlap >= 2 else "peringatan")
+            if mismatch:
+                v("N.tieout", False, f"grafik tidak tie-out dengan Key Financials: {mismatch[:3]}", True)
+            elif compared:
+                v("N.tieout", True, f"tie-out Key Financials/grafik {compared} nilai cocok", False)
+            else:
+                v("N.tieout", overlap >= 2,
+                  f"tie-out Key Financials/combo {overlap} periode (nilai tak sebanding)" if overlap >= 2
+                  else "tie-out Key Financials/combo <2 periode", False,
+                  None if overlap >= 2 else "peringatan")
         else:
             v("N.tieout", True, "tie-out dilabeli (combo/Key Financials belum lengkap)", False,
               "dilabeli")

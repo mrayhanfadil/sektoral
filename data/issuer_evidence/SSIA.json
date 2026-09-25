@@ -4,6 +4,34 @@
   "reporting_currency": "IDR",
   "source_type": "issuer_press_release",
   "verification_note": "Reported figures verified against the issuer release; interim financial statement not cross-checked.",
+  "annual_actuals_source": {
+    "title": "PT Surya Semesta Internusa Tbk Laporan Keuangan Konsolidasian 31 Desember 2025 dan 2024 (diaudit) dalam Laporan Tahunan 2025",
+    "url": "https://suryainternusa.com/assets/source/files/annual-report/ar-surya-2025---spread_compressed-low_22.05.2026.pdf",
+    "published_at": "2026-05-22",
+    "pages": "PDF 154 (laba rugi, hlm. LK 3); PDF 216-217 (Catatan 53 segmen operasi, baris Penyusutan konsolidasi: FY2025 hlm. LK 127, FY2024 hlm. LK 129); rincian penyusutan PDF 188 (Catatan 16 properti investasi), PDF 189 (Catatan 17 aset tetap), PDF 191 (Catatan 18 aset hak guna); PDF 224 (Catatan 59 reklasifikasi akun: angka FY2024 setelah reklasifikasi)",
+    "unit": "IDR; dilaporkan dalam Rupiah penuh",
+    "status": "aktual"
+  },
+  "annual_actuals": [
+    {
+      "year": 2024,
+      "revenue": 6311009073490,
+      "operating_profit": 845923357770,
+      "depreciation": 160474192622,
+      "ebitda": 1006397550392,
+      "net_profit": 448549069270,
+      "net_profit_attributable": 234225754128
+    },
+    {
+      "year": 2025,
+      "revenue": 4427181279129,
+      "operating_profit": 215715597257,
+      "depreciation": 175460879268,
+      "ebitda": 391176476525,
+      "net_profit": 28926984415,
+      "net_profit_attributable": -89369021353
+    }
+  ],
   "latest_actual": {
     "period": "1H26",
     "period_end": "2026-06-30",

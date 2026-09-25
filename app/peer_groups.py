@@ -1,4 +1,4 @@
-"""Curated peer groups: comparable businesses, not the Sectors sub-sector.
+"""Curated peer groups: comparable IDX businesses, not the Sectors sub-sector.
 
 The Sectors peer table is the issuer's sub-sector, which can put toll roads
 and a geothermal developer beside an aircraft maintenance company (GMFI's
@@ -6,28 +6,56 @@ and a geothermal developer beside an aircraft maintenance company (GMFI's
 A reviewed pack in ``data/peer_groups/<T>.json`` names the peers that share
 the issuer's business model, and the ones left out, each with a reason:
 
-    {"ticker": "GMFI", "as_of": "2026-09-25", "group": "...", "basis": "...",
-     "peers": [{"symbol": "S59.SI", "yahoo": "S59.SI", "name": "...",
-                "market": "SGX", "reason": "..."}],
-     "excluded": [{"symbol": "JSMR", "reason": "..."}]}
+    {"ticker": "JPFA", "as_of": "2026-09-25", "group": "...", "basis": "...",
+     "peers": [{"symbol": "CPIN", "yahoo": "CPIN.JK", "name": "...",
+                "market": "IDX", "reason": "..."}],
+     "excluded": [{"symbol": "RLCO", "reason": "..."}]}
+
+Peers are IDX (BEI) listings only: every peer and exclusion is a four-letter
+IDX code, a peer's market is "IDX" and its Yahoo symbol is "<CODE>.JK";
+``load`` refuses any other entry. Peers are chosen by business model, not by
+multiple: a peer whose P/E or P/B is an outlier stays in the group, and the
+valuation bands in app.method_chain leave that multiple out of the median.
 
 A peer that sits in the issuer's Sectors peer table keeps that row (same
 snapshot, same date). Any other peer is read from its stored Yahoo Finance
-snapshot (``python -m app.peer_fundamentals --group <T>``), converted to rupiah
-for display and valued in its own reporting currency, so its P/E, P/B and
-EV/EBITDA are ratios of like with like. Every row says where it came from.
+snapshot (``python -m app.peer_fundamentals --group <T>``); a peer that
+reports in US dollars is valued in dollars and shown in rupiah, so its P/E,
+P/B and EV/EBITDA are ratios of like with like. Every row says where it came
+from. A group with fewer than three peers that have data (including a group
+that finds fewer than three comparable IDX businesses) is not used: the
+report keeps the Sectors peer table and says why (``unusable_note``).
 """
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from . import cache, peer_fundamentals
 
 ROOT = Path(__file__).resolve().parent.parent / "data" / "peer_groups"
+MARKET = "IDX"
+IDX_CODE = re.compile(r"[A-Z]{4}")
+
+
+def _not_idx(entry, is_peer):
+    """Why a pack entry is not a plain IDX listing, or None."""
+    symbol = str(entry.get("symbol") or "")
+    if not IDX_CODE.fullmatch(symbol):
+        return f"symbol {symbol!r} is not a four-letter IDX code"
+    market = entry.get("market", None if is_peer else MARKET)
+    if market != MARKET:
+        return f"market {market!r} is not {MARKET!r}"
+    yahoo = entry.get("yahoo")
+    if yahoo is not None and yahoo != f"{symbol}.JK":
+        return f"yahoo {yahoo!r} is not {symbol + '.JK'!r}"
+    return None
 
 
 def load(ticker) -> dict | None:
+    """The reviewed pack for ``ticker``, or None; ValueError on a malformed pack
+    or on any peer or exclusion that is not an IDX listing."""
     path = ROOT / f"{str(ticker).strip().upper()}.json"
     if not path.is_file():
         return None
@@ -35,11 +63,18 @@ def load(ticker) -> dict | None:
     if group.get("ticker") != str(ticker).strip().upper():
         raise ValueError(f"peer group ticker mismatch: {path}")
     peers = group.get("peers")
-    if not isinstance(peers, list) or len(peers) < 3:
-        raise ValueError(f"peer group needs at least three peers: {path}")
+    if not isinstance(peers, list):
+        raise ValueError(f"peer group needs a list of peers: {path}")
     for peer in peers + list(group.get("excluded") or []):
         if not peer.get("symbol") or not str(peer.get("reason") or "").strip():
             raise ValueError(f"every peer and exclusion needs a symbol and a reason: {path}")
+    for kind, entries in (("peer", peers), ("exclusion", group.get("excluded") or [])):
+        for entry in entries:
+            why = _not_idx(entry, kind == "peer")
+            if why:
+                raise ValueError(
+                    f"{kind} {entry['symbol']} is not an IDX listing ({why}); peer groups "
+                    f"hold only IDX (BEI) companies: {path}")
     return group
 
 
@@ -103,10 +138,15 @@ MIN_PEERS = 3
 
 
 def unusable_note(ticker):
-    """Why a curated group exists but cannot be used yet, or None."""
+    """Why a curated group exists but cannot be used, or None."""
     group = load(ticker)
     if not group:
         return None
+    named = [p["symbol"] for p in group["peers"]]
+    if len(named) < MIN_PEERS:
+        found = (f"hanya menemukan {len(named)} emiten BEI yang sebanding ({', '.join(named)}; "
+                 f"minimal {MIN_PEERS})" if named else "tidak menemukan emiten BEI yang sebanding")
+        return f"grup peer kurasi {ticker} {found}, sehingga tabel peer Sectors dipakai"
     rows, missing = _rows(ticker, group)
     if len(rows) >= MIN_PEERS:
         return None

@@ -156,11 +156,17 @@ def test_agent_dcf_drivers_are_soft_for_going_concerns_only():
 
 def _ammn_lom():
     import json
-    from app import commodity, forecast, intake, lom, store
+    from app import commodity, forecast, fx, intake, lom, rates, store
     fixtures = ROOT / "tests" / "fixtures"
     # The test database has no Yahoo copper series; the Sectors one ends 2026-02-15.
     store.put(commodity.COLLECTION, "Copper",
               json.loads((fixtures / "commodity_prices.json").read_text())["Copper"])
+    # The US$ discount rate and the one USD/IDR rate are dated market inputs.
+    store.put(fx.COLLECTION, fx.KEY, {"pair": "USD/IDR", "rate": 17837.3, "date": "2026-09-24",
+                                      "source": "Yahoo Finance IDR=X daily close"})
+    store.put(rates.COLLECTION, rates.UST10Y, {
+        "name": "UST10Y", "symbol": "^TNX", "source": "Yahoo Finance ^TNX daily close",
+        "rows": [{"date": "2026-09-24", "yield_pct": 5.162}]})
     doc_in, _ = intake.load("AMMN", as_of="2026-09-24")
     plan = json.loads((fixtures / "ammn_interim_plan.json").read_text())
     fc = forecast.build(doc_in, assumption_plan=plan)

@@ -149,8 +149,12 @@ def find_peers(ticker):
                 mcap_change_1y=company.get("yearly_mcap_chg"), year=company.get("year"),
                 is_self=is_self))
         group = table.get("group_name") or {}
+        from app import peer_groups
+        # A curated group that cannot be used (fewer than three IDX peers
+        # with data) says why the sub-sector table stands in for it.
+        note = peer_groups.unusable_note(ticker)
         return {"source": f"Sectors /company/report/{ticker}/ peers",
-                "basis": "tabel peer Sectors",
+                "basis": "tabel peer Sectors" + (f"; {note}" if note else ""),
                 "group": group.get("sub_industry") or group.get("sub_sector") or "",
                 "rows": rows}
     reports = {t: cache.company_report(t) or {} for t in local_tickers()}

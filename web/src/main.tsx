@@ -4,15 +4,15 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import "./index.css";
 import Layout from "./components/Layout";
 import Landing from "./pages/Landing";
-import Research from "./pages/Research";
-import Job from "./pages/Job";
+import { DeckJob, DeckLaunch, DeckReplay } from "./pages/Deck";
 import Gallery from "./pages/Gallery";
 import { JobTrace, ReportTrace } from "./pages/Trace";
 import NotFound from "./pages/NotFound";
 
 const TITLES: [RegExp, string][] = [
   [/^\/$/, "Sectoral: company update emiten BEI dengan metode valuasi berbasis gerbang"],
-  [/^\/research$/, "Buat company update | Sectoral"],
+  [/^\/research$/, "Deck riset | Sectoral"],
+  [/\/putar$/, "Putar ulang riset | Sectoral"],
   [/^\/laporan$/, "Laporan | Sectoral"],
   [/\/jejak$/, "Jejak riset | Sectoral"],
   [/^\/jobs\//, "Riset emiten | Sectoral"],
@@ -33,8 +33,9 @@ createRoot(document.getElementById("root")!).render(
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Landing />} />
-          <Route path="research" element={<Research />} />
-          <Route path="jobs/:id" element={<Job />} />
+          <Route path="research" element={<DeckLaunch />} />
+          <Route path="jobs/:id" element={<DeckJob />} />
+          <Route path="laporan/:ticker/putar" element={<DeckReplay />} />
           <Route path="jobs/:id/jejak" element={<JobTrace />} />
           <Route path="laporan" element={<Gallery />} />
           <Route path="laporan/:ticker/jejak" element={<ReportTrace />} />

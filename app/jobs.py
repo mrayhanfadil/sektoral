@@ -22,7 +22,7 @@ LOG = logging.getLogger(__name__)
 TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
 JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 _SAFE_STATUS = re.compile(r"^[A-Za-z0-9_.-]{1,48}$")
-_MAX_EVENTS = 120
+_MAX_EVENTS = 600
 
 
 def text(value, limit=400):

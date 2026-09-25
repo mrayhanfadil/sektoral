@@ -15,6 +15,8 @@ export type ReportItem = {
   method: string;
   profile: string;
   headline: string;
+  rating_status?: string | null;
+  risks?: string[];
   chain: ChainStep[];
   blockers: number;
   held_reason: string;
@@ -70,7 +72,31 @@ export type Intel = {
   };
 };
 
-export type JobEvent = { stage: string; label: string; status: "ok" | "warn" | "error" | "run"; t: number; detail?: string; tool?: string };
+/**
+ * One progress event of a research run (app/progress.py). ``agent`` names the
+ * emitter when the stage alone does not (e.g. "riset", "forecast.news");
+ * ``data`` carries a few short structured fields (gate verdicts, method-chain
+ * decisions, hypothesis numbers). See lib/agents.ts for how the Deck reads them.
+ */
+export type JobEvent = {
+  stage: string;
+  label: string;
+  status: "ok" | "warn" | "error" | "run";
+  t: number;
+  detail?: string;
+  tool?: string;
+  agent?: string;
+  data?: Record<string, string>;
+};
+
+/** A stored run to play back: recorded events, or events derived from its audit trace. */
+export type RunReplay = {
+  ticker: string;
+  name: string | null;
+  source: "recorded" | "derived";
+  events: JobEvent[];
+  report: ReportItem | null;
+};
 
 export type Job = {
   id: string;
@@ -149,6 +175,7 @@ export const api = {
   tickers: () => request<{ tickers: string[] }>("/api/tickers").then((r) => r.tickers),
   history: () => request<{ items: HistoryItem[] }>("/api/history").then((r) => r.items),
   reports: () => request<{ items: ReportItem[] }>("/api/reports").then((r) => r.items),
+  reportRun: (ticker: string) => request<RunReplay>(`/api/reports/${encodeURIComponent(ticker)}/run`),
   reportTrace: (ticker: string) => request<TraceView>(`/api/reports/${encodeURIComponent(ticker)}/trace`),
   job: (id: string) => request<Job>(`/api/jobs/${encodeURIComponent(id)}`),
   jobTrace: (id: string) => request<TraceView>(`/api/jobs/${encodeURIComponent(id)}/trace`),

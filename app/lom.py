@@ -12,16 +12,19 @@ tax and non-tax government revenue at the latest official rates -> capex ->
 FCFF, discounted in USD.
 
 Every physical and cost input comes from the issuer evidence pack; what the
-issuer does not disclose (development capex, discount rate, risking,
-stockpile rehandling) comes from the labelled analyst assumptions in
-``data/analyst_scenarios/<T>.json`` and is shown as such. The result is an
+issuer does not disclose (development capex, risking, stockpile rehandling)
+comes from the labelled analyst assumptions in
+``data/analyst_scenarios/<T>.json`` and is shown as such. The US$ discount
+rate is built like every US$ model's (spec §4.2): WACC from UST 10Y at the
+Report Date + the Indonesia CRP + beta x the mature-market ERP, a
+market-based US$ cost of debt and market-value weights (``discount_rate``). The result is an
 assumption-led valuation, never a production-ready forecast.
 """
 from __future__ import annotations
 
 import re
 
-from . import commodity, fmt
+from . import commodity, fmt, scenario_value
 
 OZ_PER_T = 32150.7466
 G_PER_OZ = 31.1034768
@@ -32,9 +35,73 @@ CAPACITY_PAGE = 10
 LICENCE_EXTENSION_END = 2100  # H1 2026 presentation: "up to 220,000 tonnes ... and 579,000 oz"
 
 
+# Discount-rate policy of the US$ LoM: the same analyst policy as the
+# going-concern DCFs (valuation.build), labelled "parameter kebijakan analis".
+BETA = 1.1
+ERP = 0.04
+
+
 def _num(value):
     return (float(value) if isinstance(value, (int, float)) and not isinstance(value, bool)
             else None)
+
+
+def discount_rate(intake, tax_rate=None, ntgr_rate=None):
+    """(build, gaps): the US$ WACC that discounts every LoM asset (spec §4.2).
+
+    Cost of equity = UST 10Y (dated, on or before the Report Date) + CRP
+    Indonesia + beta x ERP (policy beta 1,1 and ERP 4%, as the other DCFs).
+    Cost of debt = the issuer's 1H finance cost annualised over the financial
+    debt the SOTP bridge deducts, when sourced and not below the market rate
+    UST + CRP, else that market rate. Weights are market values at the report
+    date: debt against the market capitalisation in US$ at the report's one
+    USD/IDR rate. The tax shield uses income tax and PNBP together, as the
+    flows bear them. The rate is rounded to 0,1pp; the sensitivity grid moves
+    it by +/-2pp. Elang takes the same rate: its development risk is carried
+    by the probability of development, not a higher rate.
+    """
+    ust = intake.get("ust_10y") or {}
+    rf = _num(ust.get("rate"))
+    fx = _num((intake.get("fx_spot") or {}).get("rate"))
+    bridge = intake.get("sotp_bridge") or {}
+    value = lambda key: (bridge.get(key) or {}).get("value") if isinstance(  # noqa: E731
+        bridge.get(key), dict) else None
+    shares, debt_idr, price = value("shares"), value("debt_idr"), _num(intake.get("price"))
+    gaps = [name for name, v in (("ust_10y", rf), ("fx", fx), ("bridge_debt", debt_idr),
+                                 ("bridge_shares", shares), ("price", price)) if not v]
+    if gaps:
+        return None, gaps
+    crp = scenario_value.CRP_INDONESIA
+    coe = rf + crp + BETA * ERP
+    debt = debt_idr / fx
+    market = rf + crp
+    income = (((intake.get("official_evidence") or {}).get("latest_actual") or {})
+              .get("financial_statements_usd_thousand") or {}).get("income_statement") or {}
+    cost = _num(income.get("finance_costs"))
+    effective = abs(cost) * 1000 * 2 / debt if cost and debt > 0 else None
+    if effective is not None and effective >= market:
+        period = ((intake.get("official_evidence") or {}).get("latest_actual") or {}).get(
+            "period") or "1H"
+        kd, kd_basis = effective, (f"beban keuangan {period} resmi x2 atas utang finansial "
+                                   "jembatan SOTP (bunga efektif emiten, tidak di bawah tingkat "
+                                   "pasar UST 10Y + CRP)")
+    else:
+        kd, kd_basis = market, "UST 10Y + CRP, tingkat pasar pinjaman US$ berisiko Indonesia"
+    if tax_rate is None or ntgr_rate is None:
+        pbt, tax = _num(income.get("profit_before_tax")), _num(income.get("income_tax"))
+        pre, ntgr = (_num(income.get("profit_before_non_tax_revenue")),
+                     _num(income.get("non_tax_government_revenue")))
+        tax_rate = -tax / pbt if tax is not None and pbt else 0.0
+        ntgr_rate = -ntgr / pre if ntgr is not None and pre else 0.0
+    shield = 1 - (1 - tax_rate) * (1 - ntgr_rate)
+    equity = price * shares / fx
+    weight_debt = debt / (debt + equity)
+    wacc = coe * (1 - weight_debt) + kd * (1 - shield) * weight_debt
+    return {"rate": round(wacc, 3), "wacc": wacc, "rf": rf, "rf_date": ust.get("date"),
+            "rf_source": ust.get("source"), "crp": crp, "beta": BETA, "erp": ERP, "coe": coe,
+            "kd_pretax": kd, "kd_basis": kd_basis, "kd_effective": effective, "tax": shield,
+            "kd_after": kd * (1 - shield), "weight_debt": weight_debt, "debt_usd": debt,
+            "equity_usd": equity, "fx": fx}, []
 
 
 def _band(rate_table, price):
@@ -168,7 +235,7 @@ def inputs(intake, fc):
             for metal, name in (("cu_price", "Copper"), ("au_price", "Gold")))),
         "reserve_cu_price": (_num(mlc.get("reserve_cu_price_usd_per_lb")) or 0) * LB_PER_T or None,
         "reserve_au_price": _num(mlc.get("reserve_au_price_usd_per_oz")),
-        "discount": _num(lom.get("discount_rate_usd")),
+        "discount": None,  # built below from UST 10Y + CRP + beta x ERP
         "elang_risk": _num(lom.get("elang_risk_factor")),
         "elang_capex": {int(y): float(v) for y, v in
                         (lom.get("elang_development_capex_usd") or {}).items()},
@@ -177,6 +244,9 @@ def inputs(intake, fc):
         "stockpile_capex_share": _num(lom.get("stockpile_phase_sustaining_share")),
         "assumptions": lom,
     }
+    build, rate_gaps = discount_rate(intake, values["tax_rate"], values["ntgr_rate"])
+    values.update(discount=(build or {}).get("rate"), discount_build=build)
+    gaps.extend(f"discount_{g}" for g in rate_gaps)
     for key in ("pit_mt", "stock_mt", "elang_mt", "plant_mtpa", "recovery_cu", "recovery_au",
                 "fy_guidance_cu_t", "fy_guidance_au_oz", "smelter_t", "pmr_oz",
                 "utilization", "mining_usd_t", "processing_usd_t", "smelting_usd_t",
@@ -554,7 +624,7 @@ def sotp_result(intake, res):
     last_year = max(f["year"] for f in base["flows"])
     assets = [
         {"name": "Batu Hijau (pit, stockpile, pabrik, smelter dan PMR)", "stage": "operating",
-         "method": f"LoM DCF USD {inp['discount'] * 100:.0f}%, tanpa terminal",
+         "method": f"LoM DCF USD, WACC {fmt.pct(inp['discount'])}, tanpa terminal",
          "source": mlc.get("source_url") or release,
          "provenance": ("Cadangan 30 Jun 2026, recovery tersirat 1H26, kapasitas pabrik 85 Mtpa, "
                         "smelter 220 kt x utilisasi Juni 93%, biaya unit 1H26, royalti PP 19/2025; "
@@ -562,7 +632,8 @@ def sotp_result(intake, res):
          "source_date": actual.get("published_at"), "page": "3-7",
          "nav_idr": base["nav"]["bh"] * fx, "ownership_pct": 100.0},
         {"name": "Elang (pengembangan, pra-FID)", "stage": "development",
-         "method": (f"LoM DCF USD {inp['discount'] * 100:.0f}% sampai {int(inp['licence_end'])}, "
+         "method": (f"LoM DCF USD, WACC {fmt.pct(inp['discount'])} sampai "
+                    f"{int(inp['licence_end'])}, "
                     f"probabilitas pengembangan {inp['elang_risk'] * 100:.0f}%"),
          "source": mlc.get("source_url") or release,
          "provenance": ("Cadangan Elang resmi 30 Jun 2026; capex pengembangan dan pemeliharaan "
@@ -597,7 +668,7 @@ def sotp_result(intake, res):
         "financial_source_date": actual.get("published_at"),
         "fx_date": cash_row.get("fx_date"), "fx_rate": fx,
         "basis": (f"PV beban pemasaran, umum dan administrasi 1H26 x2 (US${inp['ga_usd'] / 1e6:.1f} "
-                  f"juta per tahun) sampai {last_year} pada {inp['discount'] * 100:.0f}%.")}
+                  f"juta per tahun) sampai {last_year} pada WACC {fmt.pct(inp['discount'])}.")}
     result["bridge_evidence"] = evidence
     return result
 

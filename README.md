@@ -43,7 +43,7 @@ python3 -m app.batch BBCA BBRI AMMN SSIA INET POWR JPFA GMFI --jobs 2 --out out/
 .venv/bin/python -m app.server --reports out/reports --pdf
 ```
 
-**Refresh market data before a run.** Beside the Sectors cache, reports read four dated inputs: the USD/IDR close, copper and gold prices (used when the Sectors series is more than 45 days old), each ticker's closing prices in `data/market_quotes/`, and peer snapshots for the curated peer groups in `data/peer_groups/`. One command refreshes all of them from Yahoo Finance (network and `yfinance` required). Pass the report date and the tickers, or add `--refresh-data` to a batch run:
+**Refresh market data before a run.** Beside the Sectors cache, reports read five dated inputs: the USD/IDR close, the US Treasury 10-year yield (the risk-free rate of a US$ reporter's DCF, which is built and discounted in US$), copper and gold prices (used when the Sectors series is more than 45 days old), each ticker's closing prices in `data/market_quotes/`, and peer snapshots for the curated peer groups in `data/peer_groups/`. One command refreshes all of them from Yahoo Finance (network and `yfinance` required). Pass the report date and the tickers, or add `--refresh-data` to a batch run:
 
 ```bash
 .venv/bin/python -m app.refresh --as-of 2026-09-24 BBCA BBRI AMMN SSIA INET POWR JPFA GMFI
@@ -51,7 +51,7 @@ python3 -m app.batch BBCA BBRI AMMN SSIA INET POWR JPFA GMFI --jobs 2 --out out/
 python3 -m app.batch BBCA AMMN --as-of 2026-09-24 --out out/reports --refresh-data
 ```
 
-A step that fails is reported and the others still run; a report built on a stale input says so. Review the rewritten `data/market_quotes/*.json` before committing them. The single steps remain available as `python -m app.commodity`, `python -m app.market_quote`, `python -m app.peer_fundamentals --group <T>` and `python3 scripts/refresh_usd_idr.py`.
+A step that fails is reported and the others still run; a report built on a stale input says so. Review the rewritten `data/market_quotes/*.json` before committing them. The single steps remain available as `python -m app.rates`, `python -m app.commodity`, `python -m app.market_quote`, `python -m app.peer_fundamentals --group <T>` and `python3 scripts/refresh_usd_idr.py`.
 
 For a terminal-only run, use the one-command CLI below. It writes the HTML report and trace to `out/demo/`; `--pdf` is optional and requires PDF support. Omit it to use HTML only.
 

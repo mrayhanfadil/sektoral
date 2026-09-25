@@ -1,104 +1,61 @@
 {
   "ticker": "AMMN",
   "as_of": "2026-09-25",
-  "group": "Produsen tembaga dan tembaga-emas regional dan global",
-  "basis": "AMMN adalah produsen tembaga-emas terintegrasi (tambang, smelter, PMR). Di BEI hanya MDKA yang memproduksi tembaga; peer lain adalah produsen tembaga tercatat di Hong Kong, Australia, Inggris dan Amerika Utara, mengikuti daftar peer riset BRI Danareksa (29 Juni 2026). Tabel peer Sectors berisi penambang emas, nikel dan timah.",
+  "group": "Penambang tembaga dan emas di BEI",
+  "basis": "AMMN adalah produsen tembaga-emas terintegrasi (tambang Batu Hijau, smelter dan pemurnian logam mulia); nilainya digerakkan harga tembaga dan emas. Peer hanya emiten BEI. Di BEI hanya MDKA yang juga memproduksi tembaga, sehingga pembanding lainnya adalah produsen emas (ARCI, PSAB, BRMS) dan ANTM dengan segmen logam mulia. Penambang nikel dan timah di tabel peer Sectors tidak dipakai karena harga dan margin pengolahan nikel dan timah bukan penggerak nilai AMMN. Peer dipilih menurut model bisnis: peer dengan P/E atau P/B di luar rentang valuasi (P/E 0-50x, P/B 0-10x) tetap di grup tetapi multiple itu tidak masuk median.",
   "peers": [
     {
       "symbol": "MDKA",
       "name": "Merdeka Copper Gold",
       "market": "IDX",
-      "reason": "Tambang tembaga Wetar dan emas Tujuh Bukit; P/E tidak bermakna karena rugi.",
+      "reason": "Satu-satunya produsen tembaga lain di BEI: tembaga Wetar, emas dan proyek tembaga Tujuh Bukit; rugi 12 bulan terakhir, sehingga P/E tidak masuk median.",
       "yahoo": "MDKA.JK"
     },
     {
-      "symbol": "FCX",
-      "name": "Freeport-McMoRan",
-      "market": "NYSE",
-      "reason": "Produsen tembaga-emas terbesar, pemilik Grasberg.",
-      "yahoo": "FCX"
+      "symbol": "ANTM",
+      "name": "Aneka Tambang",
+      "market": "IDX",
+      "reason": "Penambang logam BUMN dengan segmen logam mulia dan pemurnian (emas), nikel serta bauksit dan alumina; eksposur emas sebanding, tanpa tembaga.",
+      "yahoo": "ANTM.JK"
     },
     {
-      "symbol": "SCCO",
-      "name": "Southern Copper",
-      "market": "NYSE",
-      "reason": "Produsen tembaga dengan cadangan panjang di Peru dan Meksiko.",
-      "yahoo": "SCCO"
+      "symbol": "ARCI",
+      "name": "Archi Indonesia",
+      "market": "IDX",
+      "reason": "Produsen emas dan perak dari tambang terbuka Toka Tindung, Sulawesi Utara.",
+      "yahoo": "ARCI.JK"
     },
     {
-      "symbol": "ANTO",
-      "name": "Antofagasta",
-      "market": "LSE",
-      "reason": "Produsen tembaga Chili.",
-      "yahoo": "ANTO.L"
+      "symbol": "PSAB",
+      "name": "J Resources Asia Pasifik",
+      "market": "IDX",
+      "reason": "Produsen emas di Indonesia.",
+      "yahoo": "PSAB.JK"
     },
     {
-      "symbol": "LUN",
-      "name": "Lundin Mining",
-      "market": "TSX",
-      "reason": "Produsen tembaga menengah.",
-      "yahoo": "LUN.TO"
-    },
-    {
-      "symbol": "HBM",
-      "name": "Hudbay Minerals",
-      "market": "NYSE",
-      "reason": "Produsen tembaga-emas menengah.",
-      "yahoo": "HBM"
-    },
-    {
-      "symbol": "ZIJIN",
-      "name": "Zijin Mining",
-      "market": "HKEX",
-      "reason": "Produsen tembaga dan emas Tiongkok.",
-      "yahoo": "2899.HK"
-    },
-    {
-      "symbol": "MMG",
-      "name": "MMG",
-      "market": "HKEX",
-      "reason": "Produsen tembaga (Las Bambas, Kinsevere).",
-      "yahoo": "1208.HK"
-    },
-    {
-      "symbol": "CMOC",
-      "name": "CMOC Group",
-      "market": "HKEX",
-      "reason": "Produsen tembaga dan kobalt.",
-      "yahoo": "3993.HK"
-    },
-    {
-      "symbol": "SFR",
-      "name": "Sandfire Resources",
-      "market": "ASX",
-      "reason": "Produsen tembaga menengah.",
-      "yahoo": "SFR.AX"
+      "symbol": "BRMS",
+      "name": "Bumi Resources Minerals",
+      "market": "IDX",
+      "reason": "Produsen emas (Poboya, Palu) dengan proyek tembaga-emas di Gorontalo; P/E di atas 50x sehingga tidak masuk median P/E.",
+      "yahoo": "BRMS.JK"
     }
   ],
   "excluded": [
     {
       "symbol": "EMAS",
-      "reason": "Pengembang tambang emas; rugi."
-    },
-    {
-      "symbol": "BRMS",
-      "reason": "Penambang emas; P/E 150x."
-    },
-    {
-      "symbol": "ANTM",
-      "reason": "Nikel dan emas, bukan tembaga."
-    },
-    {
-      "symbol": "NCKL",
-      "reason": "Nikel."
-    },
-    {
-      "symbol": "MBMA",
-      "reason": "Nikel."
+      "reason": "Tambang emas Pani masih tahap pengembangan; rugi dan P/B di atas 10x."
     },
     {
       "symbol": "INCO",
-      "reason": "Nikel."
+      "reason": "Nikel (tambang dan pengolahan nikel matte)."
+    },
+    {
+      "symbol": "NCKL",
+      "reason": "Nikel (bijih, HPAL dan RKEF)."
+    },
+    {
+      "symbol": "MBMA",
+      "reason": "Nikel dan kobalt (NPI dan HPAL)."
     },
     {
       "symbol": "TINS",

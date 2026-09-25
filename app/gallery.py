@@ -49,6 +49,10 @@ def _held_reason(blockers) -> str:
         return "forecast belum tervalidasi"
     if "interim" in text or "s1" in text:
         return "rilis resmi terbaru belum lengkap"
+    if "t4.discount_rate_currency" in text:
+        return "discount rate belum sesuai mata uang pelaporan"
+    if any(str(b).startswith("T.") for b in blockers):
+        return "pemeriksaan format laporan belum lolos"
     return "bukti belum lengkap"
 
 
