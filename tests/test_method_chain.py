@@ -275,7 +275,7 @@ def test_mining_profile_never_gets_earnings_scenario():
     assert forecast.build(doc_in, assumption_plan=plan)["earnings_scenario"] is None
 
 
-def test_jpfa_report_holds_value_when_template_gate_fails(tmp_path, monkeypatch):
+def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path, monkeypatch):
     from app import build
     doc_in, _ = intake.load("JPFA", as_of="2026-09-24")
     actual = doc_in["latest_official_actual"]
@@ -315,24 +315,24 @@ def test_jpfa_report_holds_value_when_template_gate_fails(tmp_path, monkeypatch)
              "source_ids": ["official"]} for i in range(4)]}
     doc = build.build("JPFA", tmp_path, as_of="2026-09-24", assumption_plan=plan,
                       assumption_status="validated")
-    assert doc["meta"]["status"] == "draft_non_distributable"
+    assert doc["meta"]["status"] == "distributable_assumption_led"
     assert doc["log_gate"]["release"]["status"] == "distributable_assumption_led"
-    assert doc["harness"]["status"] == "draft_non_distributable"
-    assert doc["harness"]["blockers"]
-    assert "tp" not in doc["meta"] and "rating" not in doc["meta"]
+    assert doc["harness"]["status"] == "distributable_assumption_led"
+    assert not doc["harness"]["blockers"]
+    assert doc["meta"]["tp"] > 0 and doc["meta"]["rating"]
     titles = [e["judul"] for e in doc["exhibits"]]
-    assert "Skenario laba FY26F: aktual 1H dan asumsi H2" not in titles
+    assert "Skenario laba FY26F: aktual 1H dan asumsi H2" in titles
     assert not any("Target harga" in title for title in titles)
     chain = next(e for e in doc["exhibits"] if e["judul"] == "Rantai metode valuasi")
     value_column = next(i for i, label in enumerate(chain["data"]["cols"])
                         if "saham" in str(label).lower())
-    assert all(row[value_column] in {"-", "Ditahan"} for row in chain["data"]["rows"]
+    assert any(row[value_column] not in {"-", "Ditahan"} for row in chain["data"]["rows"]
                if len(row) > value_column and row[value_column]), chain["data"]
     release_row = next((row for row in chain["data"]["rows"]
                         if str(row[0]).lower().startswith("keputusan rilis")), None)
     if release_row:
-        assert "ditahan" in str(release_row[1]).lower()
-    assert "Skenario laba FY27F-FY30F" not in titles
+        assert "ditahan" not in str(release_row[1]).lower()
+    assert any("Skenario laba" in title and "FY27F" in title for title in titles)
     risk = next(e for e in doc["exhibits"] if e["judul"].startswith("Katalis"))
     assert risk["data"]["rows"][0][0] == "Harga jagung"
     assert doc["cover"]["bullets"][1].startswith("Skenario FY26F:")
@@ -341,8 +341,7 @@ def test_jpfa_report_holds_value_when_template_gate_fails(tmp_path, monkeypatch)
     key_fin = doc["exhibits"][1]
     assert key_fin["judul"] == "Key Financials"
     assert [r["judul"] for r in doc["risks"]][0] == "Harga jagung dan bungkil kedelai"
-    assert "Nilai per saham dan sensitivitas valuasi ditahan" in \
-        doc["cover"]["paragraf"][-1]["isi"]
+    assert "Nilai model" in doc["cover"]["paragraf"][2]["isi"]
     risk_page = next(p for p in doc["bagian"] if p["judul"].startswith("Katalis"))
     assert risk_page["risks"] == doc["risks"] and risk_page["risks_after"] == 1
     labels = [row[0] for row in key_fin["data"]["rows"]]

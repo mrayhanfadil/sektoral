@@ -35,7 +35,7 @@ def load(ticker, as_of, root=ROOT):
     return doc, None
 
 
-def exhibit(ticker, as_of, target, _rating, price, root=ROOT):
+def exhibit(ticker, as_of, target, price, root=ROOT):
     """Informational model value vs sourced consensus, without house action labels."""
     doc, why = load(ticker, as_of, root)
     rp = lambda v: f"Rp{fmt.rp(v)}"

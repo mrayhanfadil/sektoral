@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { FileText, Play } from "lucide-react";
 import { reportFiles, type ReportItem } from "../../lib/api";
 import { pct, rp } from "../../lib/format";
+import { heldReason } from "../../lib/labels";
 import { RatingBadge } from "../Reports";
 
 const signed = (v: number | null) => (typeof v === "number" && v > 0 ? "+" : "") + pct(v);
@@ -67,7 +68,7 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
               <td className="px-4 py-3">
                 {item.published
                   ? <span className="font-mono text-[13.5px] text-ink" title={item.method}>{selected(item)}</span>
-                  : <span className="text-[13.5px] text-warn-ink">Ditahan: bukti belum lengkap</span>}
+                  : <span className="text-[13.5px] text-warn-ink">Ditahan: {heldReason(item)}</span>}
               </td>
               <td className="px-4 py-3"><Actions item={item} /></td>
             </tr>
@@ -96,7 +97,7 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
               </div>
               <div className="min-w-0">
                 <dt className="text-ink-soft">Metode</dt>
-                <dd className="m-0 truncate font-mono text-ink">{item.published ? selected(item) : "ditahan"}</dd>
+                <dd className="m-0 truncate font-mono text-ink">{item.published ? selected(item) : heldReason(item)}</dd>
               </div>
             </dl>
             <div className="mt-3"><Actions item={item} /></div>

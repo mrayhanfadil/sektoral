@@ -141,9 +141,12 @@ def status(folder, ticker, db=None) -> dict:
     sha = plan_sha(plan)
     doc = outputs.load(outputs.REPORT, folder, ticker, db)
     fingerprint = review_sha(plan, doc)
-    if sha is None or fingerprint is None:
+    if sha is None:
         return {"state": "no_plan", "plan_sha": None, "record": None}
     rec = record(folder, ticker, db)
+    if fingerprint is None:
+        return {"state": "pending", "plan_sha": sha, "review_sha": None,
+                "record": None, "stale_record": rec}
     approved = bool(rec and rec.get("review_sha") == fingerprint)
     return {"state": "approved" if approved else "pending", "plan_sha": sha,
             "review_sha": fingerprint,

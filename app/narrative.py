@@ -1,6 +1,7 @@
 """TAHAP 4: NARASI & LAYOUT. Prosa templat deterministik dari angka model."""
 import re
 import json
+import copy
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -788,7 +789,7 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             scenario_capex = analyst_projection["fy2026_capex_usd"] / 1e6
             h2_capex = scenario_capex - capex_reference["h1_2026"]
             capex_rows.extend([
-                ["FY2026 skenario AMMN(2)", fmt._id(scenario_capex, 1), "Asumsi analis; bukan guidance emiten"],
+                ["FY2026 skenario analis", fmt._id(scenario_capex, 1), "Asumsi analis; bukan guidance emiten"],
                 ["H2 tersirat dari skenario", fmt._id(h2_capex, 1), "FY26 skenario dikurangi H1 aktual"],
             ])
         capex_exhibit = add(
@@ -2543,12 +2544,12 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
              ["Beta (kebijakan analis)", fmt.mult(wi["beta"])],
              ["Equity Risk Premium (kebijakan analis)", fmt.pct(wi["erp"])],
              ["(=) Cost of Equity dipakai", fmt.pct(wi["re"])],
-             ["Jalur band (pola BBTN):", ""],
+             ["Jalur band (pola rentang CoE):", ""],
              ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
              ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
              ["Offset dari mean", "n.a.: dipakai hasil CAPM"]],
             "Source: Company, Sektoral Estimates; Rf = INDOGB 10Y; beta 1,1 dan ERP 4% "
-            "adalah parameter kebijakan analis (spec §4.3), bukan data Bloomberg/Damodaran")
+            "adalah parameter kebijakan analis menurut metodologi Sektoral, bukan data Bloomberg/Damodaran")
 
         _cg_rows = []
         for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
@@ -2580,19 +2581,19 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             "Fair P/BV = (ROE-g)/(CoE-g)")
 
         _roe_tr = ("naik" if _roe_h and _roae >= _roe_h[0] else "melandai")
-        p_ddm = (f"Driver utama valuasi bank ini adalah lintasan ROE, bukan arus kas: "
-                 f"ROAE historis {fmt.pct(_roe_h[0]) if _roe_h else '-'} {_roe_tr} ke {fmt.pct(_roae)} "
-                 f"forward bila laba {(F[0]['label'] if F else 'FY26F')} tercapai. DDM Gordon memberi "
-                 f"Rp{fmt.rp(fmt.tick(_vb['_model_tp']))}/saham; {_ddm_payout_summary(_vb)}. "
-                 f"Silang cek Inverse CoE Rp{fmt.rp(fmt.tick(_vb['_model_inverse']))}/saham "
-                 f"(P/BV wajar {fmt.mult(_vb.get('fair_pbv'), 2)}). "
-                 f"{intake.get('dps_basis')}.")
-
+        ddm_summary = _bank_ddm_summary(_vb)
+        ddm_paragraphs = []
+        if ddm_summary:
+            ddm_paragraphs.append(
+                f"Driver utama valuasi bank ini adalah lintasan ROE, bukan arus kas: "
+                f"ROAE historis {fmt.pct(_roe_h[0]) if _roe_h else '-'} {_roe_tr} ke {fmt.pct(_roae)} "
+                f"forward bila laba {(F[0]['label'] if F else 'FY26F')} tercapai. "
+                f"{ddm_summary} {intake.get('dps_basis')}.")
         sections.append({
             "halaman": len(sections) + 2,
             "judul": "Skenario nilai",
             "layout": "stack",
-            "paragraf": [p_ddm],
+            "paragraf": ddm_paragraphs,
             "exhibit": [e for e in exhibits if e["judul"] in {
                 "Komponen Cost of Equity",
                 "Sensitivitas DDM (CoE x g)",
@@ -3638,29 +3639,43 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
 def _selected_ddm_detail(va):
     """Return the DDM detail that actually set the selected model value."""
     chain = (va or {}).get("method_chain") or {}
-    selected = chain.get("selected")
-    detail = next((row.get("detail") for row in chain.get("trace") or []
-                   if row.get("key") == selected and isinstance(row.get("detail"), dict)), None)
-    if selected != "ddm" or not detail:
-        detail = (va or {}).get("ddm") or {}
-    else:
-        detail = dict(detail)
-    detail = dict(detail)
-    detail["_model_tp"] = detail.get("per_share", detail.get("tp_gordon"))
-    detail["_model_inverse"] = detail.get("per_share_inverse", detail.get("tp_inverse"))
-    detail["_model_payout"] = detail.get("payout", detail.get("payout_used"))
-    return detail
+    if chain.get("selected") != "ddm":
+        return None
+    return next((row.get("detail") for row in chain.get("trace") or []
+                 if row.get("key") == "ddm" and isinstance(row.get("detail"), dict)), None)
+
+
+def _bank_ddm_summary(detail):
+    """Describe a selected DDM only when its per-share result is present."""
+    if not isinstance(detail, dict):
+        return None
+    per_share = detail.get("per_share")
+    method = "DDM skenario" if per_share is not None else "DDM Gordon"
+    per_share = per_share if per_share is not None else detail.get("tp_gordon")
+    if not isinstance(per_share, (int, float)):
+        return None
+    text = (f"{method} memberi Rp{fmt.rp(fmt.tick(per_share))}/saham; "
+            f"{_ddm_payout_summary(detail)}.")
+    inverse = detail.get("per_share_inverse", detail.get("tp_inverse"))
+    if isinstance(inverse, (int, float)):
+        text += (f" Silang cek Inverse CoE Rp{fmt.rp(fmt.tick(inverse))}/saham"
+                 + (f" (P/BV wajar {fmt.mult(detail['fair_pbv'], 2)})"
+                    if isinstance(detail.get("fair_pbv"), (int, float)) else "") + ".")
+    return text
 
 
 def _ddm_payout_summary(detail):
     lines = detail.get("lines") or []
     payouts = [row.get("payout") for row in lines
                if isinstance(row.get("payout"), (int, float))]
+    payout = detail.get("payout")
+    if payout is None:
+        payout = detail.get("payout_used")
     if payouts:
         years = "-".join((lines[0].get("label", "FY"), lines[-1].get("label", "FY")))
         text = f"payout skenario {years} " + "/".join(fmt.pct(value) for value in payouts)
-    elif detail.get("_model_payout") is not None:
-        text = f"payout {fmt.pct(detail['_model_payout'])}"
+    elif payout is not None:
+        text = f"payout {fmt.pct(payout)}"
     else:
         text = "payout skenario"
     if detail.get("terminal_payout") is not None:
@@ -3678,7 +3693,12 @@ def _public_model_label(upside):
 
 def _scenario_profit_change(intake, forecast):
     """Change in modeled parent profit versus the latest annual actual."""
-    actuals = [row for row in intake.get("annuals") or [] if isinstance(row, dict)]
+    evidence = intake.get("official_evidence") or {}
+    if evidence.get("reporting_currency") == "USD":
+        actuals = [row for row in evidence.get("annual_actuals") or []
+                   if isinstance(row, dict)]
+    else:
+        actuals = [row for row in intake.get("annuals") or [] if isinstance(row, dict)]
     if not actuals or not isinstance(forecast, dict):
         return None
     last = actuals[-1]
@@ -5709,12 +5729,12 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
                      ["Beta (kebijakan analis)", fmt.mult(wi["beta"])],
                      ["Equity Risk Premium (kebijakan analis)", fmt.pct(wi["erp"])],
                      ["(=) Cost of Equity dipakai", fmt.pct(wi["re"])],
-                     ["Jalur band (pola BBTN):", ""],
+                     ["Jalur band (pola rentang CoE):", ""],
                      ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
                      ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
                      ["Offset dari mean", "n.a.: dipakai hasil CAPM"]]},
           note="Source: Company, Sektoral Estimates; Rf = INDOGB 10Y; beta 1,1 dan ERP 4% "
-               "adalah parameter kebijakan analis (spec §4.3), bukan data Bloomberg/Damodaran")
+               "adalah parameter kebijakan analis menurut metodologi Sektoral, bukan data Bloomberg/Damodaran")
         _cg_rows = []
         for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
             _cg_rows.append(
@@ -5743,13 +5763,12 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
           note="Source: Sektoral Estimates; sel = P/BV wajar x BVPS; "
                "Fair P/BV = (ROE-g)/(CoE-g)")
         _roe_tr = ("naik" if _roe_h and _roae >= _roe_h[0] else "melandai")
-        p_ddm = (f"Driver utama valuasi bank ini adalah lintasan ROE, bukan arus kas: "
-                 f"ROAE historis {fmt.pct(_roe_h[0])} {_roe_tr} ke {fmt.pct(_roae)} "
-                 f"forward bila laba {F[0]['label']} tercapai. DDM Gordon memberi "
-                 f"Rp{fmt.rp(fmt.tick(_vb['_model_tp']))}/saham; {_ddm_payout_summary(_vb)}. "
-                 f"Silang cek Inverse CoE Rp{fmt.rp(fmt.tick(_vb['_model_inverse']))}/saham "
-                 f"(P/BV wajar {fmt.mult(_vb.get('fair_pbv'), 2)}). "
-                 f"{intake.get('dps_basis')}.")
+        ddm_summary = _bank_ddm_summary(_vb)
+        if ddm_summary:
+            p_ddm = (f"Driver utama valuasi bank ini adalah lintasan ROE, bukan arus kas: "
+                     f"ROAE historis {fmt.pct(_roe_h[0])} {_roe_tr} ke {fmt.pct(_roae)} "
+                     f"forward bila laba {F[0]['label']} tercapai. "
+                     f"{ddm_summary} {intake.get('dps_basis')}.")
     E("Peer", "tabel",
       {"cols": ["Peer", "PER TTM", "PBV"],
        "rows": [[c["symbol"], fmt.mult(c["pe"] or 0), fmt.mult(c["pb"] or 0)]
@@ -5936,47 +5955,87 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
     }
 
 
-def _client_copy(value):
-    """Return report copy with internal file, gate, and spec identifiers removed."""
-    if isinstance(value, str):
-        text = value
-        text = re.sub(r"\bAMMN\(\d+\)", "skenario AMMN", text)
-        text = re.sub(r"\(news:\s*\d+(?:\s*,\s*news:\s*\d+)*\)",
-                      "(berita bertanggal)", text, flags=re.I)
-        text = re.sub(r"\(sectors_annuals\)", "(data tahunan Sectors)", text, flags=re.I)
-        text = re.sub(r"\(pola BBTN\)", "(pola rentang CoE)", text, flags=re.I)
-        text = re.sub(r"Method Gates?\s*\d+(?:\s*[-–]\s*\d+)?", "pemeriksaan metode",
-                      text, flags=re.I)
-        text = re.sub(r"\bS\d+(?:\.\d+)+\b", "pemeriksaan model", text)
-        text = re.sub(r"§\s*\d+(?:\.\d+[a-z]?)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?",
-                      "panduan metodologi", text, flags=re.I)
-        text = re.sub(r"\bRating\s+dan\s+target\s+harga\b", "Nilai model", text, flags=re.I)
-        text = re.sub(r"\btarget\s+harga\b", "nilai model", text, flags=re.I)
-        text = re.sub(r"\bKami menetapkan target\s+Rp", "Nilai model Rp", text,
-                      flags=re.I)
-        text = re.sub(r"\bTarget ini mengimplikasikan\b", "Nilai model ini mengimplikasikan",
-                      text, flags=re.I)
-        text = re.sub(r"\bPada target harga\b", "Pada nilai model", text, flags=re.I)
-        return re.sub(r"\s+([,.;:])", r"\1", text)
-    if isinstance(value, list):
-        return [_client_copy(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_client_copy(item) for item in value)
-    if isinstance(value, dict):
-        return {key: _client_copy(item) for key, item in value.items()}
-    return value
+def _client_prose(text):
+    """Clean authored report prose without touching evidence or machine data."""
+    if not isinstance(text, str):
+        return text
+    text = re.sub(r"\(news:\s*\d+(?:\s*,\s*news:\s*\d+)*\)",
+                  "(berita bertanggal)", text, flags=re.I)
+    text = re.sub(r"\(sectors_annuals\)", "(data tahunan Sectors)", text, flags=re.I)
+    text = re.sub(r"\(pola BBTN\)", "(pola rentang CoE)", text, flags=re.I)
+    text = re.sub(r"Method Gates?\s*\d+(?:\s*[-–]\s*\d+)?", "pemeriksaan metode",
+                  text, flags=re.I)
+    text = re.sub(r"\bS\d+(?:\.\d+)+\b", "pemeriksaan model", text)
+    text = re.sub(r"§\s*\d+(?:\.\d+[a-z]?)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?",
+                  "panduan metodologi", text, flags=re.I)
+    text = re.sub(r"\bRating\s+dan\s+target\s+harga\b", "Nilai model", text, flags=re.I)
+    text = re.sub(r"\bKami menetapkan target\s+Rp", "Nilai model Rp", text, flags=re.I)
+    text = re.sub(r"\bTarget ini mengimplikasikan\b", "Nilai model ini mengimplikasikan",
+                  text, flags=re.I)
+    text = re.sub(r"\bPada target harga\b", "Pada nilai model", text, flags=re.I)
+    text = re.sub(r"\btarget\s+harga\b",
+                  lambda match: "Nilai model" if match.group(0)[0].isupper()
+                  else "nilai model", text, flags=re.I)
+    return text
+
+
+def _client_title(title):
+    """Use public value language only for generated report headings."""
+    if not isinstance(title, str):
+        return title
+    title = re.sub(r"\bSensitivitas\s+target\s+harga\b",
+                   "Sensitivitas nilai model", title, flags=re.I)
+    return re.sub(r"\btarget\s+harga\b",
+                  lambda match: "Nilai model" if match.group(0)[0].isupper()
+                  else "nilai model", title, flags=re.I)
+
+
+def _copy_report_paragraph(paragraph):
+    if isinstance(paragraph, str):
+        return _client_prose(paragraph)
+    if not isinstance(paragraph, dict):
+        return paragraph
+    if "judul" in paragraph:
+        paragraph["judul"] = _client_title(paragraph["judul"])
+    for key in ("isi", "text"):
+        if key in paragraph:
+            paragraph[key] = _client_prose(paragraph[key])
+    return paragraph
 
 
 def client_copy(doc):
-    """Sanitize the report prose after enrichment added its exhibits."""
-    return _client_copy(doc)
+    """Copy display prose and generated headings, preserving trace and sources."""
+    if not isinstance(doc, dict):
+        return doc
+    copied = copy.deepcopy(doc)
+    cover = copied.get("cover")
+    if isinstance(cover, dict):
+        cover["headline"] = _client_prose(cover.get("headline"))
+        cover["bullets"] = [_client_prose(text) for text in cover.get("bullets") or []]
+        cover["paragraf"] = [_copy_report_paragraph(p) for p in cover.get("paragraf") or []]
+    for page in copied.get("bagian") or []:
+        if not isinstance(page, dict):
+            continue
+        page["judul"] = _client_title(page.get("judul"))
+        page["paragraf"] = [_copy_report_paragraph(p) for p in page.get("paragraf") or []]
+        for card in page.get("cards") or []:
+            if isinstance(card, dict):
+                for key in ("title", "text"):
+                    if key in card:
+                        card[key] = _client_prose(card[key])
+        for exhibit in page.get("exhibit") or []:
+            if isinstance(exhibit, dict):
+                exhibit["judul"] = _client_title(exhibit.get("judul"))
+    for exhibit in copied.get("exhibits") or []:
+        if isinstance(exhibit, dict):
+            exhibit["judul"] = _client_title(exhibit.get("judul"))
+    return copied
 
 
 def build(intake, fc, va, s1, method="auto", illustrative_scenarios=False):
-    """Build a client report and remove internal references from its copy."""
-    doc = _build_report(intake, fc, va, s1, method=method,
-                        illustrative_scenarios=illustrative_scenarios)
-    return _client_copy(doc)
+    """Build the report structure; the pipeline applies client copy after enrichment."""
+    return _build_report(intake, fc, va, s1, method=method,
+                         illustrative_scenarios=illustrative_scenarios)
 
 
 def _headline(intake, fc):

@@ -3162,7 +3162,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
         attach_rate_benchmarks(pages, intake, va)
         meta = doc.get("meta") or {}
         released_value = meta.get("tp") if meta.get("rating") else None
-        attach_consensus(pages, intake, va, released_value=released_value)
+        attach_consensus(pages, intake, released_value=released_value)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     slim_mining(doc, intake)
@@ -3175,7 +3175,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
 RATE_EXHIBITS = ("Komponen WACC", "Komponen Cost of Equity")
 
 
-def attach_consensus(pages, intake, va, *, released_value=None):
+def attach_consensus(pages, intake, *, released_value=None):
     """Informational model value vs dated analyst consensus, before method chain."""
     for page in pages:
         exhibits = page.get("exhibit") or []
@@ -3186,7 +3186,7 @@ def attach_consensus(pages, intake, va, *, released_value=None):
         if not any(e.get("judul") == consensus.TITLE for e in exhibits):
             exhibits.insert(at, consensus.exhibit(
                 intake.get("ticker"), intake.get("as_of"), _num(released_value),
-                (va or {}).get("rating"), _num(intake.get("price"))))
+                _num(intake.get("price"))))
         return
 
 
