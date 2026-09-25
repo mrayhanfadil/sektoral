@@ -352,8 +352,12 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
               else f"{len(bad)} exhibit: {_short(bad)}")
     bad = _labels(lines)
     r.add("T1.exhibit_label_rendered", not bad, "setiap objek berlabel" if not bad else _short(bad))
-    ok, msg = _appendix(lines)
-    r.add("T1.source_appendix", ok, msg)
+    from .. import render  # the renderer's own switch; importing opens nothing
+    if render.SHOW_SOURCE_APPENDIX:
+        ok, msg = _appendix(lines)
+        r.add("T1.source_appendix", ok, msg)
+    else:
+        r.na("T1.source_appendix", "lampiran sumber disembunyikan (render.SHOW_SOURCE_APPENDIX)")
 
     # Header: in-page header plus running header boxes.
     boxes = margin_boxes(css)
