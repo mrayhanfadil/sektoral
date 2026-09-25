@@ -27,7 +27,7 @@ RENDER_CHECKS: dict[str, tuple[str, str, str]] = {
     "T1.numbering_rendered": (BLOCKER, "layout", "caption Exhibit N berurutan 1..N"),
     "T1.exhibit_label_rendered": (WARNING, "layout", "setiap objek punya caption 'Exhibit N. judul'"),
     "T1.source_appendix": (WARNING, "layout", "lampiran sumber di akhir laporan untuk tiap exhibit"),
-    "T1.header": (WARNING, "layout", "header 'Equity Research - Company Update', tanggal 'Hari, DD Bulan YYYY', logo"),
+    "T1.header": (WARNING, "layout", "header 'KODE IJ | RATING · TP', 'Equity Research - Company Update | DD Mon YYYY', logo"),
     "T1.footer": (WARNING, "layout", "footer 'sectors.app', disclosure, nomor halaman"),
     "T2.price_box_rendered": (WARNING, "layout", "kotak harga: harga, TP, upside bertanda satu desimal"),
     "T2.relative_chart_rendered": (WARNING, "layout", "chart relatif IHSG 12-24 bulan, label bulan"),
@@ -204,6 +204,11 @@ _MONTHS = {m: i for i, names in enumerate(
     for m in names}
 _DATE = re.compile(r"\b(" + "|".join(_DAYS) + r"),\s+(\d{1,2})\s+(" + "|".join(_MONTHS) + r")\s+(\d{4})\b",
                    re.I)
+# Figma header date: "DD Mon YYYY" (24 Sep 2026), Indonesian or English short month.
+_SHORT_MONTHS = {m: i for i, names in enumerate(
+    (("jan",), ("feb",), ("mar",), ("apr",), ("mei", "may"), ("jun",), ("jul",),
+     ("agu", "aug"), ("sep",), ("okt", "oct"), ("nov",), ("des", "dec")), 1) for m in names}
+_SHORT_DATE = re.compile(r"\b(\d{1,2})\s+(" + "|".join(_SHORT_MONTHS) + r")\s+(\d{4})\b", re.I)
 
 
 def _split_main(lines):
@@ -282,7 +287,16 @@ def _appendix(lines):
 def _date_ok(text, tanggal):
     m = _DATE.search(text or "")
     if not m:
-        return False, "tanpa tanggal 'Hari, DD Bulan YYYY'"
+        short = _SHORT_DATE.search(text or "")
+        if not short:
+            return False, "tanpa tanggal 'DD Mon YYYY'"
+        try:
+            d = date(int(short.group(3)), _SHORT_MONTHS[short.group(2).lower()], int(short.group(1)))
+        except ValueError:
+            return False, f"tanggal tidak valid '{short.group(0)}'"
+        if tanggal and str(tanggal)[:10] != d.isoformat():
+            return False, f"tanggal header {d.isoformat()} bukan tanggal laporan {str(tanggal)[:10]}"
+        return True, short.group(0)
     day, dd, month, yyyy = m.group(1).lower(), int(m.group(2)), _MONTHS[m.group(3).lower()], int(m.group(4))
     try:
         d = date(yyyy, month, dd)
@@ -370,6 +384,9 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
         ok, msg = _date_ok(head_line, meta.get("tanggal"))
         if not ok:
             problems.append(f"header: {msg}")
+        code = meta.get("ticker")
+        if code and not re.search(rf"\b{re.escape(code)} IJ\b", " ".join(lines[max(0, head_i - 2):head_i + 3])):
+            problems.append(f"header tanpa kode '{code} IJ'")
     running = " ".join(v for k, v in boxes.items() if k.startswith("top"))
     if running:
         ok, msg = _date_ok(running, meta.get("tanggal"))
@@ -380,7 +397,8 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
                for n in b.root.iter())
     if not logo:
         problems.append("tanpa logo")
-    r.add("T1.header", not problems, f"header lengkap ({head_line[:60]})" if not problems and head_line
+    shown = " ".join(lines[max(0, head_i - 1):head_i + 1]) if head_i is not None else ""
+    r.add("T1.header", not problems, f"header lengkap ({shown[:90]})" if not problems and head_line
           else "; ".join(problems))
 
     # Footer: @page bottom boxes (print) or footer text.

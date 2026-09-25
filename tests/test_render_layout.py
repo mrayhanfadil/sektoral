@@ -155,9 +155,12 @@ def test_right_column_stacks_two_short_exhibits_against_a_tall_one():
 
 
 def test_header_and_footer_follow_the_template():
-    header = render._report_header("2026-09-24", {"ticker": "AMMN", "rating": "Sell"})
-    assert "<div class='report-title'>Equity Research - Company Update</div>" in header
-    assert "<div class='report-subtitle'>Kamis, 24 September 2026</div>" in header
+    header = render._report_header("2026-09-24", {"ticker": "AMMN", "rating": "Sell", "tp": 2840})
+    assert "<div class='report-title'>AMMN IJ | SELL · TP Rp 2.840</div>" in header
+    assert "<div class='report-subtitle'>Equity Research - Company Update | 24 Sep 2026</div>" in header
+    draft = render._report_header("2026-09-24", {"ticker": "AMMN", "rating": "Sell", "tp": 2840,
+                                                 "status": "draft_non_distributable"})
+    assert "AMMN IJ | DRAFT</div>" in draft and "TP" not in draft.split("report-subtitle")[0]
     assert "report-wordmark" in header and "report-divider" in header
     assert "@bottom-left{content:'sectors.app'" in render.CSS
     assert ("@bottom-right{content:'See important disclosure at the back of this report'"
@@ -238,7 +241,7 @@ def test_peer_issuer_summary_and_sensitivity_base_are_highlighted():
 
 def test_running_header_and_price_box_follow_the_template():
     css = render._running_header({"ticker": "AMMN", "tanggal": "2026-09-24"})
-    assert "Equity Research - Company Update" in css and "Kamis, 24 September 2026" in css
+    assert "AMMN IJ" in css and "Equity Research - Company Update | 24 Sep 2026" in css
     assert "@top-right{content:'';" in css and "data:image/png;base64," in css  # logo
     doc = _doc()
     doc["meta"].update(rating="Buy", tp=150, upside_persen=50.456, status="distributable_assumption_led")

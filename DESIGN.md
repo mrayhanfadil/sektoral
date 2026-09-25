@@ -280,6 +280,7 @@ The PDF and HTML company update (`app/render.py`) follows the report Figma rathe
 - **Report Muted** (`report-muted`): secondary text and `n.m.` cells, which recede so reported figures carry the table.
 - The draft banner borrows the web warning set (`warn-bg`, `warn-rule`, `warn-ink`).
 - Numbers are right-aligned in every table (Struktur-Template: "angka rata kanan"); body text is left-aligned, never justified.
+- Every page carries the Figma header (node 2627:900): `TICKER IJ | RATING · TP Rp X` in Roboto Black blue, then `Equity Research - Company Update | DD Mon YYYY` in Roboto Regular black, the logo top right and the blue-to-lime divider. A draft shows `TICKER IJ | DRAFT` and no TP.
 
 ### Named Rules
 **The Green Is Only Alive Rule.** `live` marks something running right now, as a bar or a dot. It is never text, never a background, never "success". Finished is `done` teal.

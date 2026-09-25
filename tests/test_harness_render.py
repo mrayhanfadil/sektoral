@@ -15,12 +15,12 @@ DOC = {"meta": {"ticker": "TEST", "emiten": "PT Uji Coba Tbk", "tanggal": "2026-
 CSS = ("@page{@bottom-left{content:'sectors.app'}"
        "@bottom-right{content:'See important disclosure at the back of this report' 'Page ' counter(page)"
        " ' of ' counter(pages)}}"
-       "@page{margin-top:19mm;@top-left{content:\"TEST IJ | BUY\"}"
-       "@top-right{content:\"Equity Research - Company Update | Kamis, 24 September 2026\"}}")
+       "@page{margin-top:19mm;@top-left{content:\"TEST IJ | BUY · TP Rp 1.200\"}"
+       "@top-right{content:\"Equity Research - Company Update | 24 Sep 2026\"}}")
 
 
 def html(**over):
-    o = {"css": CSS, "date": "Kamis, 24 September 2026", "upside": "+20,0%", "window": "12M",
+    o = {"css": CSS, "date": "24 Sep 2026", "upside": "+20,0%", "window": "12M",
          "src": [SRC] * 5, "numbers": [1, 2, 3, 4, 5], "analyst": "Equity Analyst",
          "h1": "PT Uji Coba Tbk (TEST IJ)", "base_row": "<tr class='base-row'>",
          "issuer_row": "<tr class='issuer-row'>", "median_row": "<tr class='total-row'>",
@@ -29,8 +29,8 @@ def html(**over):
     n = o["numbers"]
     s = o["src"]
     parts = [f"<html><head><style>{o['css']}</style></head><body>",
-             "<div class='report-header'><div class='report-title'>TEST IJ | BUY</div>"
-             f"<div class='report-subtitle'>Equity Research - Company Update</div><div>{o['date']}</div>"
+             "<div class='report-header'><div class='report-title'>TEST IJ | BUY · TP Rp 1.200</div>"
+             f"<div class='report-subtitle'>Equity Research - Company Update | {o['date']}</div>"
              + ("<img class='report-wordmark' alt='Sektoral' src='x.png'>" if o["logo"] else "") + "</div>",
              "<div class='cover'><div class='left'>",
              "<div class='rating-row'><span>Harga Terakhir (Rp)</span><b>1.000</b></div>",
@@ -123,9 +123,16 @@ def test_missing_appendix_warns(monkeypatch):
 def test_header_date_format_and_weekday():
     f = failed(html(date="Jumat, 24 September 2026"))
     assert "hari salah" in f["T1.header"]["message"]
-    css = CSS.replace("Kamis, 24 September 2026", "24 Sep 2026")
+    assert "bukan tanggal laporan" in failed(html(date="25 Sep 2026"))["T1.header"]["message"]
+    assert "tanpa tanggal" in failed(html(date="2026-09-24"))["T1.header"]["message"]
+    css = CSS.replace("| 24 Sep 2026", "| 25 Sep 2026")
     assert "header berjalan" in failed(html(css=css))["T1.header"]["message"]
     assert "tanpa logo" in failed(html(logo=False))["T1.header"]["message"]
+
+
+def test_header_needs_the_stock_code():
+    page = html().replace("TEST IJ | BUY · TP Rp 1.200</div>", "BUY · TP Rp 1.200</div>")
+    assert "TEST IJ" in failed(page)["T1.header"]["message"]
 
 
 def test_footer_needs_sectors_app_disclosure_right_and_page_number():
@@ -163,7 +170,7 @@ def test_negative_numbers_in_brackets():
 
 
 def _pages(src=SRC, footer="sectors.app See important disclosure at the back of this report Page {i} of 2"):
-    head = "TEST IJ | BUY Equity Research - Company Update | Kamis, 24 September 2026"
+    head = "TEST IJ | BUY · TP Rp 1.200 Equity Research - Company Update | 24 Sep 2026"
     return [f"{footer.format(i=1)}\n{head}\nExhibit 1. TEST relative to IHSG\n{src}\nExhibit 2. Key Financials\n"
             f"Laba bersih 110\n{src}",
             f"{footer.format(i=2)}\n{head}\nExhibit 3. Laba rugi\nPendapatan 1.000\n{src}"]
@@ -177,7 +184,7 @@ def test_pdf_text_checks():
     pages = _pages(footer="See important disclosure at the back of this report Page {i} of 2")
     res = {c["check"]: c for c in R.check_pdf_text(pages, DOC)["checks"]}
     assert res["T1.footer.pdf"]["status"] == R.FAIL and res["T1.footer.pdf"]["severity"] == R.WARNING
-    pages = [p.replace("| Kamis, 24 September 2026", "| 24 Sep 2026") for p in _pages()]
+    pages = [p.replace("| 24 Sep 2026", "| 25 Sep 2026") for p in _pages()]
     res = {c["check"]: c for c in R.check_pdf_text(pages, DOC)["checks"]}
     assert res["T1.header.pdf"]["status"] == R.FAIL and not res["T1.header.pdf"]["blocker"]
 
