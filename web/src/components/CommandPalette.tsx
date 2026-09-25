@@ -8,6 +8,7 @@ import { CornerDownLeft, FileText, Play, Search, SquareTerminal, Compass } from 
 import { api, type ReportItem } from "../lib/api";
 import { ratingLabel } from "../lib/labels";
 import { rp } from "../lib/format";
+import { launch } from "../lib/launch";
 
 type PaletteApi = { open: (query?: string) => void; close: () => void };
 const PaletteContext = createContext<PaletteApi>({ open: () => {}, close: () => {} });
@@ -95,9 +96,9 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
     setBusy(ticker);
     setError(null);
     try {
-      const id = await api.submit(ticker);
+      const { path } = await launch(ticker);
       onClose();
-      navigate(`/jobs/${id}`);
+      navigate(path);
     } catch (e) {
       setError((e as Error).message);
       setBusy(null);

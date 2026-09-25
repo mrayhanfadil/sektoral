@@ -54,6 +54,19 @@ class ReviewRequest(BaseModel):
     edits: list[ReviewEdit] = []
 
 
+def live_runs() -> str:
+    """Who may start a live (paid) research run: "open" (anyone, the local
+    default), "token" (only with ``SECTORAL_RUN_TOKEN``, the public
+    deployment) or "off". Visitors can always replay stored runs."""
+    mode = (os.environ.get("SECTORAL_LIVE_RUNS") or "open").strip().lower()
+    return mode if mode in ("open", "token", "off") else "token"
+
+
+def run_token_ok(given: str | None) -> bool:
+    expected = os.environ.get("SECTORAL_RUN_TOKEN") or ""
+    return bool(expected) and hmac.compare_digest(str(given or ""), expected)
+
+
 def review_token_ok(given: str | None) -> bool:
     """Approvals need the reviewer token the server was started with
     (``SECTORAL_REVIEW_TOKEN``); without one, approving is switched off."""
@@ -121,6 +134,11 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         published = set(outputs.tickers(outputs.REPORT, jobs.reports))
         return data({"tickers": [t for t in available_tickers() if t in published]})
 
+    @app.get("/api/config")
+    def config():
+        return data({"live_runs": live_runs(),
+                     "review": bool(os.environ.get("SECTORAL_REVIEW_TOKEN"))})
+
     @app.get("/api/history")
     def history():
         return data({"items": _history(jobs.reports)})
@@ -176,7 +194,11 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         return data(found)
 
     @app.post("/api/jobs", status_code=201)
-    def submit(body: JobRequest):
+    def submit(body: JobRequest, x_run_token: str | None = Header(default=None)):
+        mode = live_runs()
+        if mode == "off" or (mode == "token" and not run_token_ok(x_run_token)):
+            raise HTTPException(403, "Riset langsung dibatasi di situs ini; putar ulang run emiten "
+                                     "yang sudah diriset, atau masukkan token riset.")
         try:
             job_id = jobs.submit(body.ticker)
         except ValueError:
