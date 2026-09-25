@@ -2,8 +2,8 @@
 
 Cache-first design: the Sectors cache snippet stays the market-data source.
 This module fetches the full article behind each cached ``source`` URL,
-extracts readable text with stdlib only, and stores it under
-``data/news_full/`` so reruns and tests stay offline.
+extracts readable text with stdlib only, and stores it in the app database
+(``news_full`` collection) so reruns and tests stay offline.
 
 Provenance is explicit: every record carries ``source_url``,
 ``fetch_status`` (``fetched`` or ``unavailable_*``), and ``fetched_at``.
@@ -17,7 +17,6 @@ import html as html_mod
 import json
 import os
 import re
-import tempfile
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -25,8 +24,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 
-ROOT = Path(__file__).resolve().parent.parent
-NEWS_FULL_DIR = ROOT / "data" / "news_full"
+from . import store
+
+# Fetched article text lives in the app database, keyed by a hash of the URL.
+COLLECTION = "news_full"
+FIXTURE_DIR = Path(__file__).resolve().parent.parent / "data" / "news_full"
 
 TIMEOUT_S = 12
 MAX_HTML_BYTES = 500_000
@@ -48,36 +50,24 @@ def _url_key(url: str) -> str:
     return hashlib.sha256(str(url).encode("utf-8")).hexdigest()[:32]
 
 
-def _record_path(url: str, cache_dir: Path | None = None) -> Path:
-    directory = Path(cache_dir) if cache_dir is not None else NEWS_FULL_DIR
-    return directory / f"{_url_key(url)}.json"
-
-
-def load_cached(url: str, cache_dir: Path | None = None) -> dict | None:
+def load_cached(url: str, db=None) -> dict | None:
+    record = store.get(COLLECTION, _url_key(url), db)
+    if isinstance(record, dict):
+        return record
+    # Article snapshots committed as fixtures before the database existed are
+    # read-only seeds; new fetches are written to the database only.
     try:
-        return json.loads(_record_path(url, cache_dir).read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError):
+        seeded = json.loads((FIXTURE_DIR / f"{_url_key(url)}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return None
+    return seeded if isinstance(seeded, dict) else None
 
 
-def _save(url: str, record: dict, cache_dir: Path | None = None) -> None:
+def _save(url: str, record: dict, db=None) -> None:
+    # One atomic upsert: parallel ticker runs may fetch the same article.
     try:
-        directory = Path(cache_dir) if cache_dir is not None else NEWS_FULL_DIR
-        directory.mkdir(parents=True, exist_ok=True)
-        # Atomic replace: parallel ticker runs may fetch the same article,
-        # and a reader must never see a half-written record.
-        target = _record_path(url, directory)
-        handle, temp = tempfile.mkstemp(dir=directory, suffix=".tmp")
-        try:
-            with os.fdopen(handle, "w", encoding="utf-8") as stream:
-                json.dump(record, stream, ensure_ascii=False, indent=1)
-            os.replace(temp, target)
-        except OSError:
-            try:
-                os.unlink(temp)
-            except OSError:
-                pass
-    except OSError:
+        store.put(COLLECTION, _url_key(url), record, db)
+    except Exception:  # a cache write must never fail the run
         pass
 
 
@@ -166,7 +156,7 @@ def _fetch_html(url: str) -> tuple[str, str]:
         return raw.decode("utf-8", errors="replace"), final_url
 
 
-def enrich_one(row: dict, cache_dir: Path | None = None) -> dict:
+def enrich_one(row: dict, db=None) -> dict:
     """Fetch + extract one cached news row. Never raises."""
     url = str((row or {}).get("source") or "")
     title = str((row or {}).get("title") or "")
@@ -176,7 +166,7 @@ def enrich_one(row: dict, cache_dir: Path | None = None) -> dict:
             "full_text": "", "full_length": 0, "title_extracted": ""}
     if not url.startswith(("https://", "http://")):
         return {**base, "fetch_status": "unavailable_bad_url"}
-    cached = load_cached(url, cache_dir)
+    cached = load_cached(url, db)
     if isinstance(cached, dict) and cached.get("source_url") == url and cached.get("full_text"):
         # Reuse stored extract; refresh lightweight provenance fields.
         cached = dict(cached)
@@ -191,7 +181,7 @@ def enrich_one(row: dict, cache_dir: Path | None = None) -> dict:
         return {**base, "fetch_status": "unavailable_bad_url"}
     except Exception as error:  # network, timeout, paywall-shaped errors
         record = {**base, "fetch_status": f"unavailable_fetch_{type(error).__name__}"[:48]}
-        _save(url, record, cache_dir)
+        _save(url, record, db)
         return record
     extracted = extract_text(html_body)
     text = extracted["text"]
@@ -199,7 +189,7 @@ def enrich_one(row: dict, cache_dir: Path | None = None) -> dict:
         record = {**base, "fetch_status": "unavailable_empty_extract",
                   "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                   "title_extracted": extracted["title"]}
-        _save(url, record, cache_dir)
+        _save(url, record, db)
         return record
     record = {
         "source_url": url, "final_url": final_url, "title": title, "timestamp": timestamp,
@@ -209,22 +199,22 @@ def enrich_one(row: dict, cache_dir: Path | None = None) -> dict:
         "full_length": extracted["length"],
         "has_advice_language": bool(_ADVICE.search(f"{extracted['title']} {text[:2000]}")),
     }
-    _save(url, record, cache_dir)
+    _save(url, record, db)
     return record
 
 
-def enrich_all(rows: list, cache_dir: Path | None = None, max_workers: int = MAX_WORKERS) -> list:
+def enrich_all(rows: list, db=None, max_workers: int = MAX_WORKERS) -> list:
     """Auto deep-dive every supplied cached article, preserving order."""
     rows = [row for row in (rows or []) if isinstance(row, dict)]
     if not rows:
         return []
     # Fast path: everything already cached or offline -- avoid thread overhead.
     if _disabled() or all(
-            isinstance(load_cached(str(r.get("source") or ""), cache_dir), dict)
+            isinstance(load_cached(str(r.get("source") or ""), db), dict)
             for r in rows):
-        return [enrich_one(row, cache_dir) for row in rows]
+        return [enrich_one(row, db) for row in rows]
     with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(rows)))) as pool:
-        return list(pool.map(lambda row: enrich_one(row, cache_dir), rows))
+        return list(pool.map(lambda row: enrich_one(row, db), rows))
 
 
 def agent_text(record: dict, cap: int = AGENT_TEXT_CAP) -> str:

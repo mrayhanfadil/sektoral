@@ -17,7 +17,7 @@ from agents.analyst import signals as S
 from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
-from . import cache, fmt, idx_history, method_chain
+from . import cache, commodity, fmt, idx_history, method_chain, mineops
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
 # "USD" rather than "US$": the report keeps "$" out of rupiah-only drafts (spec §5.3).
@@ -144,8 +144,14 @@ def holding_sotp_exhibit(va):
     for c in d["components"]:
         rows.append([f"Dikurangi porsi {c['ticker']} atas ekuitas buku {c['ticker']} "
                      f"(FY{c.get('book_year') or '-'})", "nilai buku", f"({bn(c['book_share'])})"])
+    land = d.get("landbank")
     rows.append(["Segmen lain (lahan industri, hotel, utilitas, sewa) pada nilai buku",
                  "nilai buku", bn(d["remainder_book"])])
+    if land:
+        li = land["inputs"]
+        rows.append([f"Revaluasi landbank: RNAV Rp{bn(land['nav'])} miliar dikurangi nilai buku "
+                     f"Rp{bn(li['carrying_idr'])} miliar, porsi {fmt.pct(li['stake'])}",
+                     "RNAV", bn(d["landbank_uplift"])])
     rows.append(["Total nilai SOTP", "", bn(d["total"])])
     for item in d["discounts"]:
         rows.append([f"Nilai per saham, diskon holding {fmt.pct(item['discount'])}",
@@ -159,11 +165,80 @@ def holding_sotp_exhibit(va):
         ["Komponen", "Basis", "Rp miliar"], rows,
         f"Source: Company, Sektoral Estimates; kepemilikan: {stake_sources}; kapitalisasi dan "
         f"ekuitas anak usaha: {', '.join(sorted({c['market_source'] for c in d['components']}))}; "
-        "ekuitas induk: neraca interim emiten. Segmen tanpa harga pasar dinilai pada nilai buku "
-        "(lahan industri tercatat pada biaya perolehan, sehingga nilai ini konservatif). Diskon "
-        "holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. "
+        "ekuitas induk: neraca interim emiten. "
+        + ("Tanah untuk pengembangan dinilai dengan RNAV landbank (tabel terpisah) menggantikan "
+           "nilai bukunya; hotel, utilitas dan sewa tetap pada nilai buku. "
+           if d.get("landbank") else
+           "Segmen tanpa harga pasar dinilai pada nilai buku (lahan industri tercatat pada "
+           "biaya perolehan). ")
+        + "Diskon holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. "
         + ("Metode utama (Method Gate 0: grup dengan lini usaha berbeda); target memakai diskon 0%."
            if primary else "Cross-check, bukan dasar target harga."))
+
+
+def _rp_signed(value):
+    """Per-share amount with the tables' convention: negatives in brackets."""
+    amount = f"Rp{fmt.rp(abs(round(value)))}"
+    return f"({amount})" if round(value) < 0 else amount
+
+
+def landbank_exhibits(va):
+    """RNAV of the landbank behind the holding SOTP: inputs and a pace x price grid."""
+    chain = (va or {}).get("method_chain") or {}
+    sotp = next((t for t in chain.get("trace") or []
+                 if t["key"] == "holding_sotp" and t["status"] == "sufficient"), None)
+    land = ((sotp or {}).get("detail") or {}).get("landbank")
+    if not land:
+        return []
+    li, ev, lb = land["inputs"], land["inputs"]["evidence"], land["inputs"]["assumptions"]
+    shares = sotp["detail"]["shares"]
+    bn = lambda v: fmt._id(v / 1e9, 0)
+    land_src = ev.get("land_for_development") or {}
+    rows = [
+        ["Tanah untuk pengembangan (bruto)", f"{fmt._id(li['gross_ha'], 0)} ha",
+         f"audit {li['carrying_as_of']}, {land_src.get('page')}"],
+        ["Nilai buku tanah", f"Rp{bn(li['carrying_idr'])} miliar",
+         f"Rp{fmt._id(li['carrying_idr'] / (li['gross_ha'] * 10_000) / 1000, 0)} ribu/m2 bruto"],
+        ["Porsi dapat dijual (asumsi analis)", fmt.pct(li["net_ratio"]),
+         lb.get("net_saleable_basis") or "-"],
+        ["Laju penjualan", f"{fmt._id(li['pace_ha'], 1)} ha/tahun",
+         lb.get("pace_basis") or "-"],
+        ["Harga jual awal", f"Rp{fmt._id(li['asp'] / 1000, 0)} ribu/m2",
+         "marketing sales 1H26 (9,4 ha, Rp195,9 miliar)"],
+        ["Pertumbuhan harga", fmt.pct(li["asp_growth"]), lb.get("growth_basis") or "-"],
+        ["Margin kas", fmt.pct(li["cash_margin"]),
+         f"laba kotor {fmt.pct(li['gross_margin'])} + biaya buku lahan "
+         f"{fmt.pct(li['land_cost_share'])} - beban usaha {fmt.pct(li['opex_ratio'])} - PPh final "
+         f"{fmt.pct(li['final_tax'])} (segmen properti {li['margin_periods']})"],
+        ["Tingkat diskonto", fmt.pct(land["rate"]), lb.get("discount_basis") or "-"],
+        ["RNAV landbank (100%)", f"Rp{bn(land['nav'])} miliar",
+         f"terjual habis dalam {land['years']} tahun"],
+        [f"Tambahan nilai porsi SSIA ({fmt.pct(li['stake'])})",
+         f"Rp{bn(land['uplift_attributable'])} miliar",
+         f"{_rp_signed(land['uplift_attributable'] / shares)} per saham"],
+    ]
+    appraisal = ev.get("appraisal") or {}
+    if appraisal.get("fair_value_idr") and appraisal.get("area_m2"):
+        rows.append(["Cross-check penilai independen",
+                     f"Rp{fmt._id(appraisal['fair_value_idr'] / appraisal['area_m2'] / 1000, 0)} "
+                     "ribu/m2 bruto",
+                     f"{fmt._id(appraisal.get('area_ha'), 0)} ha, {appraisal.get('method')}, "
+                     f"{appraisal.get('appraisal_date')} (tanah mentah, sebelum pengembangan)"])
+    growths = sorted({g for (_, g) in land["grid"]})
+    grid_rows = [[f"{fmt._id(p, 0)} ha/tahun" + (" (target 2026)" if p == 135 else "")]
+                 + [_rp_signed(land["grid"][(p, g)] / shares) for g in growths]
+                 for p in sorted({p for (p, _) in land["grid"]})]
+    return [
+        _exhibit("RNAV landbank Suryacipta: dasar perhitungan", ["Komponen", "Nilai", "Dasar"],
+                 rows, f"Sumber: {land_src.get('source_title')}; "
+                       f"{(ev.get('marketing_asp_idr_per_m2') or {}).get('source_title')}; "
+                       "asumsi analis berlabel di data/analyst_scenarios. RNAV menggantikan nilai "
+                       "buku tanah untuk pengembangan; hanya porsi SSIA atas selisihnya yang masuk SOTP."),
+        _exhibit("Sensitivitas tambahan nilai landbank per saham: laju penjualan x pertumbuhan harga",
+                 ["Laju penjualan"] + [f"Harga +{fmt.pct(g)}/tahun" for g in growths], grid_rows,
+                 "Sumber: estimasi Sektoral; tambahan nilai per saham di atas nilai buku, porsi SSIA. "
+                 f"Basis: {fmt._id(li['pace_ha'], 1)} ha/tahun dan +{fmt.pct(li['asp_growth'])}/tahun."),
+    ]
 
 
 def attach_method_chain(doc, va):
@@ -182,6 +257,7 @@ def attach_method_chain(doc, va):
         page["exhibit"].append(exhibit)
         if sotp:
             page["exhibit"].append(sotp)
+            page["exhibit"].extend(landbank_exhibits(va))
 
 
 # ------------------------------------------------------------ cover data
@@ -236,7 +312,28 @@ def _slug(text):
     return re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")
 
 
-def _series(name):
+def _series_sourced(name, as_of=None):
+    """Monthly Sectors points, or the dated Yahoo series when Sectors is stale
+    at the Report Date (same rule as the LoM deck); (points, source note)."""
+    points = [p for p in _sectors_series(name)
+              if not as_of or p[0].isoformat() <= str(as_of)[:10]]
+    label = f"Sectors, mining/commodities/{name}/price (data bulanan)"
+    if as_of and points:
+        age = (date.fromisoformat(str(as_of)[:10]) - points[-1][0]).days
+        series = commodity.load(name) if age > mineops.DECK_MAX_AGE_DAYS else None
+        yahoo = [(date.fromisoformat(r["date"]), r["price"]) for r in (series or {}).get("rows", [])
+                 if r["date"] <= str(as_of)[:10]]
+        if yahoo and yahoo[-1][0] > points[-1][0]:
+            return yahoo, (f"{series['source']}; seri Sectors berhenti "
+                           f"{points[-1][0].isoformat()} sehingga tidak dipakai")
+    return points, label
+
+
+def _series(name, as_of=None):
+    return _series_sourced(name, as_of)[0]
+
+
+def _sectors_series(name):
     rows = []
     for _key, payload in cache.payloads(f"/mining/commodities/{name}/price/"):
         if isinstance(payload, list):
@@ -274,7 +371,7 @@ def _commodities(intake):
             names.append(name)
         if (stats or {}).get("au_cont_koz"):
             names.append("Gold")
-    return [n for n in dict.fromkeys(names) if _series(n)]
+    return [n for n in dict.fromkeys(names) if _series(n, intake.get("as_of"))]
 
 
 def industry_page(intake):
@@ -282,7 +379,8 @@ def industry_page(intake):
     if intake.get("model_profile") == "finite_life_mining":
         names = _commodities(intake)
         if names:
-            series = {n: _series(n) for n in names}
+            sourced = {n: _series_sourced(n, intake.get("as_of")) for n in names}
+            series = {n: sourced[n][0] for n in names}
             last_years = sorted({d.year for pts in series.values() for d, _ in pts})[-3:]
             rows = [["Titik data terakhir"] + [series[n][-1][0].isoformat() for n in names],
                     ["Harga terakhir"] + [fmt._id(series[n][-1][1], 0) for n in names]]
@@ -294,9 +392,9 @@ def industry_page(intake):
             cols = ["Metrik"] + [f"{COMMODITY_UNITS[n][0]} ({COMMODITY_UNITS[n][1]})" for n in names]
             exhibits.append(_exhibit(
                 "Harga komoditas utama emiten", cols, rows,
-                "Sumber: Sectors, mining/commodities/{nama}/price (data bulanan). Harga emas "
-                "dibaca sebagai USD/oz sesuai besaran datanya; titik data terakhir tiap seri "
-                "dapat berbeda."))
+                "Sumber: " + "; ".join(f"{COMMODITY_UNITS[n][0]}: {sourced[n][1]}" for n in names)
+                + ". Harga emas dibaca sebagai USD/oz sesuai besaran datanya; titik data terakhir "
+                "tiap seri dapat berbeda."))
             for name in names:
                 label, unit = COMMODITY_UNITS[name]
                 day, price = series[name][-1]
@@ -395,7 +493,7 @@ def peer_industry_page(intake):
                    if weighted else None)
     total_cap = sum(cap for cap, _ in caps if cap)
     own = subject["metrics"]
-    mult = lambda v: "-" if v is None else fmt.mult(v)
+    mult = lambda v: "-" if v is None else fmt.mult(v, cap=fmt.MULT_CAP)
     pct = lambda v: "-" if v is None else fmt.pct(v)
     table = [
         ["Kapitalisasi pasar (Rp triliun)", fmt._id(total_cap / 1e12, 1),
@@ -410,12 +508,17 @@ def peer_industry_page(intake):
         ["Liabilitas/ekuitas (median)", mult(stats["leverage"][0]), mult(own.get("leverage"))]]
     group = peers.get("group") or intake.get("sub_sector") or "sub-sektor"
     exhibit = _exhibit(
-        f"Kondisi sub-sektor {group}: peer dibanding {ticker}",
+        (f"Kondisi grup peer {group}: peer dibanding {ticker}" if peers.get("curated") else
+         f"Kondisi sub-sektor {group}: peer dibanding {ticker}"),
         ["Metrik", f"Peer ({len(others)} emiten, tanpa {ticker})", ticker], table,
-        f"Sumber: {peers['source']} ({peers['basis']}), tahun buku "
-        f"{subject.get('year') or own.get('year') or '-'}; "
-        "perubahan kapitalisasi peer ditimbang kapitalisasi pasar; median P/E dan P/B memakai "
-        "rentang yang sama dengan valuasi.")
+        f"Sumber: {peers['source']} ({peers['basis']}), "
+        + ("laporan terakhir tiap peer (12 bulan terakhir, atau tahun buku terakhir bila "
+           "emiten melapor semesteran); perubahan kapitalisasi 1 tahun hanya untuk peer dari "
+           "tabel Sectors, ditimbang kapitalisasi pasar; "
+           if peers.get("curated") else
+           f"tahun buku {subject.get('year') or own.get('year') or '-'}; "
+           "perubahan kapitalisasi peer ditimbang kapitalisasi pasar; ")
+        + "median P/E dan P/B memakai rentang yang sama dengan valuasi.")
     paragraphs = []
     if peer_change is not None and own.get("mcap_change_1y") is not None:
         gap = own["mcap_change_1y"] - peer_change
@@ -476,6 +579,10 @@ def _peer_stats(rows):
         if key in bands:
             lo, hi = bands[key]
             vals = [v for v in vals if lo < v <= hi]
+        elif key in ("roe", "net_margin"):
+            # The table shows ratios beyond 500% as n.m.; one tiny base must
+            # not drag the average to -2.306%.
+            vals = [v for v in vals if abs(v) <= 5]
         out[key] = ((statistics.median(vals), sum(vals) / len(vals)) if vals
                     else (None, None))
     return out
@@ -491,7 +598,7 @@ def peer_page(intake, valuation_inputs=None):
         rows, ["market_cap", "pe", "pb", "roe", "net_margin", "leverage"], peers["source"])}
     m = lambda row, key, kind: ("-" if row["metrics"].get(key) is None else
                                 _signed_pct(row["metrics"][key], cap=5) if kind == "pct" else
-                                fmt.mult(row["metrics"][key]) if kind == "x" else
+                                fmt.mult(row["metrics"][key], cap=fmt.MULT_CAP) if kind == "x" else
                                 _rp_bn(row["metrics"][key]))
     table = []
     for row in sorted(rows, key=lambda r: r["metrics"].get("market_cap") or 0, reverse=True):
@@ -514,7 +621,16 @@ def peer_page(intake, valuation_inputs=None):
                        fmt.mult(avg) if kind == "x" else _rp_bn(avg))
         rank_row.append(f"{signal['rank']}/{signal['n']}" if signal.get("rank") else "-")
     table += [median_row, avg_row, rank_row]
+    curated = peers.get("curated")
     exhibits = [_exhibit(
+        "Grup peer: alasan pemilihan",
+        ["Emiten", "Bursa", "Status", "Alasan"],
+        [[p.get("name") or p["symbol"], p.get("market") or "-", "dipakai", p["reason"]]
+         for p in curated["peers"]]
+        + [[x["symbol"], "BEI", "dikeluarkan", x["reason"]] for x in curated.get("excluded") or []],
+        f"Sumber: data/peer_groups/{ticker}.json (kurasi Sektoral, {curated.get('as_of')}). "
+        + curated["basis"])] if curated else []
+    exhibits += [_exhibit(
         f"Perbandingan peer {peers.get('group') or ''}".strip(),
         ["Emiten", "Kap. pasar (Rp miliar)", "P/E (x)", "P/B (x)", "ROE", "Margin bersih",
          "Liabilitas/ekuitas (x)"], table,
@@ -536,7 +652,9 @@ def peer_page(intake, valuation_inputs=None):
     pe_median, pb_median = stats["pe"][0], stats["pb"][0]
     if pe_signal.get("value") is not None and pe_median:
         paragraphs.append(
-            f"P/E {ticker} {fmt.mult(pe_signal['value'])} dibanding median peer "
+            (f"P/E {ticker} di atas {fmt.MULT_CAP}x (laba terlalu kecil untuk bermakna) dibanding median peer "
+             if pe_signal["value"] > fmt.MULT_CAP else
+             f"P/E {ticker} {fmt.mult(pe_signal['value'])} dibanding median peer ") +
             f"{fmt.mult(pe_median)}, sementara ROE berada di peringkat "
             f"{roe_signal.get('rank') or '-'} dari {roe_signal.get('n') or '-'}.")
     outliers = [r["symbol"] for r in rows
@@ -566,7 +684,7 @@ def peer_page(intake, valuation_inputs=None):
         exhibits.append(_exhibit(
             "Cross-check nilai per saham dengan multiple peer",
             ["Basis", "Multiple", "Nilai per saham"], cross,
-            "Sumber: tabel peer Sectors dan estimasi Sektoral. Cross-check tidak dirata-ratakan "
+            f"Sumber: {peers['source']} dan estimasi Sektoral. Cross-check tidak dirata-ratakan "
             "dengan metode utama; P/E dan P/B peer bukan EV/EBITDA dan berbeda struktur modal."))
         peer_ev = [p for p in intake.get("peers") or []
                    if isinstance(p.get("ev_ebitda"), (int, float))]
@@ -575,9 +693,9 @@ def peer_page(intake, valuation_inputs=None):
             f"laporan tiap peer ({method_chain.peer_ev_sources(intake.get('peers'))}) dan "
             f"tersedia untuk {len(peer_ev)} peer; ia dipakai di rantai metode, bukan di tabel "
             "ini." if peer_ev else
-            "Multiple peer di bawah ini hanya cross-check: tabel peer Sectors tidak memuat "
-            "EBITDA dan utang bersih, dan laporan tiap peer (Sectors atau snapshot Yahoo "
-            "Finance) belum tersedia, sehingga EV/EBITDA peer belum dapat diverifikasi.")
+            "Multiple peer di bawah ini hanya cross-check: EBITDA dan utang bersih peer belum "
+            "tersedia dari laporan peer (Sectors atau snapshot Yahoo Finance), sehingga "
+            "EV/EBITDA peer belum dapat diverifikasi.")
     # 1-year own-history P/E and P/BV bands (mean, median, current, percentile).
     band = own_history_bands(intake)
     if band:
@@ -666,10 +784,12 @@ def own_history_bands(intake):
         if not m:
             rows.append([label, "NA", "NA", "NA", "basis fundamental historis tidak cukup"])
             continue
-        implied = (f"Rp{fmt.rp(fmt.tick(m['mean'] * m['base_now']))} / "
+        meaningless = max(m["mean"], m["median"]) > fmt.MULT_CAP
+        implied = ("n.m." if meaningless else
+                   f"Rp{fmt.rp(fmt.tick(m['mean'] * m['base_now']))} / "
                    f"Rp{fmt.rp(fmt.tick(m['median'] * m['base_now']))}")
-        rows.append([label, fmt.mult(m["mean"]), fmt.mult(m["median"]),
-                     f"{fmt.mult(m['current'])} (p{m['percentile']:.0f})", implied])
+        rows.append([label, fmt.mult(m["mean"], cap=fmt.MULT_CAP), fmt.mult(m["median"], cap=fmt.MULT_CAP),
+                     f"{fmt.mult(m['current'], cap=fmt.MULT_CAP)} (p{m['percentile']:.0f})", implied])
     constant = [label for label, m in data["multiples"].items() if m["constant_base"]]
     return _exhibit(
         f"Band historis {data['window']} P/E dan P/BV (bukan target harga)",
@@ -679,7 +799,8 @@ def own_history_bands(intake):
         f"{data['end'].isoformat()} dan laba/ekuitas tahunan Sectors yang "
         f"sudah terbit pada tiap tanggal (akhir tahun buku + {PUBLICATION_LAG_DAYS} hari), saham "
         "kini sebagai basis pro forma. Harga implisit = multiple mean/median x EPS/BVPS terakhir "
-        "dengan driver tetap; cross-check reversion, bukan target harga."
+        "dengan driver tetap; cross-check reversion, bukan target harga. Multiple di atas "
+        f"{fmt.MULT_CAP}x ditulis n.m. karena basis laba atau ekuitas sangat kecil."
         + (f" Basis {', '.join(constant)} tidak berubah sepanjang jendela, sehingga harga "
            "implisitnya sama dengan rata-rata/median harga penutupan." if constant else ""))
 
@@ -955,7 +1076,9 @@ def financials_page(intake, fc=None):
         coverage = []
         for r in actual:
             ebit, interest = get(r, "operating_pnl"), get(r, "interest_expense_non_operating")
-            coverage.append(fmt.mult(ebit / interest) if ebit is not None and interest else "NA")
+            cover = ebit / interest if ebit is not None and interest else None
+            coverage.append("NA" if cover is None else f">{fmt.MULT_CAP}x" if cover > fmt.MULT_CAP
+                            else fmt.mult(cover))
         gearing = []
         for r in actual:
             net_debt, equity = get(r, "net_debt"), get(r, "total_equity")
@@ -1076,7 +1199,7 @@ def mining_catalysts(doc, intake):
                      "Volume semester kedua menentukan EBITDA forecast dan target harga.",
                      "Negatif bila semester kedua di bawah laju yang disiratkan panduan"])
     for name in _commodities(intake):
-        points = _series(name)
+        points = _series(name, intake.get("as_of"))
         change = _change_12m(points)
         if change is None:
             continue
@@ -1163,6 +1286,35 @@ def _rank(title):
     return len(PAGE_ORDER)
 
 
+# The bank screening DDM (historical payout on a CAGR screen), not a target.
+SCREENING_GRIDS = ("Sensitivitas DDM (CoE x g)", "Sensitivitas Inverse CoE (CoE x ROE)")
+_SCREENING_TEXT = "DDM Gordon memberi Rp"
+
+
+def drop_screening_values(doc):
+    """Remove screening fair values a reader could take for the target.
+
+    A draft withholds its target (unless it was built as an illustrative
+    internal draft), so it must not print a per-share value elsewhere; and when
+    a scenario DDM sets the target, a second screening DDM grid with another
+    base value only contradicts it. Runs after the harness has fixed the
+    release status, then renumbers exhibits.
+    """
+    meta = doc.get("meta") or {}
+    draft = meta.get("status") == "draft_non_distributable" and not meta.get("illustrative_scenarios")
+    scenario_ddm = str(doc.get("method") or "").startswith("DDM dividen skenario")
+    if not (draft or scenario_ddm):
+        return
+    keep = lambda e: e.get("judul") not in SCREENING_GRIDS
+    doc["exhibits"] = [e for e in doc["exhibits"] if keep(e)]
+    for page in doc.get("bagian") or []:
+        if page.get("exhibit"):
+            page["exhibit"] = [e for e in page["exhibit"] if keep(e)]
+        if draft and page.get("paragraf"):
+            page["paragraf"] = [p for p in page["paragraf"] if _SCREENING_TEXT not in p]
+    renumber(doc)
+
+
 def renumber(doc):
     """Cover exhibits first (price vs IHSG, then Key Financials); the rest
     follow page order."""
@@ -1220,9 +1372,12 @@ def chart_forecast_rows(intake, fc):
         return []
     idr = lambda v: v * fx if isinstance(v, (int, float)) else None
     full = anchor.get("full_year") or {}
+    # The mining interim anchor records net profit without a separate parent
+    # share; Key Financials shows that figure, so the tables must too.
+    parent = full.get("net_profit_attributable")
     rows = [{"label": f"FY{anchor['year'] % 100:02d}F", "revenue": idr(full.get("revenue")),
              "ebitda": idr(full.get("ebitda")), "net": idr(full.get("net_profit")),
-             "net_attr": idr(full.get("net_profit_attributable"))}]
+             "net_attr": idr(parent if parent is not None else full.get("net_profit"))}]
     for r in ((fc.get("outyear_scenario") or {}).get("rows") or []):
         rows.append({"label": r.get("label"), "revenue": idr(r.get("revenue")),
                      "ebitda": idr(r.get("ebitda")), "net": idr(r.get("net_profit")),
@@ -1497,7 +1652,7 @@ def fallback_risks(intake):
                           "sumber": "data keuangan Sectors"})
     if intake.get("model_profile") == "finite_life_mining":
         for name in reversed(_commodities(intake)):
-            change = _change_12m(_series(name))
+            change = _change_12m(_series(name, intake.get("as_of")))
             label = COMMODITY_UNITS.get(name, (name,))[0].lower()
             if change is not None:
                 risks.insert(0, {"kategori": "Komoditas", "judul": f"Harga {label}",

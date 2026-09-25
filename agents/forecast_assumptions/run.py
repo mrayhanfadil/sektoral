@@ -6,17 +6,19 @@ import json
 import re
 import hashlib
 import os
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
+from agents.analyst.run import _FLOW_PHRASES
 from agents.estimator.run import _chat, _response_text
+from app import store
 
 
 DRIVERS = {"revenue_growth_pp", "ebitda_margin_pp", "wacc_bps", "coe_bps", "none"}
 SPEC_PATH = Path(__file__).resolve().parents[2] / "spec" / "Instruksi-Report-v3.md"
-PLAN_STORE = Path(__file__).resolve().parents[2] / "data" / "forecast_plans"
+# Validated plans live in the app database, keyed "<TICKER>-<fingerprint>".
+PLAN_COLLECTION = "forecast_plans"
 # Bump when a subagent's required output changes, so cached plans without the
 # new fields are not reused (2: earnings key_risks; 3: thesis_titles).
 PLAN_SCHEMA = 4
@@ -313,6 +315,27 @@ def _validate(plan, source, require_news_coverage=True):
     return problems
 
 
+# Out-year revenue growth this far above the issuer's own three-year record
+# needs a dated article or guidance, not "momentum" (BBRI: 9-10% a year
+# against 3% from 2022 to 2025).
+HISTORY_GROWTH_TOLERANCE_PP = 5.0
+
+
+def _history_growth_pct(annuals):
+    """Highest of the three-year revenue and earnings CAGR, in percent."""
+    rows = sorted((a for a in annuals or [] if isinstance(a, dict) and a.get("year")),
+                  key=lambda a: a["year"])[-4:]
+    if len(rows) < 4:
+        return None
+    rates = []
+    for key in ("revenue", "earnings"):
+        first, last = rows[0].get(key), rows[-1].get(key)
+        if isinstance(first, (int, float)) and isinstance(last, (int, float)) and first > 0 \
+                and last > 0:
+            rates.append(((last / first) ** (1 / 3) - 1) * 100)
+    return max(rates) if rates else None
+
+
 def _validate_outyears(rows, source):
     """Validate four explicit analyst assumption rows after the FY scenario."""
     problems = []
@@ -353,6 +376,17 @@ def _validate_outyears(rows, source):
             problems.append(f"outyear_scenario[{year}] rationale must use Indonesian text")
     if actual_years != expected_years:
         problems.append("outyear_scenario does not cover the next four fiscal years")
+    history = _history_growth_pct(source.get("annuals"))
+    growths = [row.get("revenue_growth_pct") for row in rows if isinstance(row, dict)
+               and isinstance(row.get("revenue_growth_pct"), (int, float))]
+    cited = any(str(item).startswith("news:") for row in rows if isinstance(row, dict)
+                for item in row.get("source_ids") or [])
+    if (history is not None and growths and not cited and
+            sum(growths) / len(growths) > max(history, 0.0) + HISTORY_GROWTH_TOLERANCE_PP):
+        problems.append(
+            f"outyear revenue growth averages {sum(growths) / len(growths):.1f}% against a "
+            f"three-year record of {history:.1f}%; cite a dated article or guidance for the "
+            "faster path, or keep growth within 5pp of the record")
     if not official.get("source_url") or not _dated_on_or_before(
             official.get("published_at"), source["as_of"]):
         problems.append("outyear_scenario official evidence is missing or future-dated")
@@ -511,7 +545,9 @@ def _validate_thesis(scenario, allowed):
     problems += risk_problems
     texts += risk_texts
     texts.append(str(scenario.get("rationale") or ""))
-    if any(_RECOMMENDATION.search(t) for t in texts):
+    # "Net sell asing" describes what investors did, not advice to the reader
+    # (the analyst agent's rule); BBCA's scenario was rejected on it.
+    if any(_RECOMMENDATION.search(_FLOW_PHRASES.sub(" ", t)) for t in texts):
         problems.append("thesis/risks must not contain recommendation or target-price language")
     if any(re.search(r"[\u4e00-\u9fff]", t) for t in texts):
         problems.append("thesis/risks must use Indonesian text")
@@ -859,6 +895,10 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "economically coherent with the FY anchor; show ramp-up, normalization, "
             "asset transition, and finite-life uncertainty where relevant. Do not "
             "simply repeat one flat value every year without a causal explanation. "
+            "Anchor growth to the issuer's own record in annuals: if the average "
+            "revenue_growth_pct runs more than 5pp above the higher of its three-year "
+            "revenue or earnings CAGR, a row must cite a dated article (news:N) that "
+            "supports the faster path; momentum in one half-year is not enough. "
             "Return compact JSON only; rationale must be at most two short sentences."
         )
         if source.get("model_profile") == "going_concern_fcff":
@@ -1184,7 +1224,7 @@ def evidence_fingerprint(source, spec_sha256):
     return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:20]
 
 
-def run_cached(intake, refresh=False, store_dir=None):
+def run_cached(intake, refresh=False, db=None):
     """Reuse a validated plan for identical evidence so targets are reproducible.
 
     LLM assumptions vary between calls; without this, rerunning the same
@@ -1197,16 +1237,12 @@ def run_cached(intake, refresh=False, store_dir=None):
         # No spec or an intake without ticker/as-of: nothing stable to key a
         # stored plan on, so run the agent without storage.
         return run_live(intake)
-    folder = Path(store_dir or PLAN_STORE)
-    path = folder / f"{intake['ticker']}-{fingerprint}.json"
+    key = f"{intake['ticker']}-{fingerprint}"
     if not refresh:
-        try:
-            stored = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(stored, dict) and stored.get("plan"):
-                stored["reused"] = True
-                return stored
-        except (OSError, ValueError):
-            pass
+        stored = store.get(PLAN_COLLECTION, key, db)
+        if isinstance(stored, dict) and stored.get("plan"):
+            stored["reused"] = True
+            return stored
     result = run_live(intake)
     result["fingerprint"] = fingerprint
     result["reused"] = False
@@ -1217,12 +1253,5 @@ def run_cached(intake, refresh=False, store_dir=None):
                       ("interim_status", "earnings_status", "outyears_status", "stage_status"))
     if result.get("plan") and scenario_ok and result.get("status") in ("validated", "partial"):
         result["stored_at"] = date.today().isoformat()
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            handle, temp = tempfile.mkstemp(dir=folder, suffix=".tmp")
-            with os.fdopen(handle, "w", encoding="utf-8") as stream:
-                json.dump(result, stream, ensure_ascii=False, indent=1)
-            os.replace(temp, path)
-        except OSError:
-            pass
+        store.put(PLAN_COLLECTION, key, result, db)
     return result

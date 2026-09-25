@@ -1,0 +1,74 @@
+{
+  "ticker": "GMFI",
+  "as_of": "2026-09-25",
+  "group": "Perawatan pesawat (MRO) regional dan global",
+  "basis": "GMFI menjual jasa perawatan pesawat: reparasi dan overhaul 82% pendapatan 1H26 dan line maintenance. Tidak ada emiten MRO lain di BEI, sehingga peer adalah MRO tercatat di Singapura dan Amerika Serikat. Tabel peer Sectors ('Airport Operators') berisi jalan tol, pelabuhan dan energi terbarukan.",
+  "peers": [
+    {
+      "symbol": "S59.SI",
+      "name": "SIA Engineering",
+      "market": "SGX",
+      "reason": "MRO airframe, line maintenance dan komponen di Asia; model bisnis paling dekat dengan GMFI.",
+      "yahoo": "S59.SI"
+    },
+    {
+      "symbol": "S63.SI",
+      "name": "ST Engineering",
+      "market": "SGX",
+      "reason": "Segmen commercial aerospace adalah MRO pesawat dan komponen; grup juga memiliki segmen pertahanan dan urban solutions.",
+      "yahoo": "S63.SI"
+    },
+    {
+      "symbol": "AIR",
+      "name": "AAR Corp",
+      "market": "NYSE",
+      "reason": "MRO pesawat dan distribusi suku cadang aftermarket.",
+      "yahoo": "AIR"
+    },
+    {
+      "symbol": "VSEC",
+      "name": "VSE Corporation",
+      "market": "NASDAQ",
+      "reason": "Aftermarket penerbangan: distribusi suku cadang dan MRO komponen.",
+      "yahoo": "VSEC"
+    }
+  ],
+  "excluded": [
+    {
+      "symbol": "JSMR",
+      "reason": "Operator jalan tol."
+    },
+    {
+      "symbol": "CMNP",
+      "reason": "Operator jalan tol."
+    },
+    {
+      "symbol": "META",
+      "reason": "Infrastruktur jalan tol dan air."
+    },
+    {
+      "symbol": "PORT",
+      "reason": "Operator terminal pelabuhan."
+    },
+    {
+      "symbol": "IPCC",
+      "reason": "Terminal kendaraan di pelabuhan."
+    },
+    {
+      "symbol": "IPCM",
+      "reason": "Jasa pandu dan tunda kapal."
+    },
+    {
+      "symbol": "KARW",
+      "reason": "Jasa pelabuhan; laba nyaris nol (P/E 158,8x)."
+    },
+    {
+      "symbol": "BREN",
+      "reason": "Pengembang panas bumi dan angin; P/E 156,9x."
+    },
+    {
+      "symbol": "CASS",
+      "reason": "Ground handling dan kargo bandara, bukan perawatan pesawat."
+    }
+  ]
+}

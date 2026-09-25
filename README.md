@@ -6,7 +6,7 @@ Sektoral helps Indonesian equity analysts turn fragmented company data into a so
 
 The local browser flow is simple: enter an IDX ticker, watch the agents work, then review the market-intelligence view, the company update and the agent trace.
 
-**Planning analyst agent (`agents/analyst/`).** The run starts with an agent that writes a research question and testable hypotheses for the company type, then chooses tool calls turn by turn after seeing each result, and may call tools outside its plan when a result warrants it. Its tools mirror Sectors resources (`find_peers`, `rank_peers`, `quarterly_financials`, `price_history`, `foreign_flow`, `valuation_history`, `news`) but read only the local Sectors snapshot, so a run spends no API credits; a test asserts that the analyst modules never import the network client. An optional `web_news` tool adds dated Tavily headlines from Indonesian business media, limited to the 60 days before the data date (no look-ahead). It is context only: web articles carry no numbers into signals, and every finding and hypothesis verdict must also cite a Sectors signal. Put one or more keys in `.env` as `TAVILY_API_KEYS=key1,key2,...`; requests rotate round-robin and a key that is rejected or out of quota is skipped. Results are saved in `data/web_news/` (git-ignored), so repeating a run spends no Tavily credits; without keys the tool is simply unavailable. The Sectors tools return deterministic signals: peer ranks and medians (the Sectors peer table, or a related company's table that lists the ticker), year-on-year quarter moves, price versus IHSG, volume shifts, foreign-flow streaks, P/E versus history and peers, and a flow-versus-price divergence check. The agent then marks each hypothesis supported, not supported or unanswered, citing signal ids. A validator rejects prose that contains numbers (values are displayed from the cited signals), investment-advice wording or unknown signal ids, and asks the model to repair once; if the model still fails, a labelled host summary is shown instead. Each run is saved to `data/agent_memory/` (git-ignored), briefs the next plan, and drives the "since the last run" diff and the research history list. The status page streams each step live.
+**Planning analyst agent (`agents/analyst/`).** The run starts with an agent that writes a research question and testable hypotheses for the company type, then chooses tool calls turn by turn after seeing each result, and may call tools outside its plan when a result warrants it. Its tools mirror Sectors resources (`find_peers`, `rank_peers`, `quarterly_financials`, `price_history`, `foreign_flow`, `valuation_history`, `news`) but read only the local Sectors snapshot, so a run spends no API credits; a test asserts that the analyst modules never import the network client. An optional `web_news` tool adds dated Tavily headlines from Indonesian business media, limited to the 60 days before the data date (no look-ahead). It is context only: web articles carry no numbers into signals, and every finding and hypothesis verdict must also cite a Sectors signal. Put one or more keys in `.env` as `TAVILY_API_KEYS=key1,key2,...`; requests rotate round-robin and a key that is rejected or out of quota is skipped. Results are saved in the app database (`data/sectoral.db`, git-ignored), so repeating a run spends no Tavily credits; without keys the tool is simply unavailable. The Sectors tools return deterministic signals: peer ranks and medians (the Sectors peer table, or a related company's table that lists the ticker), year-on-year quarter moves, price versus IHSG, volume shifts, foreign-flow streaks, P/E versus history and peers, and a flow-versus-price divergence check. The agent then marks each hypothesis supported, not supported or unanswered, citing signal ids. A validator rejects prose that contains numbers (values are displayed from the cited signals), investment-advice wording or unknown signal ids, and asks the model to repair once; if the model still fails, a labelled host summary is shown instead. Each run is saved to the app database, briefs the next plan, and drives the "since the last run" diff and the research history list. The status page streams each step live.
 
 After that, the research agent selects reads from the ticker's locally cached Sectors data and creates an evidence-linked brief. A deterministic validator checks its citations before the report builder creates the update. If the cache cannot support all sections, the UI labels the result partial and the report shows its evidence limits.
 
@@ -18,17 +18,29 @@ The builder shows Buy, Hold or Sell and a target price only when the selected me
 
 From the repository root, copy `.env.example` to `.env` and set `MINIMAX_API_KEY` (or `SEKTORAL_LLM_API_KEY`) for the research agent. Never commit `.env` or share it in a recording. The workflow uses the local Sectors cache and does not need a Sectors API key at run time.
 
+The quickest start is Docker, which builds the React app and runs it with the Python API and Chromium for PDFs in one image:
+
 ```bash
-python3 -m app.web
+docker compose up --build
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten**, enter a ticker, and select **Mulai riset**. Follow the status page, then open **Buka company update** or **Lihat jejak agent** when the run finishes. If evidence is incomplete, the UI says the analysis is partial. The browser server binds to localhost by default. The agent needs network access to its configured LLM endpoint, but market data comes only from the local Sectors cache. The BBCA CLI and browser workflows have been end-to-end tested on this working checkout; rerun QA on the frozen submission checkout before recording or submitting.
+Without Docker, build the frontend once and run the Python server (Python 3.12, Node 22):
 
-**Report gallery.** `/laporan` lists every finished company update in a reports folder (rating, target, method, status, cover thumbnail, PDF, web version and audit trace), and the landing page features one real report with its method chain. Fill the folder with a batch run, then point the server at it; add `--pdf` so runs started in the browser also produce a PDF and appear in the gallery when they finish:
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/playwright install chromium
+npm --prefix web ci && npm --prefix web run build
+.venv/bin/python -m app.server
+```
+
+For frontend work, run `npm --prefix web run dev` next to the server; Vite serves the app on port 5173 and proxies `/api` and `/files` to it.
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765), select **Coba riset emiten**, enter a ticker, and select **Mulai riset**. Follow the status page, then open **Buka company update** or **Lihat jejak agent** when the run finishes. If evidence is incomplete, the UI says the analysis is partial. The server binds to localhost by default (the Docker port is published on localhost only). The agent needs network access to its configured LLM endpoint, but market data comes only from the local Sectors cache. The BBCA CLI and browser workflows have been end-to-end tested on this working checkout; rerun QA on the frozen submission checkout before recording or submitting.
+
+**Report gallery.** `/laporan` lists every finished company update in a reports folder (rating, target, method, status, cover thumbnail, PDF, web version and audit trace), and the landing page features one real report with its method chain. Fill the folder with a batch run, then point the server at it; add `--pdf` so runs started in the browser also produce a PDF and appear in the gallery when they finish. In Docker the gallery reads `out/reports`, so a batch run there shows up without flags:
 
 ```bash
 python3 -m app.batch BBCA BBRI AMMN SSIA INET POWR JPFA GMFI --jobs 2 --out out/reports --pdf
-python3 -m app.web --reports out/reports --pdf
+.venv/bin/python -m app.server --reports out/reports --pdf
 ```
 
 For a terminal-only run, use the one-command CLI below. It writes the HTML report and trace to `out/demo/`; `--pdf` is optional and requires PDF support. Omit it to use HTML only.
@@ -45,7 +57,7 @@ For an internal mining draft with the historical extrapolation and valuation scr
 
 To opt into the validated FY scenario as a formal target and rating, use `--analyst-target`, for example `python3 -m app.research AMMN --out out/AMMN-formal --pdf --as-of 2026-09-24 --analyst-target`. This route requires a validated forecast agent scenario, an official interim release, a fresh post-release close and FX quote, an official balance-sheet bridge, and 6x/8x/10x sensitivity. The selected 8x multiple is an analyst assumption; the PDF discloses missing LoM/SOTP and the trace preserves its original blockers. A separate out-year agent pass supplies bounded FY+1 to FY+4 growth and margin assumptions; the deterministic engine calculates earnings from them and labels the results as analyst scenarios, not physical LoM forecasts.
 
-A validated forecast plan is stored in `data/forecast_plans/` (git-ignored) under a fingerprint of its evidence: the official release, dated headlines, spec version and model. Rerunning a ticker on the same evidence reuses the plan, so the target price does not drift between LLM calls; new evidence triggers a fresh agent pass, and `--refresh-assumptions` forces one. The formal route needs a dated USD/IDR quote in `data/fx_usdidr.json`; refresh it with `python3 scripts/refresh_usd_idr.py` (requires `yfinance`).
+A validated forecast plan is stored in the app database under a fingerprint of its evidence: the official release, dated headlines, spec version and model. Rerunning a ticker on the same evidence reuses the plan, so the target price does not drift between LLM calls; new evidence triggers a fresh agent pass, and `--refresh-assumptions` forces one. The formal route needs a dated USD/IDR quote in `data/fx_usdidr.json`; refresh it with `python3 scripts/refresh_usd_idr.py` (requires `yfinance`).
 
 Every report also carries sections built directly from the local Sectors snapshot (`app/report_extras.py`): commodity prices and the Sectors sub-sector report, the Sectors peer table with P/E and P/B cross-checks, major shareholders and foreign flow, and multi-year income statement, balance sheet and ratios. Mining targets add a commodity-price x USD/IDR sensitivity recomputed through EBITDA, net profit and the target, and a table of interim output against full-year guidance. Pages follow the spec order and exhibits are numbered in reading order.
 
@@ -62,11 +74,14 @@ Every report also carries sections built directly from the local Sectors snapsho
 
 | Path | Purpose |
 |---|---|
-| `app/` | Deterministic report intake, forecast, valuation, narrative, and rendering |
+| `app/` | Deterministic report intake, forecast, valuation, narrative, and rendering; `app/server.py` is the FastAPI web server |
+| `web/` | React + TypeScript + Tailwind web app (landing, research, run status, gallery, audit trace) |
+| `Dockerfile`, `compose.yaml` | One image with the built web app, the Python API and Chromium for PDFs |
 | `agents/analyst/` | Planning analyst agent: local-data tools, peer/anomaly signals, hypothesis verdicts, run memory |
 | `agents/research/` | Cache-constrained research agent, evidence checks, and trace data |
 | `data/sectors_cache.db` | Local Sectors cache used as the only market-data source |
 | `data/issuer_evidence/` | Dated local copies of metrics transcribed from official issuer releases |
+| `data/sectoral.db` | App database (git-ignored): agent memory, forecast plans, fetched news, peer and FX snapshots, and the report, trace and manifest of every run. Import older JSON caches with `python -m app.store_import` |
 | `spec/` | Report and output requirements |
 | `docs/` | Sectors API/MCP reference, recipes, and implementation notes |
 | `docs/hackathon/` | Rules, submission checklist, and team operations |

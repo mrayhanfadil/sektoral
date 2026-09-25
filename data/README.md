@@ -12,13 +12,50 @@ Export of ONLY the `sectors_cache` table from
   `python3 -m app.topup <paket> <target> --live` (butuh SECTORS_API_KEY,
   tercatat di `data/credit_log.jsonl`). Tanpa itu, upstream tidak tersentuh.
 
-## Peer fundamentals from Yahoo Finance (`data/yahoo_fundamentals/`, gitignored)
+## App database (`data/sectoral.db`, gitignored)
 
-Peer EV/EBITDA needs each peer's debt, cash and EBITDA. When a peer's own
+Everything the app writes at run time lives in one SQLite file: agent memory,
+forecast plans, fetched news and article text, Yahoo peer and USD/IDR
+snapshots, and the report, trace and manifest of every run (see `app/store.py`,
+`app/outputs.py`). The hand-curated packs in this folder (`issuer_evidence/`,
+`idx_history/`, `market_quotes/`, `analyst_scenarios/`, `method_overrides/`,
+`rating_history/`) stay reviewed JSON in git. Import JSON caches written by older
+versions with `python -m app.store_import`.
+
+## Peer fundamentals from Yahoo Finance (`yahoo_fundamentals` in the app database)
+
+Peer EV/EBITDA needs each peer's debt, cash and EBITDA (the last four quarters
+when Yahoo has them, else the last fiscal year). When a peer's own
 `/company/report/<peer>/` is not in the cache, the model reads a dated Yahoo
 Finance snapshot instead (`python3 -m app.peer_fundamentals --peers-of INET`).
 Those rows stay labelled Yahoo Finance in every exhibit and note; they are
 never written into `sectors_cache.db` and never called Sectors data.
+
+## Curated peer groups (`peer_groups/`)
+
+The Sectors peer table is the issuer's sub-sector, not its business model
+(GMFI's "Airport Operators" holds toll roads and BREN). A reviewed pack per
+issuer names the comparable peers and the excluded ones, each with a reason.
+Peers in the issuer's Sectors table keep that row; others (including foreign
+listings) come from a dated Yahoo snapshot fetched with
+`python -m app.peer_fundamentals --group <T>`, valued in their own reporting
+currency. With fewer than three peers that have data, the report falls back
+to the Sectors table and says so.
+
+## Commodity prices from Yahoo Finance (`commodity_prices` in the app database)
+
+The mine valuation prices metal at the average of the last 12 calendar months.
+The Sectors series stays the source while its last point is within 45 days of
+the Report Date; when it is older (the copper series in this snapshot ends on
+15 Feb 2026) the dated Yahoo series (COMEX `HG=F`, `GC=F`) is used and labelled.
+With neither fresh, SOTP/LoM is not adequate. Refresh explicitly:
+`python -m app.commodity`.
+
+## Closing prices (`market_quotes/`)
+
+Each pack keeps the last ten Yahoo daily closes; a run takes the latest close on
+or before its Report Date. Write them for review with
+`python -m app.market_quote --as-of 2026-09-24 AMMN BBRI ...`.
 
 ## Use
 

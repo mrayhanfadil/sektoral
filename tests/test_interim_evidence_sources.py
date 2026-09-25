@@ -23,7 +23,7 @@ from app.release import assess_release  # noqa: E402
 
 EVIDENCE_DIR = ROOT / "data" / "issuer_evidence"
 TARGET_TICKERS = ["BBRI", "INET", "JPFA", "POWR", "SIDO", "SSIA"]
-VERIFIED_TICKERS = ["BBRI", "INET", "JPFA", "POWR", "SSIA"]
+VERIFIED_TICKERS = ["BBRI", "INET", "JPFA", "POWR", "SIDO", "SSIA"]
 ALL_KNOWN_TICKERS = ["AMMN", "BBRI", "GMFI", "INET", "JPFA", "POWR", "SIDO", "SSIA"]
 REPORT_AS_OF = "2026-09-22"
 
@@ -145,13 +145,23 @@ def test_evidence_loader_integration(ticker):
     assert loaded["latest_actual"]["published_at"] <= REPORT_AS_OF
 
 
-def test_sido_unverified_publication_date_is_not_loaded():
+def test_sido_publication_date_is_a_corroborated_upper_bound():
+    """The IDX filing date could not be read, so the pack dates the mirrored
+    statement at the first independent report of the same figures."""
+    actual = json.loads((EVIDENCE_DIR / "SIDO.json").read_text(encoding="utf-8"))["latest_actual"]
+    assert actual["published_at"] == "2026-08-03"
+    assert actual["corroboration_url"].startswith("https://")
+    assert "batas atas" in actual["published_at_basis"]
+    assert issuer_evidence.load("SIDO", REPORT_AS_OF) is not None
+    assert issuer_evidence.load("SIDO", "2026-08-02") is None
+
+
+def test_blocked_evidence_pack_is_not_loaded(tmp_path, monkeypatch):
     pack = json.loads((EVIDENCE_DIR / "SIDO.json").read_text(encoding="utf-8"))
-    assert pack["evidence_status"] == "blocked"
-    assert "publication date" in pack["evidence_status_reason"].lower()
+    pack.update(evidence_status="blocked", evidence_status_reason="publication date unverified")
+    (tmp_path / "SIDO.json").write_text(json.dumps(pack), encoding="utf-8")
+    monkeypatch.setattr(issuer_evidence, "ROOT", tmp_path)
     assert issuer_evidence.load("SIDO", REPORT_AS_OF) is None
-    intake_data, _ = intake.load("SIDO")
-    assert intake_data["official_evidence"] is None
 
 
 @pytest.mark.parametrize("ticker", VERIFIED_TICKERS)

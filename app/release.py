@@ -29,6 +29,8 @@ from numbers import Real
 import re
 from urllib.parse import urlsplit
 
+from . import method_chain
+
 
 OPERATING_BRIDGE_STAGES = (
     "ore_access",
@@ -434,7 +436,6 @@ def assess_chain(profile, intake, forecast, chain):
     Common data blockers always apply; the skipped methods' own gaps stay in
     the chain trace instead of blocking the selected fallback.
     """
-    from . import method_chain
     blockers = common_blockers(profile, intake, forecast)
     chain_blocker = method_chain.summary_blocker(chain or {})
     if chain_blocker:
@@ -541,7 +542,8 @@ def assess_earnings_led(intake, forecast, valuation, assumption_status):
         "blockers": blockers,
         "limitations": ["EPS FY adalah skenario analis dari aktual 1H + asumsi H2, "
                         "bukan forecast driver terekonsiliasi",
-                        "PER peer TTM dari data Sectors; peer dianggap sebanding",
+                        f"PER peer TTM dari {method_chain.peer_multiple_source(intake)}; "
+                        "peer dianggap sebanding",
                         "arus kas, capex dan neraca setelah periode interim belum dimodelkan"],
     }
 
@@ -691,8 +693,12 @@ def assess_holding_sotp(intake, forecast, valuation, assumption_status):
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "Holding SOTP (listed stakes at market, rest at book)",
         "blockers": blockers,
-        "limitations": ["segmen tanpa harga pasar dinilai pada nilai buku (lahan industri pada "
-                        "biaya perolehan), sehingga nilainya konservatif",
+        "limitations": [("tanah untuk pengembangan dinilai dengan RNAV landbank; porsi dapat "
+                         "dijual dan laju penjualan adalah asumsi analis, hotel dan utilitas "
+                         "pada nilai buku")
+                        if (detail.get("landbank") or {}) else
+                        "segmen tanpa harga pasar dinilai pada nilai buku (lahan industri pada "
+                        "biaya perolehan)",
                         "diskon holding 20-30% adalah asumsi analis untuk sensitivitas",
                         "DCF konsolidasi atas skenario analis hanya referensi"],
     }
@@ -744,13 +750,15 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
         "method": "SOTP/LoM (asset NAV, no perpetual terminal)",
         "blockers": blockers,
         "limitations": [
-            "harga rata-rata 12 bulan data Sectors dianggap datar sepanjang umur tambang; "
+            "dek harga rata-rata 12 bulan kalender terakhir dianggap datar sepanjang umur tambang; "
             "harga cadangan JORC emiten ditampilkan sebagai sensitivitas",
             "capex dan jadwal Elang tidak diungkapkan emiten; capex dari riset broker dan "
-            "faktor risiko 50% adalah asumsi analis",
-            "logam di atas kapasitas smelter dijual sebagai konsentrat dengan asumsi izin "
-            "ekspor diperpanjang",
-            "cadangan Elang sesudah 2050 dan modal kerja tidak dinilai"],
+            "probabilitas pengembangan 50% adalah asumsi analis",
+            "tanpa izin ekspor, umpan pabrik dibatasi kapasitas smelter sehingga jadwal pit, "
+            "stockpile dan Elang lebih lambat dari jadwal emiten; kasus ekspor diperpanjang "
+            "ditampilkan sebagai sensitivitas",
+            "cadangan Elang sesudah 2050 dan modal kerja tidak dinilai (penambangan sampai "
+            "cadangan habis ditampilkan sebagai sensitivitas)"],
     }
 
 
@@ -788,8 +796,8 @@ def assess_ev_ebitda_scenario(intake, forecast, valuation, assumption_status):
         "blockers": blockers,
         "limitations": ["EBITDA FY adalah skenario analis (aktual 1H resmi + margin EBITDA "
                         "asumsi agen), bukan forecast driver terekonsiliasi",
-                        f"EV/EBITDA peer FY terakhir dari {detail.get('peer_source') or 'sumber peer'} "
-                        "(market cap tabel peer Sectors + utang - kas laporan peer) diterapkan "
+                        f"EV/EBITDA peer terakhir (12 bulan terakhir bila tersedia) dari {detail.get('peer_source') or 'sumber peer'} "
+                        "(kapitalisasi pasar + utang - kas laporan peer) diterapkan "
                         "ke EBITDA forward; peer dianggap sebanding",
                         "kas, utang dan minoritas dari satu neraca; arus kas dan neraca "
                         "setelahnya belum dimodelkan"],
@@ -831,7 +839,8 @@ def assess_pbv_book(intake, forecast, valuation, assumption_status):
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "Relative P/BV on reported book (asset-heavy)",
         "blockers": blockers,
-        "limitations": ["P/B peer TTM dari data Sectors; peer dianggap sebanding",
+        "limitations": [f"P/B peer TTM dari {method_chain.peer_multiple_source(intake)}; "
+                        "peer dianggap sebanding",
                         "nilai buku terlapor pada neraca interim resmi, tanpa revaluasi aset",
                         "skenario laba FY adalah konteks tesis, bukan dasar target"],
     }
@@ -938,6 +947,6 @@ def assess_assumption_led(intake, forecast, valuation, assumption_status,
         "method": "FY26F EV/EBITDA 8x",
         "blockers": blockers,
         "underlying_sotp": underlying_release,
-        "limitations": ["8x is an analyst assumption, not a verified peer multiple",
-                        "asset-level LoM/SOTP and later cash/debt movements are not modeled"],
+        "limitations": ["multiple 8x adalah asumsi analis, bukan multiple peer tervalidasi",
+                        "LoM/SOTP per aset serta pergerakan kas dan utang sesudahnya belum dimodelkan"],
     }

@@ -59,3 +59,12 @@ logs/
 # Local notes
 TODO.local.md
 *.local.*
+
+# App database (runtime caches and run outputs); see app/store.py.
+data/sectoral.db
+data/sectoral.db-*
+
+# Local tool caches
+.impeccable/hook.cache.json
+web/.impeccable/
+web/tsconfig.tsbuildinfo

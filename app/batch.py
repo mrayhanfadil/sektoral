@@ -1,8 +1,8 @@
 """Run the end-to-end research pipeline for several tickers in parallel.
 
 Each ticker is its own ``app.research`` process (separate interpreter,
-LLM/Tavily clients and log file); per-ticker cache files are written
-atomically, so two runs never share mutable state. Keep --jobs small: every
+LLM/Tavily clients and log file); shared caches live in the app database,
+whose writes are atomic, so two runs never share half-written state. Keep --jobs small: every
 ticker already runs two LLM subagents at once, so --jobs 2 means about four
 concurrent LLM calls.
 
@@ -11,12 +11,15 @@ concurrent LLM calls.
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app import outputs  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -34,11 +37,9 @@ def _command(ticker, args):
 
 
 def summarize(ticker, out):
-    """One result row from the ticker's report JSON (None when missing)."""
-    path = Path(out) / f"{ticker}.json"
-    try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    """One result row from the ticker's stored report document."""
+    doc = outputs.load(outputs.REPORT, out, ticker)
+    if not isinstance(doc, dict):
         return {"ticker": ticker, "status": "no report"}
     meta = doc.get("meta") or {}
     return {"ticker": ticker, "status": meta.get("status"), "rating": meta.get("rating"),
@@ -84,7 +85,7 @@ def main(argv=None):
                   f"{row.get('tp') or ''} blockers={len(row.get('blockers') or [])}", flush=True)
     order = {t.upper(): i for i, t in enumerate(args.tickers)}
     rows.sort(key=lambda r: order[r["ticker"]])
-    (Path(args.out) / "summary.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False))
+    outputs.save(outputs.BATCH, args.out, "", rows)
     return 0 if all(r["exit"] == 0 for r in rows) else 1
 
 

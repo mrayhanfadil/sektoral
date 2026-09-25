@@ -9,11 +9,13 @@ import json
 import sqlite3
 from pathlib import Path
 from app import cache as report_cache
+from app import store
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 CACHE_DB = ROOT / "data" / "sectors_cache.db"
-DRIVERS_DIR = ROOT / "data" / "drivers"
-NEWS_ANALYSIS_DIR = ROOT / "data" / "news_analysis"
+# Gated estimator output and its news narrative, in the app database.
+DRIVERS_COLLECTION = "drivers"
+NEWS_ANALYSIS_COLLECTION = "news_analysis"
 
 def _like(ticker):
     return f"%/{ticker.upper()}/%"
@@ -92,20 +94,16 @@ def write_drivers(ticker, doc):
     problems = gate(doc)
     if problems:
         raise ValueError("gate menolak drivers: " + "; ".join(problems))
-    DRIVERS_DIR.mkdir(parents=True, exist_ok=True)
-    p = DRIVERS_DIR / f"{ticker.upper()}.json"
-    p.write_text(json.dumps(doc, indent=1, ensure_ascii=False))
-    return p
+    store.put(DRIVERS_COLLECTION, ticker.upper(), doc)
+    return f"{DRIVERS_COLLECTION}/{ticker.upper()}"
 
 
 def write_news_analysis(ticker, doc):
     """Persist only the validated news narrative block, separate from drivers."""
-    NEWS_ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
     payload = {"ticker": ticker.upper(),
                "news_analysis": doc.get("news_analysis") or []}
-    p = NEWS_ANALYSIS_DIR / f"{ticker.upper()}.json"
-    p.write_text(json.dumps(payload, indent=1, ensure_ascii=False))
-    return p
+    store.put(NEWS_ANALYSIS_COLLECTION, ticker.upper(), payload)
+    return f"{NEWS_ANALYSIS_COLLECTION}/{ticker.upper()}"
 
 
 TOOLS = {

@@ -1,0 +1,84 @@
+{
+  "ticker": "POWR",
+  "as_of": "2026-09-25",
+  "group": "Produsen listrik swasta untuk pelanggan industri",
+  "basis": "POWR menjual listrik dari pembangkit gas ke pelanggan kawasan industri Cikarang dan sebagian ke PLN. Pembanding terdekat adalah produsen listrik Thailand yang menjual listrik dan uap ke kawasan industri (small power producer) dan PGEO sebagai produsen listrik swasta tercatat di BEI yang laba dan arus kasnya stabil. Tabel peer Sectors berisi pengembang energi terbarukan dan holding dengan P/E 50-190x.",
+  "peers": [
+    {
+      "symbol": "PGEO",
+      "name": "Pertamina Geothermal Energy",
+      "market": "IDX",
+      "reason": "Produsen listrik swasta dengan kontrak jual beli jangka panjang dan laba stabil di BEI.",
+      "yahoo": "PGEO.JK"
+    },
+    {
+      "symbol": "BGRIM",
+      "name": "B.Grimm Power",
+      "market": "SET",
+      "reason": "Pembangkit gas kogenerasi yang menjual listrik dan uap ke pelanggan kawasan industri Thailand; model paling dekat dengan POWR.",
+      "yahoo": "BGRIM.BK"
+    },
+    {
+      "symbol": "GPSC",
+      "name": "Global Power Synergy",
+      "market": "SET",
+      "reason": "Pembangkit kogenerasi untuk pelanggan industri dan produsen listrik ke EGAT.",
+      "yahoo": "GPSC.BK"
+    },
+    {
+      "symbol": "RATCH",
+      "name": "RATCH Group",
+      "market": "SET",
+      "reason": "Portofolio pembangkit gas dan terbarukan dengan kontrak jangka panjang.",
+      "yahoo": "RATCH.BK"
+    },
+    {
+      "symbol": "EGCO",
+      "name": "Electricity Generating",
+      "market": "SET",
+      "reason": "Portofolio pembangkit dengan kontrak jangka panjang; laba 12 bulan terakhir rendah sehingga P/E di atas rentang valuasi dan tidak dipakai, EV/EBITDA tetap.",
+      "yahoo": "EGCO.BK"
+    },
+    {
+      "symbol": "GULF",
+      "name": "Gulf Development",
+      "market": "SET",
+      "reason": "Pengembang pembangkit gas IPP dan SPP untuk kawasan industri; valuasi memuat portofolio infrastruktur lain.",
+      "yahoo": "GULF.BK"
+    }
+  ],
+  "excluded": [
+    {
+      "symbol": "BREN",
+      "reason": "Pengembang panas bumi dan angin dengan P/E 156,9x, dinilai atas pertumbuhan."
+    },
+    {
+      "symbol": "CDIA",
+      "reason": "Holding infrastruktur grup Chandra Asri, bukan produsen listrik murni."
+    },
+    {
+      "symbol": "ARKO",
+      "reason": "Pengembang PLTA kecil dengan P/E 188,1x."
+    },
+    {
+      "symbol": "KEEN",
+      "reason": "Pengembang PLTA dan PLTBm kecil."
+    },
+    {
+      "symbol": "HGII",
+      "reason": "Investasi pembangkit kecil; laba nyaris nol."
+    },
+    {
+      "symbol": "LAPD",
+      "reason": "Rugi."
+    },
+    {
+      "symbol": "MPOW",
+      "reason": "Rugi."
+    },
+    {
+      "symbol": "TGRA",
+      "reason": "Rugi."
+    }
+  ]
+}

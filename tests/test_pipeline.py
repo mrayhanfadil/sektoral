@@ -14,7 +14,8 @@ from app import build as B  # noqa: E402
 
 def test_ammn_end_to_end(tmp_path):
     doc = B.build("AMMN", tmp_path)
-    assert (tmp_path / "AMMN.json").exists()
+    assert __import__("app.outputs").outputs.load("report", tmp_path, "AMMN")["meta"]["ticker"] == "AMMN"
+    assert not (tmp_path / "AMMN.json").exists()  # structured output lives in the database
     assert (tmp_path / "AMMN.html").exists()
     assert set(doc) >= {"meta", "cover", "bagian", "tabel_asumsi", "log_gate",
                         "catatan_metodologi", "exhibits"}
@@ -80,7 +81,7 @@ def test_unknown_ticker_refused(tmp_path):
 def test_forecast_accounting_identity(tmp_path):
     doc = B.build("BBCA", tmp_path)
     assert doc["meta"]["ticker"] == "BBCA"
-    raw = json.loads((tmp_path / "BBCA.json").read_text())
+    raw = __import__("app.outputs").outputs.load("report", tmp_path, "BBCA")
     assert raw["log_gate"]["S2"]["S2.5_neraca"] == "lolos"
 
 

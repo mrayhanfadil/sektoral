@@ -177,7 +177,8 @@ def test_non_mining_issuer_gets_an_industry_and_sentiment_page(tmp_path):
     doc = B.build("JPFA", tmp_path, as_of="2026-09-24")
     page = next(p for p in doc["bagian"] if p["judul"] == "Industri dan sentimen")
     table = page["exhibit"][0]
-    assert table["judul"].startswith("Kondisi sub-sektor")
+    # JPFA has a curated peer group, so the table reads the group, not the sub-sector.
+    assert table["judul"].startswith("Kondisi grup peer Integrator pakan dan unggas")
     assert [r[0] for r in table["data"]["rows"]][:2] == [
         "Kapitalisasi pasar (Rp triliun)", "Perubahan kapitalisasi pasar 1 tahun"]
     text = " ".join(page["paragraf"])

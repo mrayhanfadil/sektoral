@@ -123,6 +123,13 @@ def peer_ev_sales(peers) -> list[float]:
 PEER_EV_SOURCE_NAMES = {"sectors": "data Sectors", "yahoo": "Yahoo Finance"}
 
 
+def peer_multiple_source(intake) -> str:
+    """Where the peer P/E and P/B come from: a curated group or the Sectors table."""
+    basis = str((intake or {}).get("peer_basis") or "")
+    return ("grup peer kurasi (tabel peer Sectors dan snapshot Yahoo Finance)"
+            if basis.startswith("grup peer kurasi") else "data Sectors")
+
+
 def peer_ev_sources(peers) -> str:
     """Where the peer EVs in the median come from: Sectors, Yahoo Finance, or both.
 
@@ -242,9 +249,9 @@ def ev_ebitda_peer(peers, ebitda_fwd, shares, market_cap, net_debt=0.0,
     return candidate(
         "ev_ebitda_peer", per_share=ps, per_share_down=down,
         reasons=scale_reasons(ps, shares, market_cap) if _finite(ps) else [],
-        labels=[f"EV/EBITDA peer dari {peer_ev_sources(peers)} (market cap tabel peer Sectors "
-                "+ utang - kas, EBITDA FY terakhir laporan peer) diterapkan ke EBITDA forward; "
-                "peer dianggap sebanding", _bridge_label(net_debt_source)],
+        labels=[f"EV/EBITDA peer dari {peer_ev_sources(peers)} (kapitalisasi pasar + utang - kas, "
+                "EBITDA terakhir laporan peer, 12 bulan terakhir bila tersedia) diterapkan ke "
+                "EBITDA forward; peer dianggap sebanding", _bridge_label(net_debt_source)],
         detail={"median_ev_ebitda": median, "q1_ev_ebitda": q1,
                 "peer_count": len(mults), "ebitda_fwd": ebitda_fwd, "net_debt": nd,
                 "net_debt_source": net_debt_source, "peer_source": peer_ev_sources(peers)})
@@ -321,7 +328,7 @@ def ps_peer(peers, revenue_fwd, shares, market_cap) -> dict:
 HOLDING_DISCOUNTS = (0.0, 0.2, 0.3)
 
 
-def holding_sotp(listed, parent_equity, shares) -> dict:
+def holding_sotp(listed, parent_equity, shares, landbank=None) -> dict:
     """Holding SOTP (framework Method Gate 2): listed subsidiaries at market value
     times the stake held, the rest of the group at book.
 
@@ -330,6 +337,8 @@ def holding_sotp(listed, parent_equity, shares) -> dict:
     equity less the stake's share of each listed subsidiary's book equity,
     so no asset is counted twice. Holding discounts are judgement and are
     shown as sensitivity only (base 0%, downside the deepest discount).
+    ``landbank`` (app.landbank.value) replaces the book value of undeveloped
+    land with its RNAV; only the owner's stake of the difference is added.
     """
     reasons = []
     if not listed:
@@ -348,12 +357,14 @@ def holding_sotp(listed, parent_equity, shares) -> dict:
     if reasons:
         return candidate("holding_sotp", reasons=reasons)
     remainder = parent_equity - sum(c["book_share"] for c in components)
-    total = sum(c["market_value"] for c in components) + remainder
+    uplift = (landbank or {}).get("uplift_attributable") or 0.0
+    total = sum(c["market_value"] for c in components) + remainder + uplift
     per_share = total / shares
     discounts = [{"discount": d, "per_share": per_share * (1 - d)} for d in HOLDING_DISCOUNTS]
     return candidate("holding_sotp", per_share=per_share,
                      per_share_down=discounts[-1]["per_share"],
                      detail={"components": components, "remainder_book": remainder,
+                             "landbank": landbank, "landbank_uplift": uplift,
                              "parent_equity": parent_equity, "total": total,
                              "shares": shares, "discounts": discounts})
 
@@ -512,6 +523,8 @@ _READER_REASONS = (
     ("terminal FCFF is not positive", "FCFF terminal tidak positif"),
     ("enterprise-to-equity bridge", "jembatan EV ke ekuitas belum lengkap"),
     ("equity value is not positive", "nilai ekuitas tidak positif"),
+    ("fixed assets below half of total assets",
+     "aset tetap kurang dari separuh total aset; P/BV bukan metode untuk emiten aset berat"),
     ("belum tersedia", "belum dimodelkan"),
     ("tidak dapat dinilai", "tidak dapat dinilai"),
 )

@@ -1,0 +1,50 @@
+{
+  "ticker": "INET",
+  "currency": "IDR",
+  "price": 316,
+  "date": "2026-09-24",
+  "source_title": "Yahoo Finance INET.JK daily close",
+  "source_url": "https://finance.yahoo.com/quote/INET.JK/history/",
+  "closes": [
+    {
+      "date": "2026-09-11",
+      "price": 344
+    },
+    {
+      "date": "2026-09-14",
+      "price": 332
+    },
+    {
+      "date": "2026-09-15",
+      "price": 322
+    },
+    {
+      "date": "2026-09-16",
+      "price": 316
+    },
+    {
+      "date": "2026-09-17",
+      "price": 338
+    },
+    {
+      "date": "2026-09-18",
+      "price": 332
+    },
+    {
+      "date": "2026-09-21",
+      "price": 322
+    },
+    {
+      "date": "2026-09-22",
+      "price": 316
+    },
+    {
+      "date": "2026-09-23",
+      "price": 328
+    },
+    {
+      "date": "2026-09-24",
+      "price": 316
+    }
+  ]
+}

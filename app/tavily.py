@@ -25,9 +25,12 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from . import store
+
 ROOT = Path(__file__).resolve().parent.parent
 ENDPOINT = "https://api.tavily.com/search"
-STORE_DIR = ROOT / "data" / "web_news"
+# Search results are kept in the app database so a rerun spends no credits.
+COLLECTION = "web_news"
 # Deep dive: a window that reaches back past the 1H release, 10 hits per query.
 WINDOW_DAYS = 120
 MAX_RESULTS = 10
@@ -248,7 +251,7 @@ def _items_from_payload(payload, start, end):
 
 
 def news_context(ticker, company_name, end_date, *, ring=None, post=None,
-                 store_dir=None, profile=None, max_queries=None, industry=None):
+                 db=None, profile=None, max_queries=None, industry=None):
     """Dated headlines about one issuer, published within the window ending ``end_date``.
 
     Runs the base issuer query plus profile-relevant future-driver queries
@@ -265,31 +268,25 @@ def news_context(ticker, company_name, end_date, *, ring=None, post=None,
     queries = build_queries(ticker, company_name, profile, industry)
     if max_queries is not None:
         queries = queries[:max(1, int(max_queries))]
-    folder = Path(store_dir or STORE_DIR)
     key = hashlib.sha1(f"{'|'.join(queries)}|{start}|{end}".encode()).hexdigest()[:16]
-    stored = folder / f"{ticker}-{end.isoformat()}-{key}.json"
-    try:
-        cached = json.loads(stored.read_text(encoding="utf-8"))
+    stored_key = f"{ticker}-{end.isoformat()}-{key}"
+    cached = store.get(COLLECTION, stored_key, db)
+    if isinstance(cached, dict):
         # Backfill newer fields for caches written by the single-query version.
         cached.setdefault("queries", [cached.get("query")] if cached.get("query") else queries)
         cached.setdefault("profile", profile)
         return dict(cached, from_store=True)
-    except (OSError, ValueError):
-        pass
     # Reuse the legacy single-query cache for the base query so enabling
     # profile hints does not re-spend credits for the base result set.
     legacy_items, legacy_from_store = [], False
     if len(queries) > 1:
         base_key = hashlib.sha1(f"{queries[0]}|{start}|{end}".encode()).hexdigest()[:16]
-        legacy_path = folder / f"{ticker}-{end.isoformat()}-{base_key}.json"
-        try:
-            legacy_cached = json.loads(legacy_path.read_text(encoding="utf-8"))
-            for row in legacy_cached.get("items") or []:
-                if isinstance(row, dict) and row.get("url") and row.get("date"):
-                    legacy_items.append({**row, "query": queries[0]})
-            legacy_from_store = bool(legacy_items)
-        except (OSError, ValueError):
-            pass
+        legacy_cached = store.get(COLLECTION, f"{ticker}-{end.isoformat()}-{base_key}", db)
+        legacy_rows = legacy_cached.get("items") if isinstance(legacy_cached, dict) else None
+        for row in legacy_rows or []:
+            if isinstance(row, dict) and row.get("url") and row.get("date"):
+                legacy_items.append({**row, "query": queries[0]})
+        legacy_from_store = bool(legacy_items)
     merged, seen_urls = [], set()
     query_meta, failures = [], []
     for qi, query in enumerate(queries):
@@ -333,9 +330,5 @@ def news_context(ticker, company_name, end_date, *, ring=None, post=None,
               "profile": profile, "partial_failures": failures,
               "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if not failures:  # never cache a partial result; retry on the next run
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            stored.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
-        except OSError:
-            pass
+        store.put(COLLECTION, stored_key, result, db)
     return dict(result, from_store=False)

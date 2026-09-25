@@ -1,0 +1,112 @@
+{
+  "ticker": "AMMN",
+  "as_of": "2026-09-25",
+  "group": "Produsen tembaga dan tembaga-emas regional dan global",
+  "basis": "AMMN adalah produsen tembaga-emas terintegrasi (tambang, smelter, PMR). Di BEI hanya MDKA yang memproduksi tembaga; peer lain adalah produsen tembaga tercatat di Hong Kong, Australia, Inggris dan Amerika Utara, mengikuti daftar peer riset BRI Danareksa (29 Juni 2026). Tabel peer Sectors berisi penambang emas, nikel dan timah.",
+  "peers": [
+    {
+      "symbol": "MDKA",
+      "name": "Merdeka Copper Gold",
+      "market": "IDX",
+      "reason": "Tambang tembaga Wetar dan emas Tujuh Bukit; P/E tidak bermakna karena rugi.",
+      "yahoo": "MDKA.JK"
+    },
+    {
+      "symbol": "FCX",
+      "name": "Freeport-McMoRan",
+      "market": "NYSE",
+      "reason": "Produsen tembaga-emas terbesar, pemilik Grasberg.",
+      "yahoo": "FCX"
+    },
+    {
+      "symbol": "SCCO",
+      "name": "Southern Copper",
+      "market": "NYSE",
+      "reason": "Produsen tembaga dengan cadangan panjang di Peru dan Meksiko.",
+      "yahoo": "SCCO"
+    },
+    {
+      "symbol": "ANTO",
+      "name": "Antofagasta",
+      "market": "LSE",
+      "reason": "Produsen tembaga Chili.",
+      "yahoo": "ANTO.L"
+    },
+    {
+      "symbol": "LUN",
+      "name": "Lundin Mining",
+      "market": "TSX",
+      "reason": "Produsen tembaga menengah.",
+      "yahoo": "LUN.TO"
+    },
+    {
+      "symbol": "HBM",
+      "name": "Hudbay Minerals",
+      "market": "NYSE",
+      "reason": "Produsen tembaga-emas menengah.",
+      "yahoo": "HBM"
+    },
+    {
+      "symbol": "ZIJIN",
+      "name": "Zijin Mining",
+      "market": "HKEX",
+      "reason": "Produsen tembaga dan emas Tiongkok.",
+      "yahoo": "2899.HK"
+    },
+    {
+      "symbol": "MMG",
+      "name": "MMG",
+      "market": "HKEX",
+      "reason": "Produsen tembaga (Las Bambas, Kinsevere).",
+      "yahoo": "1208.HK"
+    },
+    {
+      "symbol": "CMOC",
+      "name": "CMOC Group",
+      "market": "HKEX",
+      "reason": "Produsen tembaga dan kobalt.",
+      "yahoo": "3993.HK"
+    },
+    {
+      "symbol": "SFR",
+      "name": "Sandfire Resources",
+      "market": "ASX",
+      "reason": "Produsen tembaga menengah.",
+      "yahoo": "SFR.AX"
+    }
+  ],
+  "excluded": [
+    {
+      "symbol": "EMAS",
+      "reason": "Pengembang tambang emas; rugi."
+    },
+    {
+      "symbol": "BRMS",
+      "reason": "Penambang emas; P/E 150x."
+    },
+    {
+      "symbol": "ANTM",
+      "reason": "Nikel dan emas, bukan tembaga."
+    },
+    {
+      "symbol": "NCKL",
+      "reason": "Nikel."
+    },
+    {
+      "symbol": "MBMA",
+      "reason": "Nikel."
+    },
+    {
+      "symbol": "INCO",
+      "reason": "Nikel."
+    },
+    {
+      "symbol": "TINS",
+      "reason": "Timah."
+    },
+    {
+      "symbol": "TBMS",
+      "reason": "Produsen kawat dan batang tembaga (hilir), bukan penambang."
+    }
+  ]
+}

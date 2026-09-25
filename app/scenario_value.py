@@ -18,6 +18,8 @@ from __future__ import annotations
 from datetime import date
 from statistics import median
 
+from . import fmt
+
 KD_PRETAX = 0.09          # market cost of debt, policy parameter (as the screen)
 STATUTORY_TAX = 0.22      # Indonesian corporate income tax, fallback only
 GRID_DELTAS = (-0.01, -0.005, 0.0, 0.005, 0.01)
@@ -159,6 +161,7 @@ def bridge(intake):
                    debt_basis=f"Sectors kuartal {quarter['date']}",
                    anchor_reason="neraca kuartal terbaru; jumlah saham berubah material "
                                  "sejak akhir tahun fiskal")
+    out.update(_distributions(intake, out.get("valuation_date"), out.get("shares")))
     nci_row = source_row if source_row is not None else None
     if (nci_row and _num(nci_row.get("total_equity")) is not None
             and _num(nci_row.get("stockholders_equity")) is not None):
@@ -168,6 +171,25 @@ def bridge(intake):
         out.update(nci=official(balance["non_controlling_interest"]),
                    nci_basis=f"nilai buku, neraca interim resmi {period}")
     return out
+
+
+def _distributions(intake, anchor, shares):
+    """Cash dividends with an ex-date after the bridge's balance-sheet date and
+    on or before the Report Date: that cash has left the company, so the
+    equity a buyer gets today is smaller by it (spec §4.3, post-balance-sheet
+    events)."""
+    as_of = _day(intake.get("as_of"))
+    if not anchor or not as_of or not shares:
+        return {"distributions": 0.0}
+    paid = [e for e in intake.get("dividend_events") or []
+            if anchor.isoformat() < e["date"] <= as_of.isoformat()]
+    if not paid:
+        return {"distributions": 0.0}
+    dps = sum(e["dps"] for e in paid)
+    dates = ", ".join(e["date"] for e in paid)
+    return {"distributions": dps * shares,
+            "distributions_basis": (f"dividen tunai Rp{fmt._id(dps, 2)}/saham, ex-date {dates} "
+                                    f"(data Sectors), sesudah tanggal neraca {anchor.isoformat()}")}
 
 
 def da_intensity(intake):
@@ -183,10 +205,16 @@ def da_intensity(intake):
     rows = [a for a in (intake.get("annuals") or [])[-3:]
             if _num(a.get("da")) is not None and a.get("revenue") and _num(a.get("ebitda"))
             and 0 <= a["da"] < a["ebitda"]]
+    official = [a for a in rows if a.get("da_source") == "official"]
+    if official:
+        return (median(a["da"] / a["revenue"] for a in official),
+                f"penyusutan/pendapatan FY{official[0]['year']}"
+                + (f"-FY{official[-1]['year']}" if len(official) > 1 else "")
+                + " laporan keuangan audit")
     if rows:
         return (median(a["da"] / a["revenue"] for a in rows),
                 f"median D&A/pendapatan FY{rows[0]['year']}-FY{rows[-1]['year']} data Sectors")
-    return 0.0, "D&A tidak tersedia; perisai pajak penyusutan tidak dihitung"
+    return None, "D&A tidak tersedia atau tidak wajar di data Sectors dan rilis resmi"
 
 
 def tax_rate(intake):
@@ -247,6 +275,30 @@ def _schedule(rows, valuation_date, h2_share, dividends):
             share = _years(end, begin) / _years(end, start)
         out.append((share, _years(begin, valuation_date) + _years(end, begin) / 2))
     return out
+
+
+def implied_rate(per_share_at, price, g, high=0.60):
+    """Discount rate at which the model's value per share equals the price.
+
+    Value falls as the rate rises, so a bisection between just above g and
+    ``high`` finds it; None when the price sits outside that range. Shown
+    beside the policy rate so a reader sees what the market is discounting.
+    """
+    if not price or price <= 0:
+        return None
+    low = g + 0.001
+    try:
+        if per_share_at(low) < price or per_share_at(high) > price:
+            return None
+        for _ in range(60):
+            mid = (low + high) / 2
+            if per_share_at(mid) > price:
+                low = mid
+            else:
+                high = mid
+    except (ZeroDivisionError, OverflowError):
+        return None
+    return (low + high) / 2
 
 
 def ddm(intake, fc, coe, g):
@@ -311,7 +363,9 @@ def ddm(intake, fc, coe, g):
               "per_share": base["per_share"], "grid": grid,
               "per_share_down": grid.get((0.01, 0.025)),
               "bvps": bvps, "roe": roe, "year": rows[0]["year"],
-              "dps_hist": list(intake.get("dps_hist") or [])}
+              "dps_hist": list(intake.get("dps_hist") or []),
+              "implied_coe": implied_rate(lambda r: value(r, g)["per_share"],
+                                          _num(intake.get("price")), g)}
     return detail, []
 
 
@@ -344,6 +398,8 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0):
         return None, reasons
 
     da_ratio, da_basis = da_intensity(intake)
+    if da_ratio is None:
+        return None, [da_basis]
     tax, tax_basis = tax_rate(intake)
     nwc_ratio, nwc_basis = nwc_intensity(intake)
     anchor = fc["earnings_scenario"]
@@ -374,6 +430,7 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0):
     price = _num(intake.get("price"))
     equity_market = price * shares if price else None
     debt, cash = link["debt"], link["cash"]
+    paid_out = link.get("distributions") or 0.0
     weight_debt = debt / (debt + equity_market) if equity_market and debt + equity_market > 0 else 0
     coe = rf + beta * erp
     kd_after = KD_PRETAX * (1 - tax)
@@ -405,10 +462,12 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0):
         ev = pv + tv * factor_tv
 
         def to_equity(enterprise):
+            # Dividends went to the parent's shareholders; minorities are
+            # bridged before them.
             equity = enterprise + cash - debt
             if nci is not None:
-                return equity - nci
-            return equity * share_parent
+                return equity - nci - paid_out
+            return equity * share_parent - paid_out
 
         result = {"timing": out, "pv_explicit": pv, "terminal_fcff": terminal, "tv": tv,
                   "factor_tv": factor_tv, "pv_tv": tv * factor_tv, "ev": ev,
@@ -421,6 +480,9 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0):
         return result
 
     base = value(wacc, g)
+    implied_wacc = implied_rate(lambda r: value(r, g)["per_share"], price, g)
+    implied_coe = ((implied_wacc - kd_after * weight_debt) / (1 - weight_debt)
+                   if implied_wacc is not None and weight_debt < 1 else None)
     for line, step in zip(lines, base["timing"]):
         line.update(step)
     grid = {(round(d, 3), gg): (value(wacc + d, gg)["per_share"] if wacc + d > gg else None)
@@ -431,11 +493,13 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0):
     detail = {"basis": "scenario", "lines": lines, "wacc": wacc, "coe": coe, "rf": rf,
               "erp": erp, "beta": beta, "kd_pretax": KD_PRETAX, "kd_after": kd_after,
               "weight_debt": weight_debt, "wacc_bps": wacc_bps, "g": g,
+              "implied_wacc": implied_wacc, "implied_coe": implied_coe,
               "tax_rate": tax, "tax_basis": tax_basis, "da_ratio": da_ratio,
               "da_basis": da_basis, "nwc_ratio": nwc_ratio, "nwc_basis": nwc_basis,
               "h2_share": h2_share, "valuation_date": when.isoformat(),
               "anchor_reason": link.get("anchor_reason"),
               "cash": cash, "cash_basis": link.get("cash_basis"), "debt": debt,
+              "distributions": paid_out, "distributions_basis": link.get("distributions_basis"),
               "debt_basis": link.get("debt_basis"), "nci": nci,
               "nci_basis": link.get("nci_basis") or (
                   f"porsi induk {share_parent * 100:.1f}% dari laba 1H resmi"
@@ -497,12 +561,13 @@ def ev_ebitda_peer(intake, fc, peers):
     q1, med, q3 = method_chain.pe_quartiles(mults)
     ebitda_idr = ebitda * fx
     nci = nci or 0.0
+    paid_out = link.get("distributions") or 0.0
 
     def per_share(multiple):
-        return (multiple * ebitda_idr + cash - debt - nci) / shares
+        return (multiple * ebitda_idr + cash - debt - nci - paid_out) / shares
 
     ev = med * ebitda_idr
-    equity = ev + cash - debt - nci
+    equity = ev + cash - debt - nci - paid_out
     lo, hi = method_chain.PEER_EV_BAND
     used = [p for p in peers or []
             if _num(p.get("ev_ebitda")) is not None and lo < p["ev_ebitda"] <= hi]
@@ -512,9 +577,11 @@ def ev_ebitda_peer(intake, fc, peers):
               "peer_count": len(mults), "peer_source": method_chain.peer_ev_sources(peers),
               "peers": [{"symbol": str(p.get("symbol") or "?").replace(".JK", ""),
                          "ev_ebitda": p["ev_ebitda"], "ev_year": p.get("ev_year"),
+                         "ev_period": p.get("ev_period"),
                          "source_kind": p.get("ev_source_kind")}
                         for p in sorted(used, key=lambda p: p["ev_ebitda"])],
               "ev": ev, "cash": cash, "debt": debt, "nci": nci, "equity": equity,
+              "distributions": paid_out, "distributions_basis": link.get("distributions_basis"),
               "shares": shares, "shares_basis": link.get("shares_basis"),
               "cash_basis": link.get("cash_basis"), "debt_basis": link.get("debt_basis"),
               "nci_basis": link.get("nci_basis"), "valuation_date": when.isoformat(),

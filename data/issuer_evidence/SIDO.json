@@ -2,12 +2,10 @@
   "schema_version": 1,
   "ticker": "SIDO",
   "reporting_currency": "IDR",
-  "evidence_status": "blocked",
-  "evidence_status_reason": "Publication date for the mirrored statement was not independently verified.",
   "latest_actual": {
     "period": "1H26",
     "period_end": "2026-06-30",
-    "published_at": "2026-07-31",
+    "published_at": "2026-08-03",
     "source_title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
     "source_url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
     "page": "3-4",
@@ -16,19 +14,28 @@
       "revenue": 1466658000000,
       "gross_profit": 740745000000,
       "net_profit": 333653000000,
-      "net_profit_attributable": 333653000000
+      "net_profit_attributable": 333653000000,
+      "depreciation": 56969000000,
+      "operating_profit": 422624000000
     },
     "prior_year": {
       "period": "1H25",
       "revenue": 1828705000000,
       "gross_profit": 1040968000000,
       "net_profit": 600468000000,
-      "net_profit_attributable": 600468000000
-    }
+      "net_profit_attributable": 600468000000,
+      "operating_profit": 746100000000
+    },
+    "published_at_basis": "Tanggal terbit di IDX tidak dapat diakses; dipakai batas atas yang terverifikasi: angka yang sama (penjualan Rp1,47 triliun, -19,8%; laba Rp333,7 miliar, -44,4%) diberitakan Radar Tasik 3 Agustus 2026 12.50 WIB, dan cocok dengan jumlah kuartal Q1+Q2 2026 Yahoo Finance.",
+    "corroboration_url": "https://radartasik.id/2026/08/03/laba-bersih-sido-muncul-anjlok-44-persen-pada-semester-i-2026-pendapatan-juga-masih-tertekan/",
+    "depreciation_page": 54
   },
   "balance_sheet": {
     "period_end": "2026-06-30",
-    "source_pages": [1, 2],
+    "source_pages": [
+      1,
+      2
+    ],
     "cash": 475644000000,
     "total_assets": 3260699000000,
     "total_liabilities": 265525000000,
