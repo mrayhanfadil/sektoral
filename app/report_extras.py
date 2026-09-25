@@ -17,9 +17,17 @@ from agents.analyst import signals as S
 from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
-from . import cache, commodity, fmt, idx_history, method_chain, mineops
+from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
+               mineops, scenario_value)
+from . import lom as lom_mod
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
+# Spec §3.1: the forecast model and the valuation tables run five years
+# (FY26F-FY30F); Key Financials, the statements and the Slide-3 charts show
+# two actual and three forecast years of that same model
+# (spec/Struktur-Template.md).
+FORECAST_YEARS = 5
+DISPLAY_FORECAST_YEARS = 3
 # "USD" rather than "US$": the report keeps "$" out of rupiah-only drafts (spec §5.3).
 COMMODITY_UNITS = {"Copper": ("Tembaga", "USD/ton"), "Gold": ("Emas", "USD/oz"),
                    "Nickel": ("Nikel", "USD/ton"), "Coal": ("Batu bara", "USD/ton")}
@@ -225,9 +233,18 @@ def landbank_exhibits(va):
                      f"{fmt._id(appraisal.get('area_ha'), 0)} ha, {appraisal.get('method')}, "
                      f"{appraisal.get('appraisal_date')} (tanah mentah, sebelum pengembangan)"])
     growths = sorted({g for (_, g) in land["grid"]})
-    grid_rows = [[f"{fmt._id(p, 0)} ha/tahun" + (" (target 2026)" if p == 135 else "")]
-                 + [_rp_signed(land["grid"][(p, g)] / shares) for g in growths]
-                 for p in sorted({p for (p, _) in land["grid"]})]
+    # The base pace joins the grid (same landbank.nav as the valuation) so the
+    # base row and column can be marked and highlighted.
+    grid = dict(land["grid"])
+    base_pace, base_g = li["pace_ha"], round(li["asp_growth"], 4)
+    for g in growths:
+        grid.setdefault((base_pace, g), land["uplift_attributable"] if round(g, 4) == base_g
+                        else (landbank.nav(li, land["rate"], base_pace, g)[0]
+                              - li["carrying_idr"]) * li["stake"])
+    grid_rows = [[(f"{fmt._id(p, 1)} ha/tahun (basis)" if p == base_pace else
+                   f"{fmt._id(p, 0)} ha/tahun") + (" (target 2026)" if p == 135 else "")]
+                 + [_rp_signed(grid[(p, g)] / shares) for g in growths]
+                 for p in sorted({p for (p, _) in grid})]
     return [
         _exhibit("RNAV landbank Suryacipta: dasar perhitungan", ["Komponen", "Nilai", "Dasar"],
                  rows, f"Sumber: {land_src.get('source_title')}; "
@@ -235,7 +252,9 @@ def landbank_exhibits(va):
                        "asumsi analis berlabel di data/analyst_scenarios. RNAV menggantikan nilai "
                        "buku tanah untuk pengembangan; hanya porsi SSIA atas selisihnya yang masuk SOTP."),
         _exhibit("Sensitivitas tambahan nilai landbank per saham: laju penjualan x pertumbuhan harga",
-                 ["Laju penjualan"] + [f"Harga +{fmt.pct(g)}/tahun" for g in growths], grid_rows,
+                 ["Laju penjualan"] + [f"Harga +{fmt.pct(g)}/tahun"
+                                       + (" (basis)" if round(g, 4) == base_g else "")
+                                       for g in growths], grid_rows,
                  "Sumber: estimasi Sektoral; tambahan nilai per saham di atas nilai buku, porsi SSIA. "
                  f"Basis: {fmt._id(li['pace_ha'], 1)} ha/tahun dan +{fmt.pct(li['asp_growth'])}/tahun."),
     ]
@@ -495,17 +514,19 @@ def peer_industry_page(intake):
     own = subject["metrics"]
     mult = lambda v: "-" if v is None else fmt.mult(v, cap=fmt.MULT_CAP)
     pct = lambda v: "-" if v is None else fmt.pct(v)
+    median = lambda key, show: ("n.m." if stats["counts"].get(key, 0) < method_chain.MIN_PEERS
+                                else show(stats[key][0]))
     table = [
         ["Kapitalisasi pasar (Rp triliun)", fmt._id(total_cap / 1e12, 1),
          fmt._id((own.get("market_cap") or 0) / 1e12, 1)],
         ["Perubahan kapitalisasi pasar 1 tahun", pct(peer_change), pct(own.get("mcap_change_1y"))],
-        [f"P/E (median peer {_band_label(method_chain.PEER_PE_BAND)})", mult(stats["pe"][0]),
+        [f"P/E (median peer {_band_label(method_chain.PEER_PE_BAND)})", median("pe", mult),
          mult(own.get("pe"))],
-        [f"P/B (median peer {_band_label(method_chain.PEER_PB_BAND)})", mult(stats["pb"][0]),
+        [f"P/B (median peer {_band_label(method_chain.PEER_PB_BAND)})", median("pb", mult),
          mult(own.get("pb"))],
-        ["ROE (median)", pct(stats["roe"][0]), pct(own.get("roe"))],
-        ["Margin laba bersih (median)", pct(stats["net_margin"][0]), pct(own.get("net_margin"))],
-        ["Liabilitas/ekuitas (median)", mult(stats["leverage"][0]), mult(own.get("leverage"))]]
+        ["ROE (median)", median("roe", pct), pct(own.get("roe"))],
+        ["Margin laba bersih (median)", median("net_margin", pct), pct(own.get("net_margin"))],
+        ["Liabilitas/ekuitas (median)", median("leverage", mult), mult(own.get("leverage"))]]
     group = peers.get("group") or intake.get("sub_sector") or "sub-sektor"
     exhibit = _exhibit(
         (f"Kondisi grup peer {group}: peer dibanding {ticker}" if peers.get("curated") else
@@ -518,7 +539,9 @@ def peer_industry_page(intake):
            if peers.get("curated") else
            f"tahun buku {subject.get('year') or own.get('year') or '-'}; "
            "perubahan kapitalisasi peer ditimbang kapitalisasi pasar; ")
-        + "median P/E dan P/B memakai rentang yang sama dengan valuasi.")
+        + "median P/E dan P/B memakai rentang yang sama dengan valuasi." + _thin_peer_note(stats)
+        + (f" n.m. pada multiple {ticker}: di atas {fmt.MULT_CAP}x, basis laba atau ekuitas "
+           "sangat kecil." if any(row[2] == "n.m." for row in table) else ""))
     paragraphs = []
     if peer_change is not None and own.get("mcap_change_1y") is not None:
         gap = own["mcap_change_1y"] - peer_change
@@ -571,9 +594,10 @@ def _peer_stats(rows):
     """(median, average) per metric over peers other than the issuer. P/E and
     P/B use the valuation's peer bands, so the table, its narrative and the
     target price all read the same peer set."""
-    bands = {"pe": method_chain.PEER_PE_BAND, "pb": method_chain.PEER_PB_BAND}
-    out = {}
-    for key in ("market_cap", "pe", "pb", "roe", "net_margin", "leverage"):
+    bands = {"pe": method_chain.PEER_PE_BAND, "pb": method_chain.PEER_PB_BAND,
+             "ev_ebitda": method_chain.PEER_EV_BAND}
+    out = {"counts": {}}
+    for key in ("market_cap", "pe", "pb", "ev_ebitda", "roe", "net_margin", "leverage"):
         vals = [r["metrics"].get(key) for r in rows if not r["is_self"]]
         vals = [v for v in vals if isinstance(v, (int, float)) and v == v]
         if key in bands:
@@ -583,9 +607,30 @@ def _peer_stats(rows):
             # The table shows ratios beyond 500% as n.m.; one tiny base must
             # not drag the average to -2.306%.
             vals = [v for v in vals if abs(v) <= 5]
-        out[key] = ((statistics.median(vals), sum(vals) / len(vals)) if vals
-                    else (None, None))
+        # The method chain's minimum: fewer than three valid peers give no
+        # median, so the peer pages never show a multiple the chain refused.
+        out["counts"][key] = len(vals)
+        out[key] = ((statistics.median(vals), sum(vals) / len(vals))
+                    if len(vals) >= method_chain.MIN_PEERS else (None, None))
     return out
+
+
+def _short_name(name):
+    """'PT Bank Rakyat Indonesia (Persero) Tbk' -> 'Bank Rakyat Indonesia'."""
+    text = re.sub(r"^PT\.?\s+", "", str(name or "").strip())
+    text = re.sub(r"\s*\((Persero)\)", "", text)
+    return re.sub(r",?\s+Tbk\.?$", "", text).strip()
+
+
+def _thin_peer_note(stats, keys=("pe", "pb", "roe", "net_margin", "leverage")):
+    """The n.m. reason for medians left out because fewer than three peers are valid."""
+    names = {"market_cap": "kapitalisasi", "pe": "P/E", "pb": "P/B", "ev_ebitda": "EV/EBITDA",
+             "roe": "ROE",
+             "net_margin": "margin bersih", "leverage": "liabilitas/ekuitas"}
+    thin = [f"{names[k]} {stats['counts'][k]} peer" for k in keys
+            if stats["counts"].get(k, 0) < method_chain.MIN_PEERS]
+    return (f" n.m.: kurang dari tiga peer valid ({', '.join(thin)}); minimum yang sama dengan "
+            "rantai metode." if thin else "")
 
 
 def peer_page(intake, valuation_inputs=None):
@@ -600,19 +645,35 @@ def peer_page(intake, valuation_inputs=None):
                                 _signed_pct(row["metrics"][key], cap=5) if kind == "pct" else
                                 fmt.mult(row["metrics"][key], cap=fmt.MULT_CAP) if kind == "x" else
                                 _rp_bn(row["metrics"][key]))
+    # Template Exhibit 11: company name with its ticker, and (non-bank) EV/EBITDA,
+    # the peer multiples the method chain reads (intake peers).
+    bank = intake.get("model_profile") == "financial_ddm"
+    ev_of = {str(p.get("symbol") or "").replace(".JK", ""): p.get("ev_ebitda")
+             for p in intake.get("peers") or []}
+    for row in rows:
+        row["metrics"].setdefault("ev_ebitda", ev_of.get(row["symbol"]))
     table = []
     for row in sorted(rows, key=lambda r: r["metrics"].get("market_cap") or 0, reverse=True):
-        label = row["symbol"] + (" (emiten)" if row["is_self"] else "")
-        table.append([label, m(row, "market_cap", "rp"), m(row, "pe", "x"), m(row, "pb", "x"),
-                      m(row, "roe", "pct"), m(row, "net_margin", "pct"), m(row, "leverage", "x")])
+        label = f"{_short_name(row.get('name'))} ({row['symbol']})".lstrip() \
+            if row.get("name") else row["symbol"]
+        label += " (emiten)" if row["is_self"] else ""
+        table.append([label, m(row, "market_cap", "rp"), m(row, "pe", "x"), m(row, "pb", "x")]
+                     + ([] if bank else [m(row, "ev_ebitda", "x") if not row["is_self"] else "-"])
+                     + [m(row, "roe", "pct"), m(row, "net_margin", "pct"), m(row, "leverage", "x")])
     median_row, avg_row, rank_row = (["Median peer (tanpa emiten)"],
                                      ["Rata-rata peer (tanpa emiten)"],
                                      [f"Peringkat {ticker}"])
     stats = _peer_stats(rows)
-    for key, kind in (("market_cap", "rp"), ("pe", "x"), ("pb", "x"), ("roe", "pct"),
-                      ("net_margin", "pct"), ("leverage", "x")):
+    for key, kind in (("market_cap", "rp"), ("pe", "x"), ("pb", "x")) + (
+            () if bank else (("ev_ebitda", "x"),)) + (("roe", "pct"),
+                                                      ("net_margin", "pct"), ("leverage", "x")):
         signal = ranked.get(f"peer.{key}") or {}
         median, avg = stats[key]
+        if stats["counts"].get(key, 0) < method_chain.MIN_PEERS:
+            median_row.append("n.m.")
+            avg_row.append("n.m.")
+            rank_row.append(f"{signal['rank']}/{signal['n']}" if signal.get("rank") else "-")
+            continue
         median_row.append("-" if median is None else
                           fmt.pct(median) if kind == "pct" else
                           fmt.mult(median) if kind == "x" else _rp_bn(median))
@@ -621,6 +682,7 @@ def peer_page(intake, valuation_inputs=None):
                        fmt.mult(avg) if kind == "x" else _rp_bn(avg))
         rank_row.append(f"{signal['rank']}/{signal['n']}" if signal.get("rank") else "-")
     table += [median_row, avg_row, rank_row]
+    ev_cols = [] if bank else ["EV/EBITDA (x)"]
     curated = peers.get("curated")
     exhibits = [_exhibit(
         "Grup peer: alasan pemilihan",
@@ -632,15 +694,22 @@ def peer_page(intake, valuation_inputs=None):
         + curated["basis"])] if curated else []
     exhibits += [_exhibit(
         f"Perbandingan peer {peers.get('group') or ''}".strip(),
-        ["Emiten", "Kap. pasar (Rp miliar)", "P/E (x)", "P/B (x)", "ROE", "Margin bersih",
-         "Liabilitas/ekuitas (x)"], table,
+        ["Emiten", "Kap. pasar (Rp miliar)", "P/E (x)", "P/B (x)"] + ev_cols
+        + ["ROE", "Margin bersih", "Liabilitas/ekuitas (x)"], table,
         f"Sumber: {peers['source']} ({peers['basis']}); per {intake.get('as_of') or intake.get('price_date') or '-'}; "
         "kriteria: model bisnis dan eksposur sebanding, kapitalisasi sebanding, outlier dijelaskan; "
         "P/E negatif tidak diperingkat; rasio di atas 500% ditulis n.m. karena basis pendapatan atau ekuitas sangat kecil. "
         f"Median dan rata-rata P/E memakai peer dengan P/E {_band_label(method_chain.PEER_PE_BAND)} "
         f"dan P/B {_band_label(method_chain.PEER_PB_BAND)}, rentang yang sama dengan valuasi. "
         "Rasio dihitung dari laba, ekuitas, pendapatan dan liabilitas tabel peer. "
-        "Emiten yang dibahas disorot '(emiten)'.")]
+        + ("" if bank else
+           f"EV/EBITDA peer = kapitalisasi pasar + utang - kas atas EBITDA terakhir dari laporan "
+           f"peer ({method_chain.peer_ev_sources(intake.get('peers'))}), rentang valid "
+           f"{_band_label(method_chain.PEER_EV_BAND)} seperti rantai metode; EV/EBITDA emiten ada "
+           "di Key Financials. ")
+        + "Emiten yang dibahas disorot '(emiten)'."
+        + _thin_peer_note(stats, ("market_cap", "pe", "pb") + (() if bank else ("ev_ebitda",))
+                          + ("roe", "net_margin", "leverage")))]
     caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
     caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
     subject = next(r for r in rows if r["is_self"])
@@ -650,6 +719,16 @@ def peer_page(intake, valuation_inputs=None):
     ]
     pe_signal, roe_signal = ranked.get("peer.pe") or {}, ranked.get("peer.roe") or {}
     pe_median, pb_median = stats["pe"][0], stats["pb"][0]
+    own_pe = subject["metrics"].get("pe")
+    if own_pe is not None and not pe_median and 0 < own_pe <= fmt.MULT_CAP:
+        valid = [(r["symbol"], r["metrics"]["pe"]) for r in rows if not r["is_self"]
+                 and isinstance(r["metrics"].get("pe"), (int, float))
+                 and method_chain.PEER_PE_BAND[0] < r["metrics"]["pe"] <= method_chain.PEER_PE_BAND[1]]
+        paragraphs.append(
+            f"Median dan rata-rata P/E peer tidak dihitung karena peer valid kurang dari tiga; "
+            f"P/E {ticker} {fmt.mult(own_pe)} dibanding "
+            + (", ".join(f"{sym} {fmt.mult(v)}" for sym, v in valid) if valid else "tanpa peer valid")
+            + ", sehingga posisi relatifnya hanya indikatif.")
     if pe_signal.get("value") is not None and pe_median:
         paragraphs.append(
             (f"P/E {ticker} di atas {fmt.MULT_CAP}x (laba terlalu kecil untuk bermakna) dibanding median peer "
@@ -660,23 +739,31 @@ def peer_page(intake, valuation_inputs=None):
     outliers = [r["symbol"] for r in rows
                 if (r["metrics"].get("pe") or 0) > method_chain.PEER_PE_BAND[1]]
     negative = [r["symbol"] for r in rows if r["metrics"].get("pe") is None and not r["is_self"]]
-    if outliers or negative:
+    # A peer with assets (ROA) but no book-based ratio has zero or negative equity.
+    no_book = [r["symbol"] for r in rows if not r["is_self"] and (
+        (isinstance(r["metrics"].get("pb"), (int, float)) and r["metrics"]["pb"] <= 0) or
+        (r["metrics"].get("roa") is not None and all(
+            r["metrics"].get(k) is None for k in ("pb", "roe", "leverage"))))]
+    if outliers or negative or no_book:
         paragraphs.append(
             "Pencilan: " + ", ".join(
                 ([f"P/E di atas {method_chain.PEER_PE_BAND[1]:.0f}x ({', '.join(outliers)})"]
                  if outliers else []) +
-                ([f"laba negatif atau P/E tidak tersedia ({', '.join(negative)})"] if negative else []))
+                ([f"laba negatif atau P/E tidak tersedia ({', '.join(negative)})"] if negative else []) +
+                ([f"ekuitas negatif atau tidak dilaporkan ({', '.join(no_book)})"]
+                 if no_book else []))
             + "; pencilan tidak masuk median dan rata-rata.")
     cross = []
     inputs = valuation_inputs or {}
-    if inputs.get("eps_idr") and pe_median:
-        implied = pe_median * inputs["eps_idr"]
-        cross.append([f"P/E median peer x EPS {inputs['label']}", fmt.mult(pe_median),
-                      f"Rp{fmt.rp(fmt.tick(implied))}"])
-    if inputs.get("bvps_idr") and pb_median:
-        implied = pb_median * inputs["bvps_idr"]
-        cross.append([f"P/B median peer x BVPS {inputs.get('bvps_period', 'terakhir')}",
-                      fmt.mult(pb_median), f"Rp{fmt.rp(fmt.tick(implied))}"])
+    thin = {key: stats["counts"].get(key, 0) < method_chain.MIN_PEERS for key in ("pe", "pb")}
+    if inputs.get("eps_idr") and (pe_median or thin["pe"]):
+        cross.append([f"P/E median peer x EPS {inputs['label']}", "n.m.", "n.m."] if thin["pe"]
+                     else [f"P/E median peer x EPS {inputs['label']}", fmt.mult(pe_median),
+                           f"Rp{fmt.rp(fmt.tick(pe_median * inputs['eps_idr']))}"])
+    if inputs.get("bvps_idr") and (pb_median or thin["pb"]):
+        basis = f"P/B median peer x BVPS {inputs.get('bvps_period', 'terakhir')}"
+        cross.append([basis, "n.m.", "n.m."] if thin["pb"] else
+                     [basis, fmt.mult(pb_median), f"Rp{fmt.rp(fmt.tick(pb_median * inputs['bvps_idr']))}"])
     if cross:
         if inputs.get("tp"):
             cross.append(["Target harga metode utama", inputs.get("method_label", "-"),
@@ -685,7 +772,8 @@ def peer_page(intake, valuation_inputs=None):
             "Cross-check nilai per saham dengan multiple peer",
             ["Basis", "Multiple", "Nilai per saham"], cross,
             f"Sumber: {peers['source']} dan estimasi Sektoral. Cross-check tidak dirata-ratakan "
-            "dengan metode utama; P/E dan P/B peer bukan EV/EBITDA dan berbeda struktur modal."))
+            "dengan metode utama; P/E dan P/B peer bukan EV/EBITDA dan berbeda struktur modal."
+            + _thin_peer_note(stats, ("pe", "pb"))))
         peer_ev = [p for p in intake.get("peers") or []
                    if isinstance(p.get("ev_ebitda"), (int, float))]
         paragraphs.append(
@@ -701,6 +789,15 @@ def peer_page(intake, valuation_inputs=None):
     if band:
         exhibits.append(band)
         exhibits.extend(band_charts(intake))
+        swaps = [(sub, orig, why) for sub, orig, why in band_selection(_band_data(intake))
+                 if orig]
+        paragraphs.append(
+            "Band historis P/E dan P/BV adalah cross-check mean-reversion atas sejarah emiten "
+            "sendiri, bukan target harga: harga implisitnya menganggap driver fundamental "
+            "(EPS dan BVPS terakhir) konstan dan hanya multiple yang kembali ke mean atau median."
+            + "".join(f" Grafik band memakai {sub} sebagai pengganti {orig} karena {why}; "
+                      f"harga implisit {sub} = multiple x basis per saham terakhir dikurangi "
+                      "utang bersih per saham." for sub, orig, why in swaps))
     else:
         paragraphs.append("Band historis P/E dan P/BV belum dimodelkan: "
                           "cache membutuhkan harga harian + EPS/BVPS TTM yang sebanding; "
@@ -750,49 +847,151 @@ def _band_data(intake):
                  and isinstance(a.get(key), (int, float))]
         return (known[-1][key] / shares, known[-1]["year"]) if known else (None, None)
 
+    def net_debt_on(day):
+        """Net debt per share of the annual already published on ``day``."""
+        known = [a for a in annuals
+                 if date(a["year"], 12, 31) + timedelta(days=PUBLICATION_LAG_DAYS) <= day]
+        if not known or not all(isinstance(known[-1].get(k), (int, float))
+                                for k in ("total_debt", "cash")):
+            return None
+        return (known[-1]["total_debt"] - known[-1]["cash"]) / shares
+
     months = max(1, round((points[-1][0] - points[0][0]).days / 30.4))
     out = {"window": f"{months} bulan", "start": points[0][0], "end": points[-1][0],
            "source": source, "multiples": {}}
-    for label, key in (("P/E", "earnings"), ("P/BV", "equity")):
+    # P/E and P/BV are the template's bands; EV/EBITDA and EV/Sales are the
+    # substitutes a report shows when one of them is not meaningful
+    # (``band_selection``). EV = close x current shares + debt - cash of the
+    # annual already published on that day.
+    for label, key, ev in (("P/E", "earnings", False), ("P/BV", "equity", False),
+                           ("EV/EBITDA", "ebitda", True), ("EV/Sales", "revenue", True)):
         series = []
         for day, close in points:
             base, year = base_on(day, key)
-            if base and base > 0:
-                series.append((day, close / base, base, year))
+            debt = net_debt_on(day) if ev else 0.0
+            if base and base > 0 and debt is not None and (close + debt) > 0:
+                series.append((day, (close + debt) / base, base, year, debt))
         if len(series) < 40:
             continue
-        mults = sorted(m for _, m, _, _ in series)
+        mults = sorted(m for _, m, _, _, _ in series)
         cur, base_now = series[-1][1], series[-1][2]
         out["multiples"][label] = {
-            "series": [(d, m) for d, m, _, _ in series],
+            "series": [(d, m) for d, m, _, _, _ in series],
             "mean": sum(mults) / len(mults), "median": statistics.median(mults),
             "current": cur, "percentile": sum(1 for m in mults if m <= cur) / len(mults) * 100,
-            "base_now": base_now, "base_year": series[-1][3],
-            "constant_base": len({round(b, 6) for _, _, b, _ in series}) == 1}
-    return out if out["multiples"] else None
+            "base_now": base_now, "base_year": series[-1][3], "net_debt_now": series[-1][4],
+            "constant_base": len({round(b, 6) for _, _, b, _, _ in series}) == 1}
+    return out if any(k in out["multiples"] for k in BAND_MULTIPLES) else None
+
+
+BAND_MULTIPLES = ("P/E", "P/BV")            # the template's own-history bands
+BAND_SUBSTITUTES = ("EV/EBITDA", "EV/Sales")  # in this order when one is not meaningful
+_BAND_BASE = {"P/E": "EPS", "P/BV": "BVPS", "EV/EBITDA": "EBITDA per saham",
+              "EV/Sales": "pendapatan per saham"}
+
+
+def _band_problem(data, label):
+    """Why a multiple's band is not meaningful, or None when it is: it must
+    cover about a year, end on the last close (a positive base today) and
+    stay within the multiple cap."""
+    m = data["multiples"].get(label)
+    base = _BAND_BASE[label].split(" ")[0]
+    if not m:
+        return f"basis {base} tidak positif sepanjang jendela"
+    first, last = m["series"][0][0], m["series"][-1][0]
+    if last < data["end"]:
+        after = last + timedelta(days=1)
+        return (f"{base} FY{_published_year_on(data, label, after)} tidak positif sejak "
+                f"{after.isoformat()}, sehingga {label} kini tidak bermakna")
+    if (last - first).days < 330:
+        months = max(1, round((last - first).days / 30.4))
+        return (f"basis {base} tidak positif sebelum {first.isoformat()}, sehingga band {label} "
+                f"hanya {months} bulan" if first > data["start"] else
+                f"data harga harian hanya {months} bulan")
+    if max(m["mean"], m["median"]) > fmt.MULT_CAP:
+        return (f"{label} di atas {fmt.MULT_CAP}x (basis {base} sangat kecil), "
+                "sehingga band-nya tidak bermakna")
+    return None
+
+
+def _published_year_on(data, label, day):
+    """The fiscal year whose annual is published on ``day`` (FY end + lag)."""
+    year = day.year - 1
+    return year if date(year, 12, 31) + timedelta(days=PUBLICATION_LAG_DAYS) <= day else year - 1
+
+
+def band_selection(data):
+    """[(label, replaces, why)] for the two band charts: P/E and P/BV, each
+    replaced by the first meaningful substitute (EV/EBITDA, else EV/Sales)
+    when its own band is not meaningful. ``replaces``/``why`` are None for a
+    template multiple shown as is."""
+    out, used = [], set()
+    for label in BAND_MULTIPLES:
+        why = _band_problem(data, label)
+        if why is None:
+            out.append((label, None, None))
+            continue
+        sub = next((s for s in BAND_SUBSTITUTES if s not in used
+                    and _band_problem(data, s) is None), None)
+        if sub:
+            used.add(sub)
+            out.append((sub, label, why))
+        elif label in data["multiples"]:
+            out.append((label, None, None))  # nothing better: the short band as is
+    return out
+
+
+def _implied(m, label):
+    """Implied price per share at a multiple (EV multiples less net debt)."""
+    debt = m.get("net_debt_now") or 0.0 if label.startswith("EV/") else 0.0
+    return lambda multiple: multiple * m["base_now"] - debt
 
 
 def own_history_bands(intake):
     """Struktur slide 5 lower half: own-history band table (mean, median,
-    current percentile, implied price at mean and median reversion)."""
+    current percentile, implied price at mean and median reversion). A
+    substitute band (EV/EBITDA or EV/Sales, ``band_selection``) adds its row
+    and the note states why it replaces P/E or P/BV."""
     data = _band_data(intake)
     if not data:
         return None
+    swaps = [(sub, orig, why) for sub, orig, why in band_selection(data) if orig]
     rows = []
-    for label in ("P/E", "P/BV"):
+    for label in BAND_MULTIPLES + tuple(sub for sub, _, _ in swaps):
         m = data["multiples"].get(label)
         if not m:
             rows.append([label, "NA", "NA", "NA", "basis fundamental historis tidak cukup"])
             continue
-        meaningless = max(m["mean"], m["median"]) > fmt.MULT_CAP
+        # A base that is no longer positive (the latest annual is a loss or
+        # negative equity) leaves no current multiple and no implied price.
+        stale = m["series"][-1][0] < data["end"]
+        meaningless = stale or max(m["mean"], m["median"]) > fmt.MULT_CAP
+        price = _implied(m, label)
         implied = ("n.m." if meaningless else
-                   f"Rp{fmt.rp(fmt.tick(m['mean'] * m['base_now']))} / "
-                   f"Rp{fmt.rp(fmt.tick(m['median'] * m['base_now']))}")
+                   f"Rp{fmt.rp(fmt.tick(price(m['mean'])))} / "
+                   f"Rp{fmt.rp(fmt.tick(price(m['median'])))}")
         rows.append([label, fmt.mult(m["mean"], cap=fmt.MULT_CAP), fmt.mult(m["median"], cap=fmt.MULT_CAP),
+                     "n.m." if stale else
                      f"{fmt.mult(m['current'], cap=fmt.MULT_CAP)} (p{m['percentile']:.0f})", implied])
-    constant = [label for label, m in data["multiples"].items() if m["constant_base"]]
+    stale = [label for label in BAND_MULTIPLES if label in data["multiples"]
+             and data["multiples"][label]["series"][-1][0] < data["end"]]
+    constant = [label for label, m in data["multiples"].items()
+                if m["constant_base"] and label in [r[0] for r in rows] and label not in stale]
+    replaced = {orig for _, orig, _ in swaps}
+
+    def row_note(label):
+        """What a template row reads when its band is not meaningful."""
+        m = data["multiples"][label]
+        if label in stale:
+            return (f"mean dan median {label} atas periode basis positif; kolom kini dan harga "
+                    "implisit ditulis n.m. (tanpa basis positif saat ini)")
+        if (m["series"][-1][0] - m["series"][0][0]).days < 330:
+            return f"baris {label} memakai jendela yang lebih pendek itu"
+        return ""
+    shown = [row[0] for row in rows]
     return _exhibit(
-        f"Band historis {data['window']} P/E dan P/BV (bukan target harga)",
+        f"Band historis {data['window']} {', '.join(shown[:-1])} dan {shown[-1]} "
+        "(bukan target harga)",
         ["Multiple", "Mean", "Median", "Kini (persentil)", "Implisit mean / median"],
         rows,
         f"Source: {data['source']} {data['start'].isoformat()} sampai "
@@ -802,31 +1001,56 @@ def own_history_bands(intake):
         "dengan driver tetap; cross-check reversion, bukan target harga. Multiple di atas "
         f"{fmt.MULT_CAP}x ditulis n.m. karena basis laba atau ekuitas sangat kecil."
         + (f" Basis {', '.join(constant)} tidak berubah sepanjang jendela, sehingga harga "
-           "implisitnya sama dengan rata-rata/median harga penutupan." if constant else ""))
+           "implisitnya sama dengan rata-rata/median harga penutupan." if constant else "")
+        + "".join(f" {label}: {row_note(label)} karena {_band_problem(data, label)}."
+                  for label in stale if label not in replaced)
+        + "".join(f" {sub} menggantikan band {orig} karena {why}"
+                  + (f"; {row_note(orig)}" if orig in data["multiples"] and row_note(orig) else "")
+                  + "." for sub, orig, why in swaps)
+        + (" EV = kapitalisasi pasar (saham kini) + utang - kas dari laporan tahunan yang sudah "
+           "terbit; harga implisit EV = multiple x basis per saham - utang bersih per saham "
+           "terakhir; kepentingan non-pengendali tidak dikurangkan." if swaps else ""))
 
 
 def band_charts(intake):
     """Struktur Exhibits 12-13: P/E and P/BV lines with mean (dashed),
-    median (dotted) and the current level marked."""
+    median (dotted) and the current level marked. A band that is not
+    meaningful is replaced by EV/EBITDA or EV/Sales (``band_selection``),
+    and the chart note states why."""
     data = _band_data(intake)
     if not data:
         return []
     charts = []
-    for label in ("P/E", "P/BV"):
-        m = data["multiples"].get(label)
-        if not m:
-            continue
+    for label, replaces, reason in band_selection(data):
+        m = data["multiples"][label]
+        # A series shorter than the price window (a negative EPS/BVPS base or a
+        # short price history) states its own window in the title.
+        first, last = m["series"][0][0], m["series"][-1][0]
+        months = max(1, round((last - first).days / 30.4))
+        short = (last - first).days < 330
+        window = f"{months} bulan" if short else data["window"]
+        base = _BAND_BASE[label]
+        why = ("" if not short else
+               f" Jendela {first.isoformat()} sampai {last.isoformat()} ({months} bulan): "
+               + (f"basis {base} tidak positif sebelum {first.isoformat()}."
+                  if first > data["start"] else
+                  f"basis {base} tidak positif sejak {(last + timedelta(days=1)).isoformat()}."
+                  if last < data["end"] else
+                  "data harga harian lokal hanya mencakup periode ini."))
+        swap = (f" {label} menggantikan band {replaces} karena {reason}; EV = kapitalisasi pasar "
+                "(saham kini) + utang - kas dari laporan tahunan yang sudah terbit."
+                if replaces else "")
         charts.append({
-            "n": 0, "judul": f"Band {label} {data['window']} {intake['ticker']}", "tipe": "band_chart",
+            "n": 0, "judul": f"Band {label} {window} {intake['ticker']}", "tipe": "band_chart",
             "data": {"label": label, "dates": [d.isoformat() for d, _ in m["series"]],
                      "values": [round(v, 4) for _, v in m["series"]], "mean": m["mean"],
                      "median": m["median"], "current": m["current"],
                      "percentile": m["percentile"]},
             "catatan_sumber": (
                 f"Source: {data['source']}; basis "
-                f"{'EPS' if label == 'P/E' else 'BVPS'} FY{m['base_year']}; garis putus-putus = "
+                f"{base} FY{m['base_year']}; garis putus-putus = "
                 f"mean {fmt.mult(m['mean'])}, titik-titik = median {fmt.mult(m['median'])}; "
-                f"kini {fmt.mult(m['current'])} di persentil {m['percentile']:.0f}.")})
+                f"kini {fmt.mult(m['current'])} di persentil {m['percentile']:.0f}." + why + swap)})
     return charts
 
 
@@ -839,8 +1063,11 @@ def ownership_exhibits(intake):
         exhibits.append(_exhibit(
             "Pemegang saham utama", ["Pemegang saham", "Kepemilikan (%)"],
             [[name, fmt._id(pct, 1)] for name, pct in holders[:6]],
-            "Sumber: Sectors, company/report, ownership.major_shareholders; komposisi dapat "
-            "berbeda dari tanggal laporan interim."))
+            (f"Sumber: {intake['major_holders_source']} (Sectors tidak memuat pemegang saham "
+             "emiten ini); komposisi dapat berbeda dari tanggal laporan interim."
+             if intake.get("major_holders_source") else
+             "Sumber: Sectors, company/report, ownership.major_shareholders; komposisi dapat "
+             "berbeda dari tanggal laporan interim.")))
         top = holders[0]
         paragraphs.append(f"Pemegang saham terbesar adalah {top[0]} dengan {fmt._id(top[1], 1)}% saham.")
     flow_rows = (local_data.cache_get(intake["ticker"], f"/foreign-flow/{intake['ticker']}/") or {}).get("data") or []
@@ -866,14 +1093,94 @@ def ownership_exhibits(intake):
 
 # ------------------------------------------------------------ financials
 
-def financials_page(intake, fc=None):
-    """Struktur slides 6-7: income statement, balance sheet, cash flow and key
-    ratios for the last two actual years and three forecast years.
+_RECLASSIFIED = ("laporan resmi mereklasifikasi pendapatan tahun ini; angka Sectors untuk pos "
+                 "ini masih sebelum reklasifikasi")
 
-    Actuals come from Sectors (Rp miliar); forecast columns reuse the
-    validated rows behind Key Financials and the combo chart, so all three
-    tie out. A line the model does not forecast shows NA. Banks switch to a
-    bank layout (NII, PPOP, provisions; loans, deposits; NIM, LDR, CAR).
+
+def _official_overlay(row, official, annual):
+    """An actual Sectors year with the official figures Key Financials shows.
+
+    Revenue and EBITDA follow the official annual release; EBIT and D&A follow
+    the audited figures intake carries (``da_source == "official"``) instead of
+    a Sectors value intake rejected. A cost line Sectors reports before a
+    revenue reclassification is dropped (n.m. with the reason); operating
+    expense is re-derived as gross profit less the official EBIT.
+    """
+    out, reasons = dict(row), {}
+    official, annual = official or {}, annual or {}
+    revenue = _num(official.get("revenue"))
+    if revenue is not None and _num(row.get("revenue")) and abs(revenue / row["revenue"] - 1) > 0.001:
+        out["revenue"] = revenue
+        for key in ("cost_of_revenue", "gross_profit", "operating_expense"):
+            out[key] = None
+            reasons[key] = _RECLASSIFIED
+    if annual.get("da_source") == "official" and _num(annual.get("ebit")) is not None:
+        out["operating_pnl"] = out["ebit"] = annual["ebit"]
+        if _num(annual.get("ebitda")):
+            out["ebitda"] = annual["ebitda"]
+        if _num(out.get("gross_profit")) is not None:
+            out["operating_expense"] = out["gross_profit"] - annual["ebit"]
+            out["_opex_derived"] = True
+    if _num(official.get("ebitda")) is not None:
+        out["ebitda"] = official["ebitda"]
+    out["_nm"] = reasons
+    return out
+
+
+def statement_rows(intake, fc, va=None):
+    """The five-year statement model behind every forecast table and chart."""
+    return forecast_statements.forecast_rows(intake, fc, va)
+
+
+# Reasons for cells the statements cannot fill (spec §3.1: n.m. with a reason, never NA).
+_NO_FORECAST = "skenario forecast belum tervalidasi, sehingga kolom forecast belum dimodelkan"
+_NOT_MODELED = "pos ini tidak dihasilkan model forecast"
+_NOT_MEANINGFUL = "tidak bermakna karena basis pembanding nol, negatif, atau tidak tersedia"
+_BEYOND_MODEL = "tahun ini di luar horizon skenario tervalidasi"
+_SECTORS_GAP = "tidak dilaporkan di data Sectors untuk tahun ini"
+# Cash-flow reconciling lines: shown only when an actual year's Sectors figures
+# do not reconcile, so the table adds up and the reader sees the source gap.
+# The harness (T7.cash_flow_actual_reconciliation) accepts them on actual
+# columns only; forecast cells must read 0 or n.m.
+CASH_GAP_LINE = "Efek kurs dan selisih definisi kas (data sumber)"
+FLOW_GAP_LINE = "Selisih komponen arus kas (data sumber)"
+_OFFICIAL_USD_GAP = ("rilis tahunan resmi US$ hanya memuat pendapatan, EBITDA, laba dan ekuitas; "
+                     "data Sectors untuk pos ini hanya tersedia dalam rupiah hasil konversi")
+# Lines Sectors never reports for an actual year, with the reason the note gives.
+_SECTORS_ABSENT = {
+    "trade_receivables": "Sectors tidak memisahkan piutang usaha; nilainya termasuk aset lancar lainnya",
+    "trade_payables": "Sectors tidak memisahkan utang usaha; nilainya termasuk liabilitas lancar lainnya",
+    "interest_income": "Sectors tidak memisahkan pendapatan bunga emiten non-bank; nilainya "
+                       "termasuk pendapatan (beban) lain-lain",
+    "change_in_working_capital": "Sectors hanya memuat total arus kas operasi; perubahan modal "
+                                 "kerja termasuk pos operasi lainnya",
+    "debt_raised": "Sectors hanya memuat total arus kas pendanaan tanpa rincian",
+    "dividends_paid": "Sectors hanya memuat total arus kas pendanaan tanpa rincian",
+    "equity_raised": "Sectors hanya memuat total arus kas pendanaan tanpa rincian",
+    "other_financing_cash_flow": "Sectors hanya memuat total arus kas pendanaan tanpa rincian",
+    "government_bonds": "Sectors tidak memisahkan obligasi pemerintah dan surat berharga",
+    "securities": "Sectors tidak memisahkan obligasi pemerintah dan surat berharga",
+    "npl": "Sectors tidak memuat kredit bermasalah (NPL)",
+    "payout": "Sectors tidak memuat dividen tahunan pada laporan keuangan historis",
+}
+
+
+def financials_page(intake, fc=None, va=None, statements=None):
+    """Struktur Slides 6-7: income statement, balance sheet, cash flow and key
+    ratios for two actual years and the first three forecast years.
+
+    Actual columns come from Sectors historical_financials (Rp miliar). A US$
+    reporter whose official annual release covers both actual years is shown
+    in US$ juta like its Key Financials and charts: actual lines from that
+    release, forecast lines from the model divided back by the same rate the
+    model used (spec §2: the model is in the reporting currency).
+    Forecast columns come from ``forecast_statements.forecast_rows``, whose
+    rows carry the same keys, so one line function reads both and the
+    forecast ties out with Key Financials, the Slide-3 charts and the
+    valuation. A cell that cannot be derived shows n.m. and the table note
+    gives the reason (the model's own for forecast lines). Banks switch to
+    the bank layout (NII, PPOP, provisions; loans, earning assets, deposits;
+    yield, cost of funds, NIM, LDR, CAR).
     """
     report = cache.company_report(intake["ticker"]) or {}
     fin = report.get("financials") or {}
@@ -882,29 +1189,117 @@ def financials_page(intake, fc=None):
     if len(every) < 2:
         return None
     actual = every[-2:]
-    prior = {r["year"]: r for r in every}
-    forecast = [dict(r) for r in chart_forecast_rows(intake, fc)[:3]]
-    labels = [f"{r['year']}A" for r in actual] + [
-        r.get("label") or "-" for r in forecast]
-    labels += [f"FY{(int(actual[-1]['year']) + i) % 100:02d}F"
-               for i in range(len(forecast) + 1, 4)]
-    n_fc = 3
-    forecast += [{} for _ in range(n_fc - len(forecast))]
+    if statements is None:
+        statements = statement_rows(intake, fc, va)
+    modeled = [dict(r) for r in (statements.get("rows") or [])[:DISPLAY_FORECAST_YEARS]]
+    model_notes = statements.get("notes") or {}
+    evidence = intake.get("official_evidence") or {}
+    official = {int(r["year"]): r for r in evidence.get("annual_actuals") or [] if r.get("year")}
+    fx = _num((intake.get("fx_spot") or {}).get("rate"))
+    usd = bool(evidence.get("reporting_currency") == "USD" and fx and fx > 0
+               and all(int(a["year"]) in official for a in actual))
+    if not usd:
+        actual = [_official_overlay(row, official.get(int(row["year"])),
+                                    next((a for a in intake.get("annuals") or []
+                                          if a.get("year") == int(row["year"])), None))
+                  for row in actual]
+        every = every[:-2] + actual
+    if usd:
+        def official_row(year):
+            row = official[year]
+            parent = row.get("net_profit_attributable")
+            return {"year": year, "revenue": row.get("revenue"), "ebitda": row.get("ebitda"),
+                    "earnings": parent if parent is not None else row.get("net_profit"),
+                    "net_cons": row.get("net_profit"), "total_equity": row.get("equity"),
+                    "stockholders_equity": row.get("equity_attributable")}
+        every = [official_row(y) for y in sorted(official)]
+        actual = [r for r in every if r["year"] in {int(a["year"]) for a in actual}]
+        # Per-share values stay in rupiah; ratios have no currency.
+        keep = {"year", "label", "eps", "dps", "bvps", "payout", "roe", "interest_coverage"}
+        modeled = [{k: (v / fx if k not in keep and isinstance(v, (int, float)) else v)
+                    for k, v in r.items()} for r in modeled]
+    start = int(modeled[-1]["year"]) if modeled else int(actual[-1]["year"])
+    forecast = modeled + [{"year": start + i}
+                          for i in range(1, DISPLAY_FORECAST_YEARS - len(modeled) + 1)]
+    labels = ([f"{r['year']}A" for r in actual] +
+              [r.get("label") or f"FY{int(r['year']) % 100:02d}F" for r in forecast])
+    fc_span = f"{labels[len(actual)]}-{labels[-1]}"
     bank = intake.get("model_profile") == "financial_ddm"
     ratios = {int(r["year"]): r for r in fin.get("historical_financial_ratio") or []
               if isinstance(r, dict) and r.get("year")}
+    by_year = {int(r["year"]): r for r in every}
+    by_year.update({int(r["year"]): r for r in forecast})
+    # Every row that is not a forecast column is a Sectors row (actual years
+    # and the year before them, which growth and averages read).
+    is_actual = lambda r: not any(r is f for f in forecast)
+    misses = []
 
     def get(row, key, zero_is_missing=False):
         value = _num(row.get(key))
-        return None if value is None or (zero_is_missing and value == 0) else value
+        if value is None or (zero_is_missing and value == 0):
+            misses.append(key)
+            return None
+        return value
 
-    def money(value):
-        return "NA" if value is None else _rp_bn(value)
+    def before(row):
+        return by_year.get(int(row["year"]) - 1) or {}
 
-    def line(label, fn, fc_fn=None):
-        cells = [money(fn(r)) for r in actual]
-        cells += [money(fc_fn(f)) if fc_fn and f else "NA" for f in forecast]
-        return [label] + cells
+    def why(row, missed):
+        """The reason a cell reads n.m.: the model's own note for a missing
+        forecast key, the Sectors gap for an actual one, else a base effect."""
+        absent = [k for k in dict.fromkeys(missed) if _num(row.get(k)) is None]
+        overridden = row.get("_nm") or {}
+        if is_actual(row) and any(k in overridden for k in absent):
+            return next(overridden[k] for k in absent if k in overridden)
+        if is_actual(row) and usd:
+            return (_OFFICIAL_USD_GAP if absent and row.get("year") in official else
+                    "tahun sebelumnya tidak ada di rilis tahunan resmi US$" if absent
+                    else _NOT_MEANINGFUL)
+        if is_actual(row):
+            return next((_SECTORS_ABSENT[k] for k in absent if k in _SECTORS_ABSENT),
+                        _SECTORS_GAP if absent else _NOT_MEANINGFUL)
+        if not modeled:
+            return _NO_FORECAST
+        if not any(row is m for m in modeled):
+            return _BEYOND_MODEL
+        return next((str(model_notes[k]).rstrip(".") for k in absent if model_notes.get(k)),
+                    _NOT_MODELED if absent else _NOT_MEANINGFUL)
+
+    def table(specs):
+        """Rows for (label, fn, format) specs; a bare label is a section row.
+        Returns the rows and, per column kind, {reason: [line labels]}."""
+        rows, gaps = [], {"aktual": {}, "forecast": {}}
+        for spec in specs:
+            if isinstance(spec, str):
+                rows.append([spec] + [""] * len(labels))
+                continue
+            label, fn, show = spec
+            cells = [label]
+            for row in actual + forecast:
+                misses.clear()
+                try:
+                    value = fn(row)
+                except (TypeError, ZeroDivisionError):
+                    value = None
+                if value is not None:
+                    cells.append(show(value))
+                    continue
+                cells.append("n.m.")
+                kind = "aktual" if is_actual(row) else "forecast"
+                names = gaps[kind].setdefault(why(row, misses), [])
+                if label not in names:
+                    names.append(label)
+            rows.append(cells)
+        return rows, gaps
+
+    def gap_note(gaps):
+        parts = []
+        for kind, where in (("aktual", "kolom aktual"), ("forecast", f"kolom {fc_span}")):
+            if kind == "forecast" and not modeled:
+                continue  # the forecast sentence already gives the one reason
+            for reason, names in gaps[kind].items():
+                parts.append(f"{', '.join(names)} ({where}): {reason}")
+        return (" n.m. pada " + "; ".join(parts) + ".") if parts else ""
 
     def minus(*values):
         return None if any(v is None for v in values) else values[0] - sum(values[1:])
@@ -912,217 +1307,459 @@ def financials_page(intake, fc=None):
     def neg(value):
         return None if value is None else -abs(value)
 
-    net_cons = lambda r: minus(get(r, "earnings_before_tax"), get(r, "tax"))
-    if bank:
-        income = [
-            line("Pendapatan bunga", lambda r: get(r, "interest_income")),
-            line("Beban bunga", lambda r: neg(get(r, "interest_expense"))),
-            line("Pendapatan bunga bersih", lambda r: get(r, "net_interest_income")),
-            line("Pendapatan non-bunga", lambda r: get(r, "non_interest_income")),
-            line("Beban operasional", lambda r: neg(get(r, "operating_expense"))),
-            line("Laba sebelum provisi (PPOP)",
-                 lambda r: None if get(r, "operating_pnl") is None or get(r, "provision") is None
-                 else get(r, "operating_pnl") + get(r, "provision")),
-            line("Provisi dan cadangan", lambda r: neg(get(r, "provision"))),
-            line("Laba operasional", lambda r: get(r, "operating_pnl")),
-            line("Pendapatan (beban) non-operasional", lambda r: get(r, "non_operating_income_or_loss")),
-            line("Laba sebelum pajak", lambda r: get(r, "earnings_before_tax")),
-            line("Pajak", lambda r: neg(get(r, "tax"))),
-            line("Laba bersih", net_cons, lambda f: f.get("net")),
-            line("Laba bersih pemilik induk", lambda r: get(r, "earnings"),
-                 lambda f: f.get("net_attr"))]
-        balance = [
-            line("Kredit bruto", lambda r: get(r, "gross_loan")),
-            line("Cadangan kerugian kredit", lambda r: neg(get(r, "allowance_for_loans"))),
-            line("Kredit bersih", lambda r: get(r, "net_loan")),
-            line("Aset produktif non-kredit", lambda r: get(r, "non_loan_earning_assets")),
-            line("Total aset", lambda r: get(r, "total_assets")),
-            line("Giro", lambda r: get(r, "current_account")),
-            line("Tabungan", lambda r: get(r, "savings_account")),
-            line("Deposito", lambda r: get(r, "time_deposit")),
-            line("Dana pihak ketiga", lambda r: get(r, "total_deposit")),
-            line("Total liabilitas", lambda r: get(r, "total_liabilities")),
-            line("Total ekuitas", lambda r: get(r, "total_equity")),
-            line("Total liabilitas dan ekuitas",
-                 lambda r: None if get(r, "total_liabilities") is None or get(r, "total_equity") is None
-                 else get(r, "total_liabilities") + get(r, "total_equity"))]
-    else:
-        income = [
-            line("Pendapatan", lambda r: get(r, "revenue"), lambda f: f.get("revenue")),
-            line("Beban pokok pendapatan", lambda r: neg(get(r, "cost_of_revenue"))),
-            line("Laba kotor", lambda r: get(r, "gross_profit")),
-            line("Beban usaha", lambda r: neg(get(r, "operating_expense"))),
-            line("Laba usaha (EBIT)", lambda r: get(r, "operating_pnl")),
-            line("EBITDA", lambda r: get(r, "ebitda", zero_is_missing=True), lambda f: f.get("ebitda")),
-            line("Beban bunga", lambda r: neg(get(r, "interest_expense_non_operating"))),
-            line("Pendapatan (beban) non-operasional lain",
-                 lambda r: minus(get(r, "non_operating_income_or_loss"),
-                                 neg(get(r, "interest_expense_non_operating")))),
-            line("Laba sebelum pajak", lambda r: get(r, "earnings_before_tax")),
-            line("Pajak", lambda r: neg(get(r, "tax"))),
-            line("Kepentingan non-pengendali",
-                 lambda r: neg(minus(net_cons(r), get(r, "earnings")))),
-            line("Laba bersih", lambda r: get(r, "earnings"), lambda f: f.get("net_attr"))]
-        balance = [
-            line("Kas dan setara kas", lambda r: get(r, "cash_and_equivalents") or get(r, "cash_only")),
-            line("Persediaan", lambda r: get(r, "inventories")),
-            line("Aset lancar lainnya",
-                 lambda r: minus(get(r, "current_assets"),
-                                 get(r, "cash_and_equivalents") or get(r, "cash_only"),
-                                 get(r, "inventories") or 0)),
-            line("Total aset lancar", lambda r: get(r, "current_assets")),
-            line("Aset tetap bersih", lambda r: get(r, "fixed_assets")),
-            line("Aset tidak lancar lainnya",
-                 lambda r: minus(get(r, "total_assets"), get(r, "current_assets"),
-                                 get(r, "fixed_assets"))),
-            line("Total aset", lambda r: get(r, "total_assets")),
-            line("Utang jangka pendek", lambda r: get(r, "short_term_debt")),
-            line("Liabilitas lancar lainnya",
-                 lambda r: minus(get(r, "current_liabilities"), get(r, "short_term_debt") or 0)),
-            line("Total liabilitas lancar", lambda r: get(r, "current_liabilities")),
-            line("Utang jangka panjang", lambda r: get(r, "long_term_debt")),
-            line("Liabilitas tidak lancar lainnya",
-                 lambda r: minus(get(r, "non_current_liabilities"), get(r, "long_term_debt") or 0)),
-            line("Total liabilitas", lambda r: get(r, "total_liabilities")),
-            line("Total ekuitas", lambda r: get(r, "total_equity")),
-            line("Total liabilitas dan ekuitas",
-                 lambda r: None if get(r, "total_liabilities") is None or get(r, "total_equity") is None
-                 else get(r, "total_liabilities") + get(r, "total_equity"))]
+    def cash(r):
+        return get(r, "cash_and_equivalents") or get(r, "cash_only")
 
-    def begin_cash(r):
-        before = prior.get(r["year"] - 1) or {}
-        return get(before, "cash_and_equivalents") or get(before, "cash_only")
-
-    cash_flow = [
-        line("Arus kas operasi", lambda r: get(r, "operating_cash_flow")),
-        line("Belanja modal", lambda r: neg(get(r, "capital_expenditure"))),
-        line("Arus kas investasi", lambda r: get(r, "investing_cash_flow")),
-        line("Arus kas pendanaan", lambda r: get(r, "financing_cash_flow")),
-        line("Perubahan kas bersih", lambda r: get(r, "net_cash_flow")),
-        line("Kas awal", begin_cash),
-        line("Kas akhir", lambda r: get(r, "cash_and_equivalents") or get(r, "cash_only")),
-        line("Arus kas bebas (operasi - capex)",
-             lambda r: None if get(r, "capital_expenditure") is None
-             else minus(get(r, "operating_cash_flow"), abs(get(r, "capital_expenditure"))))]
-    cash_flow = [row for row in cash_flow if any(cell not in ("NA",) for cell in row[1:3])]
-    # Tie-out: kas awal + perubahan kas = kas akhir (selisih biasanya efek kurs).
-    gaps = []
-    for r in actual:
-        begin, change = begin_cash(r), get(r, "net_cash_flow")
-        end = get(r, "cash_and_equivalents") or get(r, "cash_only")
-        if None not in (begin, change, end) and end and abs(begin + change - end) / abs(end) > 0.001:
-            gaps.append(f"{r['year']} selisih Rp{_rp_bn(begin + change - end)} miliar")
-
-    # Key ratios: growth needs the year before the first column.
-    series = actual + []
-    def growth(key, zero_is_missing=False):
-        cells = []
-        for r in actual:
-            now, before = get(r, key, zero_is_missing), get(prior.get(r["year"] - 1) or {}, key, zero_is_missing)
-            cells.append(fmt.pct(now / before - 1) if now is not None and before and before > 0 else "NA")
-        return cells
-
-    def fc_growth(key, base_key):
-        cells, before = [], get(actual[-1], base_key)
-        for f in forecast:
-            now = f.get(key)
-            cells.append(fmt.pct(now / before - 1) if now is not None and before and before > 0
-                         else "NA")
-            before = now
-        return cells
-
-    def ratio(fn):
-        cells = []
-        for r in actual:
-            try:
-                value = fn(r)
-            except (TypeError, ZeroDivisionError):
-                value = None
-            cells.append("NA" if value is None else fmt.pct(value))
-        return cells
+    def net_cons(r):
+        value = _num(r.get("net_cons"))
+        return value if value is not None else minus(get(r, "earnings_before_tax"), get(r, "tax"))
 
     def avg(r, key):
-        before = get(prior.get(r["year"] - 1) or {}, key)
-        now = get(r, key)
-        return (now + before) / 2 if now is not None and before is not None else now
+        now, prev = get(r, key), _num(before(r).get(key))
+        return (now + prev) / 2 if now is not None and prev is not None else now
 
+    def growth(key, zero_is_missing=False):
+        def fn(r):
+            now = get(r, key, zero_is_missing)
+            prev = _num(before(r).get(key))
+            return now / prev - 1 if now is not None and prev and prev > 0 else None
+        return fn
+
+    def forecast_only(key, fn=None):
+        """A line the model may give that Sectors never reports."""
+        def read(r):
+            if is_actual(r):
+                misses.append(key)
+                return None
+            value = get(r, key)
+            return fn(value) if fn and value is not None else value
+        return read
+
+    money = (lambda v: fmt._id(v / 1e6, 1)) if usd else _rp_bn
+    pct = fmt.pct
     roaa = lambda r: get(r, "earnings") / avg(r, "total_assets")
     roae = lambda r: get(r, "earnings") / avg(r, "total_equity")
-    na3 = ["NA"] * n_fc
-    fc_margin = ["NA" if not f.get("revenue") or f.get("net_attr") is None
-                 else fmt.pct(f["net_attr"] / f["revenue"]) for f in forecast]
     if bank:
-        sector = lambda group, key: (lambda r: _num(((ratios.get(r["year"]) or {}).get(group) or {}).get(key)))
-        coc = lambda r: get(r, "provision") / avg(r, "gross_loan")
-        ratio_rows = [
-            ["Blok Pertumbuhan (%)"] + [""] * (2 + n_fc),
-            ["Pendapatan bunga bersih"] + growth("net_interest_income") + na3,
-            ["Laba bersih pemilik induk"] + growth("earnings") + fc_growth("net_attr", "earnings"),
-            ["Blok Profitabilitas dan kualitas aset (%)"] + [""] * (2 + n_fc),
-            ["Marjin bunga bersih (NIM)"] + ratio(sector("profitability", "net_interest_margin")) + na3,
+        def sectors_ratio(group, key, drivers):
+            """Actual years: Sectors' ratio; forecast years: the model's own value."""
+            def fn(r):
+                if is_actual(r):
+                    return _num(((ratios.get(int(r["year"])) or {}).get(group) or {}).get(key))
+                for driver in drivers[1:]:
+                    get(r, driver)  # records the model keys the ratio would need
+                return get(r, drivers[0])
+            return fn
+
+        def model_or(key, actual_fn):
+            """A ratio the bank model states for forecast years (its own averages:
+            the interim year's include the 30 June balances); actual years compute it."""
+            def fn(r):
+                if not is_actual(r) and _num(r.get(key)) is not None:
+                    return _num(r[key])
+                return actual_fn(r)
+            return fn
+
+        earning = lambda r: get(r, "non_loan_earning_assets")
+        avg_earning = lambda r: avg(r, "non_loan_earning_assets")
+        funding = lambda r: minus(get(r, "total_deposit"), -(get(r, "other_interest_bearing_liabilities") or 0))
+        yield_ea = model_or("yield_on_earning_assets",
+                            lambda r: get(r, "interest_income") / avg_earning(r))
+
+        def _cost_of_funds(r):
+            prev = before(r)
+            now_f = funding(r)
+            prev_f = (None if _num(prev.get("total_deposit")) is None else
+                      _num(prev.get("total_deposit")) + (_num(prev.get("other_interest_bearing_liabilities")) or 0))
+            base = (now_f + prev_f) / 2 if now_f is not None and prev_f is not None else now_f
+            return get(r, "interest_expense") / base
+        cost_of_funds = model_or("cost_of_funds", _cost_of_funds)
+        # NIM on average earning assets in every column, the bank model's driver
+        # (Sectors' own ratio divides by the year-end balance).
+        nim = model_or("net_interest_margin",
+                       lambda r: get(r, "net_interest_income") / avg_earning(r))
+        coc = model_or("cost_of_credit", lambda r: get(r, "provision") / avg(r, "gross_loan"))
+
+        def bvps(r):
+            if is_actual(r):
+                return get(r, "total_equity") / get(r, "outstanding_shares")
+            return get(r, "bvps")
+
+        def bvps_growth(r):
+            now = bvps(r)
+            prev = bvps(before(r))
+            return now / prev - 1 if now is not None and prev and prev > 0 else None
+
+        income_rows, income_gaps = table([
+            ("Pendapatan bunga", lambda r: get(r, "interest_income"), money),
+            ("Beban bunga", lambda r: neg(get(r, "interest_expense")), money),
+            ("Pendapatan bunga bersih", lambda r: get(r, "net_interest_income"), money),
+            ("Pendapatan non-bunga", lambda r: get(r, "non_interest_income"), money),
+            ("Beban operasional", lambda r: neg(get(r, "operating_expense")), money),
+            ("Laba sebelum provisi (PPOP)",
+             lambda r: get(r, "operating_pnl") + get(r, "provision"), money),
+            ("Provisi dan cadangan", lambda r: neg(get(r, "provision")), money),
+            ("Laba operasional", lambda r: get(r, "operating_pnl"), money),
+            ("Pendapatan (beban) non-operasional",
+             lambda r: get(r, "non_operating_income_or_loss"), money),
+            ("Laba sebelum pajak", lambda r: get(r, "earnings_before_tax"), money),
+            ("Pajak penghasilan", lambda r: neg(get(r, "tax")), money),
+            ("Laba bersih konsolidasi", net_cons, money),
+            ("Kepentingan non-pengendali", lambda r: neg(minus(net_cons(r), get(r, "earnings"))), money),
+            ("Laba bersih", lambda r: get(r, "earnings"), money)])
+        balance_rows, balance_gaps = table([
+            ("Kredit bruto", lambda r: get(r, "gross_loan"), money),
+            ("Cadangan kerugian kredit", lambda r: neg(get(r, "allowance_for_loans")), money),
+            ("Kredit bersih", lambda r: get(r, "net_loan"), money),
+            ("Obligasi pemerintah", lambda r: get(r, "government_bonds"), money),
+            ("Surat berharga", lambda r: get(r, "securities"), money),
+            ("Total aset produktif", earning, money),
+            ("Aset non-produktif (kas, aset tetap, lain)",
+             lambda r: minus(get(r, "total_assets"), earning(r),
+                             -abs(get(r, "allowance_for_loans") or 0)), money),
+            ("Total aset", lambda r: get(r, "total_assets"), money),
+            ("Giro", lambda r: get(r, "current_account"), money),
+            ("Tabungan", lambda r: get(r, "savings_account"), money),
+            ("Deposito", lambda r: get(r, "time_deposit"), money),
+            ("Dana pihak ketiga", lambda r: get(r, "total_deposit"), money),
+            ("Liabilitas berbunga lain",
+             lambda r: get(r, "other_interest_bearing_liabilities"), money),
+            ("Liabilitas tanpa bunga", lambda r: get(r, "non_interest_bearing_liabilities"), money),
+            ("Total liabilitas", lambda r: get(r, "total_liabilities"), money),
+            ("Total ekuitas", lambda r: get(r, "total_equity"), money),
+            ("Total liabilitas dan ekuitas",
+             lambda r: get(r, "total_liabilities") + get(r, "total_equity"), money)])
+        ratio_rows, ratio_gaps = table([
+            "Blok Pendapatan bunga (%)",
+            ("Imbal hasil aset produktif", yield_ea, pct),
+            ("Biaya dana", cost_of_funds, pct),
+            ("Selisih bunga (spread)", lambda r: yield_ea(r) - cost_of_funds(r), pct),
+            ("Marjin bunga bersih (NIM)", nim, pct),
+            "Blok Efisiensi dan kualitas aset (%)",
             # Computed from the statement: Sectors' cost_to_income field uses another base.
-            ["Rasio biaya terhadap pendapatan"] + ratio(
-                lambda r: get(r, "operating_expense") / (get(r, "net_interest_income") +
-                                                          get(r, "non_interest_income"))) + na3,
-            ["Biaya kredit (provisi / rata-rata kredit)"] + ratio(coc) + na3,
-            ["ROAA"] + ratio(roaa) + na3,
-            ["ROAE"] + ratio(roae) + na3,
-            ["Blok Likuiditas dan permodalan (%)"] + [""] * (2 + n_fc),
-            ["Kredit terhadap simpanan (LDR)"] + ratio(sector("liquidity", "loan_to_deposit_ratio")) + na3,
-            ["Rasio CASA"] + ratio(sector("liquidity", "casa_ratio")) + na3,
-            ["Rasio kecukupan modal (CAR)"] + ratio(sector("capital", "capital_adequacy_ratio")) + na3]
+            ("Rasio biaya terhadap pendapatan",
+             lambda r: get(r, "operating_expense") / (get(r, "net_interest_income") +
+                                                       get(r, "non_interest_income")), pct),
+            ("Rasio kredit bermasalah bruto (NPL)", lambda r: get(r, "npl"), pct),
+            ("Cakupan cadangan terhadap NPL", lambda r: get(r, "allowance_for_loans") / get(r, "npl"),
+             pct),
+            ("Biaya kredit (provisi / rata-rata kredit)", coc, pct),
+            "Blok Likuiditas, profitabilitas dan permodalan (%)",
+            ("Kredit terhadap simpanan (LDR)",
+             sectors_ratio("liquidity", "loan_to_deposit_ratio", ("loan_to_deposit_ratio",)), pct),
+            ("Rasio CASA",
+             sectors_ratio("liquidity", "casa_ratio", ("casa_ratio",)), pct),
+            ("ROAE", roae, pct),
+            ("ROAA", roaa, pct),
+            ("Rasio kecukupan modal (CAR)",
+             sectors_ratio("capital", "capital_adequacy_ratio", ("capital_adequacy_ratio",)), pct),
+            "Blok Dividen dan nilai buku (%)",
+            ("Rasio pembayaran dividen", forecast_only("payout"), pct),
+            ("Pertumbuhan BVPS", bvps_growth, pct)])
     else:
         margin = lambda key, zero=False: (lambda r: get(r, key, zero) / get(r, "revenue"))
-        coverage = []
-        for r in actual:
-            ebit, interest = get(r, "operating_pnl"), get(r, "interest_expense_non_operating")
-            cover = ebit / interest if ebit is not None and interest else None
-            coverage.append("NA" if cover is None else f">{fmt.MULT_CAP}x" if cover > fmt.MULT_CAP
-                            else fmt.mult(cover))
-        gearing = []
-        for r in actual:
-            net_debt, equity = get(r, "net_debt"), get(r, "total_equity")
-            gearing.append(fmt.mult(net_debt / equity) if net_debt is not None and equity else "NA")
-        ratio_rows = [
-            ["Blok Pertumbuhan (%)"] + [""] * (2 + n_fc),
-            ["Pendapatan"] + growth("revenue") + fc_growth("revenue", "revenue"),
-            ["EBITDA"] + growth("ebitda", True) + na3,
-            ["Laba usaha"] + growth("operating_pnl") + na3,
-            ["Laba bersih"] + growth("earnings") + fc_growth("net_attr", "earnings"),
-            ["Blok Profitabilitas (%)"] + [""] * (2 + n_fc),
-            ["Marjin laba kotor"] + ratio(margin("gross_profit")) + na3,
-            ["Marjin EBITDA"] + ratio(margin("ebitda", True)) + na3,
-            ["Marjin usaha"] + ratio(margin("operating_pnl")) + na3,
-            ["Marjin laba bersih"] + ratio(margin("earnings")) + fc_margin,
-            ["ROAA"] + ratio(roaa) + na3,
-            ["ROAE"] + ratio(roae) + na3,
-            ["Blok Leverage (x)"] + [""] * (2 + n_fc),
-            ["Net gearing (utang bersih / ekuitas)"] + gearing + na3,
-            ["Cakupan bunga (EBIT / beban bunga)"] + coverage + na3]
 
-    has_fc = any(forecast)
-    fc_note = (f" Kolom {labels[2]}-{labels[-1]} memakai skenario yang sama dengan Key Financials; "
-               "baris yang tidak dimodelkan ditulis NA." if has_fc else
-               f" Kolom {labels[2]}-{labels[-1]} belum dimodelkan (NA) karena forecast belum tervalidasi.")
-    note = ("Sumber: Sectors, company/report (historical_financials), dalam Rp miliar sesuai "
-            "konversi Sectors; angka negatif dalam kurung." + fc_note)
-    cf_note = note + (" Kas awal + perubahan kas tidak sama dengan kas akhir: " + "; ".join(gaps)
-                      + " (efek kurs atau reklasifikasi kas)." if gaps else
-                      " Kas awal + perubahan kas = kas akhir (tie-out neraca).")
-    cols = ["Rp miliar"] + labels
-    exhibits = [_exhibit("Laba rugi" + (" bank" if bank else ""), cols, income, note),
-                _exhibit("Neraca" + (" bank" if bank else ""), cols, balance, note)]
-    if cash_flow:
-        exhibits.append(_exhibit("Arus kas", cols, cash_flow, cf_note))
-    exhibits.append(_exhibit("Rasio utama", ["Rasio"] + labels, ratio_rows,
-                             "Sumber: Sectors, company/report (historical_financials dan "
-                             "historical_financial_ratio); ROAA/ROAE memakai rata-rata saldo awal "
-                             "dan akhir tahun." + fc_note))
-    return _page("Data keuangan", [
-        f"Laporan keuangan {labels[0]}-{labels[-1]}: dua tahun aktual dari data Sectors dan tiga "
-        "tahun forecast dari skenario yang juga dipakai di Key Financials, sehingga laba bersih "
-        "di halaman ini, di Key Financials dan di grafik kinerja sama untuk periode yang sama."],
-        exhibits)
+        def coverage(value):
+            return f">{fmt.MULT_CAP}x" if value > fmt.MULT_CAP else fmt.mult(value)
+
+        income_rows, income_gaps = table([
+            ("Pendapatan", lambda r: get(r, "revenue"), money),
+            ("Beban pokok pendapatan", lambda r: neg(get(r, "cost_of_revenue")), money),
+            ("Laba kotor", lambda r: get(r, "gross_profit"), money),
+            ("Beban usaha", lambda r: neg(get(r, "operating_expense")), money),
+            ("Laba usaha (EBIT)", lambda r: get(r, "operating_pnl"), money),
+            ("Pendapatan bunga", forecast_only("interest_income"), money),
+            ("Beban bunga", lambda r: neg(get(r, "interest_expense_non_operating")), money),
+            # The remainder between EBIT and pre-tax profit after interest, so the
+            # statement adds up whichever source gave EBIT (for actual years it
+            # also holds interest income, which Sectors does not split out).
+            ("Pendapatan (beban) lain-lain",
+             lambda r: (_num(r["other_non_operating"])
+                        if not is_actual(r) and _num(r.get("other_non_operating")) is not None
+                        else minus(get(r, "earnings_before_tax"), get(r, "operating_pnl"),
+                                   neg(get(r, "interest_expense_non_operating")),
+                                   0 if is_actual(r) else (_num(r.get("interest_income")) or 0))),
+             money),
+            ("Laba sebelum pajak", lambda r: get(r, "earnings_before_tax"), money),
+            ("Pajak penghasilan", lambda r: neg(get(r, "tax")), money),
+            ("Kepentingan non-pengendali",
+             lambda r: neg(minus(net_cons(r), get(r, "earnings"))), money),
+            ("Laba bersih", lambda r: get(r, "earnings"), money)])
+        balance_rows, balance_gaps = table([
+            ("Kas dan setara kas", cash, money),
+            ("Piutang usaha", forecast_only("trade_receivables"), money),
+            ("Persediaan", lambda r: get(r, "inventories"), money),
+            ("Aset lancar lainnya",
+             lambda r: minus(get(r, "current_assets"), cash(r), _num(r.get("inventories")) or 0,
+                             _num(r.get("trade_receivables")) or 0), money),
+            ("Total aset lancar", lambda r: get(r, "current_assets"), money),
+            ("Aset tetap bersih", lambda r: get(r, "fixed_assets"), money),
+            ("Aset tidak lancar lainnya",
+             lambda r: minus(get(r, "total_assets"), get(r, "current_assets"),
+                             get(r, "fixed_assets")), money),
+            ("Total aset", lambda r: get(r, "total_assets"), money),
+            ("Utang jangka pendek", lambda r: get(r, "short_term_debt"), money),
+            ("Utang usaha", forecast_only("trade_payables"), money),
+            ("Liabilitas lancar lainnya",
+             lambda r: minus(get(r, "current_liabilities"), _num(r.get("short_term_debt")) or 0,
+                             _num(r.get("trade_payables")) or 0), money),
+            ("Total liabilitas lancar", lambda r: get(r, "current_liabilities"), money),
+            ("Utang jangka panjang", lambda r: get(r, "long_term_debt"), money),
+            ("Liabilitas tidak lancar lainnya",
+             lambda r: minus(get(r, "non_current_liabilities"),
+                             _num(r.get("long_term_debt")) or 0), money),
+            ("Total liabilitas", lambda r: get(r, "total_liabilities"), money),
+            ("Total ekuitas", lambda r: get(r, "total_equity"), money),
+            ("Total liabilitas dan ekuitas",
+             lambda r: get(r, "total_liabilities") + get(r, "total_equity"), money)])
+        ratio_rows, ratio_gaps = table([
+            "Blok Pertumbuhan (%)",
+            ("Pendapatan", growth("revenue"), pct),
+            ("EBITDA", growth("ebitda", True), pct),
+            ("Laba usaha", growth("operating_pnl"), pct),
+            ("Laba bersih", growth("earnings"), pct),
+            "Blok Profitabilitas (%)",
+            ("Marjin laba kotor", margin("gross_profit"), pct),
+            ("Marjin EBITDA", margin("ebitda", True), pct),
+            ("Marjin usaha", margin("operating_pnl"), pct),
+            ("Marjin laba bersih", margin("earnings"), pct),
+            ("ROAA", roaa, pct),
+            ("ROAE", roae, pct),
+            "Blok Leverage (x)",
+            ("Net gearing (utang bersih / ekuitas)",
+             lambda r: get(r, "net_debt") / get(r, "total_equity"), fmt.mult),
+            ("Cakupan bunga (EBIT / beban bunga)",
+             lambda r: get(r, "operating_pnl") / get(r, "interest_expense_non_operating"), coverage)])
+
+    def depreciation(r):
+        if is_actual(r):
+            return minus(get(r, "ebitda", zero_is_missing=True), get(r, "ebit"))
+        return get(r, "depreciation")
+
+    def other_operating(r):
+        """CFO less net profit, D&A and working capital; for actual years it
+        also holds working capital, which Sectors does not split out."""
+        if not is_actual(r) and _num(r.get("other_operating_cash_flow")) is not None:
+            return _num(r["other_operating_cash_flow"])
+        wc = 0 if is_actual(r) else get(r, "change_in_working_capital")
+        return minus(get(r, "operating_cash_flow"), get(r, "earnings"), depreciation(r), wc)
+
+    def other_investing(r):
+        if not is_actual(r) and _num(r.get("other_investing_cash_flow")) is not None:
+            return _num(r["other_investing_cash_flow"])
+        return minus(get(r, "investing_cash_flow"), neg(get(r, "capital_expenditure")))
+
+    def other_financing(r):
+        if is_actual(r):
+            misses.append("other_financing_cash_flow")
+            return None
+        if _num(r.get("other_financing_cash_flow")) is not None:
+            return _num(r["other_financing_cash_flow"])
+        return minus(get(r, "financing_cash_flow"), get(r, "debt_raised"),
+                     neg(get(r, "dividends_paid")), get(r, "equity_raised"))
+
+    def begin_cash(r):
+        if not is_actual(r) and not any(r is m for m in modeled):
+            misses.append("cash_begin")  # no forecast for this year: nothing opens it
+            return None
+        if not is_actual(r) and _num(r.get("cash_begin")) is not None:
+            return _num(r["cash_begin"])  # the model's own opening balance
+        return cash(before(r))
+
+    # Tie-outs: begin cash + net change = end cash; assets = liabilities + equity.
+    # An actual year whose Sectors figures do not reconcile gets an explicit,
+    # labelled reconciling line (the source gap, never a forecast plug).
+    cash_gaps_text, balance_breaks = [], []
+    fx_gap_years, flow_gap_years = [], []
+    for r, label in zip(actual + forecast, labels):
+        if not is_actual(r) and not any(r is m for m in modeled):
+            continue
+        begin, change, end = _num(begin_cash(r)), _num(r.get("net_cash_flow")), _num(cash(r))
+        misses.clear()
+        if is_actual(r) and None not in (begin, change, end) and end and \
+                abs(begin + change - end) / abs(end) > 0.001:
+            fx_gap_years.append(label)
+            cash_gaps_text.append(f"{label}: kas akhir selisih {money(end - begin - change)} "
+                                  "dari kas awal + perubahan kas")
+        flows = [_num(r.get(k)) for k in ("operating_cash_flow", "investing_cash_flow",
+                                          "financing_cash_flow")]
+        if is_actual(r) and None not in flows and change is not None and \
+                abs(sum(flows) - change) > 0.01 * max(abs(change), abs(sum(flows)), 1):
+            flow_gap_years.append(label)
+            cash_gaps_text.append(f"{label}: arus kas operasi + investasi + pendanaan "
+                                  f"{money(sum(flows))} vs perubahan kas {money(change)}")
+        if not is_actual(r):
+            assets, liab, equity = (_num(r.get(k)) for k in
+                                    ("total_assets", "total_liabilities", "total_equity"))
+            if None not in (assets, liab, equity) and assets and \
+                    abs(assets - liab - equity) / abs(assets) > 0.001:
+                balance_breaks.append(f"{label} selisih {money(assets - liab - equity)}")
+
+    def _settled(value, scale):
+        """A forecast residual of floating-point size is the model's exact zero."""
+        return 0.0 if value is not None and abs(value) <= 1e-6 * max(abs(scale or 0), 1) else value
+
+    def flow_gap(r):
+        """Sectors' net change less CFO + CFI + CFF (actual years); the model's
+        own residual, zero by construction, in forecast years."""
+        value = minus(get(r, "net_cash_flow"), get(r, "operating_cash_flow"),
+                      get(r, "investing_cash_flow"), get(r, "financing_cash_flow"))
+        return value if is_actual(r) else _settled(value, _num(r.get("net_cash_flow")))
+
+    def cash_gap(r):
+        """End cash less begin cash and net change: FX effects and the gap
+        between the balance-sheet and cash-flow cash definitions (actual years)."""
+        value = minus(cash(r), begin_cash(r), get(r, "net_cash_flow"))
+        return value if is_actual(r) else _settled(value, cash(r))
+
+    cash_rows, cash_gaps = table([
+        "Blok Arus kas operasi",
+        ("Laba bersih", lambda r: get(r, "earnings"), money),
+        ("Depresiasi dan amortisasi", depreciation, money),
+        ("Perubahan modal kerja", forecast_only("change_in_working_capital"), money),
+        ("Pos operasi lainnya", other_operating, money),
+        ("Jumlah arus kas operasi", lambda r: get(r, "operating_cash_flow"), money),
+        "Blok Arus kas investasi",
+        ("Belanja modal", lambda r: neg(get(r, "capital_expenditure")), money),
+        ("Pos investasi lainnya", other_investing, money),
+        ("Jumlah arus kas investasi", lambda r: get(r, "investing_cash_flow"), money),
+        "Blok Arus kas pendanaan",
+        ("Penarikan (pembayaran) utang", forecast_only("debt_raised"), money),
+        ("Dividen dibayar", forecast_only("dividends_paid", neg), money),
+        ("Penerbitan (pembelian kembali) saham", forecast_only("equity_raised"), money),
+        ("Pos pendanaan lainnya", other_financing, money),
+        ("Jumlah arus kas pendanaan", lambda r: get(r, "financing_cash_flow"), money),
+        "Blok Saldo kas"]
+        + ([(FLOW_GAP_LINE, flow_gap, money)] if flow_gap_years else [])
+        + [("Perubahan kas bersih", lambda r: get(r, "net_cash_flow"), money),
+           ("Kas awal", begin_cash, money)]
+        + ([(CASH_GAP_LINE, cash_gap, money)] if fx_gap_years else [])
+        + [("Kas akhir", cash, money),
+           ("Arus kas bebas (operasi - capex, memo)",
+            lambda r: minus(get(r, "operating_cash_flow"), abs(get(r, "capital_expenditure"))),
+            money)])
+    if bank:
+        # A bank has no capex or working-capital line; keep what either side reports.
+        keep = [row for row in cash_rows
+                if row[0].startswith("Blok ") or row[0].startswith("Jumlah ")
+                or row[0] in ("Laba bersih", "Perubahan kas bersih", "Kas awal", "Kas akhir")
+                or any(cell not in ("n.m.", "") for cell in row[1:])]
+        dropped = {row[0] for row in cash_rows} - {row[0] for row in keep}
+        cash_rows = keep
+        for kind in cash_gaps.values():
+            for reason in list(kind):
+                kind[reason] = [n for n in kind[reason] if n not in dropped]
+                if not kind[reason]:
+                    del kind[reason]
+
+    usd_reporter = evidence.get("reporting_currency") == "USD"
+    spot = intake.get("fx_spot") or {}
+    basis = statements.get("basis") or "skenario analis"
+    fc_sentence = (
+        f" Kolom {fc_span}: {basis}, dari model laporan keuangan lima tahun yang memakai skenario "
+        "yang sama dengan Key Financials dan valuasi."
+        + (f" Forecast US$ = nilai rupiah model dibagi kurs Rp{fmt.rp(fx)}/US$ "
+           f"({spot.get('date', '-')}), kurs yang sama dengan model." if usd else
+           f" Forecast berpelaporan USD dikonversi pada kurs Rp{fmt.rp(spot.get('rate'))}/USD "
+           f"({spot.get('date', '-')}), sedangkan aktual memakai konversi Sectors, sehingga "
+           f"pertumbuhan {labels[len(actual)]} terhadap {labels[len(actual) - 1]} memuat efek kurs."
+           if usd_reporter and spot.get("rate") else "")
+        if modeled else f" Kolom {fc_span} ditulis n.m.: {_NO_FORECAST}.")
+    source = (f"Sumber aktual: {evidence.get('annual_source_title') or 'rilis tahunan resmi emiten'}"
+              " (US$ juta, mata uang pelaporan)" if usd else
+              "Sumber: Sectors, company/report (historical_financials), dalam Rp miliar sesuai "
+              "konversi Sectors")
+    note = source + "; angka negatif dalam kurung." + fc_sentence
+    bank_model = bank and statements.get("mode") == forecast_statements.MODE_BANK_DRIVER
+    balance_note = note + gap_note(balance_gaps) + (
+        " Neraca forecast tidak seimbang: " + "; ".join(balance_breaks) + "."
+        if balance_breaks else
+        " Total aset = total liabilitas dan ekuitas di setiap kolom forecast; kas mengikuti "
+        "arus kas, bukan angka penyeimbang." if modeled and not bank else
+        " Total aset = total liabilitas dan ekuitas di setiap kolom forecast; aset "
+        "non-produktif (kas, aset tetap, aset lain) = total aset - aset produktif + cadangan "
+        "dan pada kolom forecast dijaga pada porsi historisnya terhadap total aset; aset "
+        "produktif selain kredit (penempatan, surat berharga) adalah pos penyeimbang model "
+        "driver bank."
+        if modeled and bank_model else "")
+    gap_lines = [line for line, years in ((FLOW_GAP_LINE, flow_gap_years),
+                                          (CASH_GAP_LINE, fx_gap_years)) if years]
+    cf_note = note + gap_note(cash_gaps) + (
+        " Selisih data sumber pada kolom aktual: " + "; ".join(cash_gaps_text)
+        + ". Angka aktual adalah data Sectors apa adanya: kas di neraca dan kas di laporan arus "
+        "kas memakai definisi berbeda (misalnya penempatan jangka pendek atau giro di bank "
+        "sentral), ditambah efek kurs dan reklasifikasi. Baris "
+        + " dan ".join(f"'{line}'" for line in gap_lines)
+        + " menampilkan selisih itu secara eksplisit"
+        + (" (" + CASH_GAP_LINE.split(" (")[0].lower() + " = kas akhir - kas awal - perubahan kas"
+           if fx_gap_years else " (")
+        + ("; " if fx_gap_years and flow_gap_years else "")
+        + ("selisih komponen = perubahan kas - arus kas operasi, investasi dan pendanaan"
+           if flow_gap_years else "")
+        + ") sehingga kolom aktual terekonsiliasi; baris ini bukan angka penyeimbang model"
+        + (" dan pada kolom forecast bernilai 0 karena kas proyeksi terekonsiliasi tanpa pos "
+           "penyeimbang." if modeled and not bank else ".")
+        if cash_gaps_text else
+        " Kas awal + perubahan kas = kas akhir, dan kas akhir sama dengan kas di neraca.")
+    if not bank:
+        cf_note += ((" Pos operasi lainnya pada kolom aktual memuat perubahan modal kerja dan "
+                     "pos non-kas lain;" if not usd else "")
+                    + " arus kas bebas adalah memo, bukan FCFF.")
+    derived = [f"{r['year']}A" for r in actual if r.get("_opex_derived")]
+    bundled = [f.get("label") for f in modeled if _num(f.get("other_non_operating")) is not None
+               and _num(f.get("interest_expense_non_operating")) is None]
+    interest_note = (f" Pendapatan (beban) lain-lain {', '.join(bundled)} termasuk beban bunga "
+                     "bersih, karena skenario tidak memisahkan bunga (laba sebelum pajak dikurangi "
+                     "laba usaha)." if bundled else "")
+    revolver = [(f.get("label"), _num(f.get("revolver"))) for f in modeled
+                if _num(f.get("revolver"))]
+    revolver_note = (" Utang jangka pendek forecast termasuk pinjaman penyeimbang kas (revolver, "
+                     "asumsi screening): " + "; ".join(f"{label} {money(v)}" for label, v in revolver)
+                     + "." if revolver else "")
+    official_note = ((" Pendapatan, EBITDA, laba usaha dan D&A aktual mengikuti laporan resmi "
+                      "yang sama dengan Key Financials; beban usaha " + ", ".join(derived)
+                      + " = laba kotor Sectors dikurangi laba usaha resmi (termasuk pendapatan dan "
+                      "beban operasi lain); pendapatan (beban) lain-lain = laba sebelum pajak "
+                      "dikurangi laba usaha dan beban bunga.") if derived else
+                     " Pendapatan (beban) lain-lain = laba sebelum pajak dikurangi laba usaha dan "
+                     "beban bunga." if not bank else "")
+    cols = ["US$ juta" if usd else "Rp miliar"] + labels
+    exhibits = [
+        _exhibit("Laba rugi" + (" bank" if bank else ""), cols, income_rows,
+                 note + gap_note(income_gaps) + official_note + interest_note),
+        _exhibit("Neraca" + (" bank" if bank else ""), cols, balance_rows,
+                 balance_note + revolver_note),
+        _exhibit("Arus kas", cols, cash_rows, cf_note),
+        _exhibit("Rasio utama", ["Rasio"] + labels, ratio_rows,
+                 (source + "; rasio dari angka US$" if usd else
+                  "Sumber: Sectors, company/report (historical_financials dan "
+                  "historical_financial_ratio)")
+                 + "; ROAA/ROAE memakai rata-rata saldo awal dan akhir "
+                 "tahun; satu desimal, angka negatif dalam kurung."
+                 + (" NIM, imbal hasil aset produktif dan biaya kredit memakai rata-rata saldo "
+                    "awal dan akhir tahun (rasio NIM Sectors memakai saldo akhir); kolom forecast "
+                    "pertama memakai rata-rata tiga saldo termasuk 30 Juni, sama dengan model "
+                    "driver bank; LDR = kredit bersih / DPK, CAR kolom forecast adalah proksi "
+                    "screening." if bank else "") + fc_sentence
+                 + gap_note(ratio_gaps))]
+    assumptions = [str(a) for a in statements.get("assumptions") or [] if str(a).strip()]
+    if modeled and assumptions:
+        exhibits.append(_exhibit(
+            "Asumsi proyeksi laporan keuangan", ["Asumsi dan sumbernya"],
+            [[a] for a in assumptions],
+            "Sumber: model laporan keuangan Sektoral; asumsi analis atau screening yang "
+            "dilabeli, dari sumber yang sama dengan valuasi."))
+    tie = ("laba bersih, dividen dan ekuitas" if bank else
+           "pendapatan, EBITDA dan laba bersih")
+    actual_source = "rilis tahunan resmi dalam US$" if usd else "data Sectors"
+    paragraph = (
+        f"Laporan keuangan {labels[0]}-{labels[-1]}: dua tahun aktual dari {actual_source} dan tiga "
+        f"tahun pertama model forecast lima tahun ({basis}). {tie[0].upper() + tie[1:]} forecast "
+        "sama dengan Key Financials, grafik kinerja dan exhibit valuasi untuk tahun yang sama; "
+        "pos yang tidak dapat diturunkan ditulis n.m. dengan alasannya di catatan tabel."
+        if modeled else
+        f"Laporan keuangan {labels[0]}-{labels[-1]}: dua tahun aktual dari {actual_source}; kolom "
+        f"{fc_span} ditulis n.m. karena {_NO_FORECAST}.")
+    return _page("Data keuangan", [paragraph], exhibits)
 
 
 # ---------------------------------------------------------- sensitivity
@@ -1332,8 +1969,9 @@ def renumber(doc):
     doc["exhibits"] = ordered
 
 
-def trim_key_financials(doc, actual_years=2, forecast_years=3):
-    """Spec §5.4: two actual and three forecast periods on the cover."""
+def trim_key_financials(doc, actual_years=2, forecast_years=DISPLAY_FORECAST_YEARS):
+    """Spec §5.4 and the template: two actual and three forecast periods on the
+    cover; the model's later years stay in the valuation exhibits."""
     cover = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
     if not cover:
         return
@@ -1345,6 +1983,343 @@ def trim_key_financials(doc, actual_years=2, forecast_years=3):
     cover["data"]["rows"] = [[row[i] if i < len(row) else "-" for i in keep]
                              for row in cover["data"]["rows"]]
     doc["cover"]["key_financials"] = cover["data"]["rows"]
+
+
+def _year_end_close(ticker, year, as_of=None):
+    """Last IDX close in December of ``year`` (a historical multiple needs the
+    price of its own period, spec §5.4), with its date."""
+    history = idx_history.load(ticker, as_of) or {}
+    closes = [(day, close) for day, close in history.get("points") or []
+              if day.year == year and day.month == 12]
+    return closes[-1] if closes else None
+
+
+def shape_key_financials(doc, intake, fc=None, va=None, statements=None):
+    """Struktur Exhibit 3: Key Financials rows and 2A+3F columns per template.
+
+    Non-bank: Pendapatan, EBITDA, Pertumbuhan EBITDA, Laba bersih, EPS,
+    Pertumbuhan EPS, PER, PBV, EV/EBITDA. Bank: Pendapatan, Laba bersih, EPS,
+    Pertumbuhan EPS, BVPS, ROE, DPS, PER, PBV (no EBITDA, spec §5.4). Values the
+    narrative already wrote (revenue, EBITDA, profit, EPS, forward PER and
+    EV/EBITDA) stay; per-share forecasts come from the statement model,
+    forward multiples use the current price, actual multiples the year-end
+    close of that year. A cell that cannot be derived reads n.m. and the note
+    says why.
+    """
+    kf = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
+    if not kf:
+        return
+    if statements is None:
+        statements = statement_rows(intake, fc, va)
+    cols, rows = kf["data"]["cols"], kf["data"]["rows"]
+    periods = [str(c) if str(c).endswith(("A", "F")) else f"{c}A" for c in cols[1:]]
+    n = len(periods)
+    actual = [not p.endswith("F") for p in periods]
+    bank = intake.get("model_profile") == "financial_ddm"
+    model = {r.get("label"): r for r in statements.get("rows") or []}
+    modeled = bool(model)
+    report = cache.company_report(intake["ticker"]) or {}
+    sectors = {int(r["year"]): r for r in (report.get("financials") or {}).get("historical_financials") or []
+               if isinstance(r, dict) and r.get("year")}
+    price, price_date = _num(intake.get("price")), intake.get("price_date") or "-"
+    reasons = {}
+
+    def find(*prefixes):
+        return next((r for r in rows if str(r[0]).startswith(prefixes)), None)
+
+    def year_of(i):
+        return int(periods[i][:4]) if actual[i] else None
+
+    def sectors_row(i):
+        return sectors.get(year_of(i)) or {} if actual[i] else {}
+
+    def model_row(i):
+        return {} if actual[i] else (model.get(periods[i]) or {})
+
+    def why_forecast(key):
+        if not modeled:
+            return ("skenario forecast belum tervalidasi, sehingga kolom forecast belum "
+                    "dimodelkan")
+        note = (statements.get("notes") or {}).get(key)
+        return str(note).rstrip(".") if note else "pos ini tidak dihasilkan model forecast"
+
+    def build(label, existing, compute, keep_actual=True, keep_forecast=True):
+        """One row: keep what the narrative wrote, compute the rest, else n.m."""
+        old = list(existing[1:]) if existing else []
+        cells = [label]
+        for i in range(n):
+            cur = old[i] if i < len(old) else None
+            keep = keep_actual if actual[i] else keep_forecast
+            if keep and cur not in (None, "", "NA", "-", "n.a.", "n.m."):
+                cells.append(cur)
+                continue
+            value, reason = compute(i)
+            if keep and cur == "n.m.":
+                if value is not None and not reason:
+                    # The narrative wrote n.m. by its own rule (e.g. a growth
+                    # rate above 500% or across zero); name that rule.
+                    reason = ("perubahan di atas 500% atau dari/ke angka negatif tidak "
+                              "bermakna sebagai pertumbuhan")
+                value = None  # the narrative's n.m. stands; compute only gives its reason
+            if value is None:
+                cells.append("n.m.")
+                kind = "kolom aktual" if actual[i] else "kolom forecast"
+                reasons.setdefault((reason, kind), [])
+                if label not in reasons[(reason, kind)]:
+                    reasons[(reason, kind)].append(label)
+            else:
+                cells.append(value)
+        return cells
+
+    def year_end(i):
+        """Market value of equity at the close of an actual year."""
+        row = sectors_row(i)
+        close = _year_end_close(intake["ticker"], year_of(i), intake.get("as_of"))
+        shares = _num(row.get("outstanding_shares"))
+        if not close or not shares:
+            return None, ("multiple historis memerlukan harga akhir tahun dan jumlah saham tahun "
+                          "itu; data harga IDX lokal tidak mencakup tahun ini")
+        return close[1] * shares, None
+
+    def multiple(value):
+        if value > fmt.MULT_CAP:
+            return None, (f"multiple di atas {fmt.MULT_CAP}x tidak bermakna karena basis laba, "
+                          "ekuitas atau EBITDA sangat kecil")
+        return fmt.mult(value, 1), None
+
+    def per(i):
+        if actual[i]:
+            mcap, reason = year_end(i)
+            earnings = _num(sectors_row(i).get("earnings"))
+            if mcap is None:
+                return None, reason
+            if not earnings or earnings <= 0:
+                return None, "laba bersih tahun itu tidak positif"
+            return multiple(mcap / earnings)
+        eps = _num(model_row(i).get("eps"))
+        if eps is None:
+            return None, why_forecast("eps")
+        return multiple(price / eps) if eps > 0 and price else (
+            None, "EPS forecast tidak positif")
+
+    def pbv(i):
+        if actual[i]:
+            mcap, reason = year_end(i)
+            equity = _num(sectors_row(i).get("total_equity"))
+            if mcap is None:
+                return None, reason
+            return multiple(mcap / equity) if equity and equity > 0 else (
+                None, "ekuitas tahun itu tidak positif")
+        bvps = _num(model_row(i).get("bvps"))
+        if bvps is None:
+            return None, why_forecast("bvps")
+        return multiple(price / bvps) if bvps > 0 and price else (
+            None, "BVPS forecast tidak positif")
+
+    # The valuation's dated cash, debt and minority bridge.
+    link = scenario_value.bridge(intake) if not bank else {}
+    computed_ev = []
+
+    def ev_ebitda(i):
+        if actual[i]:
+            mcap, reason = year_end(i)
+            row = sectors_row(i)
+            # The EBITDA the table shows for that year (official where it exists);
+            # a US$ reporter's rupiah EBITDA is Sectors' conversion of it.
+            ebitda = (_num(row.get("ebitda")) or None) if usd and official_basis \
+                else actual_value(year_of(i), "ebitda")
+            net_debt = _num(row.get("net_debt"))
+            if mcap is None:
+                return None, reason
+            if not ebitda or ebitda <= 0 or net_debt is None:
+                return None, "EBITDA atau utang bersih tahun itu tidak tersedia di data Sectors"
+            return multiple((mcap + net_debt) / ebitda)
+        ebitda = _num(model_row(i).get("ebitda"))
+        if ebitda is None:
+            return None, why_forecast("ebitda")
+        parts = [_num(link.get(k)) for k in ("shares", "cash", "debt")]
+        if None in parts or not price or ebitda <= 0:
+            return None, "jembatan EV (kas, utang, saham) valuasi tidak lengkap"
+        shares, cash_now, debt = parts
+        ev = (price * shares + debt - (cash_now - (_num(link.get("distributions")) or 0))
+              + (_num(link.get("nci")) or 0))
+        computed_ev.append(periods[i])
+        return multiple(ev / ebitda)
+
+    evidence = intake.get("official_evidence") or {}
+    official = {int(r["year"]): r for r in evidence.get("annual_actuals") or [] if r.get("year")}
+    # The narrative writes actual columns from the official annual release
+    # when it covers both actual years, else from Sectors; growth follows it.
+    official_basis = all(year_of(i) in official for i in range(n) if actual[i])
+    parent_key = ("net_profit_attributable" if official_basis and all(
+        official[year_of(i)].get("net_profit_attributable") is not None
+        for i in range(n) if actual[i]) else "net_profit")
+
+    usd = evidence.get("reporting_currency") == "USD"
+    fx = _num((intake.get("fx_spot") or {}).get("rate")) or 1.0
+
+    def actual_value(year, key):
+        if official_basis:
+            row = official.get(year) or {}
+            return _num(row.get({"ebitda": "ebitda", "earnings": parent_key}[key]))
+        # Intake's annuals carry the audited overrides (EBIT, D&A, EBITDA) the
+        # narrative writes into Key Financials; raw Sectors otherwise.
+        annual = next((a for a in intake.get("annuals") or [] if a.get("year") == year), None)
+        value = _num((annual or sectors.get(year) or {}).get(key))
+        return value or None if key == "ebitda" else value
+
+    prior_from_sectors = []
+
+    def growth_of(key, model_key):
+        def value(i):
+            if i < 0:
+                if not actual[0]:
+                    return None
+                prior = year_of(0) - 1
+                before = actual_value(prior, key)
+                # The audited rows start at the first actual year: the year before
+                # comes from Sectors' parent profit (same basis, rupiah reporters).
+                if before is None and key == "earnings" and official_basis and not usd:
+                    before = _num((sectors.get(prior) or {}).get("earnings"))
+                    if before is not None and prior not in prior_from_sectors:
+                        prior_from_sectors.append(prior)
+                return before
+            if actual[i]:
+                return actual_value(year_of(i), key)
+            value = _num(model_row(i).get(model_key))
+            # Official US$ actuals: bring the rupiah model back to US$ first.
+            return value / fx if value is not None and official_basis and usd else value
+
+        def compute(i):
+            now, before = value(i), value(i - 1)
+            if now is None:
+                return None, (why_forecast(model_key) if not actual[i] else
+                              "tidak tersedia pada data aktual tabel ini")
+            if not before or before <= 0 or now < 0:
+                return None, "basis tahun sebelumnya nol, negatif, atau tidak tersedia"
+            return fmt.pct(now / before - 1), None
+        return compute
+
+    eps_growth = find("Pertumbuhan EPS")
+    if eps_growth is None and find("Pertumbuhan laba bersih"):
+        # EPS uses one pro forma share count in every column, so its growth
+        # is the growth of the profit it divides.
+        eps_growth = ["Pertumbuhan EPS (%)"] + list(find("Pertumbuhan laba bersih")[1:])
+    eps_growth_row = build("Pertumbuhan EPS (%)", eps_growth, growth_of("earnings", "earnings"))
+    per_row = build("PER (x)", find("PER"), per, keep_actual=False)
+    pbv_row = build("PBV (x)", find("PBV"), pbv, keep_actual=False)
+    shares_pf = next((r["earnings"] / r["eps"] for r in model.values()
+                      if _num(r.get("earnings")) and _num(r.get("eps"))), None) or _num(
+        ((intake.get("official_evidence") or {}).get("balance_sheet") or {}).get(
+            "shares_outstanding")) or _num(intake.get("shares"))
+
+    def eps(i):
+        """EPS for a table whose narrative did not write one (Sectors basis, Rp)."""
+        if actual[i]:
+            earnings = _num(sectors_row(i).get("earnings"))
+            if earnings is None or not shares_pf:
+                return None, "laba atau jumlah saham tidak tersedia"
+            return fmt.rp(round(earnings / shares_pf)), None
+        value = _num(model_row(i).get("eps"))
+        return (fmt.rp(round(value)), None) if value is not None else (None, why_forecast("eps"))
+
+    base = [find("Pendapatan ("), None if bank else find("EBITDA ("), find("Laba bersih ("),
+            find("EPS (") or build("EPS (Rp)", None, eps)]
+    if bank:
+        shares = shares_pf
+
+        def bvps(i):
+            if actual[i]:
+                equity = _num(sectors_row(i).get("total_equity"))
+                if equity is None or not shares:
+                    return None, "ekuitas atau jumlah saham tidak tersedia"
+                return fmt.rp(round(equity / shares)), None
+            value = _num(model_row(i).get("bvps"))
+            return (fmt.rp(round(value)), None) if value is not None else (None, why_forecast("bvps"))
+
+        def roe(i):
+            if actual[i]:
+                row, prior = sectors_row(i), sectors.get(year_of(i) - 1) or {}
+                equity = [_num(r.get("total_equity")) for r in (row, prior)]
+                earnings = _num(row.get("earnings"))
+                if earnings is None or None in equity:
+                    return None, "laba atau ekuitas tahun itu tidak tersedia di data Sectors"
+                return fmt.pct(earnings / (sum(equity) / 2)), None
+            # Same basis as the actual columns and the ratio table: average equity.
+            prior = model_row(i - 1) if not actual[i - 1] else sectors_row(i - 1)
+            earnings = _num(model_row(i).get("earnings"))
+            equity = [_num(model_row(i).get("total_equity")), _num(prior.get("total_equity"))]
+            if earnings is None or None in equity:
+                return None, why_forecast("roe")
+            return fmt.pct(earnings / (sum(equity) / 2)), None
+
+        def dps(i):
+            if actual[i]:
+                return None, ("data Sectors mencatat dividen per tanggal ex-date, bukan per "
+                              "tahun buku")
+            value = _num(model_row(i).get("dps"))
+            return (fmt.rp(round(value)), None) if value is not None else (None, why_forecast("dps"))
+
+        shaped = [r for r in base if r] + [
+            eps_growth_row,
+            build("BVPS (Rp)", find("BVPS"), bvps, keep_actual=False),
+            build("ROE (%)", find("ROE"), roe),
+            build("DPS (Rp)", None, dps),
+            per_row, pbv_row]
+    else:
+        ebitda_growth = build("Pertumbuhan EBITDA (%)", find("Pertumbuhan EBITDA"),
+                              growth_of("ebitda", "ebitda"))
+        shaped = [r for r in base[:2] if r] + [ebitda_growth] + [r for r in base[2:] if r] + [
+            eps_growth_row, per_row, pbv_row,
+            build("EV/EBITDA (x)", find("EV/EBITDA"), ev_ebitda, keep_actual=False)]
+    # Every template cell is filled: a value or n.m. (never NA, "-" or blank).
+    for row in shaped:
+        for i in range(1, len(row)):
+            if row[i] in (None, "", "NA", "-", "n.a."):
+                row[i] = "n.m."
+                key = ("tidak dilaporkan pada sumber data aktual tabel ini" if actual[i - 1] else
+                       "tidak dihasilkan skenario untuk tahun ini",
+                       "kolom aktual" if actual[i - 1] else "kolom forecast")
+                reasons.setdefault(key, [])
+                if row[0] not in reasons[key]:
+                    reasons[key].append(row[0])
+    kf["data"]["cols"] = [cols[0]] + periods
+    kf["data"]["rows"] = shaped
+    doc["cover"]["key_financials"] = shaped
+
+    note = kf.get("catatan_sumber") or ""
+    note = re.sub(r"\s*DPS/yield dan PBV forecast tidak dihitung tanpa asumsi dividen dan ekuitas\.",
+                  "", note)
+    note = note.replace("NA: belum dimodelkan", "n.m.: belum dimodelkan")
+    if not any(str(r[0]).startswith("BVPS") for r in shaped):
+        note = note.replace("EPS/BVPS historis", "EPS historis").replace(
+            "laba/ekuitas pemilik induk", "laba pemilik induk")
+    close_dates = sorted({str(c[0]) for i in range(n) if actual[i]
+                          for c in [_year_end_close(intake["ticker"], year_of(i), intake.get("as_of"))]
+                          if c})
+    note += (" Pertumbuhan EPS sama dengan pertumbuhan laba yang dibagi karena EPS memakai satu "
+             "jumlah saham pro forma di semua kolom.")
+    if prior_from_sectors and eps_growth_row[1] != "n.m.":
+        note += (f" Pertumbuhan EPS {periods[0]} dihitung terhadap laba bersih pemilik induk "
+                 + ", ".join(f"FY{y}" for y in prior_from_sectors)
+                 + " dari data Sectors, karena laporan resmi yang dipakai tabel ini tidak memuat "
+                 "tahun itu.")
+    if close_dates:
+        note += (" Multiple aktual memakai harga penutupan akhir tahun (IDX, "
+                 + ", ".join(close_dates) + ") dengan jumlah saham, laba, ekuitas"
+                 + ("" if bank else ", EBITDA dan utang bersih") + " tahun itu dari data Sectors.")
+    if modeled:
+        note += (f" PER dan PBV forecast memakai harga {price_date} atas EPS dan BVPS model "
+                 "laporan keuangan (laba dan ekuitas pemilik induk, jumlah saham valuasi)")
+        note += ("; ROE forecast = laba induk / rata-rata ekuitas; DPS = payout x EPS, sama "
+                 "dengan exhibit DDM." if bank else
+                 f"; EV/EBITDA {', '.join(computed_ev)} = EV kini (harga {price_date}, kas, "
+                 f"utang dan minoritas {link.get('cash_basis') or 'neraca valuasi'}) atas "
+                 "EBITDA forecast." if computed_ev else ".")
+    if reasons:
+        note += " n.m. pada " + "; ".join(
+            f"{', '.join(names)} ({kind}): {reason}" for (reason, kind), names in reasons.items()) + "."
+    kf["catatan_sumber"] = note
 
 
 # ------------------------------------------------------------ combo charts (Slide 3)
@@ -1359,10 +2334,10 @@ def chart_forecast_rows(intake, fc):
     """
     fc = fc or {}
     if fc.get("production_ready") is True:
-        return [{"label": r.get("label"), "revenue": r.get("revenue"),
+        return [{"year": r.get("year"), "label": r.get("label"), "revenue": r.get("revenue"),
                  "ebitda": r.get("ebitda"), "net": r.get("net"),
                  "net_attr": r.get("net_attr", r.get("net")),
-                 "margin": r.get("margin")} for r in (fc.get("rows") or [])[:3]]
+                 "margin": r.get("margin")} for r in (fc.get("rows") or [])[:FORECAST_YEARS]]
     anchor = fc.get("earnings_scenario") or fc.get("interim_scenario")
     if not anchor:
         return []
@@ -1372,137 +2347,186 @@ def chart_forecast_rows(intake, fc):
         return []
     idr = lambda v: v * fx if isinstance(v, (int, float)) else None
     full = anchor.get("full_year") or {}
-    # The mining interim anchor records net profit without a separate parent
-    # share; Key Financials shows that figure, so the tables must too.
+    # The mining interim anchor records consolidated profit only; the parent's
+    # share is the last official year's ratio, the basis of Key Financials EPS,
+    # so every exhibit shows the same parent profit.
+    split = forecast_statements.parent_share(intake, anchor)
+    share = split[0] if split else 1.0
     parent = full.get("net_profit_attributable")
-    rows = [{"label": f"FY{anchor['year'] % 100:02d}F", "revenue": idr(full.get("revenue")),
+    rows = [{"year": anchor["year"], "label": f"FY{anchor['year'] % 100:02d}F",
+             "revenue": idr(full.get("revenue")),
              "ebitda": idr(full.get("ebitda")), "net": idr(full.get("net_profit")),
-             "net_attr": idr(parent if parent is not None else full.get("net_profit"))}]
+             "net_attr": idr(parent if parent is not None else
+                             (full["net_profit"] * share if full.get("net_profit") is not None
+                              else None))}]
     for r in ((fc.get("outyear_scenario") or {}).get("rows") or []):
-        rows.append({"label": r.get("label"), "revenue": idr(r.get("revenue")),
+        attr = r.get("net_profit_attributable")
+        if split and r.get("net_profit") is not None:
+            attr = r["net_profit"] * share
+        rows.append({"year": r.get("year"), "label": r.get("label"),
+                     "revenue": idr(r.get("revenue")),
                      "ebitda": idr(r.get("ebitda")), "net": idr(r.get("net_profit")),
-                     "net_attr": idr(r.get("net_profit_attributable"))})
+                     "net_attr": idr(attr)})
     for r in rows:
         r["margin"] = (r["ebitda"] / r["revenue"]
                        if r.get("ebitda") is not None and r.get("revenue") else None)
-    return rows[:3]
+    return rows[:FORECAST_YEARS]
 
 
-def combo_charts_page(intake, fc=None):
-    """2x2 combo: Revenue+growth, EBITDA+margin, Net Profit+EPS growth, DER vs ROE.
+def combo_charts_page(intake, fc=None, va=None, statements=None):
+    """Struktur Slide 3: four combo charts over 2024A-FY28F, each with its own
+    narrative, tying out with Key Financials for the same periods.
 
-    Actual bars solid, forecast lighter; EBITDA only when modeled; each with
-    2-3 sentences; tie-out with Key Financials (same period labels).
-    Bank: NIM+CoC note when financial_ddm (data Sectors tidak membawa NIM rinci).
+    Non-bank: revenue and growth, EBITDA and margin, net profit and EPS
+    growth, DER and ROE. Bank: revenue and growth, net profit and EPS growth,
+    equity and ROE (EBITDA means nothing for a bank), and NIM with cost of
+    credit, which the scenario does not drive, so that chart shows actual
+    years only. Actual bars solid, forecast lighter; forecast points come
+    from the same five-year model as the statements (first three years).
     """
-    annuals = (intake.get("annuals") or [])[-5:]
-    if len(annuals) < 2:
+    sectors_history = intake.get("annuals") or []
+    if len(sectors_history) < 2:
         return None
-    frows = chart_forecast_rows(intake, fc)
-    labels = [str(a.get("year")) for a in annuals] + [r.get("label", "") for r in frows[:3]]
-    rev_bars = [a.get("revenue") for a in annuals] + [r.get("revenue") for r in frows[:3]]
-    rev_g = [None] + [(cur / prev - 1) * 100
-                      if isinstance(cur, (int, float)) and isinstance(prev, (int, float)) and prev
-                      else None for prev, cur in zip(rev_bars, rev_bars[1:])]
-    # An unreported EBITDA arrives as 0 from Sectors; it is a gap, not a zero bar.
-    ebitda_bars = [a.get("ebitda") or None for a in annuals] + [r.get("ebitda") for r in frows[:3]]
-    has_ebitda = any(isinstance(v, (int, float)) for v in ebitda_bars)
-    ebitda_m = []
-    for a in annuals:
-        rev, eb = a.get("revenue") or 0, a.get("ebitda") or None
-        ebitda_m.append(eb / rev * 100 if rev and isinstance(eb, (int, float)) else None)
-    ebitda_m += [((r.get("margin") or 0) * 100) if r.get("margin") is not None else None
-                 for r in frows[:3]]
-    net_bars = [(a.get("earnings") if a.get("earnings") is not None else a.get("net_profit"))
-                for a in annuals] + [r.get("net_attr") for r in frows[:3]]
-    is_fc = [False] * len(annuals) + [True] * min(3, len(frows))
-    net_g = [None] + [(cur / prev - 1) * 100
-                      if isinstance(cur, (int, float)) and isinstance(prev, (int, float)) and prev > 0
-                      else None for prev, cur in zip(net_bars, net_bars[1:])]
-    series = [
-        {"label": "Pendapatan (Rp) & pertumbuhan", "bars": rev_bars, "line": rev_g,
-         "is_forecast": is_fc},
-        {"label": "Laba bersih (Rp) & pertumbuhan", "bars": net_bars, "line": net_g,
-         "is_forecast": is_fc},
-    ]
-    if has_ebitda:
-        series.insert(1, {"label": "EBITDA (Rp) & margin", "bars": ebitda_bars,
-                          "line": ebitda_m, "is_forecast": is_fc})
+    sectors_annuals = sectors_history[-2:]
+    frows = chart_forecast_rows(intake, fc)[:DISPLAY_FORECAST_YEARS]
+    # A scenario shorter than the display horizon still shows all three
+    # forecast years; the missing ones read n.m. (outside the scenario).
+    padded = []
+    if frows and frows[-1].get("year"):
+        for year in range(int(frows[-1]["year"]) + 1,
+                          int(frows[-1]["year"]) + 1 + DISPLAY_FORECAST_YEARS - len(frows)):
+            padded.append(f"FY{year % 100:02d}F")
+            frows = frows + [{"year": year, "label": padded[-1]}]
+    if statements is None:
+        statements = statement_rows(intake, fc, va)
+    model = {r.get("label"): r for r in statements.get("rows") or []}
+    num = lambda v: v if isinstance(v, (int, float)) else None
+    earnings = lambda a: a.get("earnings") if a.get("earnings") is not None else a.get("net_profit")
+    # Key Financials writes its actual years from the official annual release
+    # when that covers both years (in the reporting currency), else from
+    # Sectors; revenue, EBITDA and profit here use the same numbers, so
+    # Slide 3 ties out with Exhibit 3.
+    evidence = intake.get("official_evidence") or {}
+    official = {int(r["year"]): r for r in evidence.get("annual_actuals") or [] if r.get("year")}
+    official_basis = all(int(a["year"]) in official for a in sectors_annuals)
+    usd = official_basis and evidence.get("reporting_currency") == "USD"
+    fx = num((intake.get("fx_spot") or {}).get("rate"))
+    if usd and not fx:
+        official_basis = usd = False
+    if official_basis:
+        parent = ("net_profit_attributable" if all(
+            official[int(a["year"])].get("net_profit_attributable") is not None
+            for a in sectors_annuals) else "net_profit")
+        history = [{"year": y, "revenue": official[y].get("revenue"),
+                    "ebitda": official[y].get("ebitda"), "earnings": official[y].get(parent),
+                    "net_profit": official[y].get("net_profit")} for y in sorted(official)]
     else:
-        series.insert(1, {"label": "EBITDA belum dimodelkan", "bars": [None] * len(labels),
-                          "line": [None] * len(labels), "is_forecast": is_fc})
-    bank = intake.get("model_profile") == "financial_ddm"
+        history = sectors_history
+    annuals = history[-2:]
+    to_ccy = (lambda v: v / fx if num(v) is not None else None) if usd else (lambda v: v)
+    unit = "US$" if usd else "Rp"
+    labels = [f"{a.get('year')}A" for a in annuals] + [r.get("label", "") for r in frows]
     n_act = len(annuals)
-    if bank:
-        # Bank switch (struktur Exhibit 7): NIM bars and cost of credit line.
-        report = cache.company_report(intake["ticker"]) or {}
-        fin = report.get("financials") or {}
-        ratio_by_year = {int(r["year"]): r for r in fin.get("historical_financial_ratio") or []
-                         if isinstance(r, dict) and r.get("year")}
-        hist = {int(r["year"]): r for r in fin.get("historical_financials") or []
-                if isinstance(r, dict) and r.get("year")}
-        nim, coc = [], []
-        for a in annuals:
-            year = int(a["year"])
-            value = _num(((ratio_by_year.get(year) or {}).get("profitability") or {})
-                         .get("net_interest_margin"))
-            nim.append(value * 100 if value is not None else None)
-            now, before = hist.get(year) or {}, hist.get(year - 1) or {}
-            loans = [_num(r.get("gross_loan")) for r in (now, before) if _num(r.get("gross_loan"))]
-            provision = _num(now.get("provision"))
-            coc.append(provision / (sum(loans) / len(loans)) * 100
-                       if provision is not None and loans else None)
-        fourth = {"label": "NIM (%) & biaya kredit", "bars": nim + [None] * min(3, len(frows)),
-                  "line": coc + [None] * min(3, len(frows)), "is_forecast": is_fc,
-                  "bar_unit": "%"}
-    else:
-        der, roe = [], []
-        for a in annuals:
-            liab, eq = a.get("liab") or 0, a.get("equity") or 0
-            earn = a.get("earnings") or 0
-            der.append(liab / eq if eq else None)
-            roe.append(earn / eq * 100 if eq else None)
-        fourth = {"label": "DER (x) & ROE", "bars": der + [None] * min(3, len(frows)),
-                  "line": roe + [None] * min(3, len(frows)), "is_forecast": is_fc}
-    series.append(fourth)
+    span = f"{labels[0]}-{labels[-1]}"
+    is_fc = [False] * n_act + [True] * len(frows)
+    bank = intake.get("model_profile") == "financial_ddm"
+
+    def yoy(values, base):
+        """Growth in % for each point, the first one against ``base``."""
+        out = []
+        for prev, cur in zip([base] + values[:-1], values):
+            out.append((cur / prev - 1) * 100 if num(cur) is not None and num(prev) and prev > 0
+                       else None)
+        return out
 
     def cagr(values):
-        vals = [v for v in values if isinstance(v, (int, float))]
+        vals = [v for v in values if num(v) is not None]
         return ((vals[-1] / vals[0]) ** (1 / (len(vals) - 1)) - 1
                 if len(vals) >= 2 and vals[0] > 0 and vals[-1] > 0 else None)
 
-    actual_rev, fc_rev = rev_bars[:n_act], rev_bars[n_act:]
-    notes = []
-    hist_cagr = cagr(actual_rev)
-    fc_cagr = cagr(actual_rev[-1:] + fc_rev) if fc_rev and any(v for v in fc_rev) else None
-    text = (f"Pendapatan tumbuh CAGR {fmt.pct(hist_cagr)} pada {labels[0]}-{labels[n_act - 1]}"
-            if hist_cagr is not None else "Pendapatan historis belum cukup untuk CAGR")
+    base = history[-3] if len(history) >= 3 else {}
+    if not base and official_basis and not usd:
+        # Official rows start at the first actual year: EPS growth of that year
+        # reads Sectors' parent profit of the year before, as Key Financials does.
+        prior = next((a for a in sectors_history
+                      if a.get("year") == int(annuals[0]["year"]) - 1), None)
+        base = {"earnings": earnings(prior)} if prior else {}
+    rev_bars = [a.get("revenue") for a in annuals] + [to_ccy(r.get("revenue")) for r in frows]
+    rev_g = yoy(rev_bars, base.get("revenue"))
+    # An unreported EBITDA arrives as 0 from Sectors; it is a gap, not a zero bar.
+    ebitda_bars = [a.get("ebitda") or None for a in annuals] + [to_ccy(r.get("ebitda")) for r in frows]
+    ebitda_m = [e / r * 100 if num(e) is not None and r else None
+                for e, r in zip(ebitda_bars, rev_bars)]
+    net_bars = [earnings(a) for a in annuals] + [to_ccy(r.get("net_attr")) for r in frows]
+    # EPS uses one share count across the periods (Key Financials basis), so
+    # EPS growth is the growth of the parent profit it divides.
+    eps_g = yoy(net_bars, earnings(base) if base else None)
+
+    def fc_ratio(key_num, key_den, scale=1.0):
+        out = []
+        for r in frows:
+            row = model.get(r.get("label")) or {}
+            top, bottom = num(row.get(key_num)), num(row.get(key_den))
+            out.append(top / bottom * scale if top is not None and bottom else None)
+        return out
+
+    panels = []
+    revenue_title = f"Pendapatan dan pertumbuhan ({span})"
+    hist_rev = [a.get("revenue") for a in history[-5:]]
+    hist_cagr = cagr(hist_rev)
+    fc_rev = rev_bars[n_act:]
+    fc_cagr = cagr(rev_bars[n_act - 1:]) if any(num(v) for v in fc_rev) else None
+    years = f"{history[-5:][0].get('year')}-{history[-1].get('year')}"
+    move = lambda g: f"{'naik' if g >= 0 else 'turun'} {fmt.pct(abs(g) / 100)}"
+    last_g = rev_g[n_act - 1]
+    if hist_cagr is not None and len([v for v in hist_rev if num(v) is not None]) > 2:
+        text = f"Pendapatan tumbuh CAGR {fmt.pct(hist_cagr)} pada {years}"
+        if last_g is not None:
+            text += f" dan {move(last_g)} pada {labels[n_act - 1]}"
+    elif last_g is not None:
+        text = f"Pendapatan {move(last_g)} pada {labels[n_act - 1]}"
+    else:
+        text = "Pendapatan historis belum cukup untuk CAGR"
     if fc_cagr is not None:
         pace = ("lebih lambat dari" if fc_cagr < hist_cagr - 0.05 else
                 "lebih cepat dari" if fc_cagr > hist_cagr + 0.05 else "sejalan dengan") \
             if hist_cagr is not None else "dibanding"
         text += (f"; skenario {labels[n_act]}-{labels[-1]} memberi CAGR {fmt.pct(fc_cagr)}, "
                  f"{pace} laju historis")
-    notes.append(text + ".")
-    margins = [m for m in ebitda_m[:n_act] if m is not None]
-    if margins:
-        notes.append(
-            f"Margin EBITDA {labels[n_act - 1]} {fmt.pct(margins[-1] / 100)} dibanding rata-rata "
-            f"{len(margins)} tahun {fmt.pct(sum(margins) / len(margins) / 100)}"
-            + ("; skenario belum memodelkan EBITDA, sehingga margin historis menjadi acuan."
-               if not any(ebitda_bars[n_act:]) else "."))
-    else:
-        notes.append("EBITDA tidak dilaporkan pada data Sectors untuk periode ini; margin "
-                     "EBITDA tidak ditampilkan.")
-    last_rev_g = rev_g[n_act - 1] if n_act >= 2 else None
-    last_net_g = net_g[n_act - 1] if n_act >= 2 else None
+    panels.append((revenue_title, {"label": f"Pendapatan ({unit}) & pertumbuhan", "bars": rev_bars,
+                                   "line": rev_g, "is_forecast": is_fc}, labels, text + "."))
+
+    if not bank:
+        hist_m = [a["ebitda"] / a["revenue"] for a in history[-5:]
+                  if num(a.get("ebitda")) and a.get("revenue")]
+        fc_m = [m for m in ebitda_m[n_act:] if m is not None]
+        if hist_m:
+            text = (f"Margin EBITDA {labels[n_act - 1]} "
+                    f"{fmt.pct(ebitda_m[n_act - 1] / 100) if ebitda_m[n_act - 1] is not None else 'n.m.'}"
+                    f" dibanding rata-rata {len(hist_m)} tahun {fmt.pct(sum(hist_m) / len(hist_m))}")
+            text += (f"; skenario membawa margin ke {fmt.pct(fc_m[-1] / 100)} pada {labels[-1]}, "
+                     + ("di atas" if fc_m[-1] / 100 > sum(hist_m) / len(hist_m) + 0.02 else
+                        "di bawah" if fc_m[-1] / 100 < sum(hist_m) / len(hist_m) - 0.02 else
+                        "sejalan dengan") + " rata-rata historis."
+                     if fc_m else "; skenario belum memodelkan EBITDA, sehingga margin historis "
+                     "menjadi acuan.")
+        else:
+            text = ("EBITDA tidak dilaporkan pada data Sectors untuk periode ini; margin "
+                    "EBITDA tidak ditampilkan.")
+        has_ebitda = any(num(v) is not None for v in ebitda_bars)
+        panels.append((f"EBITDA dan margin ({span})",
+                       {"label": f"EBITDA ({unit}) & margin" if has_ebitda else "EBITDA belum dimodelkan",
+                        "bars": ebitda_bars, "line": ebitda_m, "is_forecast": is_fc},
+                       labels, text))
+
+    last_rev_g, last_net_g = rev_g[n_act - 1], eps_g[n_act - 1]
     if last_rev_g is not None and last_net_g is not None:
         gap = last_net_g - last_rev_g
         text = (f"Laba bersih {labels[n_act - 1]} {'naik' if last_net_g >= 0 else 'turun'} "
                 f"{fmt.pct(abs(last_net_g) / 100)} dibanding pendapatan "
                 f"{'naik' if last_rev_g >= 0 else 'turun'} {fmt.pct(abs(last_rev_g) / 100)}")
         if abs(gap) > 5:
-            now, before = annuals[n_act - 1], annuals[n_act - 2]
+            now, before = sectors_annuals[-1], sectors_annuals[-2]
             items = []
             for key, name in (("interest", "beban bunga"), ("tax", "pajak")):
                 a_now, a_before = _num(now.get(key)), _num(before.get(key))
@@ -1511,37 +2535,250 @@ def combo_charts_page(intake, fc=None):
                                  f"{fmt.pct(abs(a_now / a_before - 1))}")
             text += ("; selisihnya berasal dari pos di bawah laba usaha (" + ", ".join(items) + ")"
                      if items else "; selisihnya berasal dari pos di bawah laba usaha")
-        notes.append(text + ".")
+        text += "."
     else:
-        notes.append("Pertumbuhan laba bersih belum dapat dibandingkan dengan pendapatan.")
-    bars4, line4 = fourth["bars"][:n_act], fourth["line"][:n_act]
-    if bank and bars4[-1] is not None:
-        notes.append(f"NIM {labels[n_act - 1]} {fmt.pct(bars4[-1] / 100)}"
-                     + (f" dengan biaya kredit {fmt.pct(line4[-1] / 100)}" if line4[-1] is not None
-                        else "") + "; keduanya driver utama laba bank, bukan leverage.")
-    elif not bank and bars4[-1] is not None and line4[-1] is not None:
-        notes.append(f"DER {labels[n_act - 1]} {fmt.mult(bars4[-1])} dengan ROE "
-                     f"{fmt.pct(line4[-1] / 100)}: " +
-                     ("pertumbuhan didanai leverage yang meningkat."
-                      if len(bars4) >= 2 and bars4[-2] and bars4[-1] > bars4[-2] * 1.1
-                      else "leverage tidak naik material."))
-    else:
-        notes.append("Data leverage/ROE belum lengkap untuk periode ini.")
+        text = "Pertumbuhan laba bersih belum dapat dibandingkan dengan pendapatan."
+    net_cagr = cagr(net_bars[n_act - 1:]) if any(num(v) for v in net_bars[n_act:]) else None
+    if net_cagr is not None and fc_cagr is not None:
+        text += (f" Pada {labels[n_act]}-{labels[-1]} laba bersih tumbuh CAGR {fmt.pct(net_cagr)} "
+                 f"dibanding pendapatan {fmt.pct(fc_cagr)}.")
+    panels.append((f"Laba bersih dan pertumbuhan EPS ({span})",
+                   {"label": f"Laba bersih ({unit}) & pertumbuhan EPS", "bars": net_bars,
+                    "line": eps_g, "is_forecast": is_fc}, labels, text))
 
-    titles = [f"Pendapatan dan pertumbuhan ({labels[0]}-{labels[-1]})",
-              f"EBITDA dan margin ({labels[0]}-{labels[-1]})",
-              f"Laba bersih dan pertumbuhan ({labels[0]}-{labels[-1]})",
-              (f"NIM dan biaya kredit ({labels[0]}-{labels[n_act - 1]})" if bank else
-               f"DER dan ROE ({labels[0]}-{labels[n_act - 1]})")]
-    source = (f"Source: Company, Sektoral Estimates; periode {labels[0]}-{labels[-1]}; aktual "
-              "solid, proyeksi lebih terang; tie-out dengan Key Financials periode sama.")
+    mining_panel = None if bank else _mining_ops_panel(intake, va, labels, n_act, frows, is_fc)
+    base_sectors = sectors_history[-3] if len(sectors_history) >= 3 else {}
+    equity = [num(a.get("equity")) for a in sectors_annuals] + [
+        num((model.get(r.get("label")) or {}).get("total_equity")) for r in frows]
+    # ROE on average equity, the ROAE of the ratio table and Key Financials.
+    profit = [num(earnings(a)) for a in sectors_annuals] + [
+        num((model.get(r.get("label")) or {}).get("earnings")) for r in frows]
+    roe = []
+    for i, (now, gain) in enumerate(zip(equity, profit)):
+        prev = equity[i - 1] if i else num(base_sectors.get("equity"))
+        mean = (now + prev) / 2 if now is not None and prev is not None else None
+        roe.append(gain / mean * 100 if gain is not None and mean and mean > 0 else None)
+    if bank:
+        text = (f"Ekuitas {labels[n_act - 1]} Rp{fmt._id(equity[n_act - 1] / 1e12, 1)} triliun "
+                f"dengan ROE {fmt.pct(roe[n_act - 1] / 100)}"
+                if equity[n_act - 1] and roe[n_act - 1] is not None else "Ekuitas aktual belum lengkap")
+        payout = next((num(r.get("payout")) for r in statements.get("rows") or []
+                       if num(r.get("payout")) is not None), None)
+        if equity[-1] and roe[-1] is not None:
+            text += (f"; skenario membawa ekuitas ke Rp{fmt._id(equity[-1] / 1e12, 1)} triliun dan "
+                     f"ROE {fmt.pct(roe[-1] / 100)} pada {labels[-1]}"
+                     + (f", dengan payout {fmt.pct(payout)} dari laba" if payout is not None else ""))
+        panels.append((f"Ekuitas dan ROE ({span})",
+                       {"label": "Ekuitas (Rp) & ROE", "bars": equity, "line": roe,
+                        "is_forecast": is_fc}, labels, text + "."))
+        # NIM and cost of credit on average balances (the ratio table's and the
+        # bank model's definition). Actual years from Sectors; forecast years
+        # from the bank driver model, else n.m. with the scenario's reason.
+        report = cache.company_report(intake["ticker"]) or {}
+        fin = report.get("financials") or {}
+        hist = {int(r["year"]): r for r in fin.get("historical_financials") or []
+                if isinstance(r, dict) and r.get("year")}
+        nim, coc = [], []
+        average = lambda now, before, key: (
+            (_num(now.get(key)) + _num(before.get(key))) / 2
+            if _num(now.get(key)) is not None and _num(before.get(key)) is not None
+            else _num(now.get(key)))
+        for a in sectors_annuals:
+            year = int(a["year"])
+            now, before = hist.get(year) or {}, hist.get(year - 1) or {}
+            assets = average(now, before, "non_loan_earning_assets")
+            income = _num(now.get("net_interest_income"))
+            nim.append(income / assets * 100 if income is not None and assets else None)
+            loans = average(now, before, "gross_loan")
+            provision = _num(now.get("provision"))
+            coc.append(abs(provision) / loans * 100 if provision is not None and loans else None)
+        for r in frows:
+            row = model.get(r.get("label")) or {}
+            nim.append(num(row.get("net_interest_margin")) * 100
+                       if num(row.get("net_interest_margin")) is not None else None)
+            coc.append(num(row.get("cost_of_credit")) * 100
+                       if num(row.get("cost_of_credit")) is not None else None)
+        has_fc = any(v is not None for v in nim[n_act:] + coc[n_act:])
+        text = (f"NIM {labels[n_act - 1]} {fmt.pct(nim[n_act - 1] / 100)}"
+                + (f" dengan biaya kredit {fmt.pct(coc[n_act - 1] / 100)}"
+                   if coc[n_act - 1] is not None else "")
+                + "; keduanya driver utama laba bank, bukan leverage"
+                if nim[n_act - 1] is not None else
+                "NIM belum tersedia di data Sectors untuk periode ini")
+        if has_fc and nim[-1] is not None and coc[-1] is not None:
+            text += (f". Model driver bank membawa NIM ke {fmt.pct(nim[-1] / 100)} dan biaya "
+                     f"kredit ke {fmt.pct(coc[-1] / 100)} pada {labels[-1]}")
+        text += "."
+        cols = labels if frows else labels[:n_act]
+        nim, coc = nim[:len(cols)], coc[:len(cols)]
+        panels.append((f"NIM dan biaya kredit ({cols[0]}-{cols[-1]}"
+                       + (")" if frows else ", aktual)"),
+                       {"label": "NIM (%) & biaya kredit", "bars": nim, "line": coc,
+                        "is_forecast": is_fc[:len(cols)], "bar_unit": "%"},
+                       cols, text))
+    elif mining_panel:
+        # Finite-life miner: production volume (bars) vs unit cost (line),
+        # Struktur-Template's mining/E&P fourth chart.
+        panels.append(mining_panel)
+    else:
+        # A negative equity makes DER meaningless; leave the bar out.
+        der = [a["liab"] / a["equity"] if num(a.get("liab")) is not None and num(a.get("equity"))
+               and a["equity"] > 0 else None for a in sectors_annuals] + [
+            v if v is not None and v >= 0 else None
+            for v in fc_ratio("total_liabilities", "total_equity")]
+        has_fc = any(v is not None for v in der[n_act:] + roe[n_act:])
+        cols = labels if has_fc else labels[:n_act]
+        parts = []
+        if der[n_act - 1] is not None and roe[n_act - 1] is not None:
+            parts.append(f"DER {labels[n_act - 1]} {fmt.mult(der[n_act - 1])} dengan ROE "
+                         f"{fmt.pct(roe[n_act - 1] / 100)}: " +
+                         ("pertumbuhan didanai leverage yang meningkat"
+                          if der[n_act - 2] and der[n_act - 1] > der[n_act - 2] * 1.1
+                          else "leverage tidak naik material"))
+        elif any(num(a.get("equity")) is not None and a["equity"] <= 0 for a in sectors_annuals):
+            parts.append("Ekuitas aktual sempat negatif, sehingga DER dan ROE aktual tidak "
+                         "bermakna")
+        if has_fc and der[-1] is not None and roe[-1] is not None:
+            parts.append(f"skenario membawa DER ke {fmt.mult(der[-1])} dan ROE ke "
+                         f"{fmt.pct(roe[-1] / 100)} pada {labels[-1]}")
+        elif has_fc and roe[-1] is not None:
+            parts.append(f"skenario membawa ROE ke {fmt.pct(roe[-1] / 100)} pada {labels[-1]}")
+        text = ("; ".join(parts) + ".") if parts else \
+            "Data leverage/ROE belum lengkap untuk periode ini."
+        text = text[0].upper() + text[1:]
+        panels.append((f"DER dan ROE ({cols[0]}-{cols[-1]})",
+                       {"label": "DER (x) & ROE", "bars": der[:len(cols)], "line": roe[:len(cols)],
+                        "is_forecast": is_fc[:len(cols)]}, cols, text))
+
+    notes = statements.get("notes") or {}
+    reasons = {"Produksi tembaga": (_MINING_VOLUME_GAP, _MINING_C1_GAP),
+               "Pendapatan": (notes.get("revenue"), "basis tahun sebelumnya nol atau negatif"),
+               "EBITDA": (notes.get("ebitda"), "pendapatan atau EBITDA tidak tersedia"),
+               "Laba bersih": (notes.get("earnings"), "laba tahun sebelumnya nol atau negatif"),
+               "DER": (notes.get("total_liabilities"), "ekuitas rata-rata tidak positif"),
+               "Ekuitas": (notes.get("total_equity"), "ekuitas rata-rata tidak positif"),
+               "NIM": (notes.get("net_interest_margin") or "skenario bank tidak memodelkan NIM",
+                       notes.get("cost_of_credit") or "skenario bank tidak memodelkan biaya kredit")}
+
+    def explain(panel, cols, text):
+        """Name forecast points left empty (n.m.) and why, next to the chart."""
+        name = panel["label"].split(" (")[0].split(" &")[0]
+        bar_reason, line_reason = reasons.get(name, (None, "tidak bermakna"))
+        flags = panel.get("is_forecast") or []
+        out = []
+        for part, reason in (("bars", bar_reason or "tidak dimodelkan skenario"),
+                             ("line", line_reason)):
+            gone = [c for i, c in enumerate(cols) if i < len(flags) and flags[i]
+                    and c not in padded and (i >= len(panel[part]) or panel[part][i] is None)]
+            if gone:
+                what = ("batang" if part == "bars" else "garis")
+                out.append(f"{what} {', '.join(gone)} n.m.: {str(reason).rstrip('.')}")
+        if padded and any(c in padded for c in cols):
+            out.append(f"{', '.join(padded)} n.m.: tahun di luar horizon skenario tervalidasi")
+        return text + (" " + "; ".join(out)[0].upper() + "; ".join(out)[1:] + "." if out else "")
+
+    panels = [(title, panel, cols, explain(panel, cols, text))
+              for title, panel, cols, text in panels]
+    source = (f"Source: Company, Sektoral Estimates; periode {span}; aktual solid, forecast "
+              "lebih terang; "
+              + (f"pendapatan, EBITDA dan laba dalam US$ seperti Key Financials (forecast rupiah "
+                 f"dibagi kurs Rp{fmt.rp(fx)}/US$); " if usd else "")
+              + "forecast dari model yang sama dengan Key Financials dan tabel keuangan"
+              + (" (DER = total liabilitas / ekuitas; ROE = laba bersih / rata-rata ekuitas)."
+                 if not mining_panel else "; volume tambang dari rilis operasi emiten dan jadwal "
+                 "LoM valuasi."))
     exhibits = [{"n": 0, "judul": title, "tipe": "combo_panel",
-                 "data": {"cols": labels, "series": [panel]}, "narasi": note,
-                 "catatan_sumber": source}
-                for title, panel, note in zip(titles, series[:4], notes)]
+                 "data": {"cols": cols, "series": [panel]}, "narasi": note,
+                 "catatan_sumber": source + (panel.pop("source_note", None) or "")}
+                for title, panel, cols, note in panels]
     return _page("Kinerja keuangan dan profitabilitas",
-                 ["Empat grafik berikut memakai periode yang sama dengan Key Financials; "
-                  "proyeksi hanya tampil bila skenario tervalidasi."], exhibits)
+                 [f"Empat grafik berikut memakai periode {span} yang sama dengan Key Financials; "
+                  "forecast hanya tampil bila skenario tervalidasi."], exhibits)
+
+
+_MINING_C1_GAP = ("model LoM menghitung biaya tambang, olah dan smelter per ton bijih, bukan "
+                  "Adjusted C1 per pon tembaga terjual setelah kredit emas dan perak, sehingga "
+                  "C1 forecast tidak dihitung")
+_MINING_VOLUME_GAP = "jadwal LoM atau panduan emiten untuk tahun ini tidak tersedia"
+
+
+def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
+    """Mining chart 4 (title, series, cols, narrative) or None: copper in
+    concentrate (Mlbs, bars) against Adjusted C1 (US$/lb, line). Actual years
+    from the issuer's annual operations (``annual_operations.rows``); forecast
+    volumes from the valued LoM schedule (a part year adds the reported 1H),
+    else FY guidance for its year; the C1 line stays actual-only because the
+    LoM has no by-product-credit unit cost."""
+    if intake.get("model_profile") != "finite_life_mining":
+        return None
+    evidence = intake.get("official_evidence") or {}
+    ops = evidence.get("annual_operations") or {}
+    by_year = {int(r["year"]): r for r in ops.get("rows") or []
+               if isinstance(r, dict) and r.get("year")}
+    years = [int(str(label)[:4]) for label in labels[:n_act]]
+    if not years or not all(isinstance((by_year.get(y) or {}).get("copper_mlb"), (int, float))
+                            for y in years):
+        return None
+    volume = [float(by_year[y]["copper_mlb"]) for y in years]
+    c1 = [by_year[y].get("c1_cost_usd_lb") if isinstance(by_year[y].get("c1_cost_usd_lb"),
+                                                          (int, float)) else None
+          for y in years]
+    gold = [by_year[y].get("gold_koz") for y in years]
+    detail = forecast_statements._trace_detail(va, ("sotp_lom",), ("lom",)) or {}
+    lom = detail.get("lom") or {}
+    inp = lom.get("inputs") or {}
+    schedule_t, part_year = {}, set()
+    for row in (lom.get("base") or {}).get("rows") or []:
+        schedule_t[row["year"]] = schedule_t.get(row["year"], 0.0) + (row.get("cu_rec_t") or 0.0)
+        if (row.get("share") or 1.0) < 1.0:
+            part_year.add(row["year"])
+    guidance = {str(g.get("period")): g for g in evidence.get("management_guidance") or []
+                if isinstance(g, dict) and g.get("name") == "Tembaga dalam konsentrat (Mlbs)"}
+    fc_volume, basis = [], []
+    for r in frows:
+        year = int(r["year"]) if r.get("year") else None
+        tonnes = schedule_t.get(year)
+        if tonnes is not None and year in part_year:
+            h1 = _num(inp.get("h1_cu_t"))
+            tonnes = tonnes + h1 if h1 is not None else None
+        if tonnes is not None:
+            fc_volume.append(tonnes * lom_mod.LB_PER_T / 1e6)
+            basis.append((r.get("label"), "1H aktual + 2H jadwal LoM" if year in part_year
+                          else "jadwal LoM valuasi"))
+        elif _num((guidance.get(f"FY{year}") or {}).get("value")) is not None:
+            fc_volume.append(float(guidance[f"FY{year}"]["value"]))
+            basis.append((r.get("label"), f"panduan emiten FY{year}"))
+        else:
+            fc_volume.append(None)
+    last = labels[n_act - 1]
+    text = (f"Tembaga dalam konsentrat {last} {fmt._id(volume[-1], 0)} juta pon "
+            f"({'turun' if volume[-1] < volume[0] else 'naik'} "
+            f"{fmt.pct(abs(volume[-1] / volume[0] - 1))} dari {labels[0]})")
+    if all(isinstance(g, (int, float)) for g in gold):
+        text += f", emas {fmt._id(gold[-1], 0)} ribu oz dari {fmt._id(gold[0], 0)} ribu oz"
+    if c1[-1] is not None:
+        text += (f"; Adjusted C1 {'(' + fmt._id(-c1[-1], 2) + ')' if c1[-1] < 0 else fmt._id(c1[-1], 2)}"
+                 " US$/lb"
+                 + (" (negatif: kredit emas dan perak melebihi biaya tunai)"
+                    if c1[-1] < 0 else ""))
+    known = [f"{label} {fmt._id(v, 0)} ({how})" for (label, how), v in
+             zip(basis, [v for v in fc_volume if v is not None])]
+    if known:
+        text += ". Volume forecast (juta pon): " + ", ".join(known)
+    text += "."
+    sources = "; ".join(dict.fromkeys(
+        f"{by_year[y].get('source_title')}, hlm. {by_year[y].get('page')}" for y in years
+        if by_year[y].get("source_title")))
+    note = ((f" Volume dan C1 aktual: {sources}." if sources else "")
+            + " Tembaga = kandungan logam dalam konsentrat yang diproduksi; Adjusted C1 per pon "
+            "tembaga terjual, negatif (dalam kurung) bila kredit emas dan perak melebihi biaya "
+            "tunai.")
+    cols = labels
+    return (f"Produksi tembaga dan biaya unit C1 ({cols[0]}-{cols[-1]})",
+            {"label": "Produksi tembaga (juta pon) & Adjusted C1",
+             "bars": volume + fc_volume, "line": c1 + [None] * len(frows),
+             "is_forecast": is_fc[:len(cols)], "line_unit": "US$/lb", "source_note": note},
+            cols, text)
 
 
 def price_chart_exhibit(intake):
@@ -1694,7 +2931,11 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if not any(e.get("tipe") == "price_chart" for e in doc["exhibits"]):
         doc["exhibits"].insert(0, price_chart_exhibit(intake))
     cover_market_data(doc, intake)
+    # One five-year statement model feeds Key Financials, the charts and the
+    # statements, so the same year reads the same number everywhere.
+    statements = statement_rows(intake, fc, va)
     trim_key_financials(doc)
+    shape_key_financials(doc, intake, fc, va, statements)
     mining_catalysts(doc, intake)
     evidence = intake.get("official_evidence") or {}
     pages = doc["bagian"]
@@ -1710,7 +2951,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
                 page["exhibit"].insert(anchor + 1, guidance)
                 break
 
-    new_pages = [industry_page(intake), combo_charts_page(intake, fc),
+    new_pages = [industry_page(intake), combo_charts_page(intake, fc, va, statements),
                  sensitivity_page(valuation_inputs),
                  peer_page(intake, valuation_inputs)]
     catalyst = next((e for p in pages for e in p["exhibit"]
@@ -1727,7 +2968,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if catalyst or owner_exhibits or risk_page.get("risks"):
         new_pages.append(risk_page)
     if not ({"Riwayat keuangan dalam data Sectors", "Laba rugi", "Laba rugi bank"} & exhibit_titles):
-        new_pages.append(financials_page(intake, fc))
+        new_pages.append(financials_page(intake, fc, va, statements))
     for page in new_pages:
         if page and page["judul"] not in titles:
             pages.append(page)

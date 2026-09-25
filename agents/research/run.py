@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from agents.estimator import tools as cache_tools
 from agents.estimator.run import _chat, _parse_json, _response_text
+from app.progress import emit
 
 MAX_TOOL_CALLS = 6
 MAX_INSIGHTS = 3
@@ -1182,6 +1183,11 @@ def _useful_unread_endpoints(ticker, allowlist, seen):
     return [endpoint for _, endpoint in sorted(ranked)]
 
 
+def _emit_read(endpoint, payload):
+    emit("research", f"{endpoint} terbaca" if payload is not None else f"{endpoint} kosong",
+         status="ok" if payload is not None else "warn", tool="cache_get", agent="riset")
+
+
 def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
              db=None):
     """Run the bounded cache-only agent and persist its sanitized brief.
@@ -1247,7 +1253,10 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
     seen = set()
     report_endpoint = f"/company/report/{ticker}/"
     if report_endpoint in allowlist:
+        emit("research", f"Membaca {report_endpoint}", "baseline dibaca host sebelum agent memilih",
+             status="run", tool="cache_get", agent="riset")
         report_payload = cache_tools.cache_get(ticker, report_endpoint)
+        _emit_read(report_endpoint, report_payload)
         if report_payload is not None:
             evidence.append({"endpoint": report_endpoint, "payload": report_payload})
             seen.add(report_endpoint)
@@ -1318,7 +1327,9 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
                 break
             tool_calls_made += 1
             seen.add(endpoint)
+            emit("research", f"Membaca {endpoint}", status="run", tool="cache_get", agent="riset")
             payload = cache_tools.cache_get(ticker, endpoint)
+            _emit_read(endpoint, payload)
             if payload is None:
                 messages.extend([
                     {"role": "assistant", "content": raw},
@@ -1350,7 +1361,10 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
                     break
                 seen.add("/news/")
                 tool_calls_made += 1
+                emit("research", "Membaca /news/", "host memeriksa berita untuk kuartal yang dibaca",
+                     status="run", tool="cache_get", agent="riset")
                 news_payload = cache_tools.cache_get(ticker, "/news/")
+                _emit_read("/news/", news_payload)
                 if news_payload is not None:
                     evidence.append({"endpoint": "/news/", "payload": news_payload})
                     if _has_relevant_ticker_news(ticker, news_payload, _as_of(evidence)):

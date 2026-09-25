@@ -8,8 +8,18 @@ once to catatan_metodologi only when the profile allows a labeled substitute.
 
 Also merges the engine's own release gate (app.release.assess_release)
 so harness and engine cannot disagree: production requires BOTH to pass.
+
+With a report document, the template harness (spec/Struktur-Template.md:
+app.harness.template on the document, app.harness.render_check on its
+rendered HTML) runs too; its failed blockers join the list as ``T.<id>`` and
+force draft_non_distributable, like every other blocker. One switch,
+``template.ENABLED`` (on unless SEKTORAL_TEMPLATE_HARNESS=0), or the
+``template_checks`` argument turns it off.
 """
 from __future__ import annotations
+
+import copy
+import importlib
 
 from .s1 import check_s1
 from .s2 import check_s2
@@ -40,9 +50,38 @@ def _earnings_gate_passes(intake, forecast, valuation, assumption_status,
     return again["status"] == "distributable_assumption_led"
 
 
+def _template_mods():
+    # Imported on use so ``python -m app.harness.template`` runs without the
+    # package having imported that module first.
+    return (importlib.import_module("app.harness.template"),
+            importlib.import_module("app.harness.render_check"))
+
+
+def _template_gate(doc: dict, profile: str, intake: dict, valuation: dict,
+                   render_checks: bool) -> tuple[dict, dict]:
+    """Template checks on the document and on its rendered HTML (fail closed)."""
+    _template, _render_check = _template_mods()
+    selected = ((valuation.get("method_chain") or {}).get("selected")
+                if isinstance(valuation, dict) else None)
+    currency = (intake.get("official_evidence") or {}).get("reporting_currency")
+    rt = _template.check_template(doc, profile=profile if profile != "unsupported" else None,
+                                  method_key=selected, currency=currency)
+    if not render_checks:
+        return rt, {"tool": "check_rendered", "status": "dilabeli", "checks": [], "blockers": []}
+    try:
+        from app import render as _render
+        rr = _render_check.check_rendered(_render.render(copy.deepcopy(doc)), doc)
+    except Exception as e:  # a report that cannot be rendered cannot be released
+        err = _render_check.error_result(e)
+        rr = {"tool": "check_rendered", "status": "gagal", "checks": [err],
+              "blockers": [f"{err['check']}: {err['message']}"]}
+    return rt, rr
+
+
 def run_all(intake: dict | None = None, forecast: dict | None = None,
             valuation: dict | None = None, doc: dict | None = None,
-            assumption_status: str | None = None) -> dict:
+            assumption_status: str | None = None, template_checks: bool | None = None,
+            render_checks: bool = True) -> dict:
     intake, forecast, valuation = intake or {}, forecast or {}, valuation or {}
     profile = normalize(intake.get("model_profile") or (doc.get("meta") or {}).get("model_profile")
                         if isinstance(doc, dict) else intake.get("model_profile"))
@@ -56,6 +95,15 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
         {"tool": "check_narrative", "status": "dilabeli", "checks": [], "blockers": []}
     rs = check_output_schema(doc) if doc is not None else \
         {"tool": "check_output_schema", "status": "dilabeli", "checks": [], "blockers": []}
+    use_template = _template_mods()[0].ENABLED if template_checks is None else template_checks
+    if doc is not None and use_template:
+        rt, rr = _template_gate(doc, profile, intake, valuation, render_checks)
+    else:
+        why = "tanpa dokumen" if doc is None else "template harness dimatikan"
+        rt = {"tool": "check_template", "status": "dilabeli", "checks": [], "blockers": [],
+              "message": why}
+        rr = {"tool": "check_rendered", "status": "dilabeli", "checks": [], "blockers": []}
+    t_blockers = list(rt["blockers"]) + list(rr["blockers"])
 
     # Engine release gate (source of truth for SOTP/DDM/driver provenance).
     engine_blockers: list[str] = []
@@ -117,7 +165,7 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
 
     blockers = ([f"S1.{b}" for b in r1["blockers"]] + [f"S2.{b}" for b in s2_blockers] +
                 [f"S3.{b}" for b in r3["blockers"]] + [f"N.{b}" for b in rn["blockers"]] +
-                [f"S.{b}" for b in rs["blockers"]] +
+                [f"S.{b}" for b in rs["blockers"]] + [f"T.{b}" for b in t_blockers] +
                 [f"release.{b}" for b in engine_blockers])
 
     # Production requires every gate + engine release to pass.
@@ -127,6 +175,9 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
                                                              "distributable_assumption_led"))
     # Narrative/schema failures block production rendering but don't fake numbers.
     if doc is not None and (rn["status"] == "gagal" or rs["status"] == "gagal"):
+        all_pass = False
+    # Template blockers (spec/Struktur-Template.md) fail closed like any other.
+    if t_blockers:
         all_pass = False
 
     if engine_status == "distributable_assumption_led" and all_pass:
@@ -141,6 +192,7 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
                 "S3": {c["check"]: c["status"] for c in r3["checks"]},
                 "narrative": {c["check"]: c["status"] for c in rn["checks"]},
                 "schema": {c["check"]: c["status"] for c in rs["checks"]},
+                "template": {c["check"]: c["status"] for c in rt["checks"] + rr["checks"]},
                 "release": {"status": status, "engine_status": engine_status,
                             "route": "analyst_target" if assumption_led else
                             ((valuation.get("method_chain") or {}).get("route") or "primary_method")
@@ -155,4 +207,5 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
     return {"tool": "run_all", "profile": profile, "status": status,
             "blockers": blockers, "log_gate": log_gate,
             "gates": {"s1": r1, "s2": r2, "s3": r3, "narrative": rn,
-                      "schema": rs, "engine_status": engine_status}}
+                      "schema": rs, "template": rt, "render": rr,
+                      "engine_status": engine_status}}

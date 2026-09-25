@@ -114,22 +114,24 @@ EV/EBITDA historis Sectors dibagi EBITDA Sectors yang sama. Tahun yang D&A-nya d
 
 Tabel peer Sectors adalah sub-sektor emiten, bukan model bisnisnya. GMFI (perawatan pesawat) dibandingkan dengan jalan tol, pelabuhan dan BREN di grup "Airport Operators"; POWR (listrik gas untuk kawasan industri) dengan pengembang energi terbarukan ber-P/E 50–190x; SSIA (pemilik kawasan industri) hanya dengan kontraktor, termasuk anak usahanya sendiri; AMMN dengan penambang emas, nikel dan timah; JPFA dengan emiten kecil ber-P/E 132–1.270x. Median dan cross-check dari grup itu tidak berarti apa-apa.
 
-Kini tiap emiten punya paket grup peer di `data/peer_groups/<T>.json` yang ditinjau di git: peer dipilih menurut model bisnis, dan setiap peer yang dipakai maupun dikeluarkan tercatat dengan alasannya. Peer yang ada di tabel Sectors emiten tetap memakai baris Sectors; peer lain (termasuk bursa luar negeri) memakai snapshot Yahoo Finance bertanggal (`python -m app.peer_fundamentals --group <T>`): P/E, P/B dan EV/EBITDA dihitung dalam mata uang laporan peer sendiri, kapitalisasi dikonversi ke rupiah hanya untuk tampilan, dan periodenya tertulis (12 bulan terakhir, atau tahun buku terakhir bagi emiten yang melapor semesteran). Valuasi dan halaman peer membaca satu set yang sama, dan halaman peer memuat tabel "Grup peer: alasan pemilihan". Bila kurang dari tiga peer punya data, laporan memakai tabel Sectors dan menyebut alasannya. BBCA dan BBRI tetap memakai tabel bank Sectors, yang memang berisi bank.
+Kini tiap emiten punya paket grup peer di `data/peer_groups/<T>.json` yang ditinjau di git: peer dipilih menurut model bisnis, dan setiap peer yang dipakai maupun dikeluarkan tercatat dengan alasannya. Valuasi dan halaman peer membaca satu set yang sama, dan halaman peer memuat tabel "Grup peer: alasan pemilihan". BBCA dan BBRI tetap memakai tabel bank Sectors, yang memang berisi bank.
 
-| Emiten | Grup peer kurasi | Median P/E | P/B | EV/EBITDA | Dampak |
-|---|---|---|---|---|---|
-| AMMN | MDKA + produsen tembaga regional dan global (Freeport, Southern Copper, Antofagasta, Lundin, Hudbay, Zijin, MMG, CMOC, Sandfire) | 20,9x | 3,4x | 8,9x | cross-check P/E naik dari Rp2.510 (9,2x) ke Rp5.700 dan P/B dari Rp3.010 ke Rp4.780, jauh di atas target LoM Rp2.990 |
-| GMFI | MRO: SIA Engineering, ST Engineering, AAR, VSE | 23,4x (dua peer valid) | 2,1x | 20,7x | cross-check PER gugur karena dua peer di atas 50x; P/BV Rp24 menjadi Rp43; EV/EBITDA peer jauh di atas multiple GMFI sendiri |
-| POWR | PGEO, B.Grimm, GPSC, RATCH, EGCO, Gulf | 19,4x | 1,3x | 11,9x | PER FY kini dapat dihitung (Rp1.755) dan berada di atas target DCF Rp1.445; P/BV Rp990 |
-| SSIA | DMAS, BEST, KIJA, TOTL, PBSA | 8,7x | 1,3x | 6,6x | cross-check PER Rp825 menjadi Rp740 |
-| JPFA | CPIN, MAIN, SIPD, CPRO, CP Foods | 8,0x | 0,7x | 6,3x | cross-check PER Rp2.440 menjadi Rp2.870, 13% di bawah target DCF Rp3.280 |
-| INET | LINK, MORA, KETR, DATA, TLKM, ISAT, SUPR | 18,3x | 2,1x | 12,8x | target tidak berubah (KBLV dan JAST tidak punya EV yang dapat dipakai) |
-| SIDO | KLBF, TSPC, SOHO, DVLA, MERK, PYFA, KAEF | 9,7x | 1,4x | 5,8x | cross-check PER Rp268 menjadi Rp274 |
+**Aturan: peer hanya emiten BEI.** `app/peer_groups.load` menolak paket yang memuat peer atau pengecualian selain kode BEI empat huruf (bursa `IDX`, simbol Yahoo `<KODE>.JK`). Peer asing yang sempat dipakai (MRO Singapura dan Amerika, produsen listrik Thailand, CP Foods, produsen tembaga global) dihapus dari paket, tidak dipindah ke daftar "dikeluarkan", karena halaman peer mencantumkan setiap pengecualian sebagai emiten BEI; riwayatnya ada di git. Peer dengan P/E atau P/B pencilan tetap di grup bila model bisnisnya sebanding; rentang valuasi yang sudah ada (P/E 0–50x, P/B 0–10x, EV/EBITDA 0–50x) mengeluarkan multiple itu dari median dan halaman peer menandainya sebagai pencilan. Peer di tabel Sectors emiten memakai baris Sectors; peer lain memakai snapshot Yahoo Finance bertanggal (`python -m app.peer_fundamentals --group <T>`), dinilai dalam mata uang laporannya (ARCI dan PSAB melapor dalam dolar) dan ditampilkan dalam rupiah. Bila kurang dari tiga peer punya data, termasuk bila BEI tidak punya tiga pembanding, laporan memakai tabel Sectors dan menyebut alasannya di valuasi dan di halaman peer.
 
-Target utama tidak berubah karena hanya INET yang dinilai dengan multiple peer. Yang berubah adalah apa yang dikatakan cross-check:
+| Emiten | Grup peer BEI | Median P/E | P/B | Dampak (perkiraan: median baru x EPS/BVPS run terakhir) |
+|---|---|---|---|---|
+| AMMN | MDKA, ANTM, ARCI, PSAB, BRMS; nikel dan timah dikeluarkan | 8,6x (MDKA rugi, BRMS 150x) | 4,4x | cross-check P/E turun dari Rp5.700 ke sekitar Rp2.350, di bawah target LoM Rp2.990; P/B naik dari Rp4.780 ke sekitar Rp6.300 |
+| GMFI | CASS, GIAA, CMPP, HELI: jasa penerbangan, diperlebar karena tidak ada MRO pesawat lain di BEI | 8,0x (dua peer valid: CASS, HELI) | 2,3x (dua peer valid) | PER relatif, PER FY dan P/BV buku tidak dijalankan (dua multiple valid, minimal tiga), sehingga cross-check P/BV Rp43 hilang; GIAA dan CMPP rugi dengan ekuitas negatif dan ditandai pencilan. Tabel cross-check halaman peer masih mencetak P/B median dua peer (sekitar Rp47) karena tabel itu tidak memakai batas tiga peer |
+| POWR | CDIA, PGEO, BREN, KEEN, ARKO | 24,5x (dua peer valid) | 1,2x | cross-check PER FY (Rp1.755) gugur karena hanya PGEO dan KEEN ber-P/E di bawah 50x; P/BV Rp990 menjadi sekitar Rp965 |
+| JPFA | CPIN, MAIN, SIPD, CPRO | 6,8x | 1,1x | cross-check PER FY turun dari Rp2.870 ke sekitar Rp2.440, 26% di bawah target DCF Rp3.280 |
+| INET, SIDO, SSIA | tidak berubah (sudah BEI saja) | 18,3x; 9,7x; 8,7x | 2,1x; 1,4x; 1,3x | tidak berubah |
 
-- **POWR dan GMFI kini didukung peer.** Produsen listrik industri diperdagangkan pada EV/EBITDA 11,9x dan P/E 19,4x, sedangkan DCF POWR menyiratkan exit 7,2x; MRO global pada EV/EBITDA 20,7x, sedangkan DCF GMFI menyiratkan sekitar 12x. Selisih dengan harga tetap berasal dari kebijakan tingkat diskonto, bukan dari peer.
-- **AMMN kini bertentangan dengan peer.** Produsen tembaga diperdagangkan pada P/E 20,9x; target LoM Rp2.990 setara sekitar 7x laba FY27F. Selisihnya adalah asumsi LoM (tanpa izin ekspor, probabilitas Elang 50%, izin sampai 2050, diskonto USD 10%) berbanding cara pasar menilai produsen tembaga berumur panjang. Cross-check ini tampil di laporan dan tidak dirata-ratakan dengan target.
+Target utama tidak berubah: hanya INET yang dinilai dengan multiple peer (EV/EBITDA 12,8x), dan paketnya sudah BEI saja. Yang berubah adalah cross-check:
+
+- **AMMN:** BEI hanya punya satu produsen tembaga lain (MDKA, rugi), sehingga median P/E kini milik penambang emas dan ANTM. Kedua cross-check kini mengapit target LoM, bukan keduanya di atasnya.
+- **GMFI:** BEI tidak punya MRO pesawat lain, jadi grup diperlebar ke jasa penerbangan (CASS, HELI) dan maskapai pelanggan MRO (GIAA, CMPP); keempatnya jauh dari model bisnis MRO dan alasan tiap peer menyebut jaraknya. Maskapai rugi dengan ekuitas negatif, sehingga hanya dua P/E dan dua P/B yang valid dan metode peer tidak dijalankan; tabel jalan tol dan pelabuhan tidak lagi dipakai.
+- **POWR:** CDIA, BREN dan ARKO diperdagangkan di atas 50x laba, sehingga median P/E BEI hanya dua peer dan PER FY tidak lagi menjadi cross-check.
+- **JPFA:** tanpa CP Foods, median P/E turun ke CPIN (6,8x).
 
 ## Perbandingan dengan target publik
 
@@ -182,19 +184,19 @@ Semua penilaian ini diberi label di laporan beserta sensitivitasnya.
 - **AMMN:** probabilitas pengembangan Elang (0% memberi Rp2.360, 100% Rp3.620) dan status izin ekspor (diperpanjang: Rp3.800).
 - **SSIA:** porsi lahan dapat dijual (65%) dan laju penjualan.
 - **GMFI:** upside +98,2% tepat di bawah ambang Review Required (+100%); ekuitas tipis sesudah konversi utang membuat nilai per saham sangat peka terhadap EV.
-- **AMMN berbanding peer tembaga:** cross-check P/E Rp5.700 dan P/B Rp4.780 jauh di atas target LoM Rp2.990 (lihat putaran 4).
-- **Grup peer:** paket di `data/peer_groups/` adalah penilaian analis dan snapshot Yahoo-nya bertanggal 25 September 2026; GMFI hanya punya dua peer dengan P/E di bawah 50x. INET: PER tidak bermakna selama laba masih ramping.
+- **AMMN berbanding peer BEI:** cross-check P/E (sekitar Rp2.350, penambang emas dan ANTM) di bawah target LoM Rp2.990 dan P/B (sekitar Rp6.300) di atasnya; BEI hanya punya satu produsen tembaga lain (lihat putaran 4).
+- **Grup peer:** paket di `data/peer_groups/` adalah penilaian analis, hanya berisi emiten BEI, dan snapshot Yahoo-nya bertanggal 25 September 2026. GMFI dan POWR masing-masing hanya punya dua peer dengan P/E di bawah 50x, sehingga cross-check PER tidak dijalankan. INET: PER tidak bermakna selama laba masih ramping.
 
 ## Verifikasi
 
 - Pemeriksa otomatis membaca dokumen laporan dan menguji setiap cacat di atas, ditambah: dek tembaga basi, D&A tidak kredibel di DCF, dividen sesudah neraca, payout BBRI, penutupan basi, label beta/ERP, kode templat yang tidak dirender, kalimat cover yang bertentangan dengan valuasi, dan butir cover SSIA. Kesembilan laporan bersih.
-- 601 tes lolos, termasuk tes baru untuk grup peer kurasi (paket valid, peer asing dinilai dalam mata uangnya sendiri, fallback ke tabel Sectors, laba tahunan untuk emiten semesteran), D&A tidak kredibel, D&A audit, dividen sesudah neraca, payout, tingkat diskonto tersirat, paket harga, kurs, EBITDA peer 12 bulan terakhir, kelipatan historis, jadwal LoM tanpa ekspor, capex Elang, filter arus asing dan aturan pertumbuhan agen.
+- 601 tes lolos, termasuk tes baru untuk grup peer kurasi (paket valid dan hanya emiten BEI, peer asing ditolak, peer BEI yang melapor dalam dolar dinilai dalam dolar, fallback ke tabel Sectors, laba tahunan bila kuartal tidak tersedia), D&A tidak kredibel, D&A audit, dividen sesudah neraca, payout, tingkat diskonto tersirat, paket harga, kurs, EBITDA peer 12 bulan terakhir, kelipatan historis, jadwal LoM tanpa ekspor, capex Elang, filter arus asing dan aturan pertumbuhan agen.
 - Laporan, jejak dan manifest tiap run tersimpan di `data/sectoral.db`; tidak ada file JSON di folder output.
 - Pembaruan data (butuh jaringan, dijalankan eksplisit): `python -m app.refresh --as-of <tanggal> <ticker>...` memperbarui kurs, seri tembaga dan emas, paket harga penutupan dan snapshot peer sekaligus; `python -m app.batch ... --refresh-data` menjalankannya sebelum riset.
 
 ## Sumber
 
-- Harga, laporan keuangan, kurs dan komoditas: Yahoo Finance melalui yfinance (`.JK`, `IDR=X`, `HG=F`, `GC=F`), diambil 25 September 2026; peer luar negeri (`S59.SI`, `S63.SI`, `AIR`, `VSEC`, `BGRIM.BK`, `GPSC.BK`, `RATCH.BK`, `EGCO.BK`, `GULF.BK`, `CPF.BK`, `FCX`, `SCCO`, `ANTO.L`, `LUN.TO`, `HBM`, `2899.HK`, `1208.HK`, `3993.HK`, `SFR.AX`) dan kurs silangnya pada tanggal yang sama.
+- Harga, laporan keuangan, kurs dan komoditas: Yahoo Finance melalui yfinance (`.JK`, `IDR=X`, `HG=F`, `GC=F`), diambil 25 September 2026; snapshot peer BEI (`<KODE>.JK`, termasuk `ARCI`, `PSAB`, `GIAA`, `CMPP` dan `HELI` di luar tabel peer Sectors emitennya) dan kurs USD/IDR bagi peer yang melapor dalam dolar, pada tanggal yang sama.
 - [Laporan keuangan audit JPFA 31 Desember 2025](https://d1be5sn7lppxuh.cloudfront.net/assets/files/files/financial_report/01-2026/pt-japfa-tbk-cfs-as-of-31-december-2025-audited.pdf) (hlm. 16 dan 148–149)
 - [Laporan keuangan interim POWR 30 Juni 2026](https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf)
 - SSIA: [Laporan Tahunan 2025](https://suryainternusa.com/assets/source/files/annual-report/ar-surya-2025---spread_compressed-low_22.05.2026.pdf) (PDF hlm. 56 dan 187), [presentasi 1H26](https://suryainternusa.com/assets/source/files/corporate-persentation/2026.09.01---ssia_1h26_-ads_v2.pdf) (hlm. 43, 44, 46, 49), [rilis 1H26](https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf)

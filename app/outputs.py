@@ -2,8 +2,9 @@
 
 A run writes its readable documents (company update HTML, PDF, standalone
 trace HTML) into an output folder; the structured documents that describe it
-(report, audit trace, run manifest, batch summary) go to the database under
-the same folder, so a gallery or job still finds everything by folder.
+(report, audit trace, run manifest, batch summary, and the progress events a
+run recorded) go to the database under the same folder, so a gallery or job
+still finds everything by folder.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from pathlib import Path
 from . import store
 
 REPORT, TRACE, MANIFEST, BATCH = "report", "trace", "manifest", "batch_summary"
+EVENTS = "run_events"
 
 
 def _prefix(outdir) -> str:
@@ -46,7 +48,7 @@ def tickers(kind: str, outdir, db=None) -> list[str]:
 
 def copy(outdir, ticker: str, destination, db=None) -> None:
     """Copy a run's documents to another folder (publishing to the gallery)."""
-    for kind in (REPORT, TRACE, MANIFEST):
+    for kind in (REPORT, TRACE, MANIFEST, EVENTS):
         document = load(kind, outdir, ticker, db)
         if document is not None:
             save(kind, destination, ticker, document, db)

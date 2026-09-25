@@ -13,6 +13,7 @@ from . import methodnote
 from . import rnav
 from . import scrub
 from . import valtables
+from . import scenario_value
 from . import valuation as valuation_mod
 
 MAX_PARA = 150
@@ -370,6 +371,14 @@ def _method_label(method):
     return legacy.get(method) or method_chain.LABELS.get(method) or method
 
 
+def _NM_CHANGE_NOTE(rows):
+    """The reason for n.m. in a yoy column: a change above 500% or across zero."""
+    if not any("n.m." in [str(c) for c in row[1:]] for row in rows):
+        return ""
+    return (" n.m. pada kolom yoy: perubahan di atas 500% atau dari/ke angka negatif "
+            "tidak bermakna sebagai persentase.")
+
+
 def _build_general_draft(intake, fc, va, s1, method="auto",
                          illustrative_scenarios=False):
     """Company-update shaped evidence brief while the production model is gated."""
@@ -464,7 +473,10 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             ["Dividend yield (%)"] + total_cols_dash,
             ["EV/EBITDA (x)"] + total_cols_dash,
         ]
-        key_note = (f"Sumber: {evidence.get('annual_source_title') or actual.get('source_title')}; "
+        annual_title = (evidence.get("annual_source_title")
+                        or (evidence.get("annual_actuals_source") or {}).get("title")
+                        or actual.get("source_title"))
+        key_note = (f"Sumber: {annual_title}; "
                     f"angka {history[0]['year']}-{history[-1]['year']} ditampilkan dalam {unit}. "
                     "EPS/BVPS historis memakai laba/ekuitas pemilik induk dan jumlah "
                     f"saham per {balance.get('period_end', 'periode interim')}"
@@ -500,7 +512,9 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
     actual_rows = []
     if actual:
         previous = actual.get("prior_year") or {}
-        for label, key in (("Pendapatan", "revenue"), ("EBITDA", "ebitda"),
+        # EBITDA means nothing for a bank (spec §5.4): no EBITDA line or ratio.
+        bank = intake.get("model_profile") == "financial_ddm"
+        for label, key in (("Pendapatan", "revenue"),) + ((("EBITDA", "ebitda"),) if not bank else ()) + (
                            ("Laba usaha", "operating_profit"),
                            ("Laba bersih", "net_profit"),
                            ("Beban material", "material_expense"),
@@ -517,39 +531,45 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             ["Metrik", previous.get("period", "Periode lalu"),
              actual["period"], "yoy"], actual_rows,
             f"Sumber: {actual['source_title']}, {page_reference}; "
-            f"{actual['source_url']}")
+            f"{actual['source_url']}" + _NM_CHANGE_NOTE(actual_rows))
         metrics = actual["metrics"]
         prior_metrics = actual.get("prior_year") or {}
-        def ratio(numerator, denominator):
-            return (fmt.pct(numerator / denominator)
-                    if numerator is not None and denominator and denominator > 0 else "-")
-        diagnostic_rows = [
-            ["Margin EBITDA", ratio(prior_metrics.get("ebitda"), prior_metrics.get("revenue")),
-             ratio(metrics.get("ebitda"), metrics.get("revenue"))],
-            ["Margin laba bersih", ratio(prior_metrics.get("net_profit"), prior_metrics.get("revenue")),
-             ratio(metrics.get("net_profit"), metrics.get("revenue"))],
-        ]
+        gaps = {}
+
+        def ratio(label, numerator, denominator, period):
+            """A ratio of official figures; n.m. with the missing input named."""
+            if numerator is not None and denominator and denominator > 0:
+                return fmt.pct(numerator / denominator)
+            gaps.setdefault(label, []).append(period)
+            return "n.m."
+
+        def pair(label, top, bottom):
+            prior_period = previous.get("period", "periode lalu")
+            return [label, ratio(label, prior_metrics.get(top), prior_metrics.get(bottom), prior_period),
+                    ratio(label, metrics.get(top), metrics.get(bottom), actual["period"])]
+
+        diagnostic_rows = ([] if bank else [pair("Margin EBITDA", "ebitda", "revenue")]) + [
+            pair("Margin laba bersih", "net_profit", "revenue")]
         if metrics.get("capital_expenditure") is not None:
-            diagnostic_rows.append(
-                ["Belanja modal / pendapatan",
-                 ratio(prior_metrics.get("capital_expenditure"), prior_metrics.get("revenue")),
-                 ratio(metrics.get("capital_expenditure"), metrics.get("revenue"))])
-        if metrics.get("operating_cash_flow") is not None:
-            diagnostic_rows.append(
-                ["Arus kas operasi / EBITDA",
-                 ratio(prior_metrics.get("operating_cash_flow"), prior_metrics.get("ebitda")),
-                 ratio(metrics.get("operating_cash_flow"), metrics.get("ebitda"))])
+            diagnostic_rows.append(pair("Belanja modal / pendapatan", "capital_expenditure", "revenue"))
+        if metrics.get("operating_cash_flow") is not None and not bank:
+            diagnostic_rows.append(pair("Arus kas operasi / EBITDA", "operating_cash_flow", "ebitda"))
         add("Rasio yang menjelaskan kualitas hasil",
             ["Rasio", previous.get("period", "Periode lalu"), actual["period"]],
             diagnostic_rows,
             f"Sumber: {actual['source_title']}, {page_reference}; "
-            "rasio dihitung dari angka resmi; nilai negatif ditampilkan dalam kurung.")
+            "rasio dihitung dari angka resmi; nilai negatif ditampilkan dalam kurung."
+            + ("" if not gaps else " n.m.: " + "; ".join(
+                f"{label} {', '.join(periods)} (rilis resmi tidak memuat "
+                f"{'EBITDA' if 'EBITDA' in label else 'salah satu angka'} periode itu)"
+                for label, periods in gaps.items()) + "."))
         chart_metrics = [
             {"label": "Pendapatan", "prior": prior_metrics.get("revenue"),
              "current": metrics.get("revenue")},
         ]
         # An unreported EBITDA would plot as two zero bars; leave it off.
-        if metrics.get("ebitda") is not None and prior_metrics.get("ebitda") is not None:
+        if metrics.get("ebitda") is not None and prior_metrics.get("ebitda") is not None \
+                and not bank:
             chart_metrics.append({"label": "EBITDA", "prior": prior_metrics.get("ebitda"),
                                   "current": metrics.get("ebitda")})
         if prior_metrics.get("net_profit", 0) >= 0:
@@ -848,7 +868,9 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
               pct_change(row["current"], row.get("prior"))]
              for row in operating_metrics],
             f"Sumber: {actual['source_title']}, hlm. 3-4. Produksi tidak sama "
-            "dengan penjualan; kadar dan throughput perlu dijembatani terpisah.")
+            "dengan penjualan; kadar dan throughput perlu dijembatani terpisah."
+            + _NM_CHANGE_NOTE([[row["name"], pct_change(row["current"], row.get("prior"))]
+                               for row in operating_metrics]))
 
     guidance = evidence.get("management_guidance") or []
     if guidance and actual:
@@ -1985,9 +2007,12 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                         str(holder.get("name") or "-"), pct,
                         fmt._id(shares_held / 1e6, 1)
                         if isinstance(shares_held, (int, float)) else "-"])
+                holder_source = intake.get("major_holders_source")
                 history_page_exhibits.append(add(
-                    "Pemegang saham utama dalam data Sectors",
+                    "Pemegang saham utama" + ("" if holder_source else " dalam data Sectors"),
                     ["Pemegang saham", "Porsi", "Saham (juta)"], holder_rows,
+                    f"Sumber: {holder_source} (Sectors tidak memuat pemegang saham emiten ini); "
+                    "komposisi dapat berbeda dari tanggal laporan interim." if holder_source else
                     f"Sumber: Sectors, company/report/{ticker}, ownership.major_shareholders; "
                     "snapshot Sectors dapat berbeda dari tanggal laporan interim."))
             illustrative_pages.append({
@@ -2144,13 +2169,16 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             debt_value = sotp.get("debt_idr")
             minority_value = sotp.get("minority_interest_idr")
             shares_value = sotp.get("shares")
+            cash_ev = bridge.get("cash_idr") or {}
+            fx_text = (f"{_lom_fx_source(intake)} Rp{fmt.rp(cash_ev.get('fx_rate'))}/USD"
+                       if cash_ev.get("fx_rate") else "kurs bertanggal")
             bridge_rows = [
                 ["Kas dan setara kas", f"Rp{fmt._id(cash_value / 1e12, 2)} triliun" if cash_value is not None else "-",
-                 "Financial Statements 30 Jun 2026, hlm. 1; diterjemahkan pada JISDOR BI 23 Sep 2026."],
+                 f"Financial Statements 30 Jun 2026, hlm. 1; diterjemahkan pada {fx_text}."],
                 ["Utang finansial", f"Rp{fmt._id(debt_value / 1e12, 2)} triliun" if debt_value is not None else "-",
-                 "Pinjaman bank neto + lease/pembiayaan; hlm. 2, 89, 98; diterjemahkan pada JISDOR BI 23 Sep 2026."],
+                 f"Pinjaman bank neto + lease/pembiayaan; hlm. 2, 89, 98; diterjemahkan pada {fx_text}."],
                 ["Kepentingan nonpengendali", f"Rp{fmt._id(minority_value / 1e12, 2)} triliun" if minority_value is not None else "-",
-                 "Financial Statements 30 Jun 2026, hlm. 3; diterjemahkan pada JISDOR BI 23 Sep 2026."],
+                 f"Financial Statements 30 Jun 2026, hlm. 3; diterjemahkan pada {fx_text}."],
                 ["Saham beredar", f"{fmt._id(shares_value / 1e6, 1)} juta" if shares_value is not None else "-",
                  "Financial Statements 30 Jun 2026, hlm. 101; sesudah saham treasuri."],
                 ["PV overhead korporat", "Belum tersedia",
@@ -2160,9 +2188,9 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             ]
             bridge_exhibit = add("Jembatan korporat SOTP yang terverifikasi, masih parsial",
                 ["Komponen", "Nilai / status", "Basis dan batas bukti"], bridge_rows,
-                "Sumber: AMMAN H1 2026 Financial Statements dan Bank Indonesia JISDOR 23 Sep 2026. "
-                "Saldo keuangan per 30 Jun 2026 diterjemahkan ke IDR memakai JISDOR Rp17.803/USD; "
-                "ini hanya mengisi jembatan korporat, bukan NAV aset atau target harga.")
+                "Sumber: AMMAN H1 2026 Financial Statements. Saldo keuangan per 30 Jun 2026 "
+                f"diterjemahkan ke IDR memakai kurs laporan ({fx_text}); ini hanya mengisi "
+                "jembatan korporat, bukan NAV aset atau target harga.")
     else:
         release_rows = [
             ["Hasil interim resmi", ("Tersedia: " + actual["period"])
@@ -2672,13 +2700,18 @@ def _lom_exhibits(intake, va, detail):
     per_share = sotp["target_price_idr"]
     rows = [
         ["NAV Batu Hijau (pit, stockpile, pabrik, smelter, PMR)", usd(nav_bh), bn(nav_bh * fx),
-         f"LoM DCF USD {fmt.pct(inp['discount'])}"],
+         f"LoM DCF USD, WACC {fmt.pct(inp['discount'])}"],
         ["NAV Elang sebelum risiko", usd(nav_el), bn(nav_el * fx),
          f"sampai {int(inp['licence_end'])}; capex dari riset broker"],
         [f"NAV Elang x probabilitas pengembangan {fmt.pct(risk)}", usd(nav_el * risk),
          bn(nav_el * risk * fx), "pra-FID; asumsi analis"],
         ["Persediaan logam dan konsentrat", usd(inp["inventory_usd"]),
          bn(inp["inventory_usd"] * fx), "nilai buku 30 Jun 2026"],
+        # Template Option C rows: ownership, sum of NAV and the discount to RNAV.
+        ["Porsi kepemilikan emiten atas aset", "100,0%", "100,0%",
+         "aset dikonsolidasi; kepentingan nonpengendali dikurangkan di bawah"],
+        ["Jumlah NAV aset", usd(nav_bh + nav_el * risk + inp["inventory_usd"]),
+         bn((nav_bh + nav_el * risk + inp["inventory_usd"]) * fx), ""],
         ["(-) PV overhead korporat", f"({usd(base['overhead_usd'])})",
          f"({bn(base['overhead_usd'] * fx)})", "beban umum 1H26 x2"],
         ["(+) Kas", usd(b["cash"] / fx), bn(b["cash"]), "neraca 30 Jun 2026"],
@@ -2687,6 +2720,8 @@ def _lom_exhibits(intake, va, detail):
         ["(-) Kepentingan nonpengendali", f"({usd(b['minority'] / fx)})",
          f"({bn(b['minority'])})", "neraca 30 Jun 2026"],
         ["Nilai ekuitas", usd(sotp["equity_value_idr"] / fx), bn(sotp["equity_value_idr"]), ""],
+        ["Diskon terhadap RNAV", "0,0%", "0,0%",
+         "tidak diterapkan; risiko Elang sudah lewat probabilitas pengembangan"],
         ["Nilai per saham (Rp)", "-", f"Rp{fmt.rp(fmt.tick(per_share))}",
          f"{fmt._id(b['shares'] / 1e9, 2)} miliar saham"],
     ]
@@ -2694,7 +2729,8 @@ def _lom_exhibits(intake, va, detail):
                   "data": {"cols": ["Komponen", "US$ juta", "Rp miliar", "Basis"], "rows": rows},
                   "catatan_sumber": (
                       f"Sumber: cadangan, kapasitas, biaya unit dan neraca dari rilis dan laporan "
-                      f"keuangan 1H26 AMMAN; kurs Rp{fmt.rp(fx)}/USD (JISDOR); dek harga "
+                      f"keuangan 1H26 AMMAN; semua konversi memakai satu kurs Rp{fmt.rp(fx)}/USD "
+                      f"({_lom_fx_source(intake)}); dek harga "
                       f"{inp.get('deck_basis') or 'rata-rata 12 bulan'}; capex Elang dari "
                       f"{inp['assumptions'].get('broker_source_title')} "
                       f"({inp['assumptions'].get('broker_source_date')}), asumsi analis.")}
@@ -2768,8 +2804,35 @@ def _lom_exhibits(intake, va, detail):
              "catatan_sumber": "Sumber: estimasi Sektoral; semua komponen jembatan dalam USD, "
                                "sehingga kurs mengubah nilai per saham secara proporsional."}
     lom = inp["assumptions"]
+    rate = inp.get("discount_build") or {}
+    rate_table = {
+        "n": 0, "judul": "Komponen WACC US$ untuk NAV aset tambang", "tipe": "tabel",
+        "data": {"cols": ["Parameter", "Nilai"], "rows": [
+            [f"Risk-free (UST 10Y, {rate.get('rf_date') or '-'})", fmt.pct(rate.get("rf"))],
+            ["Country risk premium Indonesia (parameter kebijakan analis)",
+             fmt.pct(rate.get("crp"))],
+            ["Beta (parameter kebijakan analis)", fmt._id(rate.get("beta") or 0, 2)],
+            ["Equity risk premium (parameter kebijakan analis)", fmt.pct(rate.get("erp"))],
+            ["Cost of equity (CAPM)", fmt.pct(rate.get("coe"))],
+            ["Cost of debt sebelum pajak", fmt.pct(rate.get("kd_pretax"))],
+            ["Tarif pajak efektif (PPh + PNBP)", fmt.pct(rate.get("tax"))],
+            ["Cost of debt setelah pajak", fmt.pct(rate.get("kd_after"))],
+            ["Bobot utang (nilai pasar)", fmt.pct(rate.get("weight_debt"))],
+            ["Bobot ekuitas (nilai pasar)", fmt.pct(1 - (rate.get("weight_debt") or 0))],
+            ["WACC US$ (Batu Hijau dan Elang)", fmt.pct(inp["discount"])]]},
+        "catatan_sumber": (
+            f"Sumber: model US$; Rf = UST 10Y ({re.sub(r' [(].*$', '', str(rate.get('rf_source') or 'Yahoo Finance ^TNX'))}, "
+            f"{rate.get('rf_date')}); CRP Indonesia, beta dan ERP mature market parameter "
+            f"kebijakan analis, sama dengan DCF lain; biaya utang {rate.get('kd_basis')}; bobot "
+            f"dari utang finansial jembatan SOTP US${fmt._id((rate.get('debt_usd') or 0) / 1e6, 0)} "
+            f"juta dan kapitalisasi pasar US${fmt._id((rate.get('equity_usd') or 0) / 1e6, 0)} "
+            f"juta (harga {intake.get('price_date')}, kurs Rp{fmt.rp(fx)}/USD). WACC dibulatkan "
+            "ke 0,1pp; Elang memakai WACC yang sama karena risiko pengembangannya sudah lewat "
+            "probabilitas pengembangan. Tanpa nilai terminal.")}
     assumption_rows = [
-        ["Tingkat diskonto USD", fmt.pct(inp["discount"]), lom.get("discount_rate_basis")],
+        ["Tingkat diskonto USD", fmt.pct(inp["discount"]),
+         "WACC US$ dari UST 10Y + CRP 2,5% + beta x ERP 4% (parameter kebijakan analis) dan "
+         "biaya utang berbasis pasar; komponen di tabel WACC US$."],
         ["Probabilitas pengembangan Elang", fmt.pct(risk), lom.get("elang_risk_basis")],
         ["Capex pengembangan Elang",
          f"US${fmt._id(sum(base['elang_capex'].values()) / 1e9, 2)} miliar "
@@ -2812,8 +2875,10 @@ def _lom_exhibits(intake, va, detail):
         + f"), NAV Elang US${fmt._id(nav_el / 1e9, 1)} miliar dikali probabilitas "
         f"pengembangan {fmt.pct(risk)} karena proyek belum FID, dan persediaan "
         f"US${usd(inp['inventory_usd'])} "
-        "juta, dikurangi PV overhead, utang bersih dan minoritas. Arus kas didiskonto "
-        f"{fmt.pct(inp['discount'])} dalam USD sampai {int(inp['licence_end'])} tanpa nilai "
+        "juta, dikurangi PV overhead, utang bersih dan minoritas. Arus kas didiskonto WACC US$ "
+        f"{fmt.pct(inp['discount'])} (UST 10Y {fmt.pct(rate.get('rf'))} + CRP "
+        f"{fmt.pct(rate.get('crp'))} + beta x ERP, biaya utang {fmt.pct(rate.get('kd_pretax'))}) "
+        f"sampai {int(inp['licence_end'])} tanpa nilai "
         f"terminal. Dek harga rata-rata 12 bulan kalender terakhir (sumber di tabel "
         f"sensitivitas) dibuat datar; pada harga cadangan JORC emiten nilainya "
         f"Rp{fmt.rp(fmt.tick(grid[(inp['discount'], 'reserve')]))}, "
@@ -2828,16 +2893,27 @@ def _lom_exhibits(intake, va, detail):
         "tanpa nilai terminal perpetual.",
         "Input fisik dan biaya dari rilis resmi 1H26, laporan keuangan dan regulasi; recovery "
         "tersirat dari logam dalam konsentrat dibagi logam terkandung umpan 1H26.",
-        "Capex Elang, probabilitas pengembangan Elang, tingkat diskonto, rehandle stockpile dan ekspor konsentrat "
-        "adalah asumsi analis berlabel; capex Elang dari riset broker, bukan data emiten.",
+        "Capex Elang, probabilitas pengembangan Elang, rehandle stockpile dan ekspor konsentrat "
+        "adalah asumsi analis berlabel; capex Elang dari riset broker, bukan data emiten. "
+        "Tingkat diskonto adalah WACC US$ dari UST 10Y bertanggal + CRP + beta x ERP (parameter "
+        "kebijakan analis), sama dengan model US$ lain.",
         "Dek harga rata-rata 12 bulan kalender terakhir dibuat datar (Sectors bila datanya "
         "segar, selain itu seri Yahoo Finance bertanggal); harga cadangan JORC dan guncangan "
         "+/-20% ada di tabel sensitivitas.",
         "EV/EBITDA FY26F 8x menjadi cross-check di rantai metode, tidak dirata-rata.",
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
     ]
-    return {"exhibits": [sotp_table, schedule, sensitivity, tests, assumptions],
+    return {"exhibits": [sotp_table, schedule, rate_table, sensitivity, tests, assumptions],
             "text": text, "notes": notes}
+
+
+def _lom_fx_source(intake):
+    """The one USD/IDR quote of the report, as the SOTP bridge states it."""
+    cash = (intake.get("sotp_bridge") or {}).get("cash_idr") or {}
+    spot = intake.get("fx_spot") or {}
+    if spot.get("rate") and cash.get("fx_rate") == spot["rate"]:
+        return f"Yahoo Finance IDR=X, {spot.get('date')}"
+    return f"kurs bertanggal {cash.get('fx_date') or '-'}"
 
 
 def _build_assumption_led(intake, fc, va, s1, method="auto"):
@@ -2916,7 +2992,18 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
         news_effects = fc.get("news_assumptions") or []
         source_lookup.update({f"news:{item.get('article_index')}": item.get("source_url")
                               for item in news_effects})
-        assumption_rows = []
+        # The valuation runs five years: FY26F (1H actual + H2 assumption) opens
+        # the table so every year of the horizon names its basis.
+        full = scenario.get("full_year") or {}
+        ratio = lambda key: (fmt.pct(full[key] / full["revenue"])
+                             if full.get(key) is not None and full.get("revenue") else "n.m.")
+        assumption_rows = [[
+            forecast_label,
+            (f"EBITDA margin {ratio('ebitda')}; net margin {ratio('net_profit')}; "
+             f"capex/revenue {ratio('capital_expenditure') if full.get('capital_expenditure') is not None else ratio('capex')}"),
+            f"Aktual {(intake.get('latest_official_actual') or {}).get('period') or '1H'} resmi "
+            f"ditambah asumsi H2 analis; rincian di exhibit skenario {forecast_label}. "
+            f"[Sumber: official]"]]
         cited_urls = []
         for row in forward["rows"]:
             sources = [source_lookup[source_id] for source_id in row["source_ids"]
@@ -2931,8 +3018,8 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                 f"{row['rationale']} [Sumber: {', '.join(row['source_ids'])}]"])
         assumptions_exhibit = {
             "n": len(doc["exhibits"]) + 1,
-            "judul": ("Jadwal LoM FY27F-FY30F: dasar tiap tahun" if lom_schedule
-                      else "Asumsi skenario laba FY27F-FY30F"),
+            "judul": (f"Dasar tiap tahun {forecast_label}-FY30F: skenario interim dan jadwal LoM"
+                      if lom_schedule else f"Asumsi skenario laba {forecast_label}-FY30F"),
             "tipe": "tabel",
             "data": {"cols": ["Tahun", "Asumsi analis", "Dasar dan batasan"],
                      "rows": assumption_rows},
@@ -3421,13 +3508,19 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                           "net_profit" if row[0].startswith("Pertumbuhan laba bersih") else None)
             metric = key or growth_key
             if metric:
-                previous_value = prior.get(metric)
+                # Profit is the parent's share, like the actual columns and EPS: the
+                # scenario's consolidated profit times the last official parent share.
+                parent = metric == "net_profit" and attributable_share is not None
+                previous_value = (prior.get("net_profit_attributable") if parent
+                                  else prior.get(metric))
                 for index, projection in enumerate(forecast_values, start=3):
                     if index >= len(row):
                         break
                     current_value = projection.get(metric)
                     if current_value is None:
                         continue
+                    if parent:
+                        current_value *= attributable_share
                     if key:
                         row[index] = fmt._id(current_value / 1e6, 1)
                     elif previous_value and previous_value > 0:
@@ -3467,6 +3560,39 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             f"memakai harga {intake['price_date']} dan kurs {value['fx']['date']}; "
             "EV/EBITDA memakai harga kini, neraca interim, dan kurs tersebut. "
             "DPS/yield dan PBV forecast tidak dihitung tanpa asumsi dividen dan ekuitas.")
+    paragraph = next((p for p in doc["cover"].get("paragraf") or []
+                      if "memakai SOTP/LoM" in str(p.get("isi") or "")), None)
+    rows_fc = [{"year": scenario["year"], **scenario["full_year"]}] + (forward or {}).get("rows", [])
+    if paragraph and len(rows_fc) >= 3 and value.get("fx", {}).get("rate"):
+        first, third = rows_fc[0], rows_fc[2]
+        cagr = lambda key: ((third[key] / first[key]) ** 0.5 - 1
+                            if first.get(key) and third.get(key) and first[key] > 0 and third[key] > 0
+                            else None)
+        from . import forecast_statements
+        split = forecast_statements.parent_share(intake, scenario)
+        share = split[0] if split else 1.0
+        eps_fy = (first["net_profit"] * share / value["shares"] * value["fx"]["rate"]
+                  if first.get("net_profit") and value.get("shares") else None)
+        pe_tp = va["tp"] / eps_fy if eps_fy and eps_fy > 0 and va.get("tp") else None
+        from . import report_extras
+        band = ((report_extras._band_data(intake) or {}).get("multiples") or {}).get("P/E")
+        band_mean = band["mean"] if band and band["mean"] <= fmt.MULT_CAP else None
+        compare = " dan ".join(
+            ([f"median peer {fmt.mult(intake['peer_median_pe'], 1)}"]
+             if intake.get("peer_median_pe") else [])
+            + ([f"rata-rata band P/E historis {fmt.mult(band_mean, 1)}"] if band_mean else []))
+        extra = ""
+        if cagr("ebitda") is not None:
+            extra += (f" Target ini mengimplikasikan pertumbuhan EBITDA CAGR {forecast_label}-"
+                      f"{third['label']} {fmt.pct(cagr('ebitda'))}"
+                      + (f", didorong pendapatan CAGR {fmt.pct(cagr('revenue'))} dari jadwal "
+                         "LoM (umpan, logam dan dek harga)" if cagr("revenue") is not None else "")
+                      + ".")
+        if pe_tp:
+            extra += (f" Pada target harga, saham diperdagangkan pada PER {forecast_label} "
+                      f"{fmt.mult(pe_tp, 1, cap=fmt.MULT_CAP)}"
+                      + (f", dibanding {compare}" if compare else "") + ".")
+        paragraph["isi"] = paragraph["isi"].rstrip() + extra
     doc["fy26"] = {
         "Pendapatan": fmt._id(scenario["full_year"]["revenue"] * value["fx"]["rate"] / 1e9, 0),
         "EBITDA": fmt._id(scenario["full_year"]["ebitda"] * value["fx"]["rate"] / 1e9, 0),
@@ -3528,6 +3654,27 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
     lines = ddm_s["lines"]
     bn = lambda v: fmt._id(v / 1e9, 1)
     cols = ["Rp"] + [x["label"] for x in lines]
+    # First-year growth against the last fiscal year's DPS: the payout basis is
+    # the dividends of the last twelve months, which are that year's payout.
+    last = (intake.get("annuals") or [{}])[-1]
+    prior_dps = (intake["payout"] * last["earnings"] / intake["shares"]
+                 if str(intake.get("payout_basis") or "").startswith("DPS 12 bulan terakhir")
+                 and last.get("earnings") and intake.get("shares") and intake.get("payout")
+                 else None)
+    growth, gaps = [], []
+    for i, x in enumerate(lines):
+        value = x.get("dps_growth") if i else (
+            x["dps"] / prior_dps - 1 if prior_dps and prior_dps > 0 else None)
+        growth.append(fmt.pct(value) if value is not None else "n.m.")
+        if value is None:
+            gaps.append(x["label"])
+    growth_note = (
+        (f" Pertumbuhan DPS {lines[0]['label']} terhadap DPS FY{last.get('year')} "
+         f"Rp{fmt._id(prior_dps, 1)} (DPS 12 bulan terakhir, data Sectors)." if prior_dps else "")
+        + (f" Pertumbuhan DPS {', '.join(gaps)} n.m.: "
+           + ("DPS tahun buku sebelumnya tidak tersedia di data Sectors (payout "
+              f"{ddm_s['payout_basis']})" if lines[0]["label"] in gaps else
+              "DPS tahun sebelumnya nol") + "." if gaps else ""))
     table = {
         "n": 0, "judul": f"Proyeksi dividen dan nilai kini (DDM, {label}-{lines[-1]['label']})",
         "tipe": "tabel",
@@ -3535,18 +3682,21 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
             ["Laba pemilik induk (Rp miliar)"] + [bn(x["net_attr"]) for x in lines],
             ["Payout ratio"] + [fmt.pct(ddm_s["payout"])] * len(lines),
             ["DPS (Rp)"] + [fmt.rp(round(x["dps"])) for x in lines],
-            ["Pertumbuhan DPS"] + [fmt.pct(x["dps_growth"]) if x.get("dps_growth") is not None
-                                   else "-" for x in lines],
+            ["Pertumbuhan DPS"] + growth,
             ["Waktu terima (tahun)"] + [fmt._id(x["t"], 2) for x in lines],
             [f"Faktor diskonto (CoE {fmt.pct(ddm_s['coe'])})"] + [fmt._id(x["factor"], 3)
                                                                   for x in lines],
             ["PV DPS (Rp)"] + [fmt.rp(round(x["pv"])) for x in lines]]},
         "catatan_sumber": (
-            f"Sumber: laba pemilik induk skenario analis (aktual 1H resmi + asumsi H2 untuk "
-            f"{label}, asumsi tahunan sesudahnya); payout {fmt.pct(ddm_s['payout'])} "
-            f"({ddm_s['payout_basis']}); saham "
+            (f"Sumber: laba pemilik induk model driver bank (aktual 1H resmi + H2 model dari "
+             f"driver analis untuk {label}, driver tahunan sesudahnya: kredit, NIM, pendapatan "
+             f"non-bunga, rasio biaya dan biaya kredit); payout {fmt.pct(ddm_s['payout'])} "
+             if ddm_s.get("profit_basis") == "bank_driver_scenario" else
+             f"Sumber: laba pemilik induk skenario analis (aktual 1H resmi + asumsi H2 untuk "
+             f"{label}, asumsi tahunan sesudahnya); payout {fmt.pct(ddm_s['payout'])} ")
+            + f"({ddm_s['payout_basis']}); saham "
             f"{ddm_s['shares_basis']}; tanggal valuasi {ddm_s['valuation_date']}, dividen "
-            "diasumsikan diterima satu kuartal sesudah tahun buku.")}
+            "diasumsikan diterima satu kuartal sesudah tahun buku." + growth_note)}
     terminal = {
         "n": 0, "judul": "Nilai terminal dan nilai wajar per saham (DDM)", "tipe": "tabel",
         "data": {"cols": ["Komponen", "Nilai"], "rows": [
@@ -3559,9 +3709,18 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
             ["Porsi terminal terhadap nilai", fmt.pct(ddm_s["tv_share"])],
             ["Nilai wajar per saham (Rp)", fmt.rp(fmt.tick(ddm_s["per_share"]))]]
             + ([[f"CoE tersirat harga Rp{fmt.rp(intake['price'])} ({intake['price_date']})",
-                 fmt.pct(ddm_s["implied_coe"])]] if ddm_s.get("implied_coe") else [])},
+                 fmt.pct(ddm_s["implied_coe"])]] if ddm_s.get("implied_coe") else [])
+            + ([[f"Silang cek Inverse CoE: ROAE {ddm_s['fwd_label']}", fmt.pct(ddm_s["roe_fwd"])],
+                ["P/BV wajar = (ROAE - g) / (CoE - g)", fmt.mult(ddm_s["fair_pbv"], 2)],
+                [f"BVPS {ddm_s['fwd_label']} (Rp)", fmt.rp(round(ddm_s["bvps_fwd"]))],
+                ["Nilai Inverse CoE per saham (Rp, silang cek)",
+                 fmt.rp(fmt.tick(ddm_s["per_share_inverse"]))]]
+               if ddm_s.get("per_share_inverse") else [])},
         "catatan_sumber": ("Sumber: Sektoral Estimates; CoE CAPM (rf INDOGB 10Y 6,5%, beta 1,1 "
-                           "dan ERP 4% kebijakan analis); g 3,5% kebijakan analis.")}
+                           "dan ERP 4% kebijakan analis); g 3,5% kebijakan analis."
+                           + (f" Inverse CoE memakai ROAE dan BVPS {ddm_s['fwd_label']} model "
+                              "driver bank; silang cek, tidak dirata-rata dengan DDM."
+                              if ddm_s.get("per_share_inverse") else ""))}
     growths = sorted({gg for (_, gg) in ddm_s["grid"]})
     rows = []
     for delta in sorted({dw for (dw, _) in ddm_s["grid"]}):
@@ -3581,15 +3740,67 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
 
 
 def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
-    """Opsi A: FCFF forecast, terminal and EV-to-equity bridge, WACC, sensitivity."""
-    lines = dcf_s["lines"]
+    """Opsi A: FCFF forecast, terminal and EV-to-equity bridge, WACC, sensitivity.
+
+    Amounts are in the model currency (a US$ reporter in US$ juta, spec §2);
+    the value per share converts to rupiah once, on the bridge's last rows.
+    """
+    usd_model = dcf_s.get("currency") == "USD"
+    money_s = scenario_value.native_view(dcf_s)
+    lines = money_s["lines"]
+    scale, unit = (1e6, "US$ juta") if usd_model else (1e9, "Rp miliar")
     bn = lambda v: "-" if v is None else (
-        f"({fmt._id(abs(v) / 1e9, 1)})" if v < 0 else fmt._id(v / 1e9, 1))
-    head = [f"{x['label']}" + (" (H2)" if x.get("share", 1) < 0.999 else "") for x in lines]
+        f"({fmt._id(abs(v) / scale, 1)})" if v < 0 else fmt._id(v / scale, 1))
+    # Columns hold full fiscal years; a year the valuation date splits is
+    # counted in PV by its share after that date (the "Porsi periode" row).
+    head = [x["label"] for x in lines]
+    partial = [x["label"] for x in lines if x.get("share", 1) < 0.999]
+    # First-year growth against FY-1 FCFF on this table's definition: Sectors
+    # EBIT, D&A and capex of that year, the table's tax rate and working-capital
+    # intensity. A US$ reporter's Sectors figures carry historical conversion
+    # rates, not the table's spot rate, so its growth would be an FX effect.
+    usd = (intake.get("official_evidence") or {}).get("reporting_currency") == "USD"
+    first_year = int(lines[0]["label"][2:4]) + 2000
+    annual = {a.get("year"): a for a in intake.get("annuals") or []}
+    last, before = annual.get(first_year - 1) or {}, annual.get(first_year - 2) or {}
+    parts = [last.get(k) for k in ("ebit", "da", "capex_out", "revenue")]
+    prior_fcff, prior_reason = None, None
+    if usd:
+        prior_reason = (f"EBIT, D&A dan capex FY{first_year - 1} dalam US$ tidak tersedia; data "
+                        "Sectors memuatnya dalam rupiah hasil konversi pada kurs historis")
+    elif any(v is None for v in parts) or not before.get("revenue"):
+        missing = [name for name, v in zip(("EBIT", "D&A", "capex", "pendapatan"), parts)
+                   if v is None] or [f"pendapatan FY{first_year - 2}"]
+        prior_reason = (f"{', '.join(missing)} FY{first_year - 1} tidak tersedia (data Sectors "
+                        "tidak melaporkannya atau nilainya ditolak intake)")
+    else:
+        ebit, da, capex, revenue = parts
+        prior_fcff = (ebit - max(ebit, 0.0) * dcf_s["tax_rate"] + da - abs(capex)
+                      - (dcf_s.get("nwc_ratio") or 0.0) * (revenue - before["revenue"]))
+        if prior_fcff <= 0:
+            prior_reason = (f"FCFF FY{first_year - 1} Rp{fmt._id(prior_fcff / 1e9, 1)} miliar "
+                            "tidak positif")
+    fcff_growth, fcff_gaps = [], []
+    for i, x in enumerate(lines):
+        value = x.get("fcff_growth") if i else (
+            x["fcff"] / prior_fcff - 1 if prior_fcff and prior_fcff > 0 and x["fcff"] > 0 else None)
+        fcff_growth.append(fmt.pct(value) if value is not None else "n.m.")
+        if value is None:
+            fcff_gaps.append(x["label"])
+    fcff_note = (
+        (f" Pertumbuhan FCFF {lines[0]['label']} terhadap FCFF FY{first_year - 1} "
+         f"Rp{fmt._id(prior_fcff / 1e9, 1)} miliar (EBIT, D&A dan capex data Sectors; pajak "
+         "dan modal kerja dengan asumsi tabel ini)." if prior_fcff and prior_fcff > 0 else "")
+        + (f" Pertumbuhan FCFF {', '.join(fcff_gaps)} n.m.: "
+           + "; ".join(([prior_reason] if lines[0]["label"] in fcff_gaps and prior_reason else [])
+                       + (["FCFF tahun itu atau tahun sebelumnya tidak positif"]
+                          if [g for g in fcff_gaps if g != lines[0]["label"]] or
+                          (lines[0]["label"] in fcff_gaps and not prior_reason) else []))
+           + "." if fcff_gaps else ""))
     fcff = {
         "n": 0, "judul": f"Proyeksi FCFF dan nilai kini ({label}-{lines[-1]['label']})",
         "tipe": "tabel",
-        "data": {"cols": ["Rp miliar"] + head, "rows": [
+        "data": {"cols": [unit] + head, "rows": [
             ["Pendapatan"] + [bn(x["revenue"]) for x in lines],
             ["EBITDA"] + [bn(x["ebitda"]) for x in lines],
             ["(-) D&A"] + [bn(x["da"]) for x in lines],
@@ -3600,8 +3811,7 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
             ["(-) Capex"] + [bn(x["capex"]) for x in lines],
             ["(-) Kenaikan modal kerja"] + [bn(x["dnwc"]) for x in lines],
             ["FCFF"] + [bn(x["fcff"]) for x in lines],
-            ["Pertumbuhan FCFF"] + [fmt.pct(x["fcff_growth"]) if x.get("fcff_growth") is not None
-                                    else "-" for x in lines],
+            ["Pertumbuhan FCFF"] + fcff_growth,
             ["Porsi periode sesudah tanggal valuasi"] + [fmt.pct(x["share"]) for x in lines],
             [f"Faktor diskonto (WACC {fmt.pct(dcf_s['wacc'])})"] + [fmt._id(x["factor"], 3)
                                                                    for x in lines],
@@ -3611,38 +3821,56 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
             f"asumsi H2 untuk {label}, asumsi tahunan sesudahnya); D&A {dcf_s['da_basis']}; "
             f"pajak {dcf_s['tax_basis']}; {dcf_s['nwc_basis']}. Konvensi mid-period dari "
             f"tanggal valuasi {dcf_s['valuation_date']}"
-            + (f" ({dcf_s['anchor_reason']})" if dcf_s.get("anchor_reason") else "") + ".")}
+            + (f" ({dcf_s['anchor_reason']})" if dcf_s.get("anchor_reason") else "") + "."
+            + (f" Kolom {', '.join(partial)} memuat setahun penuh; PV hanya menghitung porsi "
+               "sesudah tanggal valuasi." if partial else "")
+            + (" Model dalam US$, mata uang pelaporan emiten; konversi ke rupiah hanya pada "
+               "nilai per saham." if usd_model else "")
+            + fcff_note)}
     exit_col = dcf_s.get("per_share_exit") is not None
     minority = (f"(-) Minoritas ({dcf_s['nci_basis']})" if dcf_s.get("nci") is not None else
                 f"(x) Porsi induk ({dcf_s['nci_basis']})")
 
-    paid_out = dcf_s.get("distributions") or 0.0
+    paid_out = money_s.get("distributions") or 0.0
+    fx_text = (f"Kurs Rp/US$ (Yahoo Finance IDR=X, {dcf_s.get('fx_date') or '-'})"
+               if usd_model else None)
 
-    def bridge_rows(ev, tv, pv_tv, per_share):
-        return [bn(tv), bn(pv_tv), bn(dcf_s["pv_explicit"]), bn(ev), bn(dcf_s["cash"]),
-                bn(-dcf_s["debt"])] + ([bn(-paid_out)] if paid_out else []) + [
-                bn(-dcf_s["nci"]) if dcf_s.get("nci") is not None else
+    def bridge_rows(ev, tv, pv_tv, per_share, per_share_native):
+        # A US$ model: equity and per-share value in US$, then the one
+        # conversion to rupiah at the dated spot rate.
+        own = per_share_native if usd_model else per_share
+        return [bn(tv), fmt._id(pv_tv / tv, 3) if tv else "n.m.",
+                bn(pv_tv), bn(money_s["pv_explicit"]), bn(ev), bn(money_s["cash"]),
+                bn(-money_s["debt"])] + ([bn(-paid_out)] if paid_out else []) + [
+                bn(-money_s["nci"]) if money_s.get("nci") is not None else
                 fmt.pct(dcf_s["attributable_share"]),
-                bn(per_share * dcf_s["shares"]), fmt._id(dcf_s["shares"] / 1e9, 2),
+                bn(own * dcf_s["shares"]), fmt._id(dcf_s["shares"] / 1e9, 2)] + (
+                [_usd_per_share(per_share_native), fmt._id(dcf_s["fx"], 0)] if usd_model
+                else []) + [
                 fmt.rp(fmt.tick(per_share))]
 
-    labels = ["Nilai terminal (tidak didiskonto)", "PV nilai terminal", "Jumlah PV FCFF",
+    labels = ["Nilai terminal (tidak didiskonto)", "Faktor diskonto terminal",
+              "PV nilai terminal", "Jumlah PV FCFF",
               "Enterprise value", f"(+) Kas ({dcf_s['cash_basis']})",
               f"(-) Utang ({dcf_s['debt_basis']})"] + (
                   [f"(-) Dividen dibagikan sesudah tanggal neraca "
                    f"({dcf_s['distributions_basis']})"] if paid_out else []) + [
               minority, "Nilai ekuitas pemilik induk",
-              f"Saham (miliar, {dcf_s['shares_basis']})", "Nilai wajar per saham (Rp)"]
-    gordon = bridge_rows(dcf_s["ev"], dcf_s["tv"], dcf_s["pv_tv"], dcf_s["per_share"])
-    exit_values = (bridge_rows(dcf_s["ev_exit"], dcf_s["tv_exit"], dcf_s["pv_tv_exit"],
-                               dcf_s["per_share_exit"]) if exit_col else [])
+              f"Saham (miliar, {dcf_s['shares_basis']})"] + (
+                  ["Ekuitas per saham (US$)", fx_text] if usd_model else []) + [
+              "Nilai wajar per saham (Rp)"]
+    gordon = bridge_rows(money_s["ev"], money_s["tv"], money_s["pv_tv"], dcf_s["per_share"],
+                         money_s.get("per_share_native"))
+    exit_values = (bridge_rows(money_s["ev_exit"], money_s["tv_exit"], money_s["pv_tv_exit"],
+                               dcf_s["per_share_exit"], money_s.get("per_share_exit_native"))
+                   if exit_col else [])
     rows = ([[f"FCFF terminal = FCFF {lines[-1]['label']} dengan capex >= D&A, x (1 + g)",
-              bn(dcf_s["terminal_fcff"])] + (["-"] if exit_col else [])] +
+              bn(money_s["terminal_fcff"])] + (["-"] if exit_col else [])] +
             [[name, g_] + ([x_] if exit_col else []) for name, g_, x_ in
              zip(labels, gordon, exit_values or [""] * len(labels))])
     terminal = {
         "n": 0, "judul": "Nilai terminal dan jembatan EV ke ekuitas", "tipe": "tabel",
-        "data": {"cols": ["Rp miliar", f"Gordon g {fmt.pct(dcf_s['g'])} (basis)"]
+        "data": {"cols": [unit, f"Gordon g {fmt.pct(dcf_s['g'])} (basis)"]
                  + ([f"Exit {fmt.mult(dcf_s['exit_multiple'], 1)} (cross-check)"]
                     if exit_col else []),
                  "rows": rows},
@@ -3652,11 +3880,18 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
             + (f"; exit = median EV/EBITDA historis emiten di data Sectors "
                f"({', '.join(fmt.mult(v, 1) for v in dcf_s['exit_points'])}); selisih "
                f"{fmt.pct(dcf_s['exit_gap'])} diungkapkan, tidak dirata-rata (§4.4)."
-               if exit_col else "; exit historis kurang dari tiga titik."))}
+               if exit_col else "; exit historis kurang dari tiga titik.")
+            + (f" Nilai dalam US$ sampai ekuitas per saham, lalu dikonversi ke rupiah satu kali "
+               f"pada kurs spot Rp{fmt._id(dcf_s['fx'], 0)}/US$ ({dcf_s.get('fx_date') or '-'})."
+               if usd_model else ""))}
+    rf_row = ([f"Risk-free (UST 10Y, {dcf_s.get('rf_date') or '-'})", fmt.pct(dcf_s["rf"])]
+              if usd_model else ["Risk-free (INDOGB 10Y)", fmt.pct(dcf_s["rf"])])
+    crp_rows = ([["Country risk premium Indonesia (parameter kebijakan analis)",
+                  fmt.pct(dcf_s["crp"])]] if usd_model else [])
     wacc = {
-        "n": 0, "judul": "Komponen WACC", "tipe": "tabel",
+        "n": 0, "judul": "Komponen WACC" + (" (US$)" if usd_model else ""), "tipe": "tabel",
         "data": {"cols": ["Parameter", "Nilai"], "rows": [
-            ["Risk-free (INDOGB 10Y)", fmt.pct(dcf_s["rf"])],
+            rf_row, *crp_rows,
             ["Beta", fmt._id(dcf_s["beta"], 2)],
             ["Equity risk premium", fmt.pct(dcf_s["erp"])],
             ["Cost of equity (CAPM)", fmt.pct(dcf_s["coe"])],
@@ -3665,15 +3900,23 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
             ["Cost of debt setelah pajak", fmt.pct(dcf_s["kd_after"])],
             ["Bobot utang (nilai pasar)", fmt.pct(dcf_s["weight_debt"])],
             ["Bobot ekuitas (nilai pasar)", fmt.pct(1 - dcf_s["weight_debt"])],
-            ["WACC", fmt.pct(dcf_s["wacc"])]]
-            + ([[f"WACC tersirat harga Rp{fmt.rp(intake['price'])} ({intake['price_date']})",
-                 fmt.pct(dcf_s["implied_wacc"])],
-                ["CoE tersirat pada bobot utang yang sama", fmt.pct(dcf_s["implied_coe"])]]
-               if dcf_s.get("implied_wacc") and dcf_s.get("implied_coe") else [])},
+            # Template Exhibit 9: WACC closes the table; implied rates go to the note.
+            ["WACC", fmt.pct(dcf_s["wacc"])]]},
         "catatan_sumber": (
-            f"Sumber: rf, beta dan ERP 4% kebijakan analis; bobot dari kapitalisasi pasar "
-            f"(harga {intake['price_date']}) dan utang ({dcf_s['debt_basis']})"
+            (f"Sumber: model US$; Rf = UST 10Y {fmt.pct(dcf_s['rf'])} "
+             f"({re.sub(r' [(].*$', '', str(dcf_s.get('rf_source') or 'Yahoo Finance ^TNX'))}, "
+             f"{dcf_s.get('rf_date')}); CRP Indonesia {fmt.pct(dcf_s['crp'])}, beta dan ERP "
+             f"{fmt.pct(dcf_s['erp'], 0)} (mature market) parameter kebijakan analis; biaya utang "
+             f"{dcf_s.get('kd_basis')}; bobot dari kapitalisasi pasar (harga {intake['price_date']}, "
+             f"ke US$ pada kurs Rp{fmt._id(dcf_s['fx'], 0)}/US$) dan utang "
+             f"({dcf_s['debt_basis']})" if usd_model else
+             f"Sumber: rf, beta dan ERP 4% kebijakan analis; bobot dari kapitalisasi pasar "
+             f"(harga {intake['price_date']}) dan utang ({dcf_s['debt_basis']})")
             + (f"; penyesuaian berita {dcf_s['wacc_bps']:+g} bp" if dcf_s.get("wacc_bps") else "")
+            + (f". WACC tersirat harga Rp{fmt.rp(intake['price'])} ({intake['price_date']}) "
+               f"{fmt.pct(dcf_s['implied_wacc'])}; CoE tersirat pada bobot utang yang sama "
+               f"{fmt.pct(dcf_s['implied_coe'])}"
+               if dcf_s.get("implied_wacc") and dcf_s.get("implied_coe") else "")
             + ".")}
     growths = sorted({gg for (_, gg) in dcf_s["grid"]})
     grid_rows = []
@@ -3688,8 +3931,31 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
             "tipe": "tabel",
             "data": {"cols": ["WACC"] + [f"g {fmt.pct(gg)}" for gg in growths],
                      "rows": grid_rows},
-            "catatan_sumber": "Sumber: Sektoral Estimates; basis sama dengan target harga (Gordon)."}
+            "catatan_sumber": "Sumber: Sektoral Estimates; basis sama dengan target harga (Gordon)."
+            + (f" WACC dan g dalam US$; nilai per saham US$ dikonversi ke rupiah pada kurs "
+               f"Rp{fmt._id(dcf_s['fx'], 0)}/US$ ({dcf_s.get('fx_date') or '-'})."
+               if usd_model else "")}
     return [fcff, terminal, wacc, grid]
+
+
+def _usd_per_share(value):
+    """US$ per share with four significant digits (a Rp56 share is US$0,003140)."""
+    return fmt._id(value, 6 if abs(value) < 0.01 else 5 if abs(value) < 0.1 else 4)
+
+
+def _dcf_bridge_sentence(dcf_s):
+    """EV to equity in the model currency; a US$ model states its one conversion."""
+    if dcf_s.get("currency") == "USD":
+        m = scenario_value.native_view(dcf_s)
+        usd = lambda v: fmt._id(v / 1e6, 1)  # noqa: E731
+        return (f"Dalam US$, mata uang pelaporan: EV US${usd(m['ev'])} juta ditambah kas "
+                f"US${usd(m['cash'])} juta, dikurangi utang US${usd(m['debt'])} juta dan porsi "
+                f"minoritas, memberi ekuitas US${usd(m['equity'])} juta, dikonversi ke rupiah pada "
+                f"kurs Rp{fmt._id(dcf_s['fx'], 0)}/US$. ")
+    bn = lambda v: fmt._id(v / 1e9, 1)  # noqa: E731
+    return (f"EV Rp{bn(dcf_s['ev'])} miliar ditambah kas Rp{bn(dcf_s['cash'])} miliar, dikurangi "
+            f"utang Rp{bn(dcf_s['debt'])} miliar dan porsi minoritas, memberi ekuitas "
+            f"Rp{bn(dcf_s['equity'])} miliar. ")
 
 
 def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_price=None):
@@ -3719,9 +3985,15 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
             "Rating dan target harga memakai DDM, metode utama bank: DPS = laba pemilik induk "
             f"skenario analis {label}-{last} x payout {fmt.pct(ddm_s['payout'])} "
             f"({ddm_s['payout_basis']}), didiskonto dengan Cost of Equity, terminal Gordon.",
-            f"Laba {label} dari aktual 1H resmi dan asumsi H2; tahun sesudahnya asumsi analis "
-            "tahunan. Skenario ini bukan forecast driver terekonsiliasi (S2.9), sehingga "
-            "statusnya berbasis asumsi.",
+            (f"Laba {label} dari aktual 1H resmi dan H2 model driver bank; tahun sesudahnya "
+             "dari driver bank tahunan asumsi analis (kredit, NIM, pendapatan non-bunga, rasio "
+             "biaya, biaya kredit), dengan neraca, pendanaan dan modal pada rasio historis "
+             "emiten (screening). Skenario ini bukan forecast driver terekonsiliasi (S2.9), "
+             "sehingga statusnya berbasis asumsi."
+             if ddm_s.get("profit_basis") == "bank_driver_scenario" else
+             f"Laba {label} dari aktual 1H resmi dan asumsi H2; tahun sesudahnya asumsi analis "
+             "tahunan. Skenario ini bukan forecast driver terekonsiliasi (S2.9), sehingga "
+             "statusnya berbasis asumsi."),
             f"CoE {fmt.pct(ddm_s['coe'])} dari CAPM (rf INDOGB 10Y, beta dan ERP 4% kebijakan "
             f"analis); g {fmt.pct(ddm_s['g'])}. Tanggal valuasi {ddm_s['valuation_date']}; "
             "dividen diterima satu kuartal sesudah tahun buku."
@@ -3738,8 +4010,14 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
         f"analis {label}-{last}: pendapatan, margin EBITDA dan capex dari agen, terminal Gordon.",
         f"FCFF = EBIT x (1 - pajak efektif) + D&A - capex - kenaikan modal kerja; D&A "
         f"{dcf_s['da_basis']}; pajak {dcf_s['tax_basis']}; {dcf_s['nwc_basis']}.",
-        f"WACC {fmt.pct(dcf_s['wacc'])} dari CAPM dan biaya utang 9% sebelum pajak, bobot nilai "
-        f"pasar. Tanggal valuasi {dcf_s['valuation_date']}"
+        (f"Model dalam US$, mata uang pelaporan: WACC US$ {fmt.pct(dcf_s['wacc'])} dari CAPM (UST "
+         f"10Y {fmt.pct(dcf_s['rf'])} + CRP {fmt.pct(dcf_s['crp'])} + beta x ERP) dan biaya utang "
+         f"US$ {fmt.pct(dcf_s['kd_pretax'])} sebelum pajak, bobot nilai pasar; nilai per saham "
+         f"dikonversi ke rupiah pada kurs Rp{fmt._id(dcf_s['fx'], 0)}/US$. "
+         if dcf_s.get("currency") == "USD" else
+         f"WACC {fmt.pct(dcf_s['wacc'])} dari CAPM dan biaya utang "
+         f"{fmt.pct(dcf_s['kd_pretax'], 0)} sebelum pajak, bobot nilai pasar. ")
+        + f"Tanggal valuasi {dcf_s['valuation_date']}"
         + (f" ({dcf_s['anchor_reason']})" if dcf_s.get("anchor_reason") else "")
         + f"; arus kas {label} dihitung sesudah tanggal itu; konvensi mid-period; nilai "
         "terminal di akhir tahun eksplisit terakhir."
@@ -3839,6 +4117,92 @@ def _ev_ebitda_scenario_exhibit(intake, ev, label):
             + f"; harga penutupan {intake['price_date']}.")}
 
 
+def _bank_driver_text(model, label, money, unit, eps_of, cite, a, forward_rows=()):
+    """Bank Driver Scenario prose and exhibits: (H2 sentence, FY bridge, driver table)."""
+    rows, anchor, h2 = model["rows"], model["anchor"], model["h2"]
+    first = rows[0]
+    d = first["drivers"]
+    period = anchor["period"]
+    pct = lambda v: fmt.pct(v / 100) if isinstance(v, (int, float)) else "n.m."
+    h2_text = (f"Asumsi semester kedua (Bank Driver Scenario): kredit bruto tumbuh "
+               f"{pct(d['loan_growth_pct'])} setahun, NIM H2 {pct(d['nim_pct'])}, pendapatan "
+               f"non-bunga {pct(d['non_ii_to_nii_pct'])} dari NII, rasio biaya terhadap "
+               f"pendapatan {pct(d['cost_to_income_pct'])} dan biaya kredit "
+               f"{pct(d['cost_of_credit_pct'])}; model menurunkan NII, provisi, laba, ekuitas dan "
+               "CAR dari driver tersebut. " + (a.get("rationale") or ""))
+    fy_lines = (("Pendapatan bunga bersih", "net_interest_income", "net_interest_income"),
+                ("Pendapatan non-bunga", "non_interest_income", "non_interest_income"),
+                ("Beban operasional", "operating_expense", "operating_expense"),
+                ("Provisi", "provision", "provision"),
+                ("Laba sebelum pajak", "earnings_before_tax", "earnings_before_tax"),
+                ("Laba bersih", "net_profit", "net_cons"),
+                ("Laba pemilik induk", "net_profit_attributable", "earnings"))
+    h1_values = {"net_interest_income": anchor["net_interest_income"],
+                 "non_interest_income": anchor["other_income"],
+                 "net_profit": anchor["net_profit"],
+                 "net_profit_attributable": anchor["net_profit_attributable"],
+                 **{k: anchor["split"][k] for k in ("operating_expense", "provision",
+                                                    "earnings_before_tax")}}
+    h2_values = {"net_interest_income": h2["net_interest_income"],
+                 "non_interest_income": h2["other_income"], **h2}
+    screened = ("operating_expense", "provision", "earnings_before_tax")
+    bridge = {
+        "n": 0, "judul": f"Model driver bank {label}: aktual {period} dan H2 model",
+        "tipe": "tabel",
+        "data": {"cols": [unit, f"{period} aktual", "H2 model", label],
+                 "rows": [[name, money(h1_values[k1]) + ("*" if k1 in screened else ""),
+                           money(h2_values[k1]), money(first[k2])]
+                          for name, k1, k2 in fy_lines]
+                 + [["Driver H2", "aktual resmi",
+                     f"NIM {pct(d['nim_pct'])}; CIR {pct(d['cost_to_income_pct'])}; biaya kredit "
+                     f"{pct(d['cost_of_credit_pct'])}; non-bunga/NII "
+                     f"{pct(d['non_ii_to_nii_pct'])}",
+                     f"kredit {pct(d['loan_growth_pct'])}; NIM FY {fmt.pct(first['net_interest_margin'])}"]]},
+        "catatan_sumber": (
+            f"Sumber: rilis {period} resmi (pendapatan, NII dan laba); H2 adalah model driver "
+            f"bank dengan asumsi analis ({cite((a.get('bank_drivers') or {}).get('source_ids'))}), "
+            f"bukan panduan emiten. *Rilis {period} tidak memisahkan beban operasional, provisi "
+            "dan pajak; angka bertanda bintang adalah pemisahan screening pada komposisi FY "
+            f"sebelumnya yang totalnya sama dengan laba {period} resmi. EPS memakai "
+            f"{anchor['parent_share_basis']}.")}
+    forward = None
+    if len(rows) > 1:
+        basis = {r.get("year"): r for r in [a.get("bank_drivers") or {}] + list(forward_rows)}
+        body = []
+        for r in rows:
+            x = r["drivers"]
+            why = basis.get(r["year"]) or {}
+            body.append([r["label"], pct(x["loan_growth_pct"]), pct(x["nim_pct"]),
+                         pct(x["cost_of_credit_pct"]), pct(x["cost_to_income_pct"]),
+                         money(r["earnings"]),
+                         fmt.pct(r["roe"]) if r.get("roe") is not None else "n.m.",
+                         fmt.pct(r["capital_adequacy_ratio"])
+                         if r.get("capital_adequacy_ratio") is not None else "n.m.",
+                         f"{why.get('rationale') or '-'} [Sumber: "
+                         f"{', '.join(why.get('source_ids') or ['official'])}]"])
+        forward = {
+            "n": 0, "judul": f"Bank Driver Scenario {rows[0]['label']}-{rows[-1]['label']}",
+            "tipe": "tabel",
+            "data": {"cols": ["Tahun", "Kredit tumbuh", "NIM", "Biaya kredit", "CIR",
+                              "Laba induk", "ROE", "CAR*", "Dasar"],
+                     "rows": body},
+            "catatan_sumber": (
+                f"Sumber: driver asumsi analis dari rilis resmi dan berita bertanggal, bukan "
+                f"panduan emiten; {rows[0]['label']} = aktual {period} + H2 model (NIM, CIR dan "
+                "biaya kredit kolom ini adalah driver H2). Laba induk dalam " + unit + ". *CAR "
+                "screening: ekuitas x rasio modal regulasi terhadap ekuitas FY terakhir / (total "
+                "aset x densitas ATMR FY terakhir), bukan perhitungan regulasi."
+                + ("" if not model["checks"]["warnings"] else
+                   " " + " ".join(model["checks"]["warnings"])))}
+    last = rows[-1]
+    path = (f" Model driver bank membawa laba bersih ke Rp{money(last['earnings'])} miliar pada "
+            f"{last['label']} dengan NIM {fmt.pct(last['net_interest_margin'])}, biaya kredit "
+            f"{fmt.pct(last['cost_of_credit'])} dan ROE {fmt.pct(last['roe'])}"
+            + (f"; CAR screening {fmt.pct(last['capital_adequacy_ratio'])}"
+               if last.get("capital_adequacy_ratio") is not None else "") + ".")
+    return h2_text, bridge, forward, path
+
+
 def _build_earnings_led(intake, fc, va, s1, method="auto"):
     """Going concern / bank: FY PER peer on the validated earnings scenario."""
     doc = _build_general_draft(intake, fc, va, s1, method=method)
@@ -3898,7 +4262,12 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     thesis = [p.strip() for p in a.get("thesis_points") or [] if isinstance(p, str)]
     fy = scenario["full_year"]
     path = ""
-    if forward:
+    bank_fc = fc.get("bank_model") if isinstance(fc.get("bank_model"), dict) else None
+    bank_texts = (_bank_driver_text(bank_fc, label, money, unit, eps_of, cite, a, forward)
+                  if bank_fc else None)
+    if bank_texts and forward:
+        path = bank_texts[3]
+    elif forward:
         last = forward[-1]
         # Parent's share, the basis of Key Financials and EPS (cover tie-out).
         amount = (f"US${money(last['net_profit_attributable'])} juta" if usd
@@ -4012,8 +4381,23 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     base_attr = ((evidence_annuals.get(base_year) or {}).get("net_profit_attributable")
                  or next((a["earnings"] / to_idr for a in intake.get("annuals") or []
                           if a.get("year") == base_year and a.get("earnings")), None))
-    end_row = forward[1] if len(forward) >= 2 else None  # FY+2 closes a 3-year path
-    if base_attr and base_attr > 0 and end_row and end_row.get("net_profit_attributable"):
+    end_row = forward[1] if len(forward) >= 2 else None  # FY28F closes the display horizon
+    # Template Slide 1 ¶3: CAGR FY26-28F of EBITDA (profit for a bank) and its driver.
+    bank = intake.get("model_profile") == "financial_ddm"
+    metric = "net_profit_attributable" if bank or fy.get("ebitda") is None else "ebitda"
+    start_v, end_v = fy.get(metric), (end_row or {}).get(metric)
+    if start_v and end_v and start_v > 0 and end_v > 0:
+        cagr = (end_v / start_v) ** 0.5 - 1
+        rev_cagr = ((end_row["revenue"] / fy["revenue"]) ** 0.5 - 1
+                    if fy.get("revenue") and end_row.get("revenue") else None)
+        margin_key = "net_profit_attributable" if metric != "ebitda" else "ebitda"
+        margin = lambda row: row[margin_key] / row["revenue"] if row.get("revenue") else None
+        name = "laba bersih" if metric != "ebitda" else "EBITDA"
+        growth = (f"pertumbuhan {name} CAGR {label}-{end_row['label']} {fmt.pct(cagr)}"
+                  + (f", didukung pertumbuhan pendapatan CAGR {fmt.pct(rev_cagr)} dan margin "
+                     f"{name} {fmt.pct(margin(fy))} menjadi {fmt.pct(margin(end_row))}"
+                     if rev_cagr is not None and margin(fy) is not None else ""))
+    elif base_attr and base_attr > 0 and end_row and end_row.get("net_profit_attributable"):
         cagr = (end_row["net_profit_attributable"] / base_attr) ** (1 / 3) - 1
         growth = (f"pertumbuhan laba bersih CAGR FY{base_year % 100:02d}-{end_row['label']} "
                   f"{fmt.pct(cagr)}")
@@ -4086,11 +4470,10 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
             f"{forward[-1]['label']} menjadi FCFF setelah pajak efektif "
             f"{fmt.pct(dcf_s['tax_rate'])}, D&A dan modal kerja, didiskonto WACC "
             f"{fmt.pct(dcf_s['wacc'])} ke {dcf_s['valuation_date']} dengan terminal Gordon g "
-            f"{fmt.pct(dcf_s['g'])} ({fmt.pct(dcf_s['tv_share'])} dari EV). EV Rp{bn(dcf_s['ev'])} "
-            f"miliar ditambah kas Rp{bn(dcf_s['cash'])} miliar, dikurangi utang "
-            f"Rp{bn(dcf_s['debt'])} miliar dan porsi minoritas, memberi ekuitas "
-            f"Rp{bn(dcf_s['equity'])} miliar. " + gap_text +
-            f"Pada WACC +1pp dan g 2,5% nilainya Rp{fmt.rp(va['tp_down'])}. ")
+            f"{fmt.pct(dcf_s['g'])} ({fmt.pct(dcf_s['tv_share'])} dari EV). "
+            + _dcf_bridge_sentence(dcf_s) + gap_text +
+            f"Pada WACC +1pp dan g {fmt.pct(min(dcf_s.get('grid_growth') or (0.025,)))} "
+            f"nilainya Rp{fmt.rp(va['tp_down'])}. ")
     ev_lead = (
         f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai EV/EBITDA peer forward, metode "
         f"untuk aset yang masih ramping atau riwayat singkat (Method Gate 3): EV/EBITDA median "
@@ -4114,11 +4497,17 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     # for the growth already in the target.
     growth_text = ((f"Target ini mengimplikasikan {growth}. " if growth else "")
                    + (f"Katalis positif terdekat: {driver_text}. " if driver_text else ""))
-    multiple_text = (f"Pada harga kini saham diperdagangkan pada PER {label} {fmt.mult(pe_now, 1)}"
-                     + (f", dibanding median peer {fmt.mult(d['median_pe'], 1)}"
-                        if d.get("median_pe") else "")
-                     + (f" dan rata-rata band P/E {fmt.mult(band['mean'], 1)}" if band else "")
-                     + ". " if pe_now else "")
+    # Template Slide 1 ¶3: the multiple AT the target price against peers and history.
+    pe_tp = va["tp"] / eps_fy if va.get("tp") and eps_fy and eps_fy > 0 else None
+    band_mean = band["mean"] if band and band["mean"] <= fmt.MULT_CAP else None
+    compare = " dan ".join(
+        ([f"median peer {fmt.mult(d['median_pe'], 1)}"] if d.get("median_pe") else [])
+        + ([f"rata-rata band P/E historis {fmt.mult(band_mean, 1)}"] if band_mean else []))
+    multiple_text = (f"Pada target harga, saham diperdagangkan pada PER {label} "
+                     f"{fmt.mult(pe_tp, 1, cap=fmt.MULT_CAP)} (harga kini "
+                     f"{fmt.mult(pe_now, 1, cap=fmt.MULT_CAP)})"
+                     + (f", dibanding {compare}" if compare else "") + ". "
+                     if pe_tp and pe_now else "")
     # Each skipped method with its own reason (forecast gap, too few peers, ...).
     skipped_reasons = [f"{t['short']} ({method_chain.reader_reason(t['reasons'][0])})"
                        for t in va["method_chain"]["trace"]
@@ -4138,7 +4527,8 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                                    "isi": valuation_text}
 
     # --- body pages: replace draft checklist wording
-    h2_text = (f"Asumsi semester kedua: pendapatan {fmt._id(a['h2_revenue_to_h1'], 2)}x 1H "
+    h2_text = (bank_texts[0] if bank_texts else
+               f"Asumsi semester kedua: pendapatan {fmt._id(a['h2_revenue_to_h1'], 2)}x 1H "
                f"dengan margin laba bersih {fmt.pct(a['h2_net_margin_pct'] / 100)}. "
                + (a.get("rationale") or ""))
     # Spec §5.4 'Risiko utama': the agent's sourced, quantified issuer risks.
@@ -4186,7 +4576,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
 
     # --- valuation page exhibits
     h1, h2 = scenario["h1"], scenario["h2"]
-    bridge = {
+    bridge = bank_texts[1] if bank_texts else {
         "n": 0, "judul": f"Skenario laba {label}: aktual 1H dan asumsi H2",
         "tipe": "tabel",
         "data": {"cols": [unit, "1H aktual", "H2 asumsi", label],
@@ -4196,9 +4586,9 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                      ["Laba bersih", money(h1["net_profit"]), money(h2["net_profit"]),
                       money(fy["net_profit"])],
                      ["Laba pemilik induk", "-", "-", money(fy["net_profit_attributable"])],
-                     ["Asumsi", "-",
+                     ["Asumsi", "aktual resmi",
                       f"H2/H1 {fmt._id(a['h2_revenue_to_h1'], 2)}x; margin "
-                      f"{fmt.pct(a['h2_net_margin_pct'] / 100)}", "-"]]},
+                      f"{fmt.pct(a['h2_net_margin_pct'] / 100)}", "1H aktual + H2 asumsi"]]},
         "catatan_sumber": (
             f"Sumber: {actual_title} ({scenario['published_at']}); H2 adalah asumsi analis "
             f"dari rilis dan berita bertanggal ({cite(a.get('source_ids'))}), bukan panduan "
@@ -4275,7 +4665,9 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
         sensitivity = _ev_ebitda_scenario_exhibit(intake, ev_s, label)
     exhibits = [bridge] + (sensitivity if isinstance(sensitivity, list) else
                            [sensitivity] if sensitivity else [])
-    if forward:
+    if bank_texts and bank_texts[2]:
+        exhibits.append(bank_texts[2])
+    elif forward:
         exhibits.append({
             "n": 0, "judul": f"Skenario laba {forward[0]['label']}-{forward[-1]['label']}",
             "tipe": "tabel",
@@ -4342,6 +4734,14 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                 elif value is not None and unit in row[0]:
                     row[col] = money(value)
         annual = {str(x["year"]): x.get("earnings") for x in intake.get("annuals") or []}
+        # A US$ reporter's actual EPS uses its official US$ profit at the same
+        # rate as the forecast, so EPS growth is not an FX effect.
+        if usd:
+            for row in (intake.get("official_evidence") or {}).get("annual_actuals") or []:
+                profit = (row.get("net_profit_attributable")
+                          if row.get("net_profit_attributable") is not None else row.get("net_profit"))
+                if profit is not None:
+                    annual[str(row["year"])] = profit * to_idr
         eps_row, per_row = ["EPS (Rp)"], ["PER (x)"]
         eps_values = []
         for name in cols[1:]:
@@ -4370,14 +4770,22 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                            r"\(NA: belum dimodelkan\)\.)", "", key_fin.get("catatan_sumber") or "")
         key_fin["catatan_sumber"] = (
             base_note +
-            f" {label} dan tahun sesudahnya: skenario laba analis"
+            f" {label} dan tahun sesudahnya: "
+            + ("model driver bank atas driver skenario analis (kredit, NIM, pendapatan "
+               "non-bunga, rasio biaya, biaya kredit)" if bank_fc else "skenario laba analis")
             + ("; EBITDA dari margin skenario DCF. " if dcf_s else
-               "; EBITDA dari margin skenario analis. " if modelled_ebitda else "; EBITDA tidak dimodelkan. ") +
+               "; EBITDA dari margin skenario analis. " if modelled_ebitda else
+               # EBITDA means nothing for a bank; Key Financials leaves it out.
+               ". " if intake.get("model_profile") == "financial_ddm" else
+               "; EBITDA tidak dimodelkan. ") +
             f"EPS memakai saham {actual.get('period_end', '-')}"
             + (f" dari {_shares_source(intake.get('official_evidence'))}"
                if _shares_source(intake.get("official_evidence")) else " dari neraca")
             + " (pro forma untuk tahun "
-            f"historis); PER memakai harga {intake['price_date']}.")
+            f"historis"
+            + (f"; laba US$ aktual resmi dikonversi pada kurs yang sama dengan forecast"
+               if usd else "")
+            + f"); PER memakai harga {intake['price_date']}.")
 
     if sotp_h:
         doc["catatan_metodologi"] = [
@@ -4843,8 +5251,9 @@ def build(intake, fc, va, s1, method="auto", illustrative_scenarios=False):
           f"Rp{fmt.miliar(f1['net'])} miliar, lalu tumbuh ke Rp{fmt.miliar(f3['net'])} miliar pada "
           f"{f3['label']} seiring operating leverage menuju margin {fmt.pct(f3['margin'])}. Basis ini "
           f"konsisten dengan CAGR historis {fmt.pct(rev_cagr)} sejak {A[0]['year']}, sehingga jalur "
-          f"forecast tidak mengasumsikan percepatan di luar rekam jejak. Implikasinya, pertumbuhan tiga "
-          f"tahun ke depan bertumpu pada ekspansi volume dan disiplin biaya ketimbang kenaikan harga.")
+          f"forecast tidak mengasumsikan percepatan di luar rekam jejak. Implikasinya, pertumbuhan "
+          f"{f1['label']}-{f3['label']} bertumpu pada ekspansi volume dan disiplin biaya ketimbang "
+          f"kenaikan harga.")
     p1t = "Hasil terakhir jadi basis forecast"
 
     p2 = (f"Tesis kami untuk {F[1]['label']} sampai {f3['label']} bertumpu pada dua tuas. Pertama, "

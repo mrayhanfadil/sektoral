@@ -41,5 +41,73 @@
   "shares_outstanding": 122841751300,
   "shares_source": "Daftar pemegang saham, profil emiten IDX (idx.co.id, diakses 2026-09-24)"
  },
- "operating_context": []
+ "operating_context": [],
+ "shareholders": {
+  "status": "aktual",
+  "unit": "share_percentage sebagai pecahan dari saham tercatat (0,54942 = 54,942%), sama dengan format Sectors ownership.major_shareholders",
+  "source_title": "IDX, Profil Perusahaan Tercatat BBCA: Pemegang Saham",
+  "source_url": "https://www.idx.co.id/id/perusahaan-tercatat/profil-perusahaan-tercatat/BBCA",
+  "source_api": "https://www.idx.co.id/primary/ListedCompany/GetCompanyProfilesDetail?KodeEmiten=BBCA&language=id-id",
+  "table": "PemegangSaham",
+  "retrieved_at": "2026-09-25",
+  "listed_shares": 123275050000,
+  "data_date_basis": "Profil IDX tidak mencantumkan tanggal posisi; angka ini adalah susunan pemegang saham terakhir yang dilaporkan emiten ke IDX. Laporan Bulanan Registrasi Pemegang Efek terbaru BBCA terbit di IDX 2026-09-09 (No. 013/CSG-IVR/2026, posisi akhir Agustus 2026); PDF-nya belum dibaca untuk memastikan tanggal posisi.",
+  "latest_registry_filing": {
+   "title": "Laporan Bulanan Registrasi Pemegang Efek",
+   "published_at": "2026-09-09",
+   "number": "013/CSG-IVR/2026",
+   "url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/21af25d82c_05208796f3.pdf"
+  },
+  "free_float_basis": "Masyarakat (warkat 2,508% + non warkat 42,134%) = 44,642% saham tercatat; tidak termasuk pengendali, saham treasuri (0,351%) serta direksi dan komisaris (~0,06%). BCA mencatat, per 31 Desember 2025, sebagian porsi publik dimiliki pihak terafiliasi PT Dwimuria Investama Andalan (lihat corroboration.note), jadi angka ini adalah kategori kepemilikan publik IDX, bukan free float yang disesuaikan untuk afiliasi.",
+  "rows": [
+   {
+    "name": "PT Dwimuria Investama Andalan",
+    "category": "Lebih dari 5%",
+    "share_amount": 67729950000,
+    "share_percentage": 0.54942,
+    "controlling": true
+   },
+   {
+    "name": "Masyarakat",
+    "category": "Masyarakat",
+    "share_amount": 55031425658,
+    "share_percentage": 0.44642,
+    "components": [
+     {
+      "name": "Masyarakat Non Warkat",
+      "share_amount": 51940016778,
+      "share_percentage": 0.42134
+     },
+     {
+      "name": "Masyarakat Warkat",
+      "share_amount": 3091408880,
+      "share_percentage": 0.02508
+     }
+    ]
+   },
+   {
+    "name": "Saham Treasury",
+    "category": "Saham Treasury",
+    "share_amount": 433298700,
+    "share_percentage": 0.00351
+   }
+  ],
+  "corroboration": {
+   "source_title": "BCA, Investor Relations: Composition of Shareholders",
+   "source_url": "https://www.bca.co.id/en/tentang-bca/Hubungan-Investor/informasi-saham/komposisi-pemegang-saham",
+   "as_of": "2025-12-31",
+   "retrieved_at": "2026-09-25",
+   "controlling_shareholder": {
+    "name": "PT Dwimuria Investama Andalan",
+    "share_amount": 67729950000,
+    "share_percentage": 0.5494
+   },
+   "public": {
+    "share_amount": 55545100000,
+    "share_percentage": 0.4506,
+    "includes": "saham treasuri 0,17% serta direksi dan komisaris 0,062%"
+   },
+   "note": "Halaman BCA: dari porsi publik per 31 Desember 2025, '49%' dimiliki pihak terafiliasi PT Dwimuria Investama Andalan (angka sebagaimana tertulis); pemilik akhir Dwimuria adalah Robert Budi Hartono dan Bambang Hartono."
+  }
+ }
 }

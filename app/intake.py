@@ -11,10 +11,12 @@ from . import market_quote
 from . import model_profiles
 from . import issuer_evidence
 from . import analyst_scenario
+from . import bank_model
 from . import news as news_context
 from . import news_fetch
 from . import peer_fundamentals
 from . import peer_groups
+from . import rates
 from . import research_context
 
 
@@ -27,8 +29,14 @@ def _num(x, default=None):
         return default
 
 
-def _sotp_bridge_inputs(evidence, as_of):
-    """Translate source-backed corporate bridge items, leaving gaps explicit."""
+def _sotp_bridge_inputs(evidence, as_of, fx_spot=None):
+    """Translate source-backed corporate bridge items, leaving gaps explicit.
+
+    A US$ reporter's items translate at the report's one dated USD/IDR rate,
+    the stored Yahoo Finance close (``fx_spot``) that every other conversion
+    in the report uses; the pack's own reference rate is the fallback only
+    when that close is missing.
+    """
     if not isinstance(evidence, dict):
         return None
     balance = evidence.get("balance_sheet") or {}
@@ -36,6 +44,11 @@ def _sotp_bridge_inputs(evidence, as_of):
     debt = debt_evidence.get("debt_usd_thousand") or {}
     other_financial = debt_evidence.get("other_financial_liabilities_usd_thousand") or {}
     fx_quote = evidence.get("valuation_fx_reference") or {}
+    spot = fx_spot if isinstance(fx_spot, dict) else {}
+    if spot.get("rate") and spot.get("date"):
+        fx_quote = {"rate": spot["rate"], "date": spot["date"],
+                    "source_title": "Yahoo Finance IDR=X penutupan harian",
+                    "source_url": "https://finance.yahoo.com/quote/IDR=X/history/"}
     currency = str(evidence.get("reporting_currency") or "").upper()
     if currency == "USD":
         try:
@@ -229,6 +242,15 @@ def _driver_evidence_inputs(official_evidence, payout, payout_basis,
 MAX_IMPLIED_ASSET_LIFE = 40
 
 
+def _pack_holders(evidence):
+    """Shareholder rows of an issuer evidence pack, in Sectors' major_shareholders shape."""
+    rows = (((evidence or {}).get("shareholders") or {}).get("rows")) or []
+    return [{"name": r["name"], "share_amount": r.get("share_amount"),
+             "share_percentage": r["share_percentage"]}
+            for r in rows if isinstance(r, dict) and r.get("name")
+            and isinstance(r.get("share_percentage"), (int, float))]
+
+
 def _official_annual_depreciation(annuals, evidence):
     """Replace Sectors D&A and EBITDA with audited annual figures where the
     issuer evidence pack carries them (``annual_actuals`` rows with
@@ -249,9 +271,9 @@ def _official_annual_depreciation(annuals, evidence):
                  ebitda_sectors=before)
         notes.append(
             f"D&A dan EBITDA FY{a['year']} memakai {source.get('title') or 'laporan audit emiten'}"
-            f" (penyusutan Rp{da / 1e9:,.0f} miliar, laba usaha Rp{operating / 1e9:,.0f} miliar);"
-            f" EBITDA Sectors Rp{(before or 0) / 1e9:,.0f} miliar tidak dipakai."
-            .replace(",", "."))
+            f" (penyusutan Rp{fmt._id(da / 1e9, 0)} miliar, laba usaha Rp{fmt._id(operating / 1e9, 0)}"
+            f" miliar); " + (f"EBITDA Sectors Rp{fmt._id(before / 1e9, 0)} miliar tidak dipakai."
+                             if before else "EBITDA Sectors tidak tersedia untuk tahun ini."))
     return notes
 
 
@@ -434,6 +456,12 @@ def load(ticker, as_of=None):
         if a["year"] in da_invalid_years:
             a["da_invalid"] = True
     notes.extend(_official_annual_depreciation(annuals, official_evidence))
+    # A year whose D&A now comes from the audited statements is no longer invalid.
+    official_years = {a["year"] for a in annuals if a.get("da_source") == "official"}
+    da_invalid_years = [y for y in da_invalid_years if y not in official_years]
+    for a in annuals:
+        if a["year"] in official_years:
+            a.pop("da_invalid", None)
     notes.extend(_implausible_depreciation(annuals))
 
     base = annuals[-1]
@@ -574,16 +602,26 @@ def load(ticker, as_of=None):
         "model_profile": profile, "model_profile_basis": profile_basis,
         "currency": "Rp", "fx": 1.0,
         "fx_spot": fx_spot,
+        # Risk-free of a model built in US$ (spec §4.2): the stored UST 10Y
+        # close on or before the Report Date; None when missing or stale.
+        "ust_10y": rates.on_or_before(report_date),
         "market_quote": quote,
         "price": price, "price_date": price_date, "as_of": report_date,
         "price_provenance": price_provenance,
         "shares": shares, "market_cap": market_cap,
         "annuals": annuals, "base_year": base["year"],
+        # Bank lines of the Sectors history (loans, earning assets, deposits,
+        # capital) for the bank driver model; financial institutions only.
+        "bank_history": (bank_model.history_rows(fin) if profile == "financial_ddm"
+                         else None),
         "payout": payout, "payout_basis": payout_basis,
         "dps_hist": dps_hist, "dps_basis": dps_basis,
         "dividend_events": dividend_events,
         "industry": ov.get("industry"), "sub_sector": ov.get("sub_sector"),
-        "major_holders": (own.get("major_shareholders") or [])[:5],
+        # Sectors ownership first; else the reviewed pack's IDX shareholder table.
+        "major_holders": ((own.get("major_shareholders") or []) or _pack_holders(official_evidence))[:5],
+        "major_holders_source": (None if own.get("major_shareholders") else
+                                 ((official_evidence or {}).get("shareholders") or {}).get("source_title")),
         "free_float": None,
         "daily": drows[-5:] if isinstance(drows, list) else [],
         "news": relevant_news,
@@ -627,7 +665,7 @@ def load(ticker, as_of=None):
             if official_evidence and profile == "finite_life_mining" else None),
         "operating_bridge": None,
         "sotp_assets": None,
-        "sotp_bridge": (_sotp_bridge_inputs(official_evidence, report_date)
+        "sotp_bridge": (_sotp_bridge_inputs(official_evidence, report_date, fx_spot)
                         if profile == "finite_life_mining" else None),
         "driver_evidence": _driver_evidence_inputs(
             official_evidence, payout, payout_basis, dps_hist, report_date, profile),

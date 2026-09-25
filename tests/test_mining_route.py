@@ -7,7 +7,7 @@ validated.
 import json
 from pathlib import Path
 
-from app import build, commodity, fx, store
+from app import build, commodity, fx, rates, store
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PLAN = json.loads((FIXTURES / "ammn_interim_plan.json").read_text())
@@ -17,11 +17,16 @@ COPPER = json.loads((FIXTURES / "commodity_prices.json").read_text())["Copper"]
 # seven days of the Report Date (Yahoo IDR=X close, 23 Sep 2026).
 USD_IDR = {"pair": "USD/IDR", "rate": 17805.0, "date": "2026-09-23",
            "source": "Yahoo Finance IDR=X daily close"}
+# The LoM discounts in US$ at UST 10Y + CRP + beta x ERP: the dated UST close.
+UST_10Y = {"name": "UST10Y", "symbol": "^TNX",
+           "source": "Yahoo Finance ^TNX daily close (imbal hasil US Treasury 10 tahun)",
+           "rows": [{"date": "2026-09-24", "yield_pct": 5.162}]}
 
 
 def test_ammn_publishes_on_the_validated_interim_scenario(tmp_path):
     store.put(commodity.COLLECTION, "Copper", COPPER)
     store.put(fx.COLLECTION, fx.KEY, USD_IDR)
+    store.put(rates.COLLECTION, rates.UST10Y, UST_10Y)
     doc = build.build("AMMN", tmp_path, as_of="2026-09-24", assumption_plan=PLAN,
                       assumption_status="validated")
     assert doc["meta"]["status"] == "distributable_assumption_led"
@@ -52,3 +57,23 @@ def test_ammn_deck_is_the_fresh_series_average(tmp_path):
     assert cu["source"] == "yahoo" and cu["window"] == ["2025-10", "2026-09"]
     assert cu["replaced"]["date"] == "2026-02-15"
     assert 12_500 < cu["avg12"] < 13_500
+
+
+def test_ammn_lom_grid_has_five_rate_steps_and_chart_four_reads_the_mine_plan(tmp_path):
+    store.put(commodity.COLLECTION, "Copper", COPPER)
+    store.put(fx.COLLECTION, fx.KEY, USD_IDR)
+    store.put(rates.COLLECTION, rates.UST10Y, UST_10Y)
+    doc = build.build("AMMN", tmp_path, as_of="2026-09-24", assumption_plan=PLAN,
+                      assumption_status="validated")
+    grid = next(e for e in doc["exhibits"] if e["judul"].startswith("Sensitivitas SOTP/LoM"))
+    rows = grid["data"]["rows"]
+    assert len(rows) == 5 and "(basis)" in rows[2][0]
+    base = grid["data"]["cols"].index("Dek dasar")
+    assert rows[2][base] == f"Rp{doc['meta']['tp']:,}".replace(",", ".")
+    chart = next(e for e in doc["exhibits"] if e["judul"].startswith("Produksi tembaga"))
+    series = chart["data"]["series"][0]
+    # FY2024/FY2025 from the issuer's annual operations; FY26F = 1H actual +
+    # the LoM's 2H, which equals the FY2026 guidance (485 Mlbs).
+    assert series["bars"][:2] == [395.0, 209.0] and round(series["bars"][2]) == 485
+    assert all(v is not None for v in series["bars"][2:]) and series["line"][2:] == [None] * 3
+    assert "C1 forecast tidak dihitung" in chart["narasi"]

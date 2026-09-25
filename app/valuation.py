@@ -245,10 +245,13 @@ def _ddm_scenario_candidate(intake, fc, assumption_status, coe, g):
 
 
 def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wacc_bps):
-    """Going-concern primary: FCFF DCF on the validated FY path."""
+    """Going-concern primary: FCFF DCF on the validated FY path, discounted in
+    the model currency (a US$ reporter at a US$ rate, spec §2 and §4.2)."""
     if not fc.get("earnings_scenario"):
         return None
-    detail, reasons = scenario_value.fcff(intake, fc, rf, erp, beta, g, wacc_bps)
+    rates, gaps = scenario_value.discount_rates(intake, rf, g)
+    detail, reasons = ((None, gaps) if gaps else
+                       scenario_value.fcff(intake, fc, rf, erp, beta, g, wacc_bps, rates=rates))
     gate = (release.assess_fcff_scenario(intake, fc, {"detail": detail}, assumption_status)
             if detail else _NO_GATE)
     if detail:
@@ -450,9 +453,13 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "ev_ebitda": (tp * intake["shares"] + net_debt) / f_last["ebitda"]
             if f_last["ebitda"] > 0 else None}
     lom = None
+    # Every US$ mine asset is discounted at the US$ WACC (UST 10Y + CRP + beta x
+    # ERP), not the rupiah screen WACC (spec §2, §4.2).
+    mine_rate, mine_rate_gaps = (lom_mod.discount_rate(intake) if is_miner else (None, []))
+    mine_wacc = (mine_rate or {}).get("rate") or wacc
     if is_miner and intake.get("mineops"):
         # fc/base dalam Rupiah → konversi ke Rp miliar untuk rnav.
-        lom = rnav.build(intake["mineops"], fc["rows"][0]["margin"], wacc,
+        lom = rnav.build(intake["mineops"], fc["rows"][0]["margin"], mine_wacc,
                          fc["base"]["cash"] / 1e9, fc["base"]["debt"] / 1e9,
                          fc["rows"][0]["revenue"] / 1e9)
         lom["rnav_ps"] = lom["rnav_rpbn"] * 1e9 / intake["shares"]
@@ -711,7 +718,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                 + release._check_sotp(sotp_result, intake) + mining_data,
                 labels=["sensitivitas SOTP dilabeli"])
         candidates["rnav_lom"] = method_chain.with_reasons(
-            _rnav_candidate(intake, fc, lom, wacc), mining_data)
+            _rnav_candidate(intake, fc, lom, mine_wacc), mining_data + [
+                f"tingkat diskonto US$ tidak dapat dibangun: {', '.join(mine_rate_gaps)}"
+                for _ in mine_rate_gaps[:1]])
         scenario_target = scenario_ev_ebitda_crosscheck(intake, fc)
         assumption_release = release.assess_assumption_led(
             intake, fc, scenario_target or {}, assumption_status,

@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "web/src/components/deck/SidePanels.tsx"
+        ],
+        "createdAt": "2026-09-25T05:56:16.974Z",
+        "reason": "agent triage: the flagged transition is SVG stroke-width on a 49px gate dial path, which repaints only and triggers no layout; no width/height/padding/margin is animated"
+      }
+    ]
+  }
+}

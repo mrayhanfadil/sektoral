@@ -1,0 +1,200 @@
+{
+ "status": "validated",
+ "plan": {
+  "news_effects": [],
+  "interim_scenario": null,
+  "outyear_scenario": [
+   {
+    "year": 2027,
+    "revenue_growth_pct": 8.0,
+    "ebitda_margin_pct": 12.0,
+    "net_income_margin_pct": 6.5,
+    "capex_to_revenue_pct": 4.5,
+    "rationale": "Normalisasi pasca puncak ekspansi 2026; pertumbuhan volume unggas, akuakultur, dan pakan +8% melanjutkan tren historis 8-10%. Margin EBITDA bertahan 12% didukung efisiensi integrasi vertikal; capex turun ke pemeliharaan 4,5% dari puncak ekspansi anchor.",
+    "source_ids": [
+     "official"
+    ]
+   },
+   {
+    "year": 2028,
+    "revenue_growth_pct": 7.0,
+    "ebitda_margin_pct": 11.8,
+    "net_income_margin_pct": 6.4,
+    "capex_to_revenue_pct": 4.3,
+    "rationale": "Pertumbuhan moderat ke 7% seiring pasar unggas domestik makin matang; margin EBITDA stabil 11,8% dengan biaya pakan yang kembali ke rata-rata historis Sectors. Capex pemeliharaan 4,3% tanpa proyek brownfield besar.",
+    "source_ids": [
+     "official"
+    ]
+   },
+   {
+    "year": 2029,
+    "revenue_growth_pct": 6.0,
+    "ebitda_margin_pct": 11.5,
+    "net_income_margin_pct": 6.2,
+    "capex_to_revenue_pct": 4.0,
+    "rationale": "Normalisasi siklis lebih dalam; pertumbuhan 6% dengan tekanan harga jual ayam ras dan margin pakan yang menyempit. EBITDA margin 11,5% mencerminkan kompetisi ketat; capex pemeliharaan kembali ke ~4% dari anchor.",
+    "source_ids": [
+     "official"
+    ]
+   },
+   {
+    "year": 2030,
+    "revenue_growth_pct": 5.0,
+    "ebitda_margin_pct": 11.2,
+    "net_income_margin_pct": 6.0,
+    "capex_to_revenue_pct": 4.0,
+    "rationale": "Tahap matang industri protein hewani Indonesia; pertumbuhan 5% mengikuti konsumsi domestik. Margin EBITDA 11,2% dan net margin 6% mencerminkan tekanan kompetitif; capex pemeliharaan stabil 4%.",
+    "source_ids": [
+     "official"
+    ]
+   }
+  ],
+  "earnings_scenario": {
+   "h2_revenue_to_h1": 0.9,
+   "h2_net_margin_pct": 5.8,
+   "rationale": "1H26 membukukan revenue Rp 35,4T (+28,7% YoY) dan laba attributable Rp 2,48T (+100% YoY), atau 56-59% dari proyeksi FY analis dan tertinggi dalam tiga tahun terakhir. Kontribusi Q1 sangat kuat, namun Q2 sudah menorehkan tekanan signifikan: harga DOC turun 24,6% QoQ, margin EBIT broiler berbalik ke -6,5% dari +10,1%, dan margin segmen pakan turun ke 9,5% karena SBM naik 9% QoQ. Untuk H2, kami tetapkan rasio revenue 0,90 terhadap H1 dengan margin neto H2 5,8% (di bawah 7,0% 1H), mencerminkan normalisasi pasca Q1, pemulihan harga DOC/livebird ke puncak tahunan di Agustus, namun dibatasi kenaikan SBM ke US$ 355/ton di September. Hasilnya FY: net profit attributable sekitar Rp 4,32T (+7,8% YoY), margin EBITDA 12%, dan capex 5,0% dari revenue, sejalan dengan rerata 5 tahun dan ekspansi Poultry Processing/Aquaculture.",
+   "source_ids": [
+    "official",
+    "news:0",
+    "news:4"
+   ],
+   "thesis_points": [
+    "Pemulihan harga DOC dan livebird ke puncak tahunan di Agustus 2026 berpotensi mengembalikan margin broiler ke positif setelah -6,5% di Q2, menopang margin neto H2 di 5,5-6,0%.",
+    "Kenaikan harga SBM ke US$ 355/ton di September dari US$ 301/ton di Juni memberi tekanan pada margin pakan yang turun ke 9,5% dan commercial farming, membatasi ekspansi margin EBITDA FY.",
+    "Pertumbuhan segmen Poultry Processing 31,8% YoY dan Aquaculture 39% YoY mendiversifikasi pendapatan serta menopang pertumbuhan revenue FY +11% YoY menjadi sekitar Rp 67,5T."
+   ],
+   "thesis_titles": [
+    "Pemulihan harga DOC menopang margin H2",
+    "Tekanan SBM membayangi margin pakan",
+    "Pertumbuhan volume Poultry Processing diversifikasi revenue"
+   ],
+   "catalysts_risks": [
+    {
+     "item": "Pemulihan harga DOC dan livebird",
+     "timing": "3Q26-4Q26",
+     "driver_path": "Harga DOC/livebird naik ke puncak Agustus → margin broiler kembali positif → margin neto H2 stabil 5,5-6,0%",
+     "direction": "Positif",
+     "source_ids": [
+      "news:0",
+      "news:4"
+     ]
+    },
+    {
+     "item": "Kenaikan harga SBM",
+     "timing": "September 2026",
+     "driver_path": "SBM ke US$ 355/ton → margin pakan tertekan di 9,5% → margin EBITDA FY terkoreksi di bawah 12%",
+     "direction": "Negatif",
+     "source_ids": [
+      "news:0"
+     ]
+    },
+    {
+     "item": "Implementasi program Makan Bergizi Gratis (MBG)",
+     "timing": "2H26",
+     "driver_path": "Permintaan ayam dari MBG → volume broiler naik → revenue H2 mendukung rasio 0,90x H1",
+     "direction": "Positif",
+     "source_ids": [
+      "news:4"
+     ]
+    },
+    {
+     "item": "Risiko harga broiler di bawah BEP",
+     "timing": "3Q26-4Q26",
+     "driver_path": "Harga broiler <Rp 19.100/kg → margin commercial farming tetap negatif → laba FY tertekan",
+     "direction": "Negatif",
+     "source_ids": [
+      "news:0",
+      "news:4"
+     ]
+    }
+   ],
+   "key_risks": [
+    {
+     "category": "Komoditas",
+     "headline": "Kenaikan harga SBM menekan margin pakan",
+     "explanation": "Harga SBM melonjak ke US$ 355/ton di September dari US$ 301/ton di Juni (+17,8%); margin segmen pakan turun ke 9,5% dan EBIT broiler berbalik negatif -6,5% di Q2, sehingga jika kenaikan berlanjut margin EBITDA FY terkoreksi di bawah 11%.",
+     "source_ids": [
+      "news:0",
+      "news:4"
+     ]
+    },
+    {
+     "category": "Operasi",
+     "headline": "Harga broiler di bawah break-even point",
+     "explanation": "BEP broiler JPFA di kisaran Rp 19.100/kg sedangkan harga Q2 rata-rata Rp 18.900/kg; bila livebird gagal menembus Rp 21.000/kg, margin commercial farming tetap negatif dan menggerus laba FY hingga di bawah ekspektasi.",
+     "source_ids": [
+      "news:0",
+      "news:4"
+     ]
+    },
+    {
+     "category": "Pendanaan",
+     "headline": "Fluktuasi kurs rupiah membebani biaya impor",
+     "explanation": "Mayoritas bahan baku (SBM, jagung) diimpor dan rentan terhadap depresiasi rupiah; rupiah di atas Rp 17.900/US$ berpotensi memperlebar tekanan margin pakan dan commercial farm.",
+     "source_ids": [
+      "news:2"
+     ]
+    },
+    {
+     "category": "Komoditas",
+     "headline": "Kenaikan harga jagung domestik",
+     "explanation": "Harga jagung sudah menyentuh Rp 6.573/kg di Agustus 2026 dari kisaran Rp 4.000-Rp 6.573/kg; kenaikan lebih lanjut di luar tren historis akan menekan margin pakan di luar asumsi SBM.",
+     "source_ids": [
+      "news:0"
+     ]
+    },
+    {
+     "category": "Regulasi",
+     "headline": "Penyesuaian target penerima program MBG",
+     "explanation": "Berita menyebut penyesuaian target penerima Makan Bergizi Gratis sempat memicu kekhawatiran pasar; realisasi volume penyerapan ayam dari MBG yang lebih rendah dari ekspektasi H2 akan menekan rasio revenue H2/H1 di bawah 0,90.",
+     "source_ids": [
+      "news:5"
+     ]
+    }
+   ],
+   "fy_ebitda_margin_pct": 12.0,
+   "fy_capex_to_revenue_pct": 5.0,
+   "source_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+   "published_at": "2026-08-20",
+   "source_refs": {
+    "news:0": {
+     "title": "Pemulihan Harga Livebird Jadi Katalis Saham JPFA, Simak Target Harganya",
+     "url": "https://investasi.kontan.co.id/news/pemulihan-harga-livebird-jadi-katalis-saham-jpfa-simak-target-harganya",
+     "date": "2026-09-23"
+    },
+    "news:4": {
+     "title": "Harga Ayam Turun, Indo Premier Yakin Kinerja Japfa (JPFA) Pulih di Semester II",
+     "url": "https://investasi.kontan.co.id/news/harga-ayam-turun-indo-premier-yakin-kinerja-japfa-jpfa-pulih-di-semester-ii",
+     "date": "2026-08-23"
+    },
+    "news:2": {
+     "title": "Penyebab IHSG Fluktuatif dan Parkir di 6.496 - Market - Page 2",
+     "url": "https://www.bloombergtechnoz.com/detail-news/119514/penyebab-ihsg-fluktuatif-dan-parkir-di-6-496/2",
+     "date": "2026-08-26"
+    },
+    "news:5": {
+     "title": "Kinerja Emiten Poultry Diproyeksi Positif, Cek Rekomendasi Saham CPIN, MAIN & JPFA",
+     "url": "https://investasi.kontan.co.id/news/kinerja-emiten-poultry-diproyeksi-positif-cek-rekomendasi-saham-cpin-main-jpfa",
+     "date": "2026-08-23"
+    },
+    "official": {
+     "title": "Rilis resmi 1H26",
+     "url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+     "date": "2026-08-20"
+    }
+   }
+  },
+  "stage_classification": {
+   "life_cycle_stage": "mature",
+   "has_steady_state_3y": true,
+   "commodity_price_driven": false,
+   "dissimilar_segments": 1,
+   "rationale": "JPFA adalah emiten poultry dan pakan ternak terintegrasi penuh (feed, DOC, broiler, poultry processing, aquaculture) dengan revenue tumbuh konsisten dari Rp36,96 triliun (2020) ke Rp60,72 triliun (2025), CAGR ~10,4%; 1H26 mencapai Rp35,36 triliun (+28,7% YoY) per laporan resmi. Pola ini menandakan tahap mature dengan operasional tiga tahun terakhir (2023-2025) yang berjalan stabil meskipun laba berfluktuasi Rp0,93-Rp4,00 triliun karena siklus harga livebird, DOC, dan input SBM/jagung.",
+   "source_ids": [
+    "official",
+    "news:0",
+    "news:4"
+   ]
+  }
+ }
+}

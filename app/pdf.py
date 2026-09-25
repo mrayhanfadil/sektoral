@@ -27,10 +27,16 @@ def _repeat_cover_header(pg):
         return
     png = base64.b64encode(header.screenshot(type="png")).decode("ascii")
     height_mm = box["height"] / PX_PER_MM
+    # The picture carries the look; an invisible text layer on top keeps the
+    # header searchable and machine-checkable on every page (app/harness).
+    words = " ".join(header.inner_text().split())
+    text = words.replace("\\", "\\\\").replace("'", "\\'")
     pg.add_style_tag(content=(
         f"@page{{margin-top:{height_mm + HEADER_GAP_MM + 3:.1f}mm;"
         "@top-left{content:none;border:0}@top-right{content:none;border:0}"
-        f"@top-center{{content:'';width:{CONTENT_WIDTH_MM}mm;"
+        f"@top-center{{content:'{text}';color:rgba(255,255,255,0.01);font-size:6pt;"
+        "vertical-align:bottom;text-align:left;"
+        f"width:{CONTENT_WIDTH_MM}mm;"
         f"background:url('data:image/png;base64,{png}') left 0 bottom {HEADER_GAP_MM}mm"
         f"/{CONTENT_WIDTH_MM}mm {height_mm:.2f}mm no-repeat}}}}"
         "@page:first{@top-center{content:none;background:none}}"))

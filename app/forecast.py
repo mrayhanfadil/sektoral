@@ -1,7 +1,9 @@
-"""TAHAP 2: FORECAST ENGINE (STAGE CHECK S2). Generik, berbasis driver, tiga tahun."""
+"""TAHAP 2: FORECAST ENGINE (STAGE CHECK S2). Generik, berbasis driver, lima tahun (FY+1 s.d. FY+5)."""
+from . import bank_model
 from . import fmt
 from . import scrub
 from . import rnav
+from . import scenario_value
 
 
 def _mean(xs):
@@ -54,7 +56,9 @@ def _earnings_scenario(intake, plan):
     if (not isinstance(scenario, dict) or not actual or
             not str(actual.get("period") or "").startswith("1H") or
             any(not isinstance(metrics.get(key), (int, float)) for key in
-                ("revenue", "net_profit"))):
+                ("revenue", "net_profit")) or
+            any(not isinstance(scenario.get(key), (int, float)) for key in
+                ("h2_revenue_to_h1", "h2_net_margin_pct"))):
         return None
     h1_revenue, h1_net = metrics["revenue"], metrics["net_profit"]
     h2_revenue = h1_revenue * scenario["h2_revenue_to_h1"]
@@ -82,6 +86,82 @@ def _earnings_scenario(intake, plan):
             "h2": {"revenue": h2_revenue, "net_profit": h2_net},
             "full_year": full_year,
             "attributable_share": share, "attributable_basis": basis}
+
+
+def _bank_scenario(intake, plan):
+    """Bank Driver Scenario: (earnings_scenario, outyear_scenario, bank_model).
+
+    The bank model (``app.bank_model``) turns the agent's drivers into five
+    years of statements; its FY anchor (official 1H + modelled H2) and the
+    out-years take the shape of the earnings scenario every valuation, chart
+    and table already reads, so the DDM values the model's parent profit.
+    (None, None, None) when the plan carries no validated bank drivers.
+    """
+    scenario = (plan or {}).get("earnings_scenario")
+    if (intake.get("model_profile") != "financial_ddm" or not isinstance(scenario, dict)
+            or not isinstance(scenario.get("bank_drivers"), dict)):
+        return None, None, None
+    actual = intake.get("latest_official_actual") or {}
+    evidence = intake.get("official_evidence") or {}
+    outyears = (plan or {}).get("bank_outyear_scenario")
+    drivers = [scenario["bank_drivers"]]
+    if (isinstance(outyears, list) and len(outyears) == 4 and
+            [r.get("year") for r in outyears if isinstance(r, dict)] ==
+            list(range(scenario["bank_drivers"].get("year", 0) + 1,
+                       scenario["bank_drivers"].get("year", 0) + 5))):
+        drivers += outyears
+    try:
+        link = scenario_value.bridge(intake)
+    except (KeyError, TypeError, ValueError, AttributeError):
+        link = {}
+    model = bank_model.project(
+        intake.get("bank_history"), actual, evidence.get("balance_sheet"), drivers,
+        payout=intake.get("payout"), payout_basis=intake.get("payout_basis"),
+        shares=link.get("shares") or intake.get("shares"),
+        shares_basis=link.get("shares_basis") or "data Sectors",
+        nci=link.get("nci"), nci_basis=link.get("nci_basis"))
+    if not model:
+        return None, None, model
+    first, anchor, h2 = model["rows"][0], model["anchor"], model["h2"]
+    earnings = {
+        "year": first["year"], "unit": actual.get("unit"),
+        "source_url": scenario.get("source_url"), "published_at": scenario.get("published_at"),
+        "rationale": scenario.get("rationale"), "assumptions": scenario,
+        "basis": "bank_driver_scenario",
+        "h1": {"revenue": anchor["revenue"], "net_interest_income": anchor["net_interest_income"],
+               "non_interest_income": anchor["other_income"],
+               "net_profit": anchor["net_profit"],
+               "net_profit_attributable": anchor["net_profit_attributable"],
+               **{k: anchor["split"][k] for k in ("operating_expense", "provision",
+                                                  "earnings_before_tax", "tax")}},
+        "h2": {"revenue": h2["revenue"], "net_interest_income": h2["net_interest_income"],
+               "non_interest_income": h2["other_income"], "net_profit": h2["net_profit"],
+               "net_profit_attributable": h2["net_profit_attributable"],
+               **{k: h2[k] for k in ("operating_expense", "provision", "earnings_before_tax",
+                                     "tax")}},
+        "full_year": {"revenue": first["revenue"], "net_profit": first["net_cons"],
+                      "net_profit_attributable": first["earnings"]},
+        "attributable_share": anchor["parent_share"],
+        "attributable_basis": anchor["parent_share_basis"]}
+    forward = None
+    if len(model["rows"]) == 5:
+        rows, previous = [], first
+        for driver, row in zip(outyears, model["rows"][1:]):
+            rows.append({
+                "year": row["year"], "label": row["label"], "revenue": row["revenue"],
+                "ebitda": None, "net_profit": row["net_cons"],
+                "net_profit_attributable": row["earnings"], "capex": None,
+                "revenue_growth_pct": (row["revenue"] / previous["revenue"] - 1) * 100,
+                "ebitda_margin_pct": None,
+                "net_income_margin_pct": row["net_cons"] / row["revenue"] * 100,
+                "capex_to_revenue_pct": None,
+                **{k: driver.get(k) for k in bank_model.DRIVERS + bank_model.OPTIONAL_DRIVERS},
+                "rationale": driver.get("rationale"), "source_ids": driver.get("source_ids")})
+            previous = row
+        forward = {"anchor_year": first["year"], "anchor": earnings["full_year"],
+                   "unit": actual.get("unit"), "source_url": scenario.get("source_url"),
+                   "rows": rows, "status": "validated_bank_driver_scenario"}
+    return earnings, forward, model
 
 
 def _outyear_scenario(interim, plan):
@@ -270,6 +350,17 @@ def build(intake, n_years=5, assumption_plan=None):
                        if isinstance(normalized_plan.get("driver_evidence"), dict)
                        else None) or intake.get("driver_evidence") or intake.get("drivers")
     interim_scenario = _interim_scenario(intake, normalized_plan)
+    bank_earnings, bank_forward, bank_fc = (_bank_scenario(intake, normalized_plan)
+                                            if is_ddm else (None, None, None))
+    if bank_fc:
+        # S2.5 and S2.8: the bank model's balance sheet, equity roll-forward,
+        # dividends and FY = 1H + H2 invariants; CAR warnings are labelled.
+        s2["S2.8_bank_driver"] = ("lolos" if bank_fc["checks"]["ok"] else "gagal")
+        s2["catatan"].append(
+            "S2.8: model driver bank (kredit, NIM, pendapatan non-bunga, CIR, biaya kredit) "
+            "menurunkan laba, dividen, ekuitas, ROE dan CAR screening; "
+            + ("; ".join(bank_fc["checks"]["problems"] + bank_fc["checks"]["warnings"])
+               or "neraca seimbang, roll-forward ekuitas dan dividen konsisten") + ".")
     # Source coverage is necessary, but cannot turn the historical screening
     # rows above into a calculated driver forecast.
     production_blockers = []
@@ -301,7 +392,13 @@ def build(intake, n_years=5, assumption_plan=None):
                 pass
         base_s2_failed = [k for k, v in s2.items()
                           if k != "catatan" and (v == "gagal" or (isinstance(v, tuple) and str(v[0]).startswith("gagal")))]
-        if is_ddm:
+        if is_ddm and bank_fc:
+            production_blockers.append(
+                "bank driver scenario: loan growth, NIM, non-interest income, cost-to-income "
+                "and cost of credit are analyst assumptions and the balance-sheet, funding and "
+                "capital ratios are held at history (screening), not a reconciled production "
+                "forecast")
+        elif is_ddm:
             production_blockers.append(
                 "financial driver-to-earnings/capital bridge is not calculated; "
                 "historical revenue/margins and assumed payout remain screening inputs")
@@ -317,13 +414,18 @@ def build(intake, n_years=5, assumption_plan=None):
             "S2.9: forecast masih screening; bukti driver belum dihitung menjadi "
             f"proyeksi yang direkonsiliasi ({'; '.join(reasons)}).")
         forecast_basis, production_ready = "historical_screening_proxy", False
-    earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
+    if bank_earnings:
+        earnings_scenario, outyear_scenario = bank_earnings, bank_forward
+    else:
+        earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
+        outyear_scenario = _outyear_scenario(
+            interim_scenario if is_mining else earnings_scenario, normalized_plan)
     return {"rows": rows, "assumptions": assumptions, "s2": s2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
             "earnings_scenario": earnings_scenario,
-            "outyear_scenario": _outyear_scenario(
-                interim_scenario if is_mining else earnings_scenario, normalized_plan),
+            "outyear_scenario": outyear_scenario,
+            "bank_model": bank_fc if bank_earnings else None,
             "operating_bridge": operating_bridge,
             "driver_evidence": driver_evidence,
             "forecast_basis": forecast_basis,

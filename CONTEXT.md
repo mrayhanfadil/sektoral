@@ -25,6 +25,10 @@ _Avoid_: failed run, degraded report
 **Report Gallery**:
 The collection of finished Company Updates with their rating, target, method and status.
 
+**Run Replay**:
+A finished run played back step by step: each agent step, tool call, Method Gate verdict and Method Chain decision in the order it happened. A run stored before its steps were recorded is rebuilt from its Audit Trace, and its timing is labelled as estimated.
+_Avoid_: recording, demo mode
+
 ### Evidence
 
 **Sectors Snapshot**:
@@ -58,8 +62,8 @@ A judgement with a stated basis, source and uncertainty range, always labelled a
 _Avoid_: estimate, default
 
 **Peer Group**:
-The issuer's comparable companies as listed in the Sectors peer table.
-_Avoid_: comps, sector
+The IDX-listed companies that share the issuer's business model, reviewed per issuer with a reason for each peer and each exclusion; foreign listings are never peers. When fewer than three such peers have data, the issuer's Sectors peer table stands in and the report says why.
+_Avoid_: comps, sector, sub-sector
 
 ### Agents
 
@@ -101,6 +105,10 @@ _Avoid_: base case, forecast (unqualified)
 **Analyst Scenario**:
 A full-year path built from the Latest Interim Actuals plus agent-chosen second-half and out-year assumptions; it can support an assumption-led target but is never a production forecast.
 _Avoid_: forecast, LoM forecast, projection
+
+**Bank Driver Scenario**:
+An Analyst Scenario for a bank set as yearly drivers (loan growth, NIM, non-interest income to NII, cost-to-income, cost of credit, optionally deposit growth) from which the bank model derives NII, provisions, profit, the balance sheet, equity, dividends and a screening CAR; every other parameter holds at the bank's own history under a stated rule.
+_Avoid_: bank forecast, NIM forecast, earnings scenario (for a bank that has one)
 
 **Forecast Plan**:
 A validated set of Analyst Assumptions tied to the exact evidence it was built on, reused while that evidence is unchanged.
@@ -180,4 +188,6 @@ The rating when upside exceeds +100% or downside is worse than -50%; it needs a 
 - Only a **Production-Ready** or **Assumption-Led** **Release Status** allows a **Target Price** and **Rating**.
 - A **Hypothesis Verdict** cites **Signals**; **Web News** may accompany it but cannot stand alone.
 - An **Analyst Scenario** is anchored to **Latest Interim Actuals**; a **Screening Forecast** is not.
+- A **Bank Driver Scenario** is an **Analyst Scenario**: the DDM values the parent profit and dividends the bank model derives from it, so it stays **Assumption-Led**.
+- A **Run Replay** shows the same steps and **Method Gates** verdicts as the live run it replays; it never adds a step the **Audit Trace** does not hold.
 
