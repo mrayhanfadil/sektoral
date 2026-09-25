@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "ticker": "AMMN",
+  "as_of": "2026-09-25",
+  "source_title": "Investing.com, analyst consensus (polling 3 bulan terakhir)",
+  "source_url": "https://www.investing.com/equities/amman-mineral-internasional-tbk-pt-consensus-estimates",
+  "analysts": 8,
+  "buy": 8,
+  "hold": 0,
+  "sell": 0,
+  "target_avg": 6969,
+  "target_high": 9550,
+  "target_low": 5400,
+  "currency": "IDR",
+  "estimates": null,
+  "estimates_note": "Estimasi konsensus pendapatan, EBITDA dan laba tidak ditampilkan tanpa langganan Investing Pro; tidak ada sumber konsensus estimasi yang dapat dikutip."
+}

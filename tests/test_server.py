@@ -16,7 +16,7 @@ fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app import jobs as jobs_module, outputs, server  # noqa: E402
-from test_gallery import _report  # noqa: E402
+from test_gallery import _report, approve  # noqa: E402
 
 
 @pytest.fixture
@@ -228,9 +228,14 @@ def test_report_trace_view_returns_only_public_fields(make_client, tmp_path):
         "evidence_register": {"private": "must-not-appear"},
     }
     outputs.save(outputs.TRACE, reports, "AAAA", audit)
+    pending = make_client(reports=reports).get("/api/reports/AAAA/trace").json()
+    # Until an analyst approves the plan, the gallery trace holds the rating.
+    assert pending["review_state"] == "pending" and pending["report"]["target_price"] is None
+    approve(reports, "AAAA")
     view = client_view = make_client(reports=reports).get("/api/reports/AAAA/trace")
     assert view.status_code == 200
     body = client_view.json()
+    assert body["review_state"] == "approved"
     assert body["report"]["method"] == "FY26F PER" and body["report"]["target_price"] == 1100
     assert body["research"]["endpoints"] == ["/daily/AAAA/"]
     assert body["news"]["articles"][0]["url"] is None  # only http(s) links pass

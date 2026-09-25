@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import cache as cache_mod
+from . import consensus
 from . import ddm
 from . import fmt
 from . import method_chain
@@ -2903,8 +2904,38 @@ def _lom_exhibits(intake, va, detail):
         "EV/EBITDA FY26F 8x menjadi cross-check di rantai metode, tidak dirata-rata.",
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
     ]
-    return {"exhibits": [sotp_table, schedule, rate_table, sensitivity, tests, assumptions],
+    walk = _lom_reconciliation(intake, lom_res)
+    return {"exhibits": [sotp_table, schedule, rate_table, sensitivity, tests]
+            + ([walk] if walk else []) + [assumptions],
             "text": text, "notes": notes}
+
+
+def _lom_reconciliation(intake, lom_res):
+    """Plan 1.3: the target walked, one assumption at a time, towards the
+    value on the market's usual assumptions, then to the dated consensus."""
+    rows = lom_res.get("reconciliation") or []
+    if not rows:
+        return None
+    rp = lambda v: f"Rp{fmt.rp(fmt.tick(v))}"
+    step = lambda v: "" if v is None else f"{'+' if v >= 0 else '-'}Rp{fmt.rp(fmt.tick(abs(v)))}"
+    table = [[r["label"], rp(r["per_share"]), step(r["step"])] for r in rows]
+    walked = next(r for r in rows if r["key"] == "horizon")["per_share"]
+    doc, why = consensus.load(intake.get("ticker"), intake.get("as_of"))
+    if doc:
+        avg = doc["target_avg"]
+        table.append([f"Rata-rata target konsensus ({doc['analysts']} analis, {doc['as_of']})",
+                      rp(avg), f"sisa sesudah tiga langkah {step(avg - walked)}"])
+    else:
+        table.append(["Rata-rata target konsensus", "n.a.", why])
+    return {"n": 0, "judul": "Rekonsiliasi target ke asumsi pasar dan konsensus", "tipe": "tabel",
+            "data": {"cols": ["Langkah (kumulatif)", "Nilai per saham", "Perubahan"],
+                     "rows": table},
+            "catatan_sumber": (
+                "Sumber: Sektoral Estimates; tiap langkah menambah satu asumsi di atas langkah "
+                "sebelumnya pada model LoM yang sama. Dua baris terakhir sebelum konsensus adalah "
+                "alternatif, masing-masing di atas tiga langkah pertama, bukan kumulatif satu sama "
+                "lain." + (f" Konsensus: {doc['source_title']}, diambil {doc['as_of']}." if doc
+                           else ""))}
 
 
 def _lom_fx_source(intake):
@@ -3661,6 +3692,8 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
                  if str(intake.get("payout_basis") or "").startswith("DPS 12 bulan terakhir")
                  and last.get("earnings") and intake.get("shares") and intake.get("payout")
                  else None)
+    cut = [x["label"] for x in lines
+           if x.get("payout") is not None and x["payout"] < ddm_s["payout"] - 1e-9]
     growth, gaps = [], []
     for i, x in enumerate(lines):
         value = x.get("dps_growth") if i else (
@@ -3680,7 +3713,7 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
         "tipe": "tabel",
         "data": {"cols": cols, "rows": [
             ["Laba pemilik induk (Rp miliar)"] + [bn(x["net_attr"]) for x in lines],
-            ["Payout ratio"] + [fmt.pct(ddm_s["payout"])] * len(lines),
+            ["Payout ratio"] + [fmt.pct(x.get("payout", ddm_s["payout"])) for x in lines],
             ["DPS (Rp)"] + [fmt.rp(round(x["dps"])) for x in lines],
             ["Pertumbuhan DPS"] + growth,
             ["Waktu terima (tahun)"] + [fmt._id(x["t"], 2) for x in lines],
@@ -3690,19 +3723,25 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
         "catatan_sumber": (
             (f"Sumber: laba pemilik induk model driver bank (aktual 1H resmi + H2 model dari "
              f"driver analis untuk {label}, driver tahunan sesudahnya: kredit, NIM, pendapatan "
-             f"non-bunga, rasio biaya dan biaya kredit); payout {fmt.pct(ddm_s['payout'])} "
+             f"non-bunga, rasio biaya dan biaya kredit); payout historis "
+             f"{fmt.pct(ddm_s['payout'])} "
              if ddm_s.get("profit_basis") == "bank_driver_scenario" else
              f"Sumber: laba pemilik induk skenario analis (aktual 1H resmi + asumsi H2 untuk "
              f"{label}, asumsi tahunan sesudahnya); payout {fmt.pct(ddm_s['payout'])} ")
-            + f"({ddm_s['payout_basis']}); saham "
-            f"{ddm_s['shares_basis']}; tanggal valuasi {ddm_s['valuation_date']}, dividen "
-            "diasumsikan diterima satu kuartal sesudah tahun buku." + growth_note)}
+            + f"({ddm_s['payout_basis']})"
+            + (f", diturunkan pada {', '.join(cut)} oleh batas modal model driver bank (CAR "
+               "screening tidak di bawah CAR terendah historis)" if cut else "")
+            + f"; saham {ddm_s['shares_basis']}; tanggal valuasi {ddm_s['valuation_date']}, "
+            "dividen diasumsikan diterima satu kuartal sesudah tahun buku." + growth_note)}
     terminal = {
         "n": 0, "judul": "Nilai terminal dan nilai wajar per saham (DDM)", "tipe": "tabel",
         "data": {"cols": ["Komponen", "Nilai"], "rows": [
             ["Jumlah PV DPS eksplisit (Rp)", fmt.rp(round(ddm_s["pv_dps"]))],
-            [f"DPS terminal = DPS {lines[-1]['label']} x (1 + g) (Rp)",
-             fmt.rp(round(ddm_s["terminal_dps"]))],
+            ([f"DPS terminal = DPS {lines[-1]['label']} x (1 + g) (Rp)",
+              fmt.rp(round(ddm_s["terminal_dps"]))]
+             if ddm_s.get("terminal_payout") is None else
+             [f"DPS terminal = EPS {lines[-1]['label']} x (1 + g) x payout terminal "
+              f"{fmt.pct(ddm_s['terminal_payout'])} (Rp)", fmt.rp(round(ddm_s["terminal_dps"]))]),
             ["Pertumbuhan terminal g", fmt.pct(ddm_s["g"])],
             ["Nilai terminal = DPS terminal / (CoE - g) (Rp)", fmt.rp(round(ddm_s["tv"]))],
             ["PV nilai terminal (Rp)", fmt.rp(round(ddm_s["pv_tv"]))],
@@ -3718,6 +3757,8 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
                if ddm_s.get("per_share_inverse") else [])},
         "catatan_sumber": ("Sumber: Sektoral Estimates; CoE CAPM (rf INDOGB 10Y 6,5%, beta 1,1 "
                            "dan ERP 4% kebijakan analis); g 3,5% kebijakan analis."
+                           + (f" Payout terminal: {ddm_s['terminal_payout_basis']}."
+                              if ddm_s.get("terminal_payout") is not None else "")
                            + (f" Inverse CoE memakai ROAE dan BVPS {ddm_s['fwd_label']} model "
                               "driver bank; silang cek, tidak dirata-rata dengan DDM."
                               if ddm_s.get("per_share_inverse") else ""))}

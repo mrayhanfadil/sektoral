@@ -352,21 +352,55 @@ def _parameters(rows, anchor):
         "nibl_ratio": _div(base["non_interest_bearing_liabilities"], dep),
         "capital_to_equity": r["capital_to_equity"],
         "rwa_density": r["rwa_density"],
+        "rwa_per_loan": _div(base["total_risk_weighted_asset"], base["gross_loan"]),
         "cost_of_funds": r["cost_of_funds"],
         "non_earning_share": _div(base["total_assets"] - base["non_loan_earning_assets"]
                                   + (base["allowance_for_loans"] or 0.0), base["total_assets"]),
     }
 
 
+def limits(rows, base_year):
+    """The capital floor and funding cap the projection holds (S2.8).
+
+    CAR floor = the issuer's lowest capital ratio (total capital / RWA) in the
+    Sectors history; LDR cap = its highest LDR (net loans / deposits). Either
+    is None when the history does not carry it.
+    """
+    past = [y for y in history(rows) if y["year"] <= base_year]
+    cars = [(y["ratios"]["car"], y["year"]) for y in past if y["ratios"]["car"]]
+    ldrs = [(y["ratios"]["ldr"], y["year"]) for y in past if y["ratios"]["ldr"]]
+    car, ldr = (min(cars) if cars else None), (max(ldrs) if ldrs else None)
+    return {"car_floor": car[0] if car else None,
+            "car_floor_basis": (f"CAR terendah FY{car[1]} data Sectors (modal / ATMR)"
+                                if car else None),
+            "ldr_cap": ldr[0] if ldr else None,
+            "ldr_cap_basis": (f"LDR tertinggi FY{ldr[1]} data Sectors (kredit bersih / DPK)"
+                              if ldr else None)}
+
+
+NO_LIMITS = {"car_floor": None, "car_floor_basis": None, "ldr_cap": None, "ldr_cap_basis": None}
+
+
 def project(rows, official, balance, drivers, *, payout, payout_basis, shares=None,
-            shares_basis=None, nci=None, nci_basis=None):
+            shares_basis=None, nci=None, nci_basis=None, constrain=True):
     """Five (or fewer) forecast years from the Bank Driver Scenario.
 
     ``drivers``: rows with ``year`` and the percent drivers; the first is the
     interim year (NIM, non-interest income ratio, CIR and cost of credit for
     H2; loan and deposit growth for the full year), then consecutive years.
+
+    ``constrain`` holds the capital floor and funding cap of ``limits``: a
+    year whose net loans would pass the LDR cap grows loans only as far as
+    the cap allows; a year whose CAR would fall below the floor pays a lower
+    dividend on the prior year's profit (the payout of that profit is cut),
+    and when no dividend is left to cut (or it was already declared, the
+    first year) its loan growth is capped instead. The payout on the last
+    year's profit is tested on one more year at the last year's drivers.
+    Every adjustment is listed in ``constraints["applied"]``.
+
     Returns {"rows", "anchor", "h2", "assumptions", "notes", "checks",
-    "parameters"} or None when the evidence does not support the model.
+    "parameters", "constraints"} or None when the evidence does not support
+    the model.
     """
     anchor = interim(rows, official, balance)
     if not anchor or not drivers or payout is None:
@@ -381,7 +415,17 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
         raise ValueError("bank drivers must start at the interim year and be consecutive")
     tax_rate, share = anchor["tax_rate"], anchor["parent_share"]
     nci0 = _num(nci) or 0.0
+    lim = limits(rows, base["year"]) if constrain else dict(NO_LIMITS)
+    car_ok = p["capital_to_equity"] is not None and bool(p["rwa_per_loan"])
+    floor = lim["car_floor"] if car_ok else None
     notes = {}
+
+    # One shadow year at the last year's drivers tests the payout on the last
+    # forecast year's profit, which is paid the year after; its row is dropped.
+    run = list(drivers) + [dict(drivers[-1], year=years[-1] + 1)] if constrain else list(drivers)
+    payouts = [payout] * len(run)  # payout on each year's parent profit
+    paid_rate = payout  # on the base year's profit: declared, paid in the first year
+    applied = []
 
     # Opening balances: the last fiscal year (Sectors).
     prev = {"gross_loan": base["gross_loan"], "earning_assets": base["non_loan_earning_assets"],
@@ -391,26 +435,23 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
             "total_equity": base["total_equity"], "total_assets": base["total_assets"],
             "earnings": base["earnings"]}
     out, h2 = [], None
-    for i, d in enumerate(drivers):
+    for i, d in enumerate(run):
+        year = int(d["year"])
+        label = f"FY{year % 100:02d}F"
         g = d["loan_growth_pct"] / 100
         nim, ratio = d["nim_pct"] / 100, d["non_ii_to_nii_pct"] / 100
         cir, coc = d["cost_to_income_pct"] / 100, d["cost_of_credit_pct"] / 100
-        gl = prev["gross_loan"] * (1 + g)
-        allowance = p["coverage"] * gl
-        net_loan = gl - allowance
-        if _num(d.get("deposit_growth_pct")) is not None:
-            dep = prev["total_deposit"] * (1 + d["deposit_growth_pct"] / 100)
-        else:
-            dep = net_loan / p["ldr"]
-        oibl = (p["oibl_ratio"] or 0.0) * dep
-        nibl = (p["nibl_ratio"] or 0.0) * dep
-        liabilities = dep + oibl + nibl
-        paid = payout * max(prev["earnings"], 0.0) if prev["earnings"] is not None else 0.0
-        loans_mid = anchor["loans_mid"] if anchor["loans_mid"] is not None else _avg(
-            prev["gross_loan"], gl)
+        deposit_driver = _num(d.get("deposit_growth_pct")) is not None
 
-        def flows(ea):
+        def deposits(gl):
+            if deposit_driver:
+                return prev["total_deposit"] * (1 + d["deposit_growth_pct"] / 100)
+            return (gl - p["coverage"] * gl) / p["ldr"]
+
+        def flows(ea, gl):
             """The year's income statement on year-end earning assets ``ea``."""
+            loans_mid = anchor["loans_mid"] if anchor["loans_mid"] is not None else _avg(
+                prev["gross_loan"], gl)
             if i == 0:
                 ea_mid = anchor["earning_assets_mid"]
                 if ea_mid is None:
@@ -452,37 +493,98 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
                     "opex": opex, "prov": prov, "ebt": ebt, "tax": tax, "net": ebt - tax,
                     "parent": (ebt - tax) * share, "h2": None}
 
-        # Earning assets close the balance sheet: total assets = liabilities +
-        # equity, non-earning assets keep the base year's share of total assets,
-        # and placements and securities absorb what funding leaves after loans.
-        # Equity depends on this year's NII, so solve by fixed point (the
-        # feedback is a few percent per step; it converges in a handful).
-        ea = gl / p["loan_share_ea"]
-        for _ in range(100):
-            f = flows(ea)
-            equity = (prev["parent_equity"] + f["parent"] - paid
-                      + prev["nci"] + (f["net"] - f["parent"]))
-            assets = liabilities + equity
-            new_ea = assets * (1 - p["non_earning_share"]) + allowance
-            if abs(new_ea - ea) <= max(abs(ea) * 1e-12, 1.0):
+        def solve(gl, paid):
+            """The year on gross loans ``gl`` and dividends paid ``paid``.
+
+            Earning assets close the balance sheet: total assets = liabilities
+            + equity, non-earning assets keep the base year's share of total
+            assets, and placements and securities absorb what funding leaves
+            after loans. Equity depends on this year's NII, so solve by fixed
+            point (the feedback is a few percent per step; it converges in a
+            handful).
+            """
+            allowance = p["coverage"] * gl
+            dep = deposits(gl)
+            oibl = (p["oibl_ratio"] or 0.0) * dep
+            nibl = (p["nibl_ratio"] or 0.0) * dep
+            liabilities = dep + oibl + nibl
+            ea = gl / p["loan_share_ea"]
+            for _ in range(100):
+                f = flows(ea, gl)
+                equity = (prev["parent_equity"] + f["parent"] - paid
+                          + prev["nci"] + (f["net"] - f["parent"]))
+                new_ea = (liabilities + equity) * (1 - p["non_earning_share"]) + allowance
+                if abs(new_ea - ea) <= max(abs(ea) * 1e-12, 1.0):
+                    ea = new_ea
+                    break
                 ea = new_ea
-                break
-            ea = new_ea
-        f = flows(ea)
+            f = flows(ea, gl)
+            parent_equity = prev["parent_equity"] + f["parent"] - paid
+            nci_now = prev["nci"] + (f["net"] - f["parent"])
+            equity = parent_equity + nci_now
+            return {"gl": gl, "allowance": allowance, "dep": dep, "oibl": oibl, "nibl": nibl,
+                    "liabilities": liabilities, "ea": ea, "f": f, "paid": paid,
+                    "parent_equity": parent_equity, "nci": nci_now, "equity": equity,
+                    "assets": liabilities + equity}
+
+        def need(s):
+            """Total equity that holds the CAR floor on this loan book."""
+            return floor * s["gl"] * p["rwa_per_loan"] / p["capital_to_equity"]
+
+        gl = prev["gross_loan"] * (1 + g)
+        if lim["ldr_cap"] and deposit_driver and \
+                (gl - p["coverage"] * gl) / deposits(gl) > lim["ldr_cap"] + 1e-12:
+            capped = lim["ldr_cap"] * deposits(gl) / (1 - p["coverage"])
+            applied.append({"year": year, "label": label, "rule": "ldr_cap",
+                            "lever": "loan_growth", "from_pct": g * 100,
+                            "to_pct": (capped / prev["gross_loan"] - 1) * 100})
+            gl = capped
+        paid = paid_rate * max(prev["earnings"], 0.0) if prev["earnings"] is not None else 0.0
+        s = solve(gl, paid)
+        if floor:
+            tol = lambda: max(abs(s["equity"]) * 1e-9, 1.0)
+            if i > 0 and s["paid"] > 0 and s["equity"] < need(s) - tol():
+                before = payouts[i - 1]
+                for _ in range(60):
+                    short = need(s) - s["equity"]
+                    if short <= tol() or s["paid"] <= 0:
+                        break
+                    s = solve(gl, max(s["paid"] - short * 1.000001, 0.0))
+                payouts[i - 1] = (s["paid"] / prev["earnings"]
+                                  if prev["earnings"] and prev["earnings"] > 0 else 0.0)
+                applied.append({"year": year - 1, "label": f"FY{(year - 1) % 100:02d}F",
+                                "rule": "car_floor", "lever": "payout", "from_pct": before * 100,
+                                "to_pct": payouts[i - 1] * 100, "tested_on": label})
+            if s["equity"] < need(s) - tol():
+                start = s["gl"]
+                # The interim year's loans cannot fall below the official 30 June book.
+                least = anchor["loans_mid"] if i == 0 and anchor["loans_mid"] else 0.0
+                for _ in range(60):
+                    most = max(s["equity"] * p["capital_to_equity"] / (floor * p["rwa_per_loan"]),
+                               least)
+                    if abs(most - s["gl"]) <= max(abs(most) * 1e-12, 1.0):
+                        break
+                    s = solve(most, s["paid"])
+                applied.append({"year": year, "label": label, "rule": "car_floor",
+                                "lever": "loan_growth",
+                                "from_pct": (start / prev["gross_loan"] - 1) * 100,
+                                "to_pct": (s["gl"] / prev["gross_loan"] - 1) * 100})
+        paid_rate = payouts[i]
+        f = s["f"]
+        gl, allowance, dep, ea = s["gl"], s["allowance"], s["dep"], s["ea"]
         nii, other, opex, prov = f["nii"], f["other"], f["opex"], f["prov"]
         ebt, tax, net, parent = f["ebt"], f["tax"], f["net"], f["parent"]
         avg_ea, avg_gl = f["avg_ea"], f["avg_gl"]
         if i == 0:
             h2 = f["h2"]
         income = nii + other
-        parent_equity = prev["parent_equity"] + parent - paid
-        nci_now = prev["nci"] + (net - parent)
-        equity = parent_equity + nci_now
-        assets = liabilities + equity
+        net_loan = gl - allowance
+        parent_equity, nci_now, equity = s["parent_equity"], s["nci"], s["equity"]
+        assets = s["assets"]
         non_earning = assets - net_loan - (ea - gl)
-        ibl = dep + oibl
+        ibl = dep + s["oibl"]
         row = {
-            "year": years[i], "label": f"FY{years[i] % 100:02d}F",
+            "year": year, "label": label,
             "revenue": income, "net_interest_income": nii, "non_interest_income": other,
             "operating_expense": opex, "ppop": income - opex, "provision": prov,
             "operating_pnl": ebt, "earnings_before_tax": ebt, "tax": tax, "net_cons": net,
@@ -491,19 +593,21 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
             "non_loan_earning_assets": ea, "other_earning_assets": ea - gl,
             "non_earning_assets": non_earning, "total_assets": assets,
             "total_deposit": dep,
-            "other_interest_bearing_liabilities": oibl,
-            "non_interest_bearing_liabilities": nibl, "total_liabilities": liabilities,
+            "other_interest_bearing_liabilities": s["oibl"],
+            "non_interest_bearing_liabilities": s["nibl"],
+            "total_liabilities": s["liabilities"],
             "stockholders_equity": parent_equity, "non_controlling_interest": nci_now,
-            "total_equity": equity, "dividends_paid": paid,
+            "total_equity": equity, "dividends_paid": s["paid"],
             "net_interest_margin": nii / avg_ea, "cost_of_credit": prov / avg_gl,
             "average_earning_assets": avg_ea, "average_gross_loan": avg_gl,
             "cost_to_income": opex / income if income else None,
             "non_ii_to_nii": other / nii if nii else None,
-            "loan_growth": g, "deposit_growth": dep / prev["total_deposit"] - 1,
+            "loan_growth": gl / prev["gross_loan"] - 1,
+            "deposit_growth": dep / prev["total_deposit"] - 1,
             "loan_to_deposit_ratio": net_loan / dep if dep else None,
             "roe": _div(parent, _avg(prev["parent_equity"], parent_equity)),
             "roaa": _div(parent, _avg(prev["total_assets"], assets)),
-            "payout": payout, "tax_rate": tax_rate,
+            "tax_rate": tax_rate,
             "drivers": {k: d.get(k) for k in DRIVERS + OPTIONAL_DRIVERS},
         }
         if p["ca_share"] is not None and p["sa_share"] is not None:
@@ -515,24 +619,54 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
             row.update(interest_expense=expense, interest_income=nii + expense,
                        cost_of_funds=p["cost_of_funds"],
                        yield_on_earning_assets=(nii + expense) / avg_ea)
-        if p["capital_to_equity"] is not None and p["rwa_density"]:
-            capital, rwa = equity * p["capital_to_equity"], assets * p["rwa_density"]
+        if car_ok:
+            capital, rwa = equity * p["capital_to_equity"], gl * p["rwa_per_loan"]
             row.update(total_capital=capital, total_risk_weighted_asset=rwa,
                        capital_adequacy_ratio=capital / rwa)
-        if shares:
-            row.update(eps=parent / shares, dps=payout * max(parent, 0.0) / shares,
-                       bvps=parent_equity / shares)
         out.append(row)
         prev = {"gross_loan": gl, "earning_assets": ea, "total_deposit": dep, "ibl": ibl,
                 "parent_equity": parent_equity, "nci": nci_now, "total_equity": equity,
                 "total_assets": assets, "earnings": parent}
 
+    out = out[:len(drivers)]
+    applied = [a for a in applied if a["year"] <= years[-1]]
+    for row, rate in zip(out, payouts):
+        row["payout"] = rate
+        if shares:
+            row.update(eps=row["earnings"] / shares,
+                       dps=rate * max(row["earnings"], 0.0) / shares,
+                       bvps=row["stockholders_equity"] / shares)
+    constraints = {**lim, "applied": applied, "payouts": payouts[:len(drivers)],
+                   "historical_payout": payout}
     notes.update(_notes(p, shares))
     return {"rows": out, "anchor": anchor, "h2": h2, "base_year": base["year"],
             "parameters": {k: v for k, v in p.items() if k != "base"},
+            "constraints": constraints,
             "assumptions": _assumptions(anchor, p, base, drivers, payout, payout_basis,
-                                        shares, shares_basis, nci0, nci_basis),
-            "notes": notes, "checks": checks(out, anchor, h2, base, payout, rows)}
+                                        shares, shares_basis, nci0, nci_basis, constraints),
+            "notes": notes, "checks": checks(out, anchor, h2, base, payout, rows, constraints)}
+
+
+def terminal_payout(model, growth):
+    """(payout, basis) for the DDM's terminal DPS on the bank model's path.
+
+    In steady state a bank that grows its book at ``growth`` must retain
+    growth / ROE of its profit to hold its capital ratio, so the sustainable
+    payout is 1 - growth / ROE of the last forecast year, capped at the
+    historical payout. None when the model has no ROE.
+    """
+    rows = (model or {}).get("rows") or []
+    constraints = (model or {}).get("constraints") or {}
+    historical = constraints.get("historical_payout")
+    roe = _num(rows[-1].get("roe")) if rows else None
+    if not roe or roe <= 0 or historical is None:
+        return None, None
+    sustainable = max(1 - growth / roe, 0.0)
+    if sustainable >= historical:
+        return historical, "payout historis (di bawah payout berkelanjutan 1 - g / ROE)"
+    return sustainable, (f"payout berkelanjutan 1 - g / ROE {rows[-1]['label']} "
+                         f"({_pct(growth)} / {_pct(roe)}), di bawah payout historis "
+                         f"{_pct(historical)}")
 
 
 def _notes(p, shares):
@@ -549,7 +683,7 @@ def _notes(p, shares):
                "dan rasio CASA tidak diproyeksikan.")
         notes.update(dict.fromkeys(("current_account", "savings_account", "time_deposit",
                                     "casa_ratio"), why))
-    if p["capital_to_equity"] is None or not p["rwa_density"]:
+    if p["capital_to_equity"] is None or not p["rwa_per_loan"]:
         why = ("Data Sectors FY dasar tidak memuat modal regulasi atau ATMR, sehingga CAR tidak "
                "dapat diproyeksikan.")
         notes.update(dict.fromkeys(("total_capital", "total_risk_weighted_asset",
@@ -559,8 +693,13 @@ def _notes(p, shares):
     return notes
 
 
-def checks(out, anchor, h2, base, payout, rows=None):
-    """The model's invariants and warnings (S2.5, S2.8)."""
+def checks(out, anchor, h2, base, payout, rows=None, constraints=None):
+    """The model's invariants and warnings (S2.5, S2.8).
+
+    Dividends paid in year t are the payout on year t-1's profit: the
+    declared historical payout for the first year, then each row's own
+    (possibly constrained) ``payout``.
+    """
     problems, warnings = [], []
     tol = lambda x: max(abs(x) * 1e-9, 1.0)
     for r in out:
@@ -572,9 +711,9 @@ def checks(out, anchor, h2, base, payout, rows=None):
                             "DPK, liabilitas lain dan ekuitas tidak cukup mendanai kredit")
         if r["total_equity"] <= 0:
             problems.append(f"{r['label']}: ekuitas tidak positif")
-    prev_equity, prev_parent = base["total_equity"], base["earnings"]
+    prev_equity, prev_parent, prev_payout = base["total_equity"], base["earnings"], payout
     for r in out:
-        expected = payout * max(prev_parent, 0.0)
+        expected = prev_payout * max(prev_parent, 0.0)
         if abs(r["dividends_paid"] - expected) > tol(expected):
             problems.append(f"{r['label']}: dividen dibayar tidak sama dengan payout x laba induk "
                             "tahun sebelumnya")
@@ -582,6 +721,25 @@ def checks(out, anchor, h2, base, payout, rows=None):
                 tol(r["total_equity"]):
             problems.append(f"{r['label']}: roll-forward ekuitas tidak cocok")
         prev_equity, prev_parent = r["total_equity"], r["earnings"]
+        prev_payout = r.get("payout", payout)
+    limit = constraints or {}
+    floor, cap = limit.get("car_floor"), limit.get("ldr_cap")
+    if floor:
+        below = [f"{r['label']} {_pct(r['capital_adequacy_ratio'])}" for r in out
+                 if r.get("capital_adequacy_ratio") is not None
+                 and r["capital_adequacy_ratio"] < floor - 1e-6]
+        if below:
+            warnings.append(f"CAR screening di bawah batas modal ({_pct(floor)}, "
+                            f"{limit.get('car_floor_basis')}): " + ", ".join(below)
+                            + "; dividen atas laba FY dasar sudah diumumkan dan kredit tidak "
+                            "diturunkan di bawah saldo 30 Juni resmi")
+    if cap:
+        above = [f"{r['label']} {_pct(r['loan_to_deposit_ratio'])}" for r in out
+                 if r.get("loan_to_deposit_ratio") is not None
+                 and r["loan_to_deposit_ratio"] > cap + 1e-6]
+        if above:
+            problems.append(f"LDR di atas batas pendanaan ({_pct(cap)}, "
+                            f"{limit.get('ldr_cap_basis')}): " + ", ".join(above))
     first = out[0]
     for key, h1 in (("net_cons", anchor["net_profit"]),
                     ("earnings", anchor["net_profit_attributable"]),
@@ -606,7 +764,7 @@ def checks(out, anchor, h2, base, payout, rows=None):
     history_car = [y["ratios"]["car"] for y in past if y["ratios"]["car"]]
     cars = [(r["label"], r.get("capital_adequacy_ratio")) for r in out
             if r.get("capital_adequacy_ratio") is not None]
-    if history_car and cars:
+    if history_car and cars and not (constraints or {}).get("car_floor"):
         low = min(history_car)
         below = [f"{label} {_pct(car)}" for label, car in cars if car < low]
         if below:
@@ -618,7 +776,7 @@ def checks(out, anchor, h2, base, payout, rows=None):
 
 
 def _assumptions(anchor, p, base, drivers, payout, payout_basis, shares, shares_basis, nci0,
-                 nci_basis):
+                 nci_basis, constraints=None):
     y0, period = base["year"], anchor["period"]
     fy = f"FY{y0}"
     first = f"FY{anchor['year'] % 100:02d}F"
@@ -664,7 +822,7 @@ def _assumptions(anchor, p, base, drivers, payout, payout_basis, shares, shares_
          f"dividen tunai yang dibayar tahun t = payout x laba induk tahun t-1 (dividen final "
          f"sesudah RUPS; {first} memakai laba {fy} data Sectors); DPS tahun t = payout x EPS "
          f"tahun t (baris DPS DDM). Payout {_pct(payout)}, sumber {payout_basis or '-'}, dijaga "
-         "tetap."),
+         "tetap kecuali diturunkan oleh batas modal (lihat di bawah)."),
         (f"Mekanika model: kepentingan non-pengendali saldo awal {_bn(nci0)} "
          f"({nci_basis or 'tidak dilaporkan terpisah; ekuitas induk = total ekuitas'}) bertambah "
          f"dengan porsi laba non-pengendali ({_pct(1 - anchor['parent_share'])}, "
@@ -683,13 +841,51 @@ def _assumptions(anchor, p, base, drivers, payout, payout_basis, shares, shares_
                    "rata-rata DPK + liabilitas berbunga lain, data Sectors) dijaga tetap; "
                    "beban bunga = biaya dana x rata-rata dana berbiaya; pendapatan bunga = NII + "
                    "beban bunga; imbal hasil aset produktif turunan, bukan driver.")
-    if p["capital_to_equity"] is not None and p["rwa_density"]:
+    if p["capital_to_equity"] is not None and p["rwa_per_loan"]:
         out.append(f"Asumsi screening: CAR = ekuitas x rasio modal regulasi terhadap ekuitas {fy} "
-                   f"{fmt._id(p['capital_to_equity'], 2)}x / (total aset x densitas ATMR {fy} "
-                   f"{_pct(p['rwa_density'])}); proksi kecukupan modal, bukan perhitungan "
-                   "regulasi.")
+                   f"{fmt._id(p['capital_to_equity'], 2)}x / ATMR; ATMR = kredit bruto x rasio "
+                   f"ATMR terhadap kredit bruto {fy} {_pct(p['rwa_per_loan'])} (kredit memikul "
+                   "hampir seluruh bobot risiko; penempatan dan obligasi pemerintah hampir nol); "
+                   "proksi kecukupan modal, bukan perhitungan regulasi.")
+    out += _constraint_text(constraints or {}, first)
     if shares:
         out.append(f"Asumsi valuasi: jumlah saham {fmt._id(shares / 1e9, 2)} miliar lembar "
                    f"({shares_basis or 'sumber tidak tercatat'}), flat; EPS = laba induk, BVPS = "
                    "ekuitas induk per saham.")
     return out
+
+
+def _constraint_text(constraints, first):
+    """The capital floor and funding cap, and every year they bound."""
+    floor, cap = constraints.get("car_floor"), constraints.get("ldr_cap")
+    if not floor and not cap:
+        return []
+    rules = []
+    if floor:
+        rules.append(f"CAR screening tidak turun di bawah {_pct(floor)} "
+                     f"({constraints.get('car_floor_basis')})")
+    if cap:
+        rules.append(f"LDR tidak melewati {_pct(cap)} ({constraints.get('ldr_cap_basis')})")
+    text = [("Mekanika model (batas modal dan pendanaan): " + "; ".join(rules) + ". Tahun yang "
+             "melanggar batas modal membayar dividen lebih kecil atas laba tahun sebelumnya "
+             f"(payout laba tahun itu diturunkan); dividen atas laba FY dasar yang dibayar {first} "
+             "sudah diumumkan, sehingga pada tahun itu, atau bila tidak ada dividen tersisa, "
+             "pertumbuhan kredit yang dibatasi. Tahun yang melewati batas pendanaan menumbuhkan "
+             "kredit hanya sampai batas LDR. Payout atas laba tahun terakhir diuji pada satu tahun "
+             "tambahan dengan driver tahun terakhir.")]
+    applied = constraints.get("applied") or []
+    if not applied:
+        text.append("Batas modal dan pendanaan tidak mengikat pada tahun forecast mana pun; "
+                    "driver analis dan payout historis dipakai apa adanya.")
+    for a in applied:
+        if a["lever"] == "payout":
+            text.append(f"Batas modal mengikat: payout atas laba {a['label']} diturunkan dari "
+                        f"{fmt._id(a['from_pct'], 1)}% ke {fmt._id(a['to_pct'], 1)}% agar CAR "
+                        f"{a['tested_on']} tidak di bawah batas.")
+        else:
+            why = "batas modal" if a["rule"] == "car_floor" else "batas pendanaan (LDR)"
+            text.append(f"{why[0].upper()}{why[1:]} mengikat: pertumbuhan kredit bruto "
+                        f"{a['label']} dibatasi dari {fmt._id(a['from_pct'], 1)}% ke "
+                        f"{fmt._id(a['to_pct'], 1)}%; dana yang tidak disalurkan ditempatkan "
+                        "di aset produktif lain.")
+    return text

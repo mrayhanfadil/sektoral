@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useSpring } from "motion/react";
 import { GATES, type DeckState, type GateState, type Hypothesis } from "../../lib/agents";
-import { Clamp, Glyph, Hold, RegionHead } from "./kit";
+import { Clamp, Glyph, Hold, HoldLight, RegionHead } from "./kit";
 import { GATE_SETTLE, SPRING, SPRING_SOFT, isJudged, useChangeCount, verdictGlyph, verdictStatus, verdictTone } from "./read";
 
 const REGION = "border-b border-rule px-5 py-4 max-sm:px-4";
@@ -43,8 +43,8 @@ function HypothesisRow({ h }: { h: Hypothesis }) {
   return (
     <motion.li initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} transition={{ height: SPRING, opacity: { duration: 0.3 } }}
       className="relative isolate overflow-hidden">
-      <Hold n={changed} tone={verdictStatus(h.verdict)} />
-      <div className="grid grid-cols-[26px_minmax(0,1fr)] gap-x-2 py-2.5">
+      <HoldLight n={changed} tone={verdictStatus(h.verdict)} />
+      <div className="grid grid-cols-[26px_minmax(0,1fr)] gap-x-2 py-2.5 pl-2">
         <span className="data pt-[2px] text-ink-soft">H{h.index}</span>
         <div className="min-w-0">
           <p className="line-clamp-3 text-[13.5px] leading-snug text-ink" title={text}>{text}</p>

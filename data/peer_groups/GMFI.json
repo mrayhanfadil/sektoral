@@ -66,5 +66,29 @@
       "symbol": "BREN",
       "reason": "Produsen listrik panas bumi dan angin."
     }
-  ]
+  ],
+  "regional_reference": [
+    {
+      "symbol": "S59.SI",
+      "yahoo": "S59.SI",
+      "market": "SGX",
+      "name": "SIA Engineering",
+      "reason": "MRO pesawat penuh (airframe, komponen, line maintenance) milik grup Singapore Airlines; model bisnis paling dekat dengan GMFI, termasuk basis captive grup maskapai."
+    },
+    {
+      "symbol": "AIR",
+      "yahoo": "AIR",
+      "market": "NYSE",
+      "name": "AAR Corp",
+      "reason": "Penyedia jasa aftermarket penerbangan AS: MRO airframe dan komponen serta distribusi suku cadang."
+    },
+    {
+      "symbol": "TATT",
+      "yahoo": "TATT",
+      "market": "NASDAQ",
+      "name": "TAT Technologies",
+      "reason": "MRO komponen dan APU/landing gear serta pembuatan heat-transfer; skala kecil, fokus komponen."
+    }
+  ],
+  "regional_reference_basis": "Referensi regional hanya untuk konteks: peer valuasi tetap emiten BEI (aturan IDX-only), sehingga baris ini tidak masuk median, cross-check maupun rantai metode. VSE dan TransDigm tidak dimasukkan karena multiple-nya didorong distribusi dan komponen proprietary bermargin tinggi, bukan jasa MRO. ST Engineering juga tidak dimasukkan: konglomerat teknik yang MRO-nya hanya sebagian pendapatan, dan laba FY2025 di Yahoo Finance memberi P/E 73x yang tidak dapat diverifikasi."
 }

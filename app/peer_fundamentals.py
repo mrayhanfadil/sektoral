@@ -11,6 +11,7 @@ snapshots; refreshing is an explicit command that needs the network:
     python -m app.peer_fundamentals MORA LINK          # symbols
     python -m app.peer_fundamentals --peers-of INET    # every peer in a table
     python -m app.peer_fundamentals --group GMFI       # a curated peer group
+    python -m app.peer_fundamentals --regional GMFI    # its non-IDX context listings
 
 For curated peer groups (app.peer_groups) the snapshot also carries net
 income, equity, assets, liabilities and market cap with the exchange rates
@@ -285,6 +286,9 @@ def main(argv=None) -> int:
     parser.add_argument("symbols", nargs="*", help="IDX symbols (with or without .JK)")
     parser.add_argument("--peers-of", action="append", default=[],
                         help="fetch every peer in this issuer's cached Sectors peer table")
+    parser.add_argument("--regional", action="append", default=[],
+                        help="fetch the non-IDX regional reference listings of this issuer's "
+                             "curated peer group (context only, never valuation peers)")
     parser.add_argument("--group", action="append", default=[],
                         help="fetch every peer in this issuer's curated peer group "
                              "(its Sectors peer table when it has none)")
@@ -297,6 +301,13 @@ def main(argv=None) -> int:
         from . import refresh as refresh_all
         grouped, yahoo = refresh_all.peer_symbols(args.group)
         symbols.extend(s for s in grouped if s not in symbols)
+    if args.regional:
+        from . import peer_groups
+        for ticker in args.regional:
+            for entry in (peer_groups.load(ticker) or {}).get("regional_reference") or []:
+                yahoo[entry["symbol"]] = entry["yahoo"]
+                if entry["symbol"] not in symbols:
+                    symbols.append(entry["symbol"])
     if not symbols:
         parser.error("no symbols given")
     result = refresh(symbols, yahoo=yahoo)

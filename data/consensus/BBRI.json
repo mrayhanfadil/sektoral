@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "ticker": "BBRI",
+  "as_of": "2026-09-25",
+  "source_title": "Investing.com, analyst consensus (polling 3 bulan terakhir)",
+  "source_url": "https://www.investing.com/equities/bank-rakyat-in-consensus-estimates",
+  "analysts": 23,
+  "buy": 15,
+  "hold": 8,
+  "sell": 1,
+  "target_avg": 3796,
+  "target_high": 4900,
+  "target_low": 2860,
+  "currency": "IDR",
+  "estimates": null,
+  "estimates_note": "Estimasi konsensus pendapatan, EBITDA dan laba tidak ditampilkan tanpa langganan Investing Pro; tidak ada sumber konsensus estimasi yang dapat dikutip."
+}

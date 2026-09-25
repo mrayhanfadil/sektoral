@@ -391,3 +391,33 @@ def test_signal_ids_and_label_numbers_are_not_invented_figures(tmp_path):
     assert result["synthesis"]["source"] == "agent", result["problems"]
     assert "flow.net_20d" not in result["synthesis"]["headline"]
     assert "arus bersih asing" in result["synthesis"]["headline"]
+
+
+def test_investor_flow_words_are_not_advice_but_a_call_to_act_is():
+    assert A._advice_terms("Asing mencatat akumulasi bersih; pola akumulasi berlanjut") == []
+    assert "akumulasi" in A._advice_terms("Akumulasi saham ini sekarang")
+    assert "layak diakumulasi" in A._advice_terms("Saham ini layak diakumulasi")
+
+
+def test_dates_and_period_labels_are_not_invented_figures():
+    doc = {"headline": "Laba 1H26 dan FY2025 dibahas pada 2026-09-22",
+           "findings": [{"title": "Kuartal Q2 2026", "signal_ids": ["a"],
+                         "interpretation": "Tren sejak 2024.", "caveat": "Batas bukti."}],
+           "hypotheses": [{"index": 0, "verdict": "didukung", "signal_ids": ["a"],
+                           "reason": "Sinyal a."}]}
+    assert A._synthesis_problems(doc, {"a"}, 1) == []
+    doc["findings"][0]["interpretation"] = "Laba naik 11, lalu 25%."
+    problems = A._synthesis_problems(doc, {"a"}, 1)
+    # Tokens are listed clean: no trailing punctuation, no repeats.
+    assert problems == ["prosa tidak boleh memuat angka (angka ditampilkan dari sinyal yang "
+                        "dicite); hapus: 11, 25%"]
+
+
+def test_verdict_spellings_are_normalised_and_partial_support_is_marked():
+    doc = {"hypotheses": [{"verdict": "Didukung."}, {"verdict": "tidak terdukung"},
+                          {"verdict": "Sebagian didukung", "reason": "Margin naik, laba belum."},
+                          {"verdict": "mungkin"}]}
+    A._normalize_verdicts(doc)
+    verdicts = [h["verdict"] for h in doc["hypotheses"]]
+    assert verdicts == ["didukung", "tidak didukung", "belum terjawab", "mungkin"]
+    assert doc["hypotheses"][2]["reason"].startswith("Sebagian didukung: margin naik")

@@ -21,6 +21,37 @@ export type ReportItem = {
   blockers: number;
   held_reason: string;
   files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean };
+  review?: { state: ReviewState; reviewer: string | null; reviewed_at: string | null; decision: string | null; edits: number };
+};
+
+export type ReviewState = "approved" | "pending" | "no_plan";
+
+/** One numeric driver of the Forecast Plan an analyst may change. */
+export type ReviewField = {
+  path: string;
+  field: string;
+  label: string;
+  unit: "%" | "x";
+  year: number | null;
+  value: number;
+  rationale: string;
+};
+
+export type ReviewEdit = {
+  path: string; label: string; year: number | null; unit: string; from: number; to: number; reason: string;
+};
+
+export type ReviewView = {
+  state: ReviewState;
+  plan_sha: string | null;
+  reviewer: string | null;
+  reviewed_at: string | null;
+  decision: "approved" | "approved_with_edits" | null;
+  note: string | null;
+  edits: ReviewEdit[];
+  stale: boolean;
+  enabled: boolean;
+  fields: ReviewField[];
 };
 
 export type HistoryItem = {
@@ -114,6 +145,8 @@ export type Job = {
 
 export type TraceView = {
   ticker: string;
+  /** Gallery reports only: whether an analyst approved the Forecast Plan. */
+  review_state?: ReviewState;
   report: {
     release_status: string | null;
     published: boolean;
@@ -146,6 +179,10 @@ export type TraceView = {
     interim: { rationale: string | null; published_at: string | null; url: string | null } | null;
     outyears: { year: string | null; revenue_growth_pct: number | null; ebitda_margin_pct: number | null;
       net_income_margin_pct: number | null; capex_to_revenue_pct: number | null; rationale: string | null; source_ids: string[] }[];
+    /** Bank Driver Scenario: the interim year's H2 drivers, then the out-years (percent). */
+    bank_drivers?: { year: string | null; loan_growth_pct: number | null; nim_pct: number | null; non_ii_to_nii_pct: number | null;
+      cost_to_income_pct: number | null; cost_of_credit_pct: number | null; deposit_growth_pct: number | null;
+      rationale: string | null; source_ids: string[] }[];
   };
   deepdive: { title: string | null; date: string | null; url: string | null; status: string | null; length: number; preview: string | null }[];
 };
@@ -177,6 +214,13 @@ export const api = {
   reports: () => request<{ items: ReportItem[] }>("/api/reports").then((r) => r.items),
   reportRun: (ticker: string) => request<RunReplay>(`/api/reports/${encodeURIComponent(ticker)}/run`),
   reportTrace: (ticker: string) => request<TraceView>(`/api/reports/${encodeURIComponent(ticker)}/trace`),
+  review: (ticker: string) => request<ReviewView>(`/api/reports/${encodeURIComponent(ticker)}/review`),
+  approve: (ticker: string, token: string, body: { reviewer: string; note: string; edits: { path: string; value: number; reason: string }[] }) =>
+    request<ReviewView>(`/api/reports/${encodeURIComponent(ticker)}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Review-Token": token },
+      body: JSON.stringify(body),
+    }),
   job: (id: string) => request<Job>(`/api/jobs/${encodeURIComponent(id)}`),
   jobTrace: (id: string) => request<TraceView>(`/api/jobs/${encodeURIComponent(id)}/trace`),
   submit: (ticker: string) =>

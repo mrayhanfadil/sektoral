@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app import outputs, progress, run_events  # noqa: E402
-from test_gallery import _report  # noqa: E402
+from test_gallery import _report, approve  # noqa: E402
 
 VERDICT_BANK = {"primary": "DDM / Excess Return", "secondary": "Relative Valuation",
                 "gates_passed": ["0_business_model", "5_upside_band"], "gates_failed": [],
@@ -138,6 +138,7 @@ def test_replay_endpoint_prefers_recorded_events(tmp_path):
     reports.mkdir()
     _report(reports, "AAAA")
     outputs.save(outputs.TRACE, reports, "AAAA", _audit())
+    approve(reports, "AAAA")
     with TestClient(server.create_app(tmp_path / "out", reports)) as client:
         derived = client.get("/api/reports/AAAA/run").json()
         assert derived["source"] == "derived" and derived["report"]["rating"] == "Hold"

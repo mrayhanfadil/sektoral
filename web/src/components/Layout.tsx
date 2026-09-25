@@ -9,11 +9,21 @@ import { PaletteProvider, usePalette } from "./CommandPalette";
 function useScrollToHash() {
   const { pathname, hash } = useLocation();
   useEffect(() => {
-    if (hash) {
-      document.getElementById(hash.slice(1))?.scrollIntoView();
-    } else {
+    if (!hash) {
       window.scrollTo(0, 0);
+      return;
     }
+    // Pages load on first visit and sections render once their data arrives,
+    // so the target may appear a moment later: look for it for up to 5 s.
+    let timer = 0;
+    const until = Date.now() + 5000;
+    const seek = () => {
+      const target = document.getElementById(hash.slice(1));
+      if (target) target.scrollIntoView();
+      else if (Date.now() < until) timer = window.setTimeout(seek, 50);
+    };
+    seek();
+    return () => window.clearTimeout(timer);
   }, [pathname, hash]);
 }
 
@@ -78,12 +88,11 @@ function DeckBar() {
                   className={`group relative flex items-center gap-2 px-2.5 text-[14px] font-medium whitespace-nowrap no-underline transition-colors max-sm:px-1.5 max-sm:text-[13.5px] ${
                     active ? "text-ink-strong" : "text-ink-soft hover:text-ink-strong"}`}>
                   <kbd className={`kbd transition-colors max-sm:hidden ${active ? "!border-brand-ink/40 !text-brand-ink" : "group-hover:text-ink"}`}>{k.key}</kbd>
-                  {/* Phones: F3 keeps an icon and a short label so all three keys fit the bar. */}
+                  {/* Phones: F3 is an icon with its full name for screen readers, so all three keys fit the bar. */}
                   {k.key === "F3" ? (
                     <>
-                      <Workflow aria-hidden className="size-4 flex-none sm:hidden" strokeWidth={2.2} />
+                      <Workflow aria-hidden className="size-[18px] flex-none sm:hidden" strokeWidth={2.2} />
                       <span className="max-sm:sr-only">{k.label}</span>
-                      <span aria-hidden className="sm:hidden">Cara</span>
                     </>
                   ) : k.label}
                   {active && (
