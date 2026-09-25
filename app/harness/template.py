@@ -111,6 +111,8 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "T6.income_statement_order": (WARNING, "present", "urutan baris laba rugi"),
     "T6.balance_sheet_lines_and_balance": (BLOCKER, "model", "baris neraca; total aset = liabilitas + ekuitas"),
     "T6.balance_sheet_subtotals": (WARNING, "model", "subtotal neraca sama dengan jumlah barisnya"),
+    "T6.balancing_debt_share": (WARNING, "model",
+                                "pinjaman penyeimbang kas forecast <= 25% dari total ekuitas"),
     "T7.cash_flow_sections_and_tieout": (BLOCKER, "model", "arus kas: tiga blok, rekonsiliasi kas proyeksi"),
     "T7.cash_flow_actual_reconciliation": (WARNING, "present", "rekonsiliasi kas tahun aktual (efek kurs)"),
     "T7.key_ratio_sections_format": (BLOCKER, "present", "baris rasio utama per template"),
@@ -2316,6 +2318,34 @@ def _t6_bs(ctx, r):
     else:
         r.add("T6.balance_sheet_subtotals", not bad, f"{checked} subtotal cocok" if not bad
               else f"subtotal tidak sama dengan jumlah: {_short(bad, 4)}")
+
+
+# The short-term debt the statements draw to keep cash at its minimum
+# (report_extras.REVOLVER_LINE) is a screening plug; above this share of total
+# equity the forecast leans on financing nobody has arranged.
+BALANCING_DEBT_EQUITY_MAX = 0.25
+_REVOLVER_LABEL = re.compile(r"pinjaman penyeimbang kas|balancing (cash )?(debt|borrowing)", re.I)
+
+
+@_check("T6.balancing_debt_share")
+def _t6_revolver(ctx, r):
+    if not ctx.bs or ctx.bank:
+        r.na("T6.balancing_debt_share", "tanpa neraca" if not ctx.bs else "bank: tanpa utang penyeimbang")
+        return
+    rows = _rows(ctx.bs)
+    memo = next((row for row in rows if row and _REVOLVER_LABEL.search(_clean(row[0]))), None)
+    if memo is None:
+        r.add("T6.balancing_debt_share", True, "tanpa pinjaman penyeimbang kas")
+        return
+    equity = _match_rows(rows, [c for c in BS_ROWS[_profile_kind(ctx)] if c[0] == "equity"]).get("equity")
+    debt = {y: v for y, v in _row_values(ctx.bs, memo).items() if v[2] == "F"}
+    eq = _row_values(ctx.bs, equity) if equity else {}
+    heavy = [f"{y}F {debt[y][0] / eq[y][0]:.0%}" for y in sorted(debt)
+             if y in eq and eq[y][0] > 0 and debt[y][0] / eq[y][0] > BALANCING_DEBT_EQUITY_MAX]
+    r.add("T6.balancing_debt_share", not heavy,
+          (f"pinjaman penyeimbang kas <= {BALANCING_DEBT_EQUITY_MAX:.0%} ekuitas" if not heavy else
+           f"pinjaman penyeimbang kas > {BALANCING_DEBT_EQUITY_MAX:.0%} ekuitas: "
+           + ", ".join(heavy) + "; pendanaan capex/dividen belum dimodelkan"))
 
 
 def _cf_sections(e):

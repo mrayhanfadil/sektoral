@@ -903,6 +903,21 @@ def test_balance_sheet_must_balance_and_subtotals_add_up():
     assert failed(doc)["T6.balance_sheet_subtotals"]["severity"] == T.WARNING
 
 
+def test_balancing_debt_above_a_quarter_of_equity_is_a_warning():
+    doc = make_doc()
+    assert results(doc)["T6.balancing_debt_share"]["status"] == T.PASS
+    bs = find(doc, "Neraca")
+    at = next(i for i, r in enumerate(bs["data"]["rows"]) if r[0] == "Utang jangka pendek")
+    # Equity FY26F-FY28F = 550, 610, 680; the memo line is part of short-term debt.
+    bs["data"]["rows"].insert(at + 1, ["Termasuk pinjaman penyeimbang kas (memo)", "n.m.",
+                                       "n.m.", "40", "100", "150"])
+    assert results(doc)["T6.balancing_debt_share"]["status"] == T.PASS
+    bs["data"]["rows"][at + 1][5] = "400"
+    f = failed(doc)["T6.balancing_debt_share"]
+    assert f["severity"] == T.WARNING and "2028F 59%" in f["message"]
+    assert "T6.balance_sheet_subtotals" not in failed(doc)
+
+
 def test_bank_balance_sheet_lines():
     doc = make_doc("financial_ddm")
     bs = find(doc, "Neraca bank")
