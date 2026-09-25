@@ -18,7 +18,7 @@ from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
-               mineops, scenario_value)
+               mineops, rate_benchmarks, scenario_value)
 from . import lom as lom_mod
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
@@ -3007,12 +3007,33 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
             pages.append(page)
     if va:
         attach_method_chain(doc, va)
+        attach_rate_benchmarks(pages, intake, va)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2
     renumber(doc)
     return doc
+
+
+RATE_EXHIBITS = ("Komponen WACC", "Komponen Cost of Equity")
+
+
+def attach_rate_benchmarks(pages, intake, va):
+    """The policy-vs-benchmark table (app.rate_benchmarks) right after the
+    first WACC or Cost of Equity exhibit; nothing when the report has none."""
+    for page in pages:
+        exhibits = page.get("exhibit") or []
+        at = next((i for i, e in enumerate(exhibits)
+                   if str(e.get("judul") or "").startswith(RATE_EXHIBITS)), None)
+        if at is None:
+            continue
+        if any(e.get("judul") == rate_benchmarks.TITLE for e in exhibits):
+            return
+        table = rate_benchmarks.exhibit(intake.get("ticker"), intake.get("as_of"), va)
+        if table:
+            exhibits.insert(at + 1, table)
+        return
 
 
 def valuation_inputs(intake, fc, va):

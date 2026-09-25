@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "retrieved_at": "2026-09-25",
+  "note": "Dated market and survey benchmarks shown beside the analyst policy discount-rate inputs (app.rate_benchmarks). A benchmark dated after a report's date is not shown in that report.",
+  "rf_idr": {
+    "value": 0.07008,
+    "label": "penutupan 23 September 2026",
+    "as_of": "2026-09-23",
+    "source_title": "Investing.com, Indonesia 10-Year Bond Yield Historical Data",
+    "source_url": "https://www.investing.com/rates-bonds/indonesia-10-year-bond-yield-historical-data",
+    "short_source": "Investing.com, 23 Sep 2026"
+  },
+  "erp": {
+    "value": 0.0423,
+    "label": "implied ERP S&P 500 awal 2026",
+    "as_of": "2026-01-05",
+    "source_title": "Damodaran, Historical Implied Equity Risk Premiums (update Januari 2026)",
+    "source_url": "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/histimpl.html",
+    "short_source": "Damodaran, Jan 2026"
+  },
+  "crp": {
+    "value": 0.0246,
+    "cds_value": 0.016,
+    "rating": "Baa2",
+    "default_spread": 0.0162,
+    "cds_spread": 0.0105,
+    "label": "2,46% basis rating Moody's Baa2; 1,60% basis CDS sovereign",
+    "as_of": "2026-01-05",
+    "source_title": "Damodaran, Country Default Spreads and Risk Premiums (update 5 Januari 2026)",
+    "source_url": "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ctryprem.html",
+    "short_source": "Damodaran, 5 Jan 2026"
+  },
+  "growth": {
+    "as_of": "2026-04-14",
+    "source_title": "IMF World Economic Outlook April 2026, DataMapper (NGDP_RPCH, PCPIPCH)",
+    "source_url": "https://www.imf.org/external/datamapper/api/v1/NGDP_RPCH/IDN/USA",
+    "IDR": {
+      "country": "Indonesia",
+      "year": 2031,
+      "real": 0.052,
+      "inflation": 0.025
+    },
+    "USD": {
+      "country": "Amerika Serikat",
+      "year": 2031,
+      "real": 0.018,
+      "inflation": 0.022
+    },
+    "short_source": "IMF WEO Apr 2026"
+  }
+}
