@@ -55,6 +55,8 @@ def test_ammn_report_date_includes_published_interim_without_releasing_target(tm
     assert "tp" not in doc["meta"]
     titles = {item["judul"] for item in doc["exhibits"]}
     assert "Hasil interim resmi dan perubahan yoy" in titles
+    # The interim table carries the figures; a two-period bar chart only repeated them.
+    assert not any(item.get("tipe") == "bar_chart" for item in doc["exhibits"])
     assert "Metrik operasi dan pemrosesan" in titles
     assert "Pemeriksaan sebelum rating dan target harga" in titles
     assert len(doc["exhibits"]) >= 9
