@@ -35,6 +35,7 @@ def _repeat_cover_header(pg):
         f"@page{{margin-top:{height_mm + HEADER_GAP_MM + 3:.1f}mm;"
         "@top-left{content:none;border:0}@top-right{content:none;border:0}"
         f"@top-center{{content:'{text}';color:rgba(255,255,255,0.01);font-size:6pt;"
+        "font-family:'Roboto',sans-serif;"
         "vertical-align:bottom;text-align:left;"
         f"width:{CONTENT_WIDTH_MM}mm;"
         f"background:url('data:image/png;base64,{png}') left 0 bottom {HEADER_GAP_MM}mm"

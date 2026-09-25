@@ -850,7 +850,18 @@ def peer_page(intake, valuation_inputs=None):
         paragraphs.append("Band historis P/E dan P/BV belum dimodelkan: "
                           "cache membutuhkan harga harian + EPS/BVPS TTM yang sebanding; "
                           "cakupan saat ini tidak cukup.")
-    return _page("Perbandingan peer", paragraphs, exhibits)
+    return _page("Perbandingan peer", _merge_paragraphs(paragraphs), exhibits)
+
+
+def _merge_paragraphs(paragraphs):
+    """One paragraph for the issuer's position in its group (composition,
+    multiple vs median, outliers) and one for the method notes (cross-check,
+    bands), instead of a string of one-sentence paragraphs."""
+    texts = [p.strip() for p in paragraphs if p and p.strip()]
+    notes = ("Multiple peer", "Band historis")
+    position = [t for t in texts if not t.startswith(notes)]
+    method = [t for t in texts if t.startswith(notes)]
+    return [" ".join(group) for group in (position, method) if group]
 
 
 PUBLICATION_LAG_DAYS = 90  # annual results assumed public ~3 months after FY end

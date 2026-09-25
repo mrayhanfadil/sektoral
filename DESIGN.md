@@ -31,7 +31,7 @@ colors:
   err-ink: "#9B1C1C"
   brand-dark: "#3552F0"
   brand-hover-dark: "#4A66F6"
-  brand-ink-dark: "#E4E6EA"
+  brand-ink-dark: "#9DB1FF"
   brand-50-dark: "#1A2036"
   brand-100-dark: "#222A45"
   tint-dark: "#2A3352"
@@ -48,12 +48,17 @@ colors:
   wordmark-dark: "#F2F3F5"
   done-dark: "#4FE0B6"
   ok-bg-dark: "#11291F"
-  ok-ink-dark: "#E4E6EA"
+  ok-ink-dark: "#6EE7C0"
   warn-bg-dark: "#2D2412"
-  warn-ink-dark: "#E4E6EA"
+  warn-ink-dark: "#F5C45A"
   warn-rule-dark: "#B8871F"
   err-bg-dark: "#321719"
-  err-ink-dark: "#E4E6EA"
+  err-ink-dark: "#FF9A9A"
+  report-ink: "#000000"
+  report-rule: "#E0E0E0"
+  report-highlight: "#E1E9FF"
+  report-section-row: "#B4C7FF"
+  report-muted: "#555555"
 typography:
   display:
     fontFamily: "Roboto, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
@@ -115,6 +120,7 @@ rounded:
   control: "6px"
   panel: "8px"
   palette: "12px"
+  report-rating: "3.4mm"
   full: "9999px"
 spacing:
   "1": "4px"
@@ -265,6 +271,16 @@ A single committed blue on cool paper or charcoal console, with a small, strictl
 - **Rules** (`rule-soft`, `rule`, `rule-strong`): inner dividers; region and panel borders (the brand rule grey); hover borders and idle markers.
 - **Wordmark** (`wordmark`): the logo's black `CTORAL`, inverted to near-white in dark.
 
+### Printed company update
+The PDF and HTML company update (`app/render.py`) follows the report Figma rather than the web tokens; it is print-only and has no dark variant.
+- **Report Ink** (`report-ink`): body text and chart baselines, pure black on paper.
+- **Report Rule** (`report-rule`): table rules and the dashed chart grid.
+- **Report Highlight** (`report-highlight`): even table rows, the cover rating box and the executive-summary callout.
+- **Report Section Row** (`report-section-row`): block headers inside statement tables, the issuer row in peer tables and the base cell of a sensitivity grid; also the forecast bars in charts.
+- **Report Muted** (`report-muted`): secondary text and `n.m.` cells, which recede so reported figures carry the table.
+- The draft banner borrows the web warning set (`warn-bg`, `warn-rule`, `warn-ink`).
+- Numbers are right-aligned in every table (Struktur-Template: "angka rata kanan"); body text is left-aligned, never justified.
+
 ### Named Rules
 **The Green Is Only Alive Rule.** `live` marks something running right now, as a bar or a dot. It is never text, never a background, never "success". Finished is `done` teal.
 
@@ -322,7 +338,7 @@ The system is flat and ruled. Depth inside the console comes from tonal steps (`
 
 ## Shapes
 
-Small, square-shouldered corners scaled to the object: 3px for subagent chips and PDF cover thumbnails, 4px for kbd caps and engine tags, 5px for the run-state chip and ticker badge, 6px for buttons, inputs, rail nodes and rows, 8px for panels and the console frame, 12px only for the Cmd-K palette. Pills and toggles are fully round. Borders are 1px throughout; rails and progress lines are 1–2px. The gate board is a grid with a 1px gap over a `rule` background, so cells read as one instrument panel.
+Small, square-shouldered corners scaled to the object: 3px for subagent chips and PDF cover thumbnails, 4px for kbd caps and engine tags, 5px for the run-state chip and ticker badge, 6px for buttons, inputs, rail nodes and rows, 8px for panels and the console frame, 12px only for the Cmd-K palette. Pills and toggles are fully round. The printed company update has one rounded shape, the cover rating box at 3.4mm (`report-rating`, from the report Figma); every table in it is square. Borders are 1px throughout; rails and progress lines are 1–2px. The gate board is a grid with a 1px gap over a `rule` background, so cells read as one instrument panel.
 
 The recurring silhouettes are the E-mark's three horizontal bars (live indicator and brand mark) and the gate needle, a small semicircular gauge.
 
