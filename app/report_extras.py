@@ -2777,9 +2777,8 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
                   "forecast hanya tampil bila skenario tervalidasi."], exhibits)
 
 
-_MINING_C1_GAP = ("model LoM menghitung biaya tambang, olah dan smelter per ton bijih, bukan "
-                  "Adjusted C1 per pon tembaga terjual setelah kredit emas dan perak, sehingga "
-                  "C1 forecast tidak dihitung")
+_MINING_C1_GAP = ("jadwal LoM valuasi hanya memuat sebagian tahun ini (2H), sehingga biaya "
+                  "tunai setahun penuh per pon tidak dihitung")
 _MINING_VOLUME_GAP = "jadwal LoM atau panduan emiten untuk tahun ini tidak tersedia"
 
 
@@ -2788,8 +2787,9 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
     concentrate (Mlbs, bars) against Adjusted C1 (US$/lb, line). Actual years
     from the issuer's annual operations (``annual_operations.rows``); forecast
     volumes from the valued LoM schedule (a part year adds the reported 1H),
-    else FY guidance for its year; the C1 line stays actual-only because the
-    LoM has no by-product-credit unit cost."""
+    else FY guidance for its year. The line is Adjusted C1 for actual years
+    and the LoM's own cash cost after the gold credit (``lom.unit_cost``) for
+    full forecast years, labelled as a different definition."""
     if intake.get("model_profile") != "finite_life_mining":
         return None
     evidence = intake.get("official_evidence") or {}
@@ -2815,6 +2815,8 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
             part_year.add(row["year"])
     guidance = {str(g.get("period")): g for g in evidence.get("management_guidance") or []
                 if isinstance(g, dict) and g.get("name") == "Tembaga dalam konsentrat (Mlbs)"}
+    model_cost = {int(k): v for k, v in (lom.get("unit_cost") or {}).items()}
+    fc_cost = [model_cost.get(int(r["year"])) if r.get("year") else None for r in frows]
     fc_volume, basis = [], []
     for r in frows:
         year = int(r["year"]) if r.get("year") else None
@@ -2846,6 +2848,11 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
              zip(basis, [v for v in fc_volume if v is not None])]
     if known:
         text += ". Volume forecast (juta pon): " + ", ".join(known)
+    costed = [(r.get("label"), v) for r, v in zip(frows, fc_cost) if v is not None]
+    if costed:
+        text += (". Biaya tunai model setelah kredit emas (US$/lb): "
+                 + ", ".join(f"{label} {'(' + fmt._id(-v, 2) + ')' if v < 0 else fmt._id(v, 2)}"
+                             for label, v in costed))
     text += "."
     sources = "; ".join(dict.fromkeys(
         f"{by_year[y].get('source_title')}, hlm. {by_year[y].get('page')}" for y in years
@@ -2853,11 +2860,16 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
     note = ((f" Volume dan C1 aktual: {sources}." if sources else "")
             + " Tembaga = kandungan logam dalam konsentrat yang diproduksi; Adjusted C1 per pon "
             "tembaga terjual, negatif (dalam kurung) bila kredit emas dan perak melebihi biaya "
-            "tunai.")
+            "tunai."
+            + (" Garis forecast adalah biaya tunai jadwal LoM valuasi per pon tembaga diproduksi: "
+               "biaya tambang, olah dan smelter dikurangi pendapatan emas pada dek dasar, tanpa "
+               "royalti, bea keluar, G&A korporat dan kredit perak; definisinya bukan Adjusted C1 "
+               "emiten, sehingga dibaca sebagai arah, bukan angka yang sebanding."
+               if any(v is not None for v in fc_cost) else ""))
     cols = labels
     return (f"Produksi tembaga dan biaya unit C1 ({cols[0]}-{cols[-1]})",
             {"label": "Produksi tembaga (juta pon) & Adjusted C1",
-             "bars": volume + fc_volume, "line": c1 + [None] * len(frows),
+             "bars": volume + fc_volume, "line": c1 + fc_cost,
              "is_forecast": is_fc[:len(cols)], "line_unit": "US$/lb", "source_note": note},
             cols, text)
 
