@@ -106,9 +106,9 @@ Owner = who fixes a real finding: **present** (`report_extras`, `narrative`),
 | | `T5.peer_highlight_rendered` | warning | HTML: issuer row and Median/Average rows styled | layout |
 | IDX only (D4) | `T5.peers_idx_only` | blocker | peer selection exhibit (exchange column of used peers) and peer comparison rows (4-letter IDX codes, not listed elsewhere with a foreign exchange) | peers |
 | Peer values agree with the chain (D15) | `T5.peer_crosscheck_consistency` | blocker | medians/averages in the peer table and every peer-derived per-share row vs method-chain rows and valid multiples | present |
-| P/E and P/BV bands with mean, median, current marker | `T5.hist_bands_mean_median_marker` | warning | `band_chart` data (P/E, P/BV, mean/median/current/percentile, window >= 11 months, mean within band) | present |
+| P/E and P/BV bands with mean, median, current marker | `T5.hist_bands_mean_median_marker` | warning | `band_chart` data (P/E, P/BV, mean/median/current/percentile, window >= 11 months, mean within band). Where P/E or P/BV is not meaningful (base not positive for part of the year or today, or above 100x) an EV/EBITDA or EV/Sales band stands in, only when its note states '<X> menggantikan band <P/E/P/BV> karena ...' | present |
 | | `T5.band_lines_rendered` | warning | HTML band SVG: mean and median lines in two dash styles besides the grid, plus a marker | layout |
-| Implied price mean and median, >= 2 multiples | `T5.implied_price_mean_median_two_multiples` | warning | band table rows | present |
+| Implied price mean and median, >= 2 multiples | `T5.implied_price_mean_median_two_multiples` | warning | band table rows: >= 2 multiples with implied prices at mean and median; a substitute multiple's row counts only when the table note states the substitution | present |
 | Disclaimer: cross-check, not the TP, constant drivers | `T5.disclaimer` | warning | visible text of the band page (paragraphs, titles, narasi) | present |
 | Peer narrative vs median/average | `T5.peer_narrative` | warning | peer page paragraphs | present |
 | **Slide 6** Income statement lines | `T6.income_statement_lines` | blocker | IS row labels (non-bank / bank set) | present / model |
@@ -116,7 +116,7 @@ Owner = who fixes a real finding: **present** (`report_extras`, `narrative`),
 | Balance sheet lines, TA = TL&E | `T6.balance_sheet_lines_and_balance` | blocker | BS row labels; total assets vs total liabilities and equity per column (0.1%) | model |
 | | `T6.balance_sheet_subtotals` | warning | subtotal arithmetic | model |
 | **Slide 7** Cash flow sections and reconciliation | `T7.cash_flow_sections_and_tieout` | blocker | section rows, lines; forecast: begin + change = end, CFO+CFI+CFF = change (0.1%) | model |
-| | `T7.cash_flow_actual_reconciliation` | warning | same arithmetic on actual columns (FX effects) | present |
+| | `T7.cash_flow_actual_reconciliation` | warning | same arithmetic on actual columns (1%); a source gap (FX, cash definitions) counts only through an explicit line labelled `(data sumber)`: 'Efek kurs dan selisih definisi kas' between begin and end cash, 'Selisih komponen arus kas' between CFO+CFI+CFF and the net change. Such a line on a forecast column must read 0 or n.m., else it is a plug and fails `T7.cash_flow_sections_and_tieout` | present |
 | Key ratio sections and format | `T7.key_ratio_sections_format` | blocker | ratio lines (non-bank growth/profitability/leverage; bank set) | present / model |
 | | `T7.key_ratio_format` | warning | section header rows, one decimal | present |
 | Tie-outs: IS = KF = CF start; CF end cash = BS cash; begin(t) = end(t-1) | `T7.tieouts` | blocker | same columns, 0.1% + display rounding; bank BS without cash line: n/a | model |

@@ -220,15 +220,27 @@ def test_a_bank_without_sectors_bank_history_keeps_the_earnings_role(monkeypatch
 
 
 def test_plan_schema_moves_the_fingerprint():
-    source = _source()
+    source = _source()                      # a financial_ddm source
     before = agent.evidence_fingerprint(source, "spec")
-    original = agent.PLAN_SCHEMA
+    original = dict(agent.PLAN_SCHEMA_BY_PROFILE)
     try:
-        agent.PLAN_SCHEMA = 4
+        agent.PLAN_SCHEMA_BY_PROFILE["financial_ddm"] = 4
         assert agent.evidence_fingerprint(source, "spec") != before
     finally:
-        agent.PLAN_SCHEMA = original
-    assert agent.PLAN_SCHEMA == 5
+        agent.PLAN_SCHEMA_BY_PROFILE.clear()
+        agent.PLAN_SCHEMA_BY_PROFILE.update(original)
+    assert agent.plan_schema("financial_ddm") == 5
+
+
+def test_a_bank_schema_bump_keeps_other_profiles_plans():
+    assert agent.plan_schema("going_concern_fcff") == agent.PLAN_SCHEMA_DEFAULT
+    assert agent.plan_schema("finite_life_mining") == agent.PLAN_SCHEMA_DEFAULT
+
+
+def test_the_plan_is_pinned_to_the_sections_the_agents_read():
+    text, sha = agent._spec_sections()
+    import hashlib
+    assert sha == hashlib.sha256(text.encode()).hexdigest()
 
 
 def test_long_bank_rationale_is_cut_to_whole_sentences():

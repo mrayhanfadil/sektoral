@@ -719,3 +719,310 @@ def test_bbca_rows_tie_to_the_published_ddm(history):
     assert all("total_assets" not in r and "ebitda" not in r for r in rows)
     assert rows[0]["total_equity"] == pytest.approx(
         281687555000000 + rows[0]["net_cons"] - 0.813433 * 57537287000000)
+
+
+# --- interim opening: the first forecast year rolls from the official 1H balance sheet
+
+INTERIM_BS = {"period_end": "2026-06-30", "cash": 260 * B, "trade_receivables": 120 * B,
+              "inventories": 160 * B, "current_assets": 600 * B, "fixed_assets": 820 * B,
+              "total_assets": 1500 * B, "short_term_debt": 110 * B, "trade_payables": 90 * B,
+              "current_liabilities": 280 * B, "long_term_debt": 290 * B, "total_debt": 400 * B,
+              "total_liabilities": 640 * B, "total_equity": 860 * B,
+              "equity_attributable": 820 * B, "non_controlling_interest": 40 * B,
+              "shares_outstanding": 1e9, "source_title": "Laporan keuangan interim TEST"}
+# 1H26 cash flow: FY2025 cash 200 + (60 - 40 + 40) = 260, the interim cash.
+INTERIM_FLOWS = {"cash_begin": 200 * B, "operating_cash_flow": 60 * B,
+                 "capital_expenditure": 30 * B, "investing_cash_flow": -40 * B,
+                 "debt_raised": 60 * B, "dividends_paid": 36 * B, "equity_raised": 0.0,
+                 "other_financing_cash_flow": 16 * B, "financing_cash_flow": 40 * B,
+                 "net_cash_flow": 60 * B, "pages": "hlm. 9-10"}
+
+
+def interim_intake(shares=1e9, dividends_1h=36 * B, finance_income=None):
+    intake = going_concern()
+    balance = dict(INTERIM_BS, shares_outstanding=shares)
+    flows = dict(INTERIM_FLOWS, dividends_paid=dividends_1h)
+    # Keep the interim cash flow tying to the interim cash when the dividend moves.
+    flows["other_financing_cash_flow"] += dividends_1h - 36 * B
+    intake["official_evidence"]["balance_sheet"] = balance
+    actual = intake["latest_official_actual"]
+    actual["cash_flow"] = flows
+    actual["metrics"]["capital_expenditure"] = 30 * B
+    if finance_income is not None:
+        actual["metrics"].update(finance_income=finance_income, finance_cost=8 * B)
+    return intake
+
+
+def assert_statements_add_up(rows):
+    for row in rows:
+        assert row["total_assets"] == pytest.approx(
+            row["total_liabilities"] + row["total_equity"], rel=1e-12)
+        assert row["cash_begin"] + row["net_cash_flow"] == pytest.approx(
+            row["cash_and_equivalents"], rel=1e-12)
+        assert row["net_cash_flow"] == pytest.approx(
+            row["operating_cash_flow"] + row["investing_cash_flow"]
+            + row["financing_cash_flow"], rel=1e-12)
+        # Each block of the cash-flow table adds up from its own lines.
+        assert row["operating_cash_flow"] == pytest.approx(
+            row["earnings"] + row["depreciation"] + row["change_in_working_capital"]
+            + row["other_operating_cash_flow"], rel=1e-12)
+        assert row["investing_cash_flow"] == pytest.approx(
+            row["other_investing_cash_flow"] - row["capital_expenditure"], rel=1e-12)
+        assert row["financing_cash_flow"] == pytest.approx(
+            row["debt_raised"] + row["equity_raised"] + row["other_financing_cash_flow"]
+            - row["dividends_paid"], rel=1e-12)
+        assert row["current_assets"] == pytest.approx(
+            row["cash_and_equivalents"] + row["trade_receivables"] + row["inventories"]
+            + row["other_current_assets"], rel=1e-12)
+        assert row["current_liabilities"] == pytest.approx(
+            row["short_term_debt"] + row["trade_payables"] + row["other_current_liabilities"],
+            rel=1e-12)
+        assert row["cash_and_equivalents"] >= 0
+    for before, after in zip(rows, rows[1:]):
+        assert after["cash_begin"] == pytest.approx(before["cash_and_equivalents"], rel=1e-12)
+
+
+@pytest.mark.parametrize("shares", [1e9, 2e9])
+def test_interim_opening_rolls_the_official_balance_sheet_with_h2_flows(history, shares):
+    history["TEST"] = [BASE_2025]
+    intake, fc = interim_intake(shares), scenario()
+    va = dcf_va(intake, fc)
+    out = fs.forecast_rows(intake, fc, va)
+    rows, first = out["rows"], out["rows"][0]
+    assert out["mode"] == fs.MODE_INTERIM and [r["label"] for r in rows] == LABELS
+    assert_statements_add_up(rows)
+    # FY26F cash flow = official 1H + modelled H2, from the FY2025 year-end cash.
+    assert first["cash_begin"] == BASE_2025["cash_and_equivalents"] == INTERIM_FLOWS["cash_begin"]
+    anchor = fc["earnings_scenario"]
+    h2_cons = anchor["h2"]["net_profit"]
+    da_h2 = first["depreciation"] - 26 * B
+    capex_h2 = first["capital_expenditure"] - 30 * B
+    assert first["depreciation"] == pytest.approx(0.05 * first["revenue"])  # 1H official D&A/revenue
+    h2_share = anchor["h2"]["revenue"] / anchor["full_year"]["revenue"]
+    dnwc_h2 = -first["change_in_working_capital"]
+    assert dnwc_h2 == pytest.approx(
+        va["method_chain"]["trace"][0]["detail"]["lines"][0]["dnwc"] * h2_share)
+    assert first["operating_cash_flow"] == pytest.approx(60 * B + h2_cons + da_h2 - dnwc_h2)
+    assert first["investing_cash_flow"] == pytest.approx(-40 * B - capex_h2)
+    assert first["other_investing_cash_flow"] == pytest.approx(-10 * B)
+    assert first["equity_raised"] == 0.0
+    assert first["other_financing_cash_flow"] == pytest.approx(16 * B)
+    # The FY26F balance sheet is the interim one moved by H2 flows only.
+    assert first["fixed_assets"] == pytest.approx(820 * B + capex_h2 - da_h2)
+    assert first["dividends_paid"] == pytest.approx(36 * B)   # final FY2025 paid in 1H
+    assert first["total_equity"] == pytest.approx(860 * B + h2_cons)
+    assert first["non_controlling_interest"] == pytest.approx(40 * B + h2_cons * (1 - 0.9))
+    assert first["cash_and_equivalents"] == pytest.approx(
+        260 * B + (h2_cons + da_h2 - dnwc_h2) - capex_h2 + first["revolver"])
+    assert first["long_term_debt"] == 290 * B and first["other_non_current_assets"] == 80 * B
+    # Working-capital lines scale together from the interim balances.
+    scale = first["working_capital"] / (120 * B + 160 * B + 60 * B - 90 * B - 80 * B)
+    assert first["trade_receivables"] == pytest.approx(120 * B * scale)
+    assert first["trade_payables"] == pytest.approx(90 * B * scale)
+    # FY27F onwards roll normally from the FY26F close.
+    for before, row in zip(rows, rows[1:]):
+        assert row["fixed_assets"] == pytest.approx(
+            before["fixed_assets"] + row["capital_expenditure"] - row["depreciation"])
+        assert row["dividends_paid"] == pytest.approx(0.4 * before["earnings"])
+        assert row["total_equity"] == pytest.approx(
+            before["total_equity"] + row["net_cons"] - row["dividends_paid"])
+        assert row["other_investing_cash_flow"] == 0.0 and row["equity_raised"] == 0.0
+    # FCFF identity with the scenario DCF holds in every year (full-year flows).
+    for row, line in zip(rows, va["method_chain"]["trace"][0]["detail"]["lines"], strict=True):
+        assert row["fcff"] == pytest.approx(line["fcff"], rel=1e-9)
+    # Per-share values on the official interim share count.
+    assert all(r["eps"] == pytest.approx(r["earnings"] / shares) for r in rows)
+    for key in fs.BS_KEYS + fs.CF_KEYS:
+        assert key not in out["notes"], key
+    text = " ".join(out["assumptions"])
+    assert "neraca awal interim" in text and "arus H2 saja" in text
+    assert ("jumlah saham berubah" in text) == (shares == 2e9)
+
+
+def test_interim_opening_pays_the_prior_final_dividend_in_h2_when_1h_paid_none(history):
+    history["TEST"] = [BASE_2025]
+    intake, fc = interim_intake(dividends_1h=0.0), scenario()
+    out = fs.forecast_rows(intake, fc)
+    first = out["rows"][0]
+    assert out["mode"] == fs.MODE_INTERIM
+    due = 0.4 * BASE_2025["earnings"]
+    assert first["dividends_paid"] == pytest.approx(due)
+    assert first["total_equity"] == pytest.approx(
+        860 * B + fc["earnings_scenario"]["h2"]["net_profit"] - due)
+    assert_statements_add_up(out["rows"])
+    assert any("dibayar pada H2" in a for a in out["assumptions"])
+
+
+def test_interim_cash_floor_is_capped_at_the_year_end_cash(history):
+    """Interim cash swollen by a rights issue does not set the revolver floor."""
+    history["TEST"] = [BASE_2025]
+    intake = interim_intake(shares=2e9)
+    balance = intake["official_evidence"]["balance_sheet"]
+    flows = intake["latest_official_actual"]["cash_flow"]
+    for key in ("cash", "current_assets", "total_assets", "total_equity",
+                "equity_attributable"):
+        balance[key] += 3000 * B
+    flows["equity_raised"] = 3000 * B
+    for key in ("financing_cash_flow", "net_cash_flow"):
+        flows[key] += 3000 * B
+    fc = heavy_capex()
+    out = fs.forecast_rows(intake, fc)
+    rows = out["rows"]
+    assert out["mode"] == fs.MODE_INTERIM
+    assert_statements_add_up(rows)
+    ratio = BASE_2025["cash_and_equivalents"] / BASE_2025["revenue"]
+    for row in rows:
+        floor = min(BASE_2025["cash_and_equivalents"], ratio * row["revenue"])
+        assert row["cash_and_equivalents"] >= floor - 1e-3
+    assert all(r["revolver"] == 0 for r in rows)          # the raised cash funds the capex
+    text = next(a for a in out["assumptions"] if "penyeimbang kas. Kas minimum" in a)
+    assert "kas FY2025" in text and "kas neraca interim 2026-06-30" in text
+
+
+def test_interim_income_statement_splits_official_interest_income(history):
+    history["TEST"] = [BASE_2025]
+    out = fs.forecast_rows(interim_intake(finance_income=3 * B), scenario())
+    for row in out["rows"]:
+        assert row["interest_income"] == pytest.approx(6 * B)
+        assert row["interest_expense_non_operating"] == pytest.approx(16 * B)
+        assert (row["operating_pnl"] + row["interest_income"]
+                - row["interest_expense_non_operating"] + row["other_non_operating"]
+                ) == pytest.approx(row["earnings_before_tax"])
+    assert "interest_income" not in out["notes"]
+
+
+@pytest.mark.parametrize("break_it", ["missing_line", "cash_flow_gap", "no_cash_flow"])
+def test_incomplete_interim_evidence_keeps_the_previous_modes(history, break_it):
+    history["TEST"] = [BASE_2025]
+    for shares, expected in ((1e9, fs.MODE_FULL), (2e9, fs.MODE_EQUITY)):
+        intake = interim_intake(shares)
+        if break_it == "missing_line":
+            del intake["official_evidence"]["balance_sheet"]["current_assets"]
+        elif break_it == "cash_flow_gap":
+            intake["latest_official_actual"]["cash_flow"]["net_cash_flow"] += 5 * B
+        else:
+            del intake["latest_official_actual"]["cash_flow"]
+        out = fs.forecast_rows(intake, scenario())
+        assert out["mode"] == expected
+        assert not any("neraca awal interim" in a for a in out["assumptions"])
+
+
+def test_interim_capex_above_the_fy_scenario_falls_back_with_a_reason(history):
+    history["TEST"] = [BASE_2025]
+    intake = interim_intake()
+    intake["latest_official_actual"]["cash_flow"]["capital_expenditure"] = 90 * B
+    intake["latest_official_actual"]["cash_flow"]["investing_cash_flow"] = -100 * B
+    intake["latest_official_actual"]["cash_flow"]["operating_cash_flow"] = 120 * B
+    out = fs.forecast_rows(intake, scenario())
+    assert out["mode"] == fs.MODE_FULL                     # year-end roll, shares unchanged
+    assert any("tidak dipakai sebagai neraca awal karena capex" in a
+               for a in out["assumptions"])
+
+
+# INET (stored report out/reports-final, 2026-09-24): the official 1H26 pack
+# (data/issuer_evidence/INET.json) with the Sectors history and validated scenario.
+INET = {
+    "annuals": [
+        {"year": 2023, "revenue": 28889381869.0, "ebitda": 2069999999.0, "ebit": 1441435170.0,
+         "tax": 434437379.0, "interest": 131305772.0, "ebt": 1310129398.0,
+         "total_debt": 2020607799.0, "cash": 61802426896.0, "current_assets": 65764792556.0,
+         "current_liabilities": 7490677601.0, "short_term_debt": 383567171.0,
+         "shares": 7500000000.0, "earnings": 875692735.0},
+        {"year": 2024, "revenue": 30437200682.0, "ebitda": 3893684941.0, "ebit": 1310294737.0,
+         "da": 2583390204.0, "da_source": "official", "tax": 367678990.0,
+         "interest": 111698031.0, "ebt": 1696037943.0, "total_debt": 1383485043.0,
+         "cash": 61911440465.0, "current_assets": 66980456860.0,
+         "current_liabilities": 12593365343.0, "short_term_debt": 368860779.0,
+         "shares": 7379771778.0, "earnings": 1328358920.0},
+        {"year": 2025, "revenue": 91819511247.0, "ebitda": 44804727585.0,
+         "ebit": 30322656374.0, "da": 14482071211.0, "da_source": "official",
+         "tax": 6951371805.0, "interest": 550164084.0, "ebt": 31440433028.0,
+         "total_debt": 9809263197.0, "cash": 404440595923.0, "current_assets": 478221061779.0,
+         "current_liabilities": 322527200724.0, "short_term_debt": 1848167840.0,
+         "shares": 9575834632.0, "earnings": 24489584751.0}],
+    "history": [
+        {"year": 2023, "revenue": 28889381869, "earnings": 875692735,
+         "cash_and_equivalents": 61802426896},
+        {"year": 2024, "revenue": 30437200682, "earnings": 1328358920,
+         "cash_and_equivalents": 61911440465},
+        {"year": 2025, "revenue": 91819511247, "earnings": 24489584751,
+         "cash_and_equivalents": 404440595923, "current_assets": 478221061779,
+         "fixed_assets": 282150146476, "total_assets": 760371208255,
+         "short_term_debt": 1848167840, "long_term_debt": 7961095357,
+         "total_debt": 9809263197, "current_liabilities": 322527200724,
+         "non_current_liabilities": 8632380923, "total_liabilities": 331159581647,
+         "total_equity": 429211626608}],
+    "fc": {"production_ready": False,
+           "earnings_scenario": {
+               "year": 2026, "h1": {"revenue": 926453327140, "net_profit": 34210434283},
+               "h2": {"revenue": 972775993497.0, "net_profit": 34047159772.395},
+               "full_year": {"revenue": 1899229320637.0, "net_profit": 68257594055.395004,
+                             "net_profit_attributable": 67181675579.36286,
+                             "ebitda": 199419078666.885, "capex": 854653194286.65},
+               "attributable_share": 0.9842373806032634,
+               "attributable_basis": "porsi induk 1H resmi"},
+           "outyear_scenario": {"status": "validated_analyst_scenario", "rows": [
+               {"year": 2027, "label": "FY27F", "revenue": 2184113718732.5498,
+                "ebitda": 218411371873.255, "net_profit": 76443980155.63924,
+                "net_profit_attributable": 75239022791.2742, "capex": 829963213118.3689},
+               {"year": 2028, "label": "FY28F", "revenue": 2730142148415.6875,
+                "ebitda": 382219900778.1962, "net_profit": 136507107420.78438,
+                "net_profit_attributable": 134355397841.56111, "capex": 682535537103.9219},
+               {"year": 2029, "label": "FY29F", "revenue": 3276170578098.8247,
+                "ebitda": 589710704057.7885, "net_profit": 229331940466.91772,
+                "net_profit_attributable": 225717068373.82263, "capex": 491425586714.82367},
+               {"year": 2030, "label": "FY30F", "revenue": 3669311047470.684,
+                "ebitda": 733862209494.1368, "net_profit": 330237994272.3616,
+                "net_profit_attributable": 325032578458.3046,
+                "capex": 366931104747.0684}]}},
+}
+
+
+def inet_intake():
+    from app import issuer_evidence
+    evidence = issuer_evidence.load("INET", "2026-09-24")
+    return {"ticker": "INET", "model_profile": "going_concern_fcff", "as_of": "2026-09-24",
+            "price": 316.0, "shares": 9575834632.0, "payout": 0.25,
+            "payout_basis": "asumsi analis 25% (tanpa payout historis di data Sectors)",
+            "official_evidence": evidence, "latest_official_actual": evidence["latest_actual"],
+            "fx_spot": {"pair": "USD/IDR", "rate": 17837.3, "date": "2026-09-24"},
+            "annuals": copy.deepcopy(INET["annuals"]), "quarterly_actuals": [],
+            "dividend_events": []}
+
+
+def test_inet_statements_open_from_the_official_30_june_2026_balance_sheet(history):
+    history["INET"] = INET["history"]
+    intake, fc = inet_intake(), copy.deepcopy(INET["fc"])
+    va = dcf_va(intake, fc)
+    out = fs.forecast_rows(intake, fc, va)
+    rows, first = out["rows"], out["rows"][0]
+    balance = intake["official_evidence"]["balance_sheet"]
+    assert out["mode"] == fs.MODE_INTERIM and [r["label"] for r in rows] == LABELS
+    assert_statements_add_up(rows)
+    # Income statement, balance sheet and cash flow are modelled in every year;
+    # only the gross-margin split and the unsourced payout lines stay n.m.
+    assert set(out["notes"]) == {"cost_of_revenue", "gross_profit", "operating_expense",
+                                 "dps", "payout"}
+    assert all(out["notes"].values())
+    # Official D&A intensity (1H26: Rp18,2 miliar on Rp926,5 miliar), not Sectors.
+    assert first["depreciation"] == pytest.approx(
+        18_200_613_870 / 926_453_327_140 * first["revenue"])
+    # FY26F cash flow opens at the FY2025 cash; the 1H26 rights issue, bonds and sukuk
+    # are the official 1H figures.
+    assert first["cash_begin"] == 404_440_595_923
+    assert first["equity_raised"] == 3_196_399_572_903
+    assert first["dividends_paid"] == 894_468_398
+    h2 = fc["earnings_scenario"]["h2"]["net_profit"]
+    assert first["total_equity"] == pytest.approx(balance["total_equity"] + h2)
+    assert first["non_controlling_interest"] == pytest.approx(
+        balance["non_controlling_interest"] + h2 * (1 - 0.9842373806032634))
+    assert first["long_term_debt"] == balance["long_term_debt"]
+    # The raised cash funds the capex: no revolver draw, cash stays positive.
+    assert all(r["revolver"] == 0 for r in rows)
+    assert all(r["eps"] == pytest.approx(r["earnings"] / 22_374_111_088) for r in rows)
+    for row, line in zip(rows, va["method_chain"]["trace"][0]["detail"]["lines"], strict=True):
+        assert row["fcff"] == pytest.approx(line["fcff"], rel=1e-9)
+    identifiers = set(fs.NON_FINANCIAL_KEYS)
+    for text in _reader_texts(out):
+        assert not [w for w in re.findall(r"[a-z]+(?:_[a-z]+)+", text) if w in identifiers]
+        assert "aksi korporasi tercatat" not in text

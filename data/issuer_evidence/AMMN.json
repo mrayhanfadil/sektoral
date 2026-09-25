@@ -24,6 +24,68 @@
       "equity_attributable": 5338096000
     }
   ],
+  "annual_operations": {
+    "status": "aktual",
+    "basis": "Volume dilaporkan emiten. Tembaga dan emas = kandungan logam dalam konsentrat yang diproduksi/terjual (sebelum smelter); katoda tembaga dan emas murni adalah produk hilir dari konsentrat yang sama, jadi tidak dijumlahkan dengan logam dalam konsentrat. Adjusted C1 = biaya tambang dan olah tembaga sampai siap kirim, dikurangi kredit produk sampingan (emas, perak, asam sulfat) atas penjualan, disesuaikan untuk pergerakan biaya pengupasan tangguhan dan stockpile/persediaan konsentrat; per pon tembaga TERJUAL (negatif = kredit sampingan melebihi biaya). AISC tidak diungkapkan emiten.",
+    "units": {
+      "copper_mlb": "juta pon (Mlbs) tembaga dalam konsentrat",
+      "gold_koz": "ribu troy ounce emas dalam konsentrat",
+      "c1_cost_usd_lb": "US$ per pon tembaga terjual (Adjusted C1)",
+      "concentrate_dmt": "dry metric ton",
+      "cathode_t": "ton katoda tembaga",
+      "refined_gold_oz": "troy ounce emas murni"
+    },
+    "rows": [
+      {
+        "year": 2024,
+        "copper_mlb": 395,
+        "copper_sales_mlb": 288,
+        "gold_koz": 802.749,
+        "gold_sales_koz": 611.262,
+        "c1_cost_usd_lb": -3.37,
+        "concentrate_production_dmt": 755083,
+        "concentrate_sales_dmt": 570837,
+        "cathode_production_t": null,
+        "cathode_sales_t": null,
+        "refined_gold_production_oz": null,
+        "refined_gold_sales_oz": null,
+        "copper_price_net_usd_lb": 4.15,
+        "gold_price_net_usd_oz": 2397,
+        "downstream_note": "Smelter dan PMR belum berproduksi pada 2024 (katoda pertama Maret 2025, emas murni pertama Juli 2025).",
+        "source_title": "AMMAN Full Year 2024 Earnings Results (Press Release, March 20, 2025)",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6MjUyOCwicHVyIjoiYmxvYl9pZCJ9fQ==--9737d2a30da765441196a5908bf2fedd231c7b1d/FY%202024%20EARNINGS%20RELEASE.pdf?disposition=inline",
+        "published_at": "2025-03-20",
+        "page": "3 (Key Operational and Financial Highlights)",
+        "corroboration_title": "AMMAN FY 2025 Earnings Release (Press Release, March 26, 2026)",
+        "corroboration_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk4MCwicHVyIjoiYmxvYl9pZCJ9fQ==--9fe52aa807bb394abea52787b8ebc2d6723c9f42/FY%202025%20EARNINGS%20RELEASE.pdf?disposition=inline",
+        "corroboration_page": 3
+      },
+      {
+        "year": 2025,
+        "copper_mlb": 209,
+        "copper_sales_mlb": 69,
+        "gold_koz": 102.758,
+        "gold_sales_koz": 55.402,
+        "c1_cost_usd_lb": -0.54,
+        "concentrate_production_dmt": 446563,
+        "concentrate_sales_dmt": 151353,
+        "cathode_production_t": 79849,
+        "cathode_sales_t": 75943,
+        "refined_gold_production_oz": 124723,
+        "refined_gold_sales_oz": 114149,
+        "copper_price_net_usd_lb": 5.1,
+        "gold_price_net_usd_oz": 4204,
+        "downstream_note": "Katoda 79.849 t setara 176 Mlbs (release hlm. 1); emas murni dari PMR sejak pertengahan Juli 2025.",
+        "source_title": "AMMAN FY 2025 Earnings Release (Press Release, March 26, 2026)",
+        "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk4MCwicHVyIjoiYmxvYl9pZCJ9fQ==--9fe52aa807bb394abea52787b8ebc2d6723c9f42/FY%202025%20EARNINGS%20RELEASE.pdf?disposition=inline",
+        "published_at": "2026-03-26",
+        "page": "3 (Key Operational and Financial Highlights); 5 (definisi Adjusted C1)",
+        "corroboration_title": "AMMAN FY 2025 Earnings Presentation",
+        "corroboration_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6NDk3OCwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--50df1975317d5d37d39e6c868f5b05f51f29bb1d/FY%202025%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+        "corroboration_page": 16
+      }
+    ]
+  },
   "latest_actual": {
     "period": "1H26",
     "period_end": "2026-06-30",

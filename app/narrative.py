@@ -2007,9 +2007,12 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                         str(holder.get("name") or "-"), pct,
                         fmt._id(shares_held / 1e6, 1)
                         if isinstance(shares_held, (int, float)) else "-"])
+                holder_source = intake.get("major_holders_source")
                 history_page_exhibits.append(add(
-                    "Pemegang saham utama dalam data Sectors",
+                    "Pemegang saham utama" + ("" if holder_source else " dalam data Sectors"),
                     ["Pemegang saham", "Porsi", "Saham (juta)"], holder_rows,
+                    f"Sumber: {holder_source} (Sectors tidak memuat pemegang saham emiten ini); "
+                    "komposisi dapat berbeda dari tanggal laporan interim." if holder_source else
                     f"Sumber: Sectors, company/report/{ticker}, ownership.major_shareholders; "
                     "snapshot Sectors dapat berbeda dari tanggal laporan interim."))
             illustrative_pages.append({

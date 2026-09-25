@@ -857,7 +857,7 @@ def _short_number(value):
 
 
 def _mini_chart(ox, oy, w, h, title, labels, bars, line, forecast, line_label=None,
-                bar_unit=""):
+                bar_unit="", line_unit="%"):
     """One quadrant: bars (actual solid blue, forecast light blue), optional
     secondary line on its own scale, dashed grid and a black zero baseline.
     `line_label` names the line in the corner (the 2x2 grid; a single panel
@@ -885,7 +885,7 @@ def _mini_chart(ox, oy, w, h, title, labels, bars, line, forecast, line_label=No
     bw = min(34.0, slot * 0.62)
     # Value labels shrink when the widest would reach its neighbour's.
     texts = [f"{_short_number(v)}{bar_unit}" for v in bars if isinstance(v, (int, float))]
-    texts += [f"{fmt._id(v, 1)}%" for v in line or [] if isinstance(v, (int, float))]
+    texts += [_line_value(v, line_unit) for v in line or [] if isinstance(v, (int, float))]
     widest = max((_em(t) for t in texts), default=0.0)
     scale = min(1.0, slot * 0.92 / (widest * 7.5)) if widest else 1.0
     bar_font, line_font = max(5.5, 7.5 * scale), max(5.5, 7.0 * scale)
@@ -920,11 +920,21 @@ def _mini_chart(ox, oy, w, h, title, labels, bars, line, forecast, line_label=No
         for (x, y), (_, v) in zip(coords, points):
             out.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='2.2' fill='{SERIES[3]}'/>"
                        f"<text x='{x:.1f}' y='{y - 5:.1f}' text-anchor='middle' font-size='{line_font:.1f}' "
-                       f"fill='{INK}'>{fmt._id(v, 1)}%</text>")
+                       f"fill='{INK}'>{html.escape(_line_value(v, line_unit))}</text>")
         if line_label:
             out.append(f"<text x='{ox + w}' y='{oy + 11}' text-anchor='end' font-size='8' "
                        f"fill='{INK}'>garis: {html.escape(line_label)}</text>")
     return "".join(out)
+
+
+def _line_value(value, unit="%"):
+    """A line point's label: '12,4%' for a percentage line; a unit cost
+    ('US$/lb') in two decimals, negatives in brackets (a by-product credit
+    larger than the cost gives a negative C1)."""
+    if unit == "%":
+        return f"{fmt._id(value, 1)}%"
+    text = fmt._id(abs(value), 2)
+    return f"({text})" if value < 0 else text
 
 
 def _series_names(series):
@@ -1009,7 +1019,7 @@ def _combo_panel(ex):
         items.append((EVEN_ROW, f"{bar} proyeksi"))
     if sum(isinstance(v, (int, float)) for v in series.get("line") or []) >= 2:
         items.append((SERIES[3], f"{line[:1].upper() + line[1:] if line else 'Garis'} "
-                                 "(%, sumbu kanan)"))
+                                 f"({series.get('line_unit') or '%'}, sumbu kanan)"))
     w, h = 360, 190
     legend, legend_h = _legend(items, 0, h + 3, w)
     parts = [f"<div class='exhibit keep panel'><div class='chart-caption'>Exhibit {ex['n']}. "
@@ -1018,7 +1028,7 @@ def _combo_panel(ex):
              f"aria-label='{html.escape(ex['judul'])}' style='display:block;width:100%;height:auto'>",
              _mini_chart(0, 0, w, h, title, labels, series.get("bars") or [],
                          series.get("line") or [], series.get("is_forecast") or [],
-                         bar_unit=_bar_unit(series)),
+                         bar_unit=_bar_unit(series), line_unit=series.get("line_unit") or "%"),
              legend,
              "</svg>", _source_line(ex)]
     # The source line sits right under the chart; the panel's narrative
@@ -1154,13 +1164,16 @@ def _band_chart(ex):
         parts.append(f"<text x='{x(d):.1f}' y='{y1 + 14}' text-anchor='{anchor}' {label} "
                      f"fill='{INK}'>{d:%d-%b-%y}</text>")
     legend_y = 182
+    # A longer multiple name (EV/EBITDA, EV/Sales substituting P/E or P/BV)
+    # moves the rest of the legend right so the labels do not overlap.
+    dx = max(0, round(62 + 5.8 * len(str(data["label"])) + 8 - 100))
     parts.append(f"<line x1='40' x2='58' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{PRIMARY}' stroke-width='2'/>"
                  f"<text x='62' y='{legend_y}' {label} fill='{INK}'>{html.escape(data['label'])}</text>"
-                 f"<line x1='100' x2='118' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{INK}' stroke-dasharray='6 4'/>"
-                 f"<text x='122' y='{legend_y}' {label} fill='{INK}'>Mean {html.escape(fmt.mult(data['mean']))}</text>"
-                 f"<line x1='190' x2='208' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{INK}' stroke-dasharray='1.5 3'/>"
-                 f"<text x='212' y='{legend_y}' {label} fill='{INK}'>Median {html.escape(fmt.mult(data['median']))}</text>"
-                 f"<text x='290' y='{legend_y}' {label} fill='{INK}'>Kini p{data['percentile']:.0f}</text>")
+                 f"<line x1='{100 + dx}' x2='{118 + dx}' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{INK}' stroke-dasharray='6 4'/>"
+                 f"<text x='{122 + dx}' y='{legend_y}' {label} fill='{INK}'>Mean {html.escape(fmt.mult(data['mean']))}</text>"
+                 f"<line x1='{190 + dx}' x2='{208 + dx}' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{INK}' stroke-dasharray='1.5 3'/>"
+                 f"<text x='{212 + dx}' y='{legend_y}' {label} fill='{INK}'>Median {html.escape(fmt.mult(data['median']))}</text>"
+                 f"<text x='{290 + dx}' y='{legend_y}' {label} fill='{INK}'>Kini p{data['percentile']:.0f}</text>")
     parts.append("</svg>")
     parts.append(_source_line(ex) + "</div>")
     return "".join(parts)

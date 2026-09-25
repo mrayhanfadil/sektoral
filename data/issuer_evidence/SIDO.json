@@ -2,6 +2,36 @@
   "schema_version": 1,
   "ticker": "SIDO",
   "reporting_currency": "IDR",
+  "annual_actuals_source": {
+    "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Laporan Keuangan Konsolidasian 31 Desember 2025 dan untuk tahun yang berakhir pada tanggal tersebut (diaudit), dengan angka pembanding 2024",
+    "url": "https://investor.sidomuncul.co.id/misc/fr/2025/FY-2025.pdf",
+    "mirror_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202025/Audit/SIDO/Industri%20Jamu%20Dan%20Farmasi%20Sido%20Muncul%2031%20Des%202025.pdf",
+    "published_at": "2026-02-27",
+    "published_at_basis": "Diotorisasi Direksi 26 Februari 2026; berkas di IDX dan daftar Financial Reports situs investor Sido Muncul bertanggal 27 Februari 2026.",
+    "pages": "PDF 15-16 (laba rugi, hlm. LK 3-4); PDF 95 (Catatan 35 informasi segmen, baris Penyusutan dan amortisasi, hlm. LK 83); rincian penyusutan aset tetap PDF 61-62 (Catatan 10, hlm. LK 49-50: FY2025 Rp123.729 juta, FY2024 Rp105.984 juta; selisih ke angka segmen adalah penyusutan aset hak-guna/amortisasi lain)",
+    "unit": "IDR; dilaporkan dalam jutaan Rupiah",
+    "status": "aktual"
+  },
+  "annual_actuals": [
+    {
+      "year": 2024,
+      "revenue": 3919084000000,
+      "operating_profit": 1471483000000,
+      "depreciation": 107597000000,
+      "ebitda": 1579080000000,
+      "net_profit": 1171026000000,
+      "net_profit_attributable": 1171026000000
+    },
+    {
+      "year": 2025,
+      "revenue": 4079659000000,
+      "operating_profit": 1544117000000,
+      "depreciation": 125835000000,
+      "ebitda": 1669952000000,
+      "net_profit": 1229202000000,
+      "net_profit_attributable": 1229202000000
+    }
+  ],
   "latest_actual": {
     "period": "1H26",
     "period_end": "2026-06-30",

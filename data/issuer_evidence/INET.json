@@ -2,6 +2,60 @@
   "schema_version": 1,
   "ticker": "INET",
   "reporting_currency": "IDR",
+  "annual_actuals_source": {
+    "title": "PT Sinergi Inti Andalan Prima Tbk dan Entitas Anak Laporan Keuangan Konsolidasian 31 Desember 2025 dan 2024 (diaudit)",
+    "url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202025/Audit/INET/Report%20INET%2031%20Desember%202025.pdf",
+    "published_at": "2026-03-31",
+    "published_at_basis": "tanggal berkas laporan keuangan tahunan audit 2025 di daftar IDX (File_Modified 2026-03-31); laporan auditor independen bertanggal 30 Maret 2026 (PDF 9)",
+    "pages": "PDF 10-12 (laporan posisi keuangan 31 Desember 2025), PDF 13-14 (laba rugi: laba usaha, laba bersih, porsi induk); Penyusutan aset tetap PDF 40-41 (Catatan 7: FY2025 13.396.495.645 beban pokok + 912.953.204 umum dan administrasi; FY2024 1.870.186.738 + 568.963.563), penyusutan aset hak-guna PDF 42-43 dan 50 (Catatan 8 dan 16: FY2025 172.622.362; FY2024 144.239.903); PDF 54-55 (Catatan 22 dan 24, rincian beban). Angka sama dengan kolom komparatif laporan 30 Juni 2026 (hlm. 1-5 dan 43-46)",
+    "unit": "IDR; dilaporkan dalam Rupiah penuh",
+    "status": "aktual",
+    "depreciation_scope": "penyusutan aset tetap + penyusutan aset hak-guna (tidak ada aset takberwujud pada FY2024-FY2025); EBITDA = laba usaha + penyusutan"
+  },
+  "annual_actuals": [
+    {
+      "year": 2024,
+      "revenue": 30437200682,
+      "operating_profit": 1310294737,
+      "depreciation": 2583390204,
+      "ebitda": 3893684941,
+      "net_profit": 1328358953,
+      "net_profit_attributable": 1328358920
+    },
+    {
+      "year": 2025,
+      "revenue": 91819511247,
+      "operating_profit": 30322656374,
+      "depreciation": 14482071211,
+      "ebitda": 44804727585,
+      "net_profit": 24489061223,
+      "net_profit_attributable": 24489584751,
+      "balance_sheet": {
+        "period_end": "2025-12-31",
+        "cash": 404440595923,
+        "trade_receivables": 8520499265,
+        "inventories": 0,
+        "current_assets": 478221061779,
+        "fixed_assets": 163236579480,
+        "total_assets": 760371208255,
+        "short_term_debt": 1848167840,
+        "trade_payables": 9617976740,
+        "current_liabilities": 322527200724,
+        "long_term_debt": 7961095357,
+        "non_current_liabilities": 8632380923,
+        "total_liabilities": 331159581647,
+        "equity_attributable": 429192026162,
+        "non_controlling_interest": 19600446,
+        "total_equity": 429211626608,
+        "shares_issued": 9581075296,
+        "other_current_assets": 65259966591,
+        "other_non_current_assets": 118913566996,
+        "other_current_liabilities": 311061056144,
+        "other_non_current_liabilities": 671285566,
+        "total_debt": 9809263197
+      }
+    }
+  ],
   "latest_actual": {
     "period": "1H26",
     "period_end": "2026-06-30",
@@ -15,7 +69,12 @@
       "gross_profit": 122106633456,
       "operating_profit": 71362909254,
       "net_profit": 34210434283,
-      "net_profit_attributable": 33671188228
+      "net_profit_attributable": 33671188228,
+      "depreciation": 18200613870,
+      "finance_income": 18840556482,
+      "finance_cost": 50059346081,
+      "capital_expenditure": 240945437729,
+      "dividends_paid": 894468398
     },
     "prior_year": {
       "period": "1H25",
@@ -23,16 +82,139 @@
       "gross_profit": 16783732569,
       "operating_profit": 9899975077,
       "net_profit": 7657637678,
-      "net_profit_attributable": 7652194508
+      "net_profit_attributable": 7652194508,
+      "depreciation": 7290641214,
+      "finance_income": 247462844,
+      "finance_cost": 64416830
+    },
+    "metric_sources": {
+      "revenue, gross_profit, operating_profit, finance_income, finance_cost, net_profit": "hlm. 4 (PDF 14), laporan laba rugi",
+      "net_profit_attributable": "hlm. 5 (PDF 15)",
+      "depreciation": "penyusutan aset tetap Rp17.329.773.565 (hlm. 43-44, PDF 53-54, Catatan 14: beban pokok pendapatan 13.142.216.069 + beban umum dan administrasi 4.187.557.496) + penyusutan aset hak-guna Rp462.835.729 (hlm. 45-46 dan 64, PDF 55-56 dan 74, Catatan 15 dan 27) + amortisasi aset takberwujud Rp408.004.576 (hlm. 72, PDF 82, Catatan 36)",
+      "capital_expenditure": "hlm. 9 (PDF 19), arus kas investasi: perolehan aset tetap (kas); penambahan aset tetap Catatan 14 Rp243.835.158.601 termasuk akrual",
+      "prior_year.depreciation": "1H25 tidak diaudit: penyusutan aset tetap 6.949.629.839 + 322.132.377 (hlm. 44, PDF 54) + aset hak-guna 18.878.998 (hlm. 46 dan 72, PDF 56 dan 82)"
+    },
+    "cash_flow": {
+      "period": "1H26",
+      "pages": "hlm. 9-10 (PDF 19-20), laporan arus kas konsolidasian (metode langsung)",
+      "unit": "IDR; dilaporkan dalam Rupiah penuh",
+      "status": "aktual",
+      "cash_begin": 404440595923,
+      "operating_cash_flow": 20445032352,
+      "capital_expenditure": 240945437729,
+      "other_investing_cash_flow": -608023711927,
+      "investing_cash_flow": -848969149656,
+      "debt_raised": 1624580643555,
+      "dividends_paid": 894468398,
+      "equity_raised": 3196399572903,
+      "other_financing_cash_flow": -59089378605,
+      "financing_cash_flow": 4760996369455,
+      "net_cash_flow": 3932472252151,
+      "cash_end": 4336912848074,
+      "components": {
+        "investasi": {
+          "akuisisi entitas anak, neto": -253306207954,
+          "uang muka IRU": -198134825975,
+          "uang muka pembelian aset tetap": -102427733560,
+          "perolehan aset tetap": -240945437729,
+          "uang muka proyek": -110000000000,
+          "penyertaan saham": -4359000000,
+          "perolehan aset hak guna": -770944438,
+          "perolehan aset takberwujud": -25000000,
+          "uang jaminan": 61000000000
+        },
+        "utang": {
+          "utang bank jangka pendek": 628160148553,
+          "obligasi": 500000000000,
+          "sukuk ijarah": 500000000000,
+          "pembayaran utang bank": -2459926138,
+          "pembayaran liabilitas sewa": -569402448,
+          "pembayaran utang pembiayaan konsumen": -550176412
+        },
+        "pendanaan lainnya": {
+          "setoran kepentingan nonpengendali": 3300000000,
+          "pembayaran utang lain-lain pihak ketiga": -50500000000,
+          "biaya emisi obligasi dan sukuk ijarah": -11889378605
+        }
+      }
     }
   },
   "balance_sheet": {
     "period_end": "2026-06-30",
-    "source_pages": [1, 2, 3],
+    "source_pages": [
+      1,
+      2,
+      3
+    ],
     "cash": 4336912848074,
     "total_assets": 6111011414909,
     "total_equity": 3808927328480,
-    "shares_issued": 22374111088
+    "shares_issued": 22374111088,
+    "source_title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+    "source_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+    "published_at": "2026-09-11",
+    "unit": "IDR; dilaporkan dalam Rupiah penuh",
+    "status": "aktual",
+    "trade_receivables": 289944326487,
+    "inventories": 0,
+    "other_current_assets": 93350679651,
+    "current_assets": 4720207854212,
+    "fixed_assets": 817362426620,
+    "other_non_current_assets": 573441134077,
+    "short_term_debt": 1182941139787,
+    "trade_payables": 117451683828,
+    "other_current_liabilities": 364386237799,
+    "current_liabilities": 1664779061414,
+    "long_term_debt": 597545347936,
+    "other_non_current_liabilities": 39759677079,
+    "non_current_liabilities": 637305025015,
+    "total_liabilities": 2302084086429,
+    "total_debt": 1780486487723,
+    "equity_attributable": 3656735606187,
+    "non_controlling_interest": 152191722293,
+    "line_notes": {
+      "inventories": "neraca konsolidasian tidak memuat pos persediaan",
+      "other_current_assets": "kas yang dibatasi penggunaannya, piutang lain-lain, pajak dibayar di muka, uang muka, biaya dibayar di muka dan biaya emisi ditangguhkan",
+      "other_non_current_assets": "uang muka tidak lancar (IRU dan pembelian aset tetap) Rp481.057.113.975, investasi pada entitas asosiasi, penyertaan saham, aset hak-guna, aset takberwujud, goodwill Rp82.968.435.904 dan uang jaminan",
+      "short_term_debt": "utang bank jangka pendek + bagian lancar utang bank jangka panjang, utang pembiayaan konsumen, utang obligasi (Obligasi I Seri A jatuh tempo 10 Februari 2027), sukuk ijarah (Seri A) dan liabilitas sewa",
+      "long_term_debt": "bagian tidak lancar utang bank jangka panjang, utang pembiayaan konsumen, utang obligasi, sukuk ijarah dan liabilitas sewa",
+      "total_debt": "utang berbunga; uang jaminan pelanggan Rp269.230.500.000 dan pendapatan diterima di muka tidak termasuk (bagian liabilitas lancar lainnya)",
+      "other_non_current_liabilities": "liabilitas imbalan pascakerja dan liabilitas pajak tangguhan",
+      "shares_issued": "modal ditempatkan dan disetor penuh 22.374.111.088 saham (hlm. 3 dan 66, PDF 13 dan 76); tidak ada saham treasuri yang dilaporkan"
+    }
+  },
+  "capital_changes_2026": {
+    "source_title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+    "source_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+    "published_at": "2026-09-11",
+    "pages": "hlm. 11-12 (PDF 21-22, Catatan 1b-1c), hlm. 66-69 (PDF 76-79, Catatan 30-32), hlm. 10 (PDF 20, arus kas pendanaan)",
+    "status": "aktual",
+    "shares_issued_2025_12_31": 9581075296,
+    "shares_issued_2026_06_30": 22374111088,
+    "rights_issue": {
+      "name": "Penawaran Umum Terbatas I (PMHMETD)",
+      "effective_date": "2025-12-22",
+      "new_shares": 12800000000,
+      "exercise_price_idr": 250,
+      "series_ii_warrants": 2304000000,
+      "warrant_ratio": "9 Waran Seri II per 50 saham hasil pelaksanaan HMETD",
+      "share_premium_idr": 3067521986160,
+      "issuance_cost_idr": 1889007876
+    },
+    "warrant_series_i": {
+      "issued_at_ipo": 2100000000,
+      "exercise_price_idr": 91,
+      "apic_2025_12_31": 168670704288,
+      "apic_2026_06_30": 169569327799
+    },
+    "proceeds_from_share_issuance_1h26": 3196399572903,
+    "debt_raised_1h26": {
+      "bonds_i": 500000000000,
+      "ijarah_sukuk_i": 500000000000,
+      "short_term_bank_loans": 628160148553
+    },
+    "dividend_paid_1h26": 894468398,
+    "dividend_basis": "dividen tunai tahun buku 2025 Rp894.468.398 (Akta No. 31, 19 Mei 2026), dibayar pada 1H26 (hlm. 10 dan 67, PDF 20 dan 77)"
   },
   "operating_context": []
 }

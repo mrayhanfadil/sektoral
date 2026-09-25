@@ -192,9 +192,22 @@ def test_release_assessment_official_actual_blockers_cleared(ticker):
 # of the segment note (fixed assets + investment properties + right-of-use), and
 # operating profit ("Laba usaha") from the income statement, full Rupiah.
 AUDITED_DEPRECIATION = {
+    # Fixed-asset depreciation (Catatan 7) + right-of-use depreciation (Catatan 8).
+    "INET": {
+        2024: {"depreciation": 2_439_150_301 + 144_239_903, "operating_profit": 1_310_294_737},
+        2025: {"depreciation": 14_309_448_849 + 172_622_362, "operating_profit": 30_322_656_374},
+    },
     "SSIA": {
         2024: {"depreciation": 160_474_192_622, "operating_profit": 845_923_357_770},
         2025: {"depreciation": 175_460_879_268, "operating_profit": 215_715_597_257},
+    },
+    # FY2025 audited statements: laba rugi PDF p.15, segment note 35 PDF p.95
+    # ("Penyusutan dan amortisasi"), fixed-asset roll-forward note 10 PDF p.61-62.
+    "SIDO": {
+        2024: {"depreciation": 107_597_000_000, "operating_profit": 1_471_483_000_000,
+               "net_profit": 1_171_026_000_000, "revenue": 3_919_084_000_000},
+        2025: {"depreciation": 125_835_000_000, "operating_profit": 1_544_117_000_000,
+               "net_profit": 1_229_202_000_000, "revenue": 4_079_659_000_000},
     },
 }
 
@@ -233,3 +246,78 @@ def test_audited_annual_depreciation_carries_full_provenance(ticker):
         assert annuals[year]["da_source"] == "official"
         assert annuals[year]["ebit"] == expected["operating_profit"]
         assert annuals[year].get("da_implied_life") is None
+
+
+def test_inet_interim_balance_sheet_and_cash_flow_tie_to_the_filing():
+    """The 30 June 2026 statements the forecast opens from: every line sourced from
+    the audited interim report, subtotals and cash tying as the filing prints them."""
+    pack = json.loads((EVIDENCE_DIR / "INET.json").read_text(encoding="utf-8"))
+    actual, balance = pack["latest_actual"], pack["balance_sheet"]
+    assert balance["source_url"] == actual["source_url"]
+    assert balance["source_url"].startswith("https://www.idx.co.id/")
+    assert balance["published_at"] == actual["published_at"] == "2026-09-11"
+    assert balance["period_end"] == actual["period_end"] == "2026-06-30"
+    assert balance["status"] == "aktual" and balance["unit"].startswith("IDR")
+    lines = ("cash", "trade_receivables", "inventories", "other_current_assets",
+             "current_assets", "fixed_assets", "other_non_current_assets", "total_assets",
+             "short_term_debt", "trade_payables", "other_current_liabilities",
+             "current_liabilities", "long_term_debt", "other_non_current_liabilities",
+             "non_current_liabilities", "total_liabilities", "total_debt",
+             "equity_attributable", "non_controlling_interest", "total_equity", "shares_issued")
+    for key in lines:
+        assert isinstance(balance[key], int) and not isinstance(balance[key], bool), key
+    b = balance
+    assert b["total_assets"] == 6_111_011_414_909 and b["cash"] == 4_336_912_848_074
+    assert b["current_assets"] == (b["cash"] + b["trade_receivables"] + b["inventories"]
+                                   + b["other_current_assets"]) == 4_720_207_854_212
+    assert b["total_assets"] == (b["current_assets"] + b["fixed_assets"]
+                                 + b["other_non_current_assets"])
+    assert b["current_liabilities"] == (b["short_term_debt"] + b["trade_payables"]
+                                        + b["other_current_liabilities"]) == 1_664_779_061_414
+    assert b["non_current_liabilities"] == b["long_term_debt"] + b["other_non_current_liabilities"]
+    assert b["total_liabilities"] == b["current_liabilities"] + b["non_current_liabilities"]
+    assert b["total_assets"] == b["total_liabilities"] + b["total_equity"]
+    assert b["total_equity"] == b["equity_attributable"] + b["non_controlling_interest"]
+    assert b["total_debt"] == b["short_term_debt"] + b["long_term_debt"] == 1_780_486_487_723
+    assert b["shares_issued"] == pack["capital_changes_2026"]["shares_issued_2026_06_30"]
+    # 1H26 cash flow: FY2025 cash + net cash flow = the 30 June cash.
+    flows = actual["cash_flow"]
+    assert flows["cash_begin"] + flows["net_cash_flow"] == b["cash"] == flows["cash_end"]
+    assert (flows["operating_cash_flow"] + flows["investing_cash_flow"]
+            + flows["financing_cash_flow"]) == flows["net_cash_flow"]
+    assert flows["investing_cash_flow"] == (flows["other_investing_cash_flow"]
+                                            - flows["capital_expenditure"])
+    assert flows["financing_cash_flow"] == (flows["debt_raised"] + flows["equity_raised"]
+                                            + flows["other_financing_cash_flow"]
+                                            - flows["dividends_paid"])
+    for block in flows["components"].values():
+        assert all(isinstance(v, int) for v in block.values())
+    assert sum(flows["components"]["utang"].values()) == flows["debt_raised"]
+    assert flows["cash_begin"] == pack["annual_actuals"][1]["balance_sheet"]["cash"]
+    # 1H26 D&A: fixed assets + right-of-use + intangibles (Catatan 14, 15, 36).
+    metrics = actual["metrics"]
+    assert metrics["depreciation"] == 17_329_773_565 + 462_835_729 + 408_004_576
+    assert metrics["capital_expenditure"] == flows["capital_expenditure"]
+    assert metrics["dividends_paid"] == flows["dividends_paid"]
+    assert "Catatan 14" in actual["metric_sources"]["depreciation"]
+    # FY2025 audited year-end balance sheet balances too.
+    year = pack["annual_actuals"][1]["balance_sheet"]
+    assert year["total_assets"] == year["total_liabilities"] + year["total_equity"]
+    assert year["total_equity"] == year["equity_attributable"] + year["non_controlling_interest"]
+
+
+def test_inet_intake_uses_the_official_depreciation_and_interim_bridge():
+    data, _ = intake.load("INET")
+    annuals = {a["year"]: a for a in data["annuals"]}
+    # The Sectors EBITDA - EBIT (Rp1,1 miliar on Rp282 miliar of assets) is replaced.
+    assert annuals[2025]["da"] == 14_482_071_211 and annuals[2025]["da_source"] == "official"
+    assert annuals[2025]["ebitda"] == 44_804_727_585
+    from app import scenario_value
+    ratio, basis = scenario_value.da_intensity(data)
+    assert ratio == pytest.approx(18_200_613_870 / 926_453_327_140)
+    assert "1H26 resmi" in basis
+    link = scenario_value.bridge(data)
+    assert link["shares"] == 22_374_111_088
+    assert link["cash"] == 4_336_912_848_074 and link["debt"] == 1_780_486_487_723
+    assert link["nci"] == 152_191_722_293
+    assert str(link["valuation_date"]) == "2026-06-30"
