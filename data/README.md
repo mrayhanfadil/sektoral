@@ -31,6 +31,13 @@ Finance snapshot instead (`python3 -m app.peer_fundamentals --peers-of INET`).
 Those rows stay labelled Yahoo Finance in every exhibit and note; they are
 never written into `sectors_cache.db` and never called Sectors data.
 
+## Refreshing dated market data
+
+`python -m app.refresh --as-of <date> <tickers>` refreshes, in one run, the
+USD/IDR close, the copper and gold series, the tickers' closing-price packs and
+their peer snapshots (curated group, else the Sectors peer table). Each section
+below describes one of those inputs; the single-step commands still work.
+
 ## Curated peer groups (`peer_groups/`)
 
 The Sectors peer table is the issuer's sub-sector, not its business model

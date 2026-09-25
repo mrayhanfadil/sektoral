@@ -190,7 +190,7 @@ Semua penilaian ini diberi label di laporan beserta sensitivitasnya.
 - Pemeriksa otomatis membaca dokumen laporan dan menguji setiap cacat di atas, ditambah: dek tembaga basi, D&A tidak kredibel di DCF, dividen sesudah neraca, payout BBRI, penutupan basi, label beta/ERP, kode templat yang tidak dirender, kalimat cover yang bertentangan dengan valuasi, dan butir cover SSIA. Kesembilan laporan bersih.
 - 601 tes lolos, termasuk tes baru untuk grup peer kurasi (paket valid, peer asing dinilai dalam mata uangnya sendiri, fallback ke tabel Sectors, laba tahunan untuk emiten semesteran), D&A tidak kredibel, D&A audit, dividen sesudah neraca, payout, tingkat diskonto tersirat, paket harga, kurs, EBITDA peer 12 bulan terakhir, kelipatan historis, jadwal LoM tanpa ekspor, capex Elang, filter arus asing dan aturan pertumbuhan agen.
 - Laporan, jejak dan manifest tiap run tersimpan di `data/sectoral.db`; tidak ada file JSON di folder output.
-- Perintah pembaruan data (butuh jaringan, dijalankan eksplisit): `python -m app.commodity`, `python -m app.market_quote --as-of 2026-09-24 <ticker>...`, `python -m app.peer_fundamentals --peers-of INET`, `python -m app.peer_fundamentals --group <T>`; kurs lewat `app.fx.refresh_usd_idr()`.
+- Pembaruan data (butuh jaringan, dijalankan eksplisit): `python -m app.refresh --as-of <tanggal> <ticker>...` memperbarui kurs, seri tembaga dan emas, paket harga penutupan dan snapshot peer sekaligus; `python -m app.batch ... --refresh-data` menjalankannya sebelum riset.
 
 ## Sumber
 

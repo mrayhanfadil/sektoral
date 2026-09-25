@@ -286,19 +286,17 @@ def main(argv=None) -> int:
     parser.add_argument("--peers-of", action="append", default=[],
                         help="fetch every peer in this issuer's cached Sectors peer table")
     parser.add_argument("--group", action="append", default=[],
-                        help="fetch every peer in this issuer's curated peer group")
+                        help="fetch every peer in this issuer's curated peer group "
+                             "(its Sectors peer table when it has none)")
     args = parser.parse_args(argv)
     symbols = list(args.symbols)
     for ticker in args.peers_of:
         symbols.extend(p for p in peers_of(ticker) if p not in symbols)
     yahoo = {}
-    for ticker in args.group:
-        from . import peer_groups
-        for peer in (peer_groups.load(ticker) or {}).get("peers") or []:
-            symbol = str(peer["symbol"]).upper()
-            yahoo[symbol] = peer.get("yahoo") or f"{symbol}.JK"
-            if symbol not in symbols:
-                symbols.append(symbol)
+    if args.group:
+        from . import refresh as refresh_all
+        grouped, yahoo = refresh_all.peer_symbols(args.group)
+        symbols.extend(s for s in grouped if s not in symbols)
     if not symbols:
         parser.error("no symbols given")
     result = refresh(symbols, yahoo=yahoo)
