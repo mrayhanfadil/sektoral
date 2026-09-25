@@ -141,3 +141,43 @@ The biggest step toward institutional grade: a human approves the agent's assump
 2. For credibility: 2.1, then 3.1 on two tickers.
 3. For institutional grade: Phase 4.
 4. Before the demo video: Phase 5 (live re-runs first).
+
+---
+
+## Status, 25 Sep 2026 (branch `claude/improvement-plan`)
+
+| Item | Status | What changed |
+|---|---|---|
+| 1.1 BBRI capital path | Done | CAR floor (historical low) and LDR cap (historical high). A breach cuts the payout on the prior year's profit, or caps loan growth when the dividend is already declared or funding runs out. RWA grows with loans. The DDM pays each year's payout and a sustainable terminal payout (1 − g / ROE). BBRI Rp5.325 → Rp4.570 (Buy), BBCA Rp6.625 → Rp6.575 (Hold). |
+| 1.2 SSIA capex and balancing debt | Done | FY26 capex already follows the Rp2,2 trillion guidance, so no re-run. The balancing debt is a memo line in the balance sheet and cash flow, with its cause stated. New harness warning `T6.balancing_debt_share` (above 25% of equity): SSIA trips it at 26–33%. |
+| 1.3 AMMN reconciliation | Done | New exhibit: export permit +Rp790, Elang 100% +Rp990, horizon +Rp446 take Rp2.830 to Rp5.050. A deck 20% higher (Rp6.875) or a WACC 2pp lower (Rp6.325) closes the rest. |
+| 2.1 Discount-rate inputs | Done | A policy-vs-benchmark table after each WACC/CoE exhibit covers INDOGB 10Y, Damodaran ERP and CRP, IDX weekly beta, and IMF WEO nominal GDP. Rupiah models use the local-currency build. |
+| 2.2 Consensus | Done (targets only) | `data/consensus/` holds the Investing.com target consensus for all nine tickers. Earnings estimates are paywalled and the report says so. The table is left out when the consensus was retrieved after the report date. |
+| 3.1 Broker benchmarks | Done | `docs/benchmark-followup-2026-09-25.md`: GMFI +17% vs Kompas Saham (bridged), BBCA −24% vs Rp8.600 (CoE), SIDO between Kiwoom and Panin. No data errors. |
+| 3.2 POWR US$ | Done | Audited FY2024–FY2025 US$ figures added; statements now in US$ (TP Rp1.330). |
+| 3.2 INET filings | Blocked | IDX returns a Cloudflare bot check to automated downloads. Save the two files by hand (URLs in `data/issuer_evidence/INET.json`). |
+| 3.2 BBCA free float | Blocked | The shareholder registry is on the same IDX site. Needs manual retrieval. |
+| 3.2 GMFI regional peers | Done | A regional reference table (SIA Engineering, AAR, TAT), context only, outside the method chain. Refresh with `python -m app.peer_fundamentals --regional GMFI`. |
+| 3.2 AMMN unit cost | Done | The chart plots the LoM cash cost after the gold credit for FY27F–FY28F, labelled as the model's own measure. |
+| 3.3 Analyst agent | Done | Flow words ("akumulasi asing") and dates no longer fail the validator. Verdicts are normalised. Topic and index pages are rejected from the news register. Takes effect on fresh runs. |
+| 4 Analyst review | Done | Reports stay drafts until an analyst approves the Forecast Plan, from the web (needs `SECTORAL_REVIEW_TOKEN`) or with `python -m app.assumption_review`. Edits carry reasons and rebuild the report offline. |
+| 5 UI polish | Done | Icon-only F3 on phones, row hold lights, console-grammar Method Gates section, bank drivers on the trace page, code-split bundle. |
+| 5 Fresh runs | Running | All nine re-running live into `out/live-2026-09-25` (as of 25 Sep, fresh plans). So far BBCA Hold Rp6.525, AMMN Sell Rp2.840. Compare with the published set before replacing it. |
+| Housekeeping | For you | Deleting folders and backups is left to you; commands below. |
+
+### Housekeeping commands (run when ready)
+
+```bash
+rm -rf out/reports-final out/rebuild-* out/evidence-check* out/harness-check out/bank-drivers out/live-demo out/imp-*
+```
+
+```bash
+rm data/sectoral.db-bak-20260925-cleanup
+```
+
+Main checkout backups: `data/sectoral.db-bak-20260925-pr11`, `-deploy`, `-relkeys`. The merged branch `claude/ui-revamp` and its worktree can go too.
+
+### After merging
+
+- The main checkout's database needs the GMFI regional snapshots: `python -m app.peer_fundamentals --regional GMFI`.
+- Every published report is a draft until approved: `python -m app.assumption_review approve --folder out/reports --reviewer "<nama>" <T>`, or set `SECTORAL_REVIEW_TOKEN` in `.env` and approve from each report's trace page.
