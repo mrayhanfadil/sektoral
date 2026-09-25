@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "ticker": "BBCA",
+  "as_of": "2026-09-25",
+  "source_title": "Investing.com, analyst consensus (polling 3 bulan terakhir)",
+  "source_url": "https://www.investing.com/equities/bnk-central-as-consensus-estimates",
+  "analysts": 25,
+  "buy": 24,
+  "hold": 2,
+  "sell": 0,
+  "target_avg": 8214,
+  "target_high": 10100,
+  "target_low": 6000,
+  "currency": "IDR",
+  "estimates": null,
+  "estimates_note": "Estimasi konsensus pendapatan, EBITDA dan laba tidak ditampilkan tanpa langganan Investing Pro; tidak ada sumber konsensus estimasi yang dapat dikutip."
+}

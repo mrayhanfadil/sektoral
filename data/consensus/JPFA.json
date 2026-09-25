@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "ticker": "JPFA",
+  "as_of": "2026-09-25",
+  "source_title": "Investing.com, analyst consensus (polling 3 bulan terakhir)",
+  "source_url": "https://www.investing.com/equities/japfa-comfeed-consensus-estimates",
+  "analysts": 13,
+  "buy": 14,
+  "hold": 0,
+  "sell": 0,
+  "target_avg": 3117,
+  "target_high": 3700,
+  "target_low": 2500,
+  "currency": "IDR",
+  "estimates": null,
+  "estimates_note": "Estimasi konsensus pendapatan, EBITDA dan laba tidak ditampilkan tanpa langganan Investing Pro; tidak ada sumber konsensus estimasi yang dapat dikutip.",
+  "note": "Halaman menyebut 13 analis dan 14 rekomendasi beli; keduanya dicatat apa adanya."
+}

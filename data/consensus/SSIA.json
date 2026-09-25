@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "ticker": "SSIA",
+  "as_of": "2026-09-25",
+  "source_title": "Investing.com, analyst consensus (polling 3 bulan terakhir)",
+  "source_url": "https://www.investing.com/equities/surya-semesta-consensus-estimates",
+  "analysts": 6,
+  "buy": 6,
+  "hold": 0,
+  "sell": 0,
+  "target_avg": 2122,
+  "target_high": 2340,
+  "target_low": 1770,
+  "currency": "IDR",
+  "estimates": null,
+  "estimates_note": "Estimasi konsensus pendapatan, EBITDA dan laba tidak ditampilkan tanpa langganan Investing Pro; tidak ada sumber konsensus estimasi yang dapat dikutip."
+}

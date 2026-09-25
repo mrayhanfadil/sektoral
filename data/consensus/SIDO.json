@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "ticker": "SIDO",
+  "as_of": "2026-09-25",
+  "source_title": "Investing.com, analyst consensus (polling 3 bulan terakhir)",
+  "source_url": "https://www.investing.com/equities/industri-jamu-consensus-estimates",
+  "analysts": 11,
+  "buy": 5,
+  "hold": 6,
+  "sell": 1,
+  "target_avg": 488,
+  "target_high": 735,
+  "target_low": 330,
+  "currency": "IDR",
+  "estimates": null,
+  "estimates_note": "Estimasi konsensus pendapatan, EBITDA dan laba tidak ditampilkan tanpa langganan Investing Pro; tidak ada sumber konsensus estimasi yang dapat dikutip."
+}
