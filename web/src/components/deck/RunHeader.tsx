@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import type { DeckState, Status } from "../../lib/agents";
 import { LiveMark } from "../Mark";
 import { STATUS_INK } from "./read";
+import { IssuerLogo } from "../IssuerLogo";
 
 export type RunPhase = "pending" | "running" | "completed" | "error" | "paused";
 
@@ -41,6 +42,7 @@ export function RunHeader({ ticker, name, phase, clock, clockNote, counts, badge
     <header className="border-b border-rule">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4 max-sm:px-4 max-sm:py-3">
         <div className="flex min-w-[min(100%,300px)] flex-1 basis-[300px] items-center gap-4 max-sm:gap-3">
+          {ticker && <IssuerLogo ticker={ticker} size="md" className="max-sm:hidden" />}
           <h1 className="font-mono text-[34px] leading-none font-semibold tracking-[-.01em] text-ink-strong max-sm:text-[26px]">
             {ticker || <span className="text-ink-faint">----</span>}
           </h1>
