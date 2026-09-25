@@ -564,26 +564,6 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 f"{label} {', '.join(periods)} (rilis resmi tidak memuat "
                 f"{'EBITDA' if 'EBITDA' in label else 'salah satu angka'} periode itu)"
                 for label, periods in gaps.items()) + "."))
-        chart_metrics = [
-            {"label": "Pendapatan", "prior": prior_metrics.get("revenue"),
-             "current": metrics.get("revenue")},
-        ]
-        # An unreported EBITDA would plot as two zero bars; leave it off.
-        if metrics.get("ebitda") is not None and prior_metrics.get("ebitda") is not None \
-                and not bank:
-            chart_metrics.append({"label": "EBITDA", "prior": prior_metrics.get("ebitda"),
-                                  "current": metrics.get("ebitda")})
-        if prior_metrics.get("net_profit", 0) >= 0:
-            chart_metrics.append({"label": "Laba bersih",
-                                  "prior": prior_metrics.get("net_profit"),
-                                  "current": metrics.get("net_profit")})
-        exhibits.append({
-            "n": len(exhibits) + 1, "judul": f"Perbandingan metrik {actual['period']}",
-            "tipe": "bar_chart", "data": {"unit": unit, "rows": chart_metrics,
-                                         "prior_label": previous.get("period", "1H25"),
-                                         "current_label": actual["period"]},
-            "catatan_sumber": (f"Sumber: {actual['source_title']}, {page_reference}; "
-                               "grafik memakai nilai absolut dari angka yang dilaporkan.")})
     else:
         quarter = intake.get("latest_quarterly_actual") or {}
         if quarter:
@@ -2448,8 +2428,7 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
          "exhibit": [e for e in exhibits if e["judul"] in
                      {"Hasil interim resmi dan perubahan yoy",
                       "Baris kuartalan dalam data lokal",
-                      "Rasio yang menjelaskan kualitas hasil",
-                      f"Perbandingan metrik {actual['period']}" if actual else ""}]},
+                      "Rasio yang menjelaskan kualitas hasil"}]},
         {"halaman": 3, "judul": "Operasi dan posisi keuangan",
          "layout": "stack", "paragraf": [outlook],
          "exhibit": [e for e in exhibits if e["judul"] in
