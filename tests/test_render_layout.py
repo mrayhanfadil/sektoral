@@ -246,3 +246,31 @@ def test_running_header_and_price_box_follow_the_template():
     doc = _doc()
     doc["meta"].update(rating="Buy", tp=150, upside_persen=50.456, status="distributable_assumption_led")
     assert "+50,5%</b>" in render.render(doc)
+
+
+def _yoy_table(cells, note):
+    return {"n": 3, "judul": "Hasil interim resmi dan perubahan yoy", "tipe": "tabel",
+            "catatan_sumber": note,
+            "data": {"cols": ["Metrik", "1H25", "1H26", "yoy"],
+                     "rows": [["Pendapatan (US$ juta)", "183,0", "2.052,0", cells[0]],
+                              ["Laba bersih (US$ juta)", "(146,0)", "504,0", cells[1]]]}}
+
+
+def test_a_table_with_nm_prints_only_the_nm_reason_under_the_source_line():
+    note = ("Sumber: AMMAN H1 2026 Earnings Release, hlm. 3; https://www.amman.co.id/x "
+            "n.m. pada kolom yoy: perubahan dari/ke angka negatif tidak bermakna sebagai persentase.")
+    out = render._table(_yoy_table([">500%", "n.m."], note))
+    assert out.index(f"<p class='src'>{HOUSE}</p>") < out.index("<p class='nm-note'>")
+    assert ("<p class='nm-note'>n.m. pada kolom yoy: perubahan dari/ke angka negatif tidak "
+            "bermakna sebagai persentase.</p>") in out
+    assert "amman.co.id" not in out
+    # '>500%' is a figure: right-aligned like the rest of the column.
+    assert "<td class='cell-num short'>&gt;500%</td>" in out
+    assert "nm-note" not in render._table(_yoy_table([">500%", "12,0%"], note))
+
+
+def test_nm_note_takes_the_nm_clause_of_a_multi_clause_sentence():
+    note = ("Sumber: grup peer kurasi Sektoral; per 2026-09-25; P/E negatif tidak diperingkat; "
+            "rasio di atas 500% ditulis n.m. karena basis sangat kecil. Median memakai peer valid.")
+    assert render._nm_note({"catatan_sumber": note}) == (
+        "<p class='nm-note'>rasio di atas 500% ditulis n.m. karena basis sangat kecil.</p>")

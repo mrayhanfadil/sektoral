@@ -26,6 +26,7 @@ RENDER_CHECKS: dict[str, tuple[str, str, str]] = {
     "T1.source_line": (BLOCKER, "layout", "source line tepat 'Source: Company, Sektoral Estimates' di bawah tiap exhibit"),
     "T1.numbering_rendered": (BLOCKER, "layout", "caption Exhibit N berurutan 1..N"),
     "T1.exhibit_label_rendered": (WARNING, "layout", "setiap objek punya caption 'Exhibit N. judul'"),
+    "T1.nm_note_rendered": (BLOCKER, "layout", "tabel dengan sel n.m. mencetak alasannya di bawah source line"),
     "T1.source_appendix": (WARNING, "layout", "lampiran sumber di akhir laporan untuk tiap exhibit"),
     "T1.header": (WARNING, "layout", "header 'KODE IJ | RATING · TP', 'Equity Research - Company Update | DD Mon YYYY', logo"),
     "T1.footer": (WARNING, "layout", "footer 'sectors.app', disclosure, nomor halaman"),
@@ -366,6 +367,21 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
               else f"{len(bad)} exhibit: {_short(bad)}")
     bad = _labels(lines)
     r.add("T1.exhibit_label_rendered", not bad, "setiap objek berlabel" if not bad else _short(bad))
+    # n.m. only with its reason where the reader sees it (spec: "n.m. dengan
+    # alasan di catatan exhibit"); the source appendix may be hidden.
+    exhibits = [n for n in b.root.iter() if n.tag == "div" and "exhibit" in n.cls()
+                and any(c.tag == "table" for c in n.iter())]
+    with_nm = [e for e in exhibits if any(c.tag == "td" and c.text() == "n.m." for c in e.iter())]
+    if not with_nm:
+        r.na("T1.nm_note_rendered", "tanpa sel n.m.")
+    else:
+        bad = []
+        for e in with_nm:
+            if not any(c.tag == "p" and "nm-note" in c.cls() and c.text() for c in e.iter()):
+                cap = next((c.text() for c in e.iter() if c.tag == "caption"), "")
+                bad.append(cap[:50] or "tanpa caption")
+        r.add("T1.nm_note_rendered", not bad, f"{len(with_nm)} tabel ber-n.m. dengan alasan tercetak"
+              if not bad else f"{len(bad)} tabel tanpa alasan n.m.: {_short(bad, 4)}")
     from .. import render  # the renderer's own switch; importing opens nothing
     if render.SHOW_SOURCE_APPENDIX:
         ok, msg = _appendix(lines)

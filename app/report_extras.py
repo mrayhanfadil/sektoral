@@ -66,6 +66,14 @@ def _signed_pct(value, cap=None):
     return fmt.pct(value)
 
 
+def _growth_pct(value, cap=5):
+    """A growth rate: above the cap it reads '>500%' (the reader knows it is
+    large); a fall past the negative cap is n.m."""
+    if value is not None and value > cap:
+        return f">{fmt._id(cap * 100, 0)}%"
+    return _signed_pct(value, cap)
+
+
 def _exhibit(title, columns, rows, source):
     return {"n": 0, "judul": title, "tipe": "tabel",
             "data": {"cols": columns, "rows": rows}, "catatan_sumber": source}
@@ -440,8 +448,8 @@ def industry_page(intake):
         years = sorted(y for y in history if y.isdigit())[-5:]
         rows = [[y, fmt.mult(_num(history[y].get("pe")) or 0) if _num(history[y].get("pe")) else "-",
                  fmt.mult(_num(history[y].get("pb")) or 0) if _num(history[y].get("pb")) else "-",
-                 _signed_pct(_num((growth.get(y) or {}).get("avg_annual_revenue_growth")), cap=5),
-                 _signed_pct(_num((growth.get(y) or {}).get("avg_annual_earning_growth")), cap=5)]
+                 _growth_pct(_num((growth.get(y) or {}).get("avg_annual_revenue_growth"))),
+                 _growth_pct(_num((growth.get(y) or {}).get("avg_annual_earning_growth")))]
                 for y in years]
         name = report.get("sub_sector") or intake.get("sub_sector")
         exhibits.append(_exhibit(
@@ -449,7 +457,8 @@ def industry_page(intake):
             ["Tahun", "P/E sub-sektor", "P/B sub-sektor", "Pertumbuhan pendapatan",
              "Pertumbuhan laba"], rows,
             f"Sumber: Sectors, subsector/report/{_slug(name)}; pertumbuhan adalah rata-rata "
-            "tertimbang emiten di sub-sektor; n.m. bila di atas 500% karena basis rendah."))
+            "tertimbang emiten di sub-sektor; di atas 500% ditulis >500% dan di bawah -500% "
+            "ditulis n.m. karena basis rendah atau negatif."))
         if years:
             last = history[years[-1]]
             forecasts = ((report.get("growth") or {}).get("growth_forecasts") or {})
@@ -2148,10 +2157,10 @@ def shape_key_financials(doc, intake, fc=None, va=None, statements=None):
             value, reason = compute(i)
             if keep and cur == "n.m.":
                 if value is not None and not reason:
-                    # The narrative wrote n.m. by its own rule (e.g. a growth
-                    # rate above 500% or across zero); name that rule.
-                    reason = ("perubahan di atas 500% atau dari/ke angka negatif tidak "
-                              "bermakna sebagai pertumbuhan")
+                    # The narrative wrote n.m. by its own rule (a growth rate
+                    # across zero; above 500% prints '>500%'); name that rule.
+                    reason = ("perubahan dari/ke angka negatif tidak bermakna "
+                              "sebagai pertumbuhan")
                 value = None  # the narrative's n.m. stands; compute only gives its reason
             if value is None:
                 cells.append("n.m.")
