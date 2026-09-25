@@ -421,3 +421,20 @@ def test_verdict_spellings_are_normalised_and_partial_support_is_marked():
     verdicts = [h["verdict"] for h in doc["hypotheses"]]
     assert verdicts == ["didukung", "tidak didukung", "belum terjawab", "mungkin"]
     assert doc["hypotheses"][2]["reason"].startswith("Sebagian didukung: margin naik")
+
+
+def test_stray_cjk_tokens_are_stripped_from_synthesis_prose():
+    doc = {"headline": "BBCA mempertahankan 優位 profitabilitas.",
+           "findings": [{"title": "Posisi 投资者 asing", "signal_ids": ["a"],
+                         "interpretation": "Tafsir.", "caveat": "Batas."}],
+           "hypotheses": [{"index": 0, "verdict": "didukung", "signal_ids": ["a"],
+                           "reason": "Didukung 優位."}], "next_checks": ["Cek 投资者 ulang"]}
+    removed = A._strip_foreign(doc)
+    assert removed == ["優位", "投资者"]
+    assert doc["headline"] == "BBCA mempertahankan profitabilitas."
+    assert doc["hypotheses"][0]["reason"] == "Didukung."
+    assert A._synthesis_problems(doc, {"a"}, 1) == []
+    # Prose that was only foreign script is empty afterwards and still fails.
+    only = {**doc, "headline": "優位"}
+    A._strip_foreign(only)
+    assert any("wajib diisi" in p for p in A._synthesis_problems(only, {"a"}, 1))
