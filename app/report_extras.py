@@ -19,7 +19,7 @@ from agents.estimator import tools as local_data
 
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
                mineops, rate_benchmarks, scenario_value)
-from . import consensus
+from . import consensus, peer_groups
 from . import lom as lom_mod
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
@@ -637,6 +637,48 @@ def _thin_peer_note(stats, keys=("pe", "pb", "roe", "net_margin", "leverage")):
             "rantai metode." if thin else "")
 
 
+REGIONAL_TITLE = "Referensi regional (konteks, bukan peer valuasi)"
+
+
+def regional_reference_exhibit(ticker):
+    """Non-IDX listings of the curated pack (``regional_reference``), shown
+    for context: they never enter the peer medians, the cross-checks or the
+    method chain, which stay IDX-only."""
+    try:
+        rows, missing, basis = peer_groups.regional(ticker)
+    except ValueError:
+        return None
+    if not rows:
+        return None
+    x = lambda v: fmt.mult(v, cap=fmt.MULT_CAP) if isinstance(v, (int, float)) and v > 0 else "n.m."
+    table = []
+    for row in rows:
+        ev = (row.get("ev") or {}).get("ev_ebitda")
+        table.append([f"{row['company_name']} ({row['symbol']})", row["market"],
+                      _rp_bn(row["market_cap"]) if row.get("market_cap") else "-",
+                      x(row.get("pe_ttm")), x(row.get("pb_mrq")), x(ev),
+                      str(row.get("year") or "-")])
+
+    def median(values):
+        values = sorted(v for v in values if isinstance(v, (int, float)) and v > 0)
+        if not values:
+            return None
+        mid = len(values) // 2
+        return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
+    table.append(["Median referensi regional", "", "",
+                  x(median(r.get("pe_ttm") for r in rows)), x(median(r.get("pb_mrq") for r in rows)),
+                  x(median((r.get("ev") or {}).get("ev_ebitda") for r in rows)), ""])
+    fetched = sorted({str(r.get("source") or "").rsplit("diambil ", 1)[-1] for r in rows})
+    return _exhibit(
+        REGIONAL_TITLE,
+        ["Perusahaan", "Bursa", "Kap. pasar (Rp miliar)", "P/E (x)", "P/B (x)", "EV/EBITDA (x)",
+         "Periode laba"], table,
+        f"Sumber: Yahoo Finance (laporan keuangan dan kapitalisasi pasar, diambil "
+        f"{', '.join(fetched)}), dikonversi ke Rp; data/peer_groups/{ticker}.json. "
+        + (basis or "Hanya konteks; tidak dipakai dalam valuasi.")
+        + (f" Tanpa snapshot: {', '.join(missing)}." if missing else ""))
+
+
 def peer_page(intake, valuation_inputs=None):
     ticker = intake["ticker"]
     peers = peer_tools.find_peers(ticker)
@@ -714,7 +756,9 @@ def peer_page(intake, valuation_inputs=None):
         + "Emiten yang dibahas disorot '(emiten)'."
         + _thin_peer_note(stats, ("market_cap", "pe", "pb") + (() if bank else ("ev_ebitda",))
                           + ("roe", "net_margin", "leverage")))]
-    caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
+    regional = regional_reference_exhibit(ticker)
+    if regional:
+        exhibits.append(regional)
     caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
     subject = next(r for r in rows if r["is_self"])
     paragraphs = [
