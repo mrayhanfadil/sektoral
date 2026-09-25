@@ -15,7 +15,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import outputs
+from . import assumption_review, outputs
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
@@ -56,8 +56,13 @@ def _held_reason(blockers) -> str:
     return "bukti belum lengkap"
 
 
-def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
-    """Public fields of one report document; None when it is not a report."""
+def summary(doc, folder: Path, stored_ticker: str, require_review: bool = True) -> dict | None:
+    """Public fields of one report document; None when it is not a report.
+
+    A report is published only when its release gate passed and, with
+    ``require_review``, an analyst approved the Forecast Plan it was built on
+    (app.assumption_review); until then it is a draft awaiting review.
+    """
     meta = doc.get("meta") if isinstance(doc, dict) else None
     if not isinstance(meta, dict) or not meta.get("ticker"):
         return None
@@ -65,7 +70,10 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
     if not TICKER.fullmatch(ticker) or ticker != stored_ticker.upper():
         return None
     status = str(meta.get("status") or "")
-    published = status.startswith("distributable")
+    review = assumption_review.status(folder, ticker)
+    releasable = status.startswith("distributable")
+    published = releasable and (review["state"] == "approved" or not require_review)
+    reviewed = review.get("record") or {}
     method = str(doc.get("method") or "")
     return {
         "ticker": ticker,
@@ -83,19 +91,27 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
                                          or (doc.get("run_manifest") or {}).get("profile") or ""), "Emiten"),
         "headline": str((doc.get("cover") or {}).get("headline") or ""),
         "risks": [str(r.get("judul")) for r in doc.get("risks") or [] if isinstance(r, dict)][:3],
-        "chain": _chain(doc),
+        # Awaiting review: the chain shows the route, not the values it reached.
+        "chain": ([{**step, "value": "ditahan"} for step in _chain(doc)]
+                  if releasable and not published else _chain(doc)),
         "blockers": len((doc.get("harness") or {}).get("blockers") or []),
-        "held_reason": _held_reason((doc.get("harness") or {}).get("blockers") or []),
+        "held_reason": ("menunggu persetujuan asumsi oleh analis" if releasable and not published
+                        else _held_reason((doc.get("harness") or {}).get("blockers") or [])),
+        "review": {"state": review["state"], "reviewer": reviewed.get("reviewer"),
+                   "reviewed_at": reviewed.get("reviewed_at"),
+                   "decision": reviewed.get("decision"),
+                   "edits": len(reviewed.get("edits") or [])},
         "files": {**{kind: (folder / pattern.format(t=ticker)).is_file()
                       for kind, (pattern, _) in FILES.items()},
                   "trace_json": outputs.exists(outputs.TRACE, folder, ticker)},
     }
 
 
-def load(folder) -> list[dict]:
+def load(folder, require_review: bool = True) -> list[dict]:
     """All reports in ``folder``: published first, then by ticker."""
     folder = Path(folder)
-    items = [s for s in (summary(outputs.load(outputs.REPORT, folder, t), folder, t)
+    items = [s for s in (summary(outputs.load(outputs.REPORT, folder, t), folder, t,
+                                 require_review)
                          for t in outputs.tickers(outputs.REPORT, folder)
                          if TICKER.fullmatch(t)) if s]
     return sorted(items, key=lambda s: (not s["published"], s["ticker"]))

@@ -21,6 +21,37 @@ export type ReportItem = {
   blockers: number;
   held_reason: string;
   files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean };
+  review?: { state: ReviewState; reviewer: string | null; reviewed_at: string | null; decision: string | null; edits: number };
+};
+
+export type ReviewState = "approved" | "pending" | "no_plan";
+
+/** One numeric driver of the Forecast Plan an analyst may change. */
+export type ReviewField = {
+  path: string;
+  field: string;
+  label: string;
+  unit: "%" | "x";
+  year: number | null;
+  value: number;
+  rationale: string;
+};
+
+export type ReviewEdit = {
+  path: string; label: string; year: number | null; unit: string; from: number; to: number; reason: string;
+};
+
+export type ReviewView = {
+  state: ReviewState;
+  plan_sha: string | null;
+  reviewer: string | null;
+  reviewed_at: string | null;
+  decision: "approved" | "approved_with_edits" | null;
+  note: string | null;
+  edits: ReviewEdit[];
+  stale: boolean;
+  enabled: boolean;
+  fields: ReviewField[];
 };
 
 export type HistoryItem = {
@@ -114,6 +145,8 @@ export type Job = {
 
 export type TraceView = {
   ticker: string;
+  /** Gallery reports only: whether an analyst approved the Forecast Plan. */
+  review_state?: ReviewState;
   report: {
     release_status: string | null;
     published: boolean;
@@ -177,6 +210,13 @@ export const api = {
   reports: () => request<{ items: ReportItem[] }>("/api/reports").then((r) => r.items),
   reportRun: (ticker: string) => request<RunReplay>(`/api/reports/${encodeURIComponent(ticker)}/run`),
   reportTrace: (ticker: string) => request<TraceView>(`/api/reports/${encodeURIComponent(ticker)}/trace`),
+  review: (ticker: string) => request<ReviewView>(`/api/reports/${encodeURIComponent(ticker)}/review`),
+  approve: (ticker: string, token: string, body: { reviewer: string; note: string; edits: { path: string; value: number; reason: string }[] }) =>
+    request<ReviewView>(`/api/reports/${encodeURIComponent(ticker)}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Review-Token": token },
+      body: JSON.stringify(body),
+    }),
   job: (id: string) => request<Job>(`/api/jobs/${encodeURIComponent(id)}`),
   jobTrace: (id: string) => request<TraceView>(`/api/jobs/${encodeURIComponent(id)}/trace`),
   submit: (ticker: string) =>

@@ -12,6 +12,7 @@ import {
 } from "../components/Intel";
 import { MethodChain, RatingBadge, signedPct } from "../components/Reports";
 import { Notice, useLoad } from "../components/State";
+import { ReviewPanel } from "../components/Review";
 
 /* ------------------------------------------------------------------ */
 /* The index: the trace's table of contents, grouped by the agent that */
@@ -214,7 +215,9 @@ type Links = {
 /** The report's release as recorded in the trace: a ruled readout plus, when known, its method chain. */
 function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; run?: RunReplay }) {
   const { report } = trace;
-  const [label, tone] = RELEASE[report.release_status ?? ""] ?? [report.release_status ? report.release_status : "Status belum tercatat", "neutral" as ChipTone];
+  const awaiting = trace.review_state === "pending" && (report.release_status ?? "").startsWith("distributable");
+  const [label, tone] = awaiting ? ["Lolos gerbang, menunggu review analis", "warn" as ChipTone]
+    : RELEASE[report.release_status ?? ""] ?? [report.release_status ? report.release_status : "Status belum tercatat", "neutral" as ChipTone];
   const counts = useMemo(() => (run?.events.length ? derive(run.events, { finished: true }).counts : null), [run]);
   const cell = "min-w-0 bg-surface px-4 py-3";
   const dt = "mb-1 text-[12px] text-ink-soft";
@@ -600,7 +603,8 @@ export function ReportTrace() {
   const files = reportFiles(T);
   return (
     <TracePage state={state} item={item} run={run.data ?? undefined} missing={`Jejak riset ${T} tidak ditemukan.`}
-      links={{ reportUrl: files.html, pdfUrl: item?.files.pdf ? files.pdf : undefined, replayUrl: `/laporan/${T}/putar` }} />
+      links={{ reportUrl: files.html, pdfUrl: item?.files.pdf ? files.pdf : undefined, replayUrl: `/laporan/${T}/putar` }}
+      review={<ReviewPanel ticker={T} onApproved={() => { state.reload(); reports.reload(); }} />} />
   );
 }
 
@@ -614,12 +618,14 @@ export function JobTrace() {
   );
 }
 
-function TracePage({ state, item, run, links, missing }:
-  { state: ReturnType<typeof useLoad<TraceView>>; item?: ReportItem; run?: RunReplay; links: Links; missing: string }) {
+function TracePage({ state, item, run, links, missing, review }:
+  { state: ReturnType<typeof useLoad<TraceView>>; item?: ReportItem; run?: RunReplay; links: Links; missing: string;
+    review?: React.ReactNode }) {
   if (state.data) {
     return (
       <div className="min-h-full bg-canvas">
         <TraceHeader trace={state.data} item={item} run={run} links={links} />
+        {review && <div className="wrap pt-6">{review}</div>}
         <TraceBody trace={state.data} />
       </div>
     );
