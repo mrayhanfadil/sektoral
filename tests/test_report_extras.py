@@ -513,3 +513,11 @@ def test_mining_reports_keep_audit_detail_out_of_the_printed_report():
     assert [p["judul"] for p in doc["lampiran_audit"]] == [
         "Rekonstruksi aktual Q2 2026", "Rekonstruksi aktual Q2 2026 (lanjutan)", "Cross-check FY26F EV/EBITDA"]
     assert [p["halaman"] for p in doc["bagian"]] == [2, 3, 4, 5, 6]
+
+
+def test_growth_above_500_percent_reads_as_a_capped_figure():
+    from app.harness.template import classify_cell
+    assert X._growth_pct(10.2) == ">500%"
+    assert X._growth_pct(0.25) == "25,0%"
+    assert X._growth_pct(-7) == "n.m."
+    assert classify_cell(">500%") == "num"

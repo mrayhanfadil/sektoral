@@ -45,6 +45,7 @@ Owner = who fixes a real finding: **present** (`report_extras`, `narrative`),
 | **General** Exhibit label above every object, descriptive | `T1.exhibit_label` | warning | doc `exhibits[].judul` (not empty, not a generic word such as "Chart"/"Tabel") | present |
 | | `T1.exhibit_label_rendered` | warning | HTML: every exhibit block carries an `Exhibit N.` caption | layout |
 | Source line under every object | `T1.source_line` | blocker | HTML `p.src` / `.info-src` per exhibit block; PDF lines starting `Source:` | layout |
+| n.m. only with its reason, printed where the cell is | `T1.nm_note_rendered` | blocker | HTML: every exhibit table with an `n.m.` cell has a `p.nm-note` (the n.m. part of its note) under the source line; `>500%` replaces n.m. for growth above 500% | layout |
 | Detail provenance at the back (D2) | `T1.source_appendix` | warning | HTML: appendix heading ("Lampiran sumber"/"Source appendix") after the last exhibit, every exhibit number listed | layout |
 | Sequential numbering, global counter | `T1.numbering` | blocker | doc: `n` = 1..N in reading order (price chart, Key Financials, then `bagian` order), every placed exhibit in `exhibits` | present |
 | | `T1.numbering_rendered` | blocker | HTML `Exhibit N.` captions in order = 1..N (an appendix run is not counted) | layout |

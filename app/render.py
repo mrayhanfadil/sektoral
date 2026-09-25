@@ -231,6 +231,8 @@ CSS = (FONT_FACES + PAGE_NUM +
        "color:" + INK + ";margin-bottom:1.7mm;font-family:'Roboto',sans-serif}"
        ".src{font-size:5.8pt;color:" + INK + ";margin:1.7mm 0 0;line-height:1.4;font-style:italic;"
        "text-align:left;overflow-wrap:anywhere}"
+       ".nm-note{font-size:5.8pt;color:" + MUT + ";margin:0.6mm 0 0;line-height:1.35;font-style:italic;"
+       "text-align:left;overflow-wrap:anywhere}"
        # Source appendix: one entry per exhibit, links shortened to host/file.
        ".src-list{margin:0;font-size:6.7pt;line-height:1.35}"
        ".src-list dt{font-weight:700;margin-top:1.4mm;break-after:avoid-page}"
@@ -259,6 +261,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".exhibit-table thead th{padding:8px 10px;font-size:10px}"
        ".exhibit-table caption{font-size:12px;margin-bottom:5px}"
        ".src{font-size:10px;line-height:1.4}"
+       ".nm-note{font-size:10px;line-height:1.4}"
        ".grid-col .exhibit-table,.pair-col .exhibit-table{min-width:0}"
        # The cover's right column is narrower than 620px; its table must fit, not scroll.
        ".cover .exhibit-table{min-width:0}"
@@ -701,7 +704,7 @@ def _fill_columns(floor, need, compact, headers, body, budget):
     return [w + freed * w / total for w in widths]
 
 
-_NUMERIC_CELL = re.compile(r"^(?:Rp|USD\s*)?[\d(~−-]|^(?:n\.a\.|n\.m\.|NA)$")
+_NUMERIC_CELL = re.compile(r"^(?:Rp|USD\s*)?[\d(~−<>-]|^(?:n\.a\.|n\.m\.|NA)$")
 
 
 def _column_kinds(cols, rows):
@@ -725,7 +728,8 @@ def _column_kinds(cols, rows):
 # Every exhibit footer is the house source line and nothing else (spec §5.5,
 # Struktur-Template "Exhibit labeling dan sourcing"). Each exhibit's own
 # provenance and caveats are collected while rendering and printed once, in
-# the source appendix at the end of the report.
+# the source appendix at the end of the report. The one exception is a table's
+# n.m. reason, printed under its source line (``_nm_note``).
 _NOTES = contextvars.ContextVar("exhibit_notes", default=None)
 
 
@@ -735,6 +739,27 @@ def _source_line(ex, detail=None):
         notes.append((ex.get("n"), str(ex.get("judul") or ""),
                       fmt.provenance_detail(ex.get("catatan_sumber") if detail is None else detail)))
     return f"<p class='src'>{html.escape(fmt.DEFAULT_SOURCE)}</p>"
+
+
+_NM_REASON = re.compile(r"n\.\s?m\.|tidak bermakna|not meaningful|(?:belum|tidak) dimodelkan", re.I)
+
+
+def _nm_note(ex):
+    """Why a table shows n.m.: the part of its note that says so, printed under
+    the source line (the n.m. rule of spec/Instruksi-Report-v3.md needs the
+    reason where the reader sees the cell). The rest of the provenance stays
+    in the source appendix."""
+    parts = []
+    for sentence in re.split(r"(?<=\.)\s+(?=[A-Z])", fmt.provenance_detail(ex.get("catatan_sumber"))):
+        if not _NM_REASON.search(sentence):
+            continue
+        at = sentence.find("n.m. pada")
+        if at >= 0:
+            parts.append(sentence[at:])
+        else:
+            parts.extend(c.strip() for c in sentence.split(";") if _NM_REASON.search(c))
+    text = " ".join(part.strip().rstrip(".") + "." for part in parts if part.strip())
+    return f"<p class='nm-note'>{html.escape(fmt.bracket_negatives(text))}</p>" if text else ""
 
 
 def _header_cell(col, kind):
@@ -820,6 +845,7 @@ def _table(ex, context="full"):
     head = "".join(_header_cell(col, kind) for col, kind in zip(cols, kinds))
     marks = _row_marks(ex, cols, rows)
     groups = [[]]
+    has_nm = False
     for index, row in enumerate(rows):
         cells = [str(row[i]) if i < len(row) else "" for i in range(len(cols))]
         if _is_section_row(cells):
@@ -842,6 +868,7 @@ def _table(ex, context="full"):
             base = " base-cell" if (index, col) == marks["cell"] else ""
             # A missing figure recedes so the reported ones carry the table.
             muted = " cell-nm" if col and cell.strip() in ("n.m.", "n.a.", "NA") else ""
+            has_nm = has_nm or (col and cell.strip() == "n.m.")
             rendered.append(f"<td class='cell-{kind}{short}{base}{muted}'>{html.escape(cell)}</td>")
         groups[-1].append(f"<tr{classes}>" + "".join(rendered) + "</tr>")
     body = "".join(f"<tbody class='block'>{''.join(group)}</tbody>" for group in groups if group)
@@ -852,7 +879,7 @@ def _table(ex, context="full"):
     return (f"<div class='exhibit{keep}'><table class='exhibit-table'>"
             f"<caption>Exhibit {ex['n']}. {html.escape(fmt.bracket_negatives(ex['judul']))}</caption>"
             f"<colgroup>{colgroup}</colgroup><thead><tr>{head}</tr></thead>"
-            f"{body}</table>{_source_line(ex)}</div>")
+            f"{body}</table>{_source_line(ex)}{_nm_note(ex) if has_nm else ''}</div>")
 
 
 def _nice_max(value):

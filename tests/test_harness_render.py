@@ -198,3 +198,15 @@ def test_a_hidden_appendix_is_not_applicable(monkeypatch):
     monkeypatch.setattr(render, "SHOW_SOURCE_APPENDIX", False)
     checks = {c["check"]: c for c in R.check_rendered("<html><body><p>x</p></body></html>")["checks"]}
     assert checks["T1.source_appendix"]["status"] == R.NA
+
+
+def test_nm_cells_need_a_printed_reason():
+    table = ("<div class='exhibit'><table class='exhibit-table'><caption>Exhibit 6. Laba rugi</caption>"
+             "<tbody><tr><td>Laba usaha</td><td class='cell-num'>n.m.</td></tr></tbody></table>"
+             f"<p class='src'>{SRC}</p>{{note}}</div>")
+    bare = html().replace("</body>", table.format(note="") + "</body>")
+    assert failed(bare)["T1.nm_note_rendered"]["blocker"]
+    noted = html().replace("</body>", table.format(note="<p class='nm-note'>n.m. pada Laba usaha: "
+                                                        "basis negatif.</p>") + "</body>")
+    assert checks(noted)["T1.nm_note_rendered"]["status"] == R.PASS
+    assert checks(html())["T1.nm_note_rendered"]["status"] == R.NA
