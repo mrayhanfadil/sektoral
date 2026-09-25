@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "ticker": "GMFI",
+  "as_of": "2026-09-25",
+  "source_title": "Investing.com, analyst consensus (polling 3 bulan terakhir)",
+  "source_url": "https://www.investing.com/equities/garuda-maintenance-facility-consensus-estimates",
+  "analysts": 1,
+  "buy": 1,
+  "hold": 0,
+  "sell": 0,
+  "target_avg": 150,
+  "target_high": 150,
+  "target_low": 150,
+  "currency": "IDR",
+  "estimates": null,
+  "estimates_note": "Estimasi konsensus pendapatan, EBITDA dan laba tidak ditampilkan tanpa langganan Investing Pro; tidak ada sumber konsensus estimasi yang dapat dikutip."
+}

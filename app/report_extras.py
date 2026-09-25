@@ -19,6 +19,7 @@ from agents.estimator import tools as local_data
 
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
                mineops, rate_benchmarks, scenario_value)
+from . import consensus
 from . import lom as lom_mod
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
@@ -80,6 +81,9 @@ def _page(title, paragraphs, exhibits):
 _DECISION = {"selected": "Terpilih", "stop_extreme": "Terpilih, ekstrem (rantai berhenti)",
              "skipped": "Dilewati", "cross_check": "Silang cek", "not_needed": "Tidak dijalankan",
              "not_available": "Belum tersedia"}
+
+
+METHOD_CHAIN_TITLE = "Rantai metode valuasi"
 
 
 def method_chain_exhibit(va):
@@ -3008,6 +3012,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if va:
         attach_method_chain(doc, va)
         attach_rate_benchmarks(pages, intake, va)
+        attach_consensus(pages, intake, va)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     for index, page in enumerate(doc["bagian"]):
@@ -3017,6 +3022,22 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
 
 
 RATE_EXHIBITS = ("Komponen WACC", "Komponen Cost of Equity")
+
+
+def attach_consensus(pages, intake, va):
+    """House target vs the dated analyst consensus (app.consensus), just
+    before the method chain on the target page."""
+    for page in pages:
+        exhibits = page.get("exhibit") or []
+        at = next((i for i, e in enumerate(exhibits)
+                   if e.get("judul") == METHOD_CHAIN_TITLE), None)
+        if at is None:
+            continue
+        if not any(e.get("judul") == consensus.TITLE for e in exhibits):
+            exhibits.insert(at, consensus.exhibit(
+                intake.get("ticker"), intake.get("as_of"), _num((va or {}).get("tp")),
+                (va or {}).get("rating"), _num(intake.get("price"))))
+        return
 
 
 def attach_rate_benchmarks(pages, intake, va):

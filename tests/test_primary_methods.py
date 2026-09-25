@@ -219,6 +219,28 @@ def test_lom_value_ties_to_the_sotp_bridge_and_moves_the_right_way():
     assert not release._check_operating_bridge({"operating_bridge": bridge})
 
 
+def test_lom_reconciliation_walks_cumulatively_from_the_target():
+    import pytest
+    from app import lom
+    doc_in, _, (res, gaps) = _ammn_lom()
+    if res is None:
+        pytest.skip(f"AMMN LoM inputs unavailable: {gaps}")
+    rows = {r["key"]: r for r in res["reconciliation"]}
+    assert [r["key"] for r in res["reconciliation"]] == [
+        "target", "export", "elang", "horizon", "deck", "rate"]
+    assert rows["target"]["per_share"] == pytest.approx(res["per_share"])
+    # Each cumulative step adds one assumption to the one before it.
+    assert rows["export"]["per_share"] == pytest.approx(res["other_export"])
+    for prev, key in (("target", "export"), ("export", "elang"), ("elang", "horizon")):
+        assert rows[key]["step"] == pytest.approx(rows[key]["per_share"] - rows[prev]["per_share"])
+        assert rows[key]["per_share"] > rows[prev]["per_share"]
+    # The two closing levers each sit on the walked value, not on each other.
+    for key in ("deck", "rate"):
+        assert rows[key]["alternative"]
+        assert rows[key]["step"] == pytest.approx(
+            rows[key]["per_share"] - rows["horizon"]["per_share"])
+
+
 def test_lom_gate_needs_sourced_analyst_assumptions():
     import pytest
     doc_in, fc, (res, gaps) = _ammn_lom()

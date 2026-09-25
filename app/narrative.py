@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import cache as cache_mod
+from . import consensus
 from . import ddm
 from . import fmt
 from . import method_chain
@@ -2903,8 +2904,38 @@ def _lom_exhibits(intake, va, detail):
         "EV/EBITDA FY26F 8x menjadi cross-check di rantai metode, tidak dirata-rata.",
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
     ]
-    return {"exhibits": [sotp_table, schedule, rate_table, sensitivity, tests, assumptions],
+    walk = _lom_reconciliation(intake, lom_res)
+    return {"exhibits": [sotp_table, schedule, rate_table, sensitivity, tests]
+            + ([walk] if walk else []) + [assumptions],
             "text": text, "notes": notes}
+
+
+def _lom_reconciliation(intake, lom_res):
+    """Plan 1.3: the target walked, one assumption at a time, towards the
+    value on the market's usual assumptions, then to the dated consensus."""
+    rows = lom_res.get("reconciliation") or []
+    if not rows:
+        return None
+    rp = lambda v: f"Rp{fmt.rp(fmt.tick(v))}"
+    step = lambda v: "" if v is None else f"{'+' if v >= 0 else '-'}Rp{fmt.rp(fmt.tick(abs(v)))}"
+    table = [[r["label"], rp(r["per_share"]), step(r["step"])] for r in rows]
+    walked = next(r for r in rows if r["key"] == "horizon")["per_share"]
+    doc, why = consensus.load(intake.get("ticker"), intake.get("as_of"))
+    if doc:
+        avg = doc["target_avg"]
+        table.append([f"Rata-rata target konsensus ({doc['analysts']} analis, {doc['as_of']})",
+                      rp(avg), f"sisa sesudah tiga langkah {step(avg - walked)}"])
+    else:
+        table.append(["Rata-rata target konsensus", "n.a.", why])
+    return {"n": 0, "judul": "Rekonsiliasi target ke asumsi pasar dan konsensus", "tipe": "tabel",
+            "data": {"cols": ["Langkah (kumulatif)", "Nilai per saham", "Perubahan"],
+                     "rows": table},
+            "catatan_sumber": (
+                "Sumber: Sektoral Estimates; tiap langkah menambah satu asumsi di atas langkah "
+                "sebelumnya pada model LoM yang sama. Dua baris terakhir sebelum konsensus adalah "
+                "alternatif, masing-masing di atas tiga langkah pertama, bukan kumulatif satu sama "
+                "lain." + (f" Konsensus: {doc['source_title']}, diambil {doc['as_of']}." if doc
+                           else ""))}
 
 
 def _lom_fx_source(intake):
