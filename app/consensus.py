@@ -50,9 +50,10 @@ def exhibit(ticker, as_of, target, rating, price, root=ROOT):
             ["Rentang target konsensus", f"{rp(doc['target_low'])} s.d. {rp(doc['target_high'])}"],
             ["Rekomendasi (beli / tahan / jual)", f"{doc['buy']} / {doc['hold']} / {doc['sell']}"],
             ["Target Sektoral terhadap rata-rata konsensus",
-             fmt.pct(target / avg - 1) if target and avg else "n.m."],
+             fmt.pct(target / avg - 1) if target and avg else
+             "tidak dihitung: target harga Sektoral ditahan"],
             ["Upside rata-rata konsensus terhadap harga",
-             fmt.pct(avg / price - 1) if price else "n.m."],
+             fmt.pct(avg / price - 1) if price else "tidak dihitung: harga pasar tidak tersedia"],
             ["Estimasi konsensus pendapatan, EBITDA, laba", doc.get("estimates_note") or "-"],
             ["Sumber konsensus", f"{doc['source_title']}, diambil {doc['as_of']}"]]
         note = f"Sumber: {doc['source_title']} ({doc['source_url']}), diambil {doc['as_of']}; Sektoral Estimates."
