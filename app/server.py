@@ -116,7 +116,10 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
 
     @app.get("/api/tickers")
     def tickers():
-        return data({"tickers": available_tickers()})
+        # Suggest only issuers with a full report in the gallery; the others
+        # stay hidden from the research launcher and the search palette.
+        published = set(outputs.tickers(outputs.REPORT, jobs.reports))
+        return data({"tickers": [t for t in available_tickers() if t in published]})
 
     @app.get("/api/history")
     def history():
