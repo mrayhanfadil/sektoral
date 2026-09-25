@@ -1162,7 +1162,41 @@ _SECTORS_ABSENT = {
     "securities": "Sectors tidak memisahkan obligasi pemerintah dan surat berharga",
     "npl": "Sectors tidak memuat kredit bermasalah (NPL)",
     "payout": "Sectors tidak memuat dividen tahunan pada laporan keuangan historis",
+    "revolver": "pinjaman penyeimbang kas adalah pos model forecast; utang aktual seluruhnya di "
+                "utang jangka pendek dan jangka panjang",
+    "revolver_flow": "pinjaman penyeimbang kas adalah pos model forecast; utang aktual seluruhnya "
+                     "di penarikan (pembayaran) utang",
 }
+# Memo lines under short-term debt and debt raised: the part the model draws
+# to keep cash at its minimum (``forecast_statements`` revolver). The harness
+# (T6.balancing_debt_share) reads the balance-sheet memo line.
+REVOLVER_LINE = "Termasuk pinjaman penyeimbang kas (memo)"
+
+
+def _revolver_note(modeled, money):
+    """Why the model draws short-term debt: the years operating cash flow
+    falls short of capex and dividends, and how large the balance gets
+    against equity."""
+    balance = [(f.get("label"), _num(f.get("revolver"))) for f in modeled
+               if _num(f.get("revolver"))]
+    short = []
+    for f in modeled:
+        cfo, capex, paid = (_num(f.get(k)) for k in ("operating_cash_flow", "capital_expenditure",
+                                                      "dividends_paid"))
+        if None not in (cfo, capex) and (_num(f.get("revolver_flow")) or 0.0) > 0.5:
+            short.append(f"{f.get('label')} arus kas operasi {money(cfo)} terhadap belanja modal "
+                         f"{money(abs(capex))}" + (f" dan dividen {money(abs(paid))}" if paid else ""))
+    last = modeled[-1] if modeled else {}
+    share = (_num(last.get("revolver")) / _num(last.get("total_equity"))
+             if _num(last.get("revolver")) and _num(last.get("total_equity")) else None)
+    return (" Baris 'Termasuk pinjaman penyeimbang kas' adalah bagian utang jangka pendek forecast "
+            "yang ditarik model agar kas tidak turun di bawah kas minimum (asumsi screening, tanpa "
+            "fasilitas atau jadwal pelunasan dari emiten): "
+            + "; ".join(f"{label} {money(v)}" for label, v in balance) + "."
+            + (" Penarikan terjadi karena " + "; ".join(short) + "." if short else "")
+            + (f" Saldonya {fmt.pct(share)} dari total ekuitas {last.get('label')}; pembiayaan "
+               "sebenarnya (utang bank, obligasi atau penundaan capex) belum dimodelkan."
+               if share is not None else ""))
 
 
 def financials_page(intake, fc=None, va=None, statements=None):
@@ -1218,6 +1252,7 @@ def financials_page(intake, fc=None, va=None, statements=None):
         keep = {"year", "label", "eps", "dps", "bvps", "payout", "roe", "interest_coverage"}
         modeled = [{k: (v / fx if k not in keep and isinstance(v, (int, float)) else v)
                     for k, v in r.items()} for r in modeled]
+    drawn = any(abs(_num(f.get("revolver")) or 0.0) > 0.5 for f in modeled)
     start = int(modeled[-1]["year"]) if modeled else int(actual[-1]["year"])
     forecast = modeled + [{"year": start + i}
                           for i in range(1, DISPLAY_FORECAST_YEARS - len(modeled) + 1)]
@@ -1497,8 +1532,9 @@ def financials_page(intake, fc=None, va=None, statements=None):
              lambda r: minus(get(r, "total_assets"), get(r, "current_assets"),
                              get(r, "fixed_assets")), money),
             ("Total aset", lambda r: get(r, "total_assets"), money),
-            ("Utang jangka pendek", lambda r: get(r, "short_term_debt"), money),
-            ("Utang usaha", forecast_only("trade_payables"), money),
+            ("Utang jangka pendek", lambda r: get(r, "short_term_debt"), money)]
+            + ([(REVOLVER_LINE, forecast_only("revolver"), money)] if drawn else [])
+            + [("Utang usaha", forecast_only("trade_payables"), money),
             ("Liabilitas lancar lainnya",
              lambda r: minus(get(r, "current_liabilities"), _num(r.get("short_term_debt")) or 0,
                              _num(r.get("trade_payables")) or 0), money),
@@ -1623,8 +1659,9 @@ def financials_page(intake, fc=None, va=None, statements=None):
         ("Pos investasi lainnya", other_investing, money),
         ("Jumlah arus kas investasi", lambda r: get(r, "investing_cash_flow"), money),
         "Blok Arus kas pendanaan",
-        ("Penarikan (pembayaran) utang", forecast_only("debt_raised"), money),
-        ("Dividen dibayar", forecast_only("dividends_paid", neg), money),
+        ("Penarikan (pembayaran) utang", forecast_only("debt_raised"), money)]
+        + ([(REVOLVER_LINE, forecast_only("revolver_flow"), money)] if drawn else [])
+        + [("Dividen dibayar", forecast_only("dividends_paid", neg), money),
         ("Penerbitan (pembelian kembali) saham", forecast_only("equity_raised"), money),
         ("Pos pendanaan lainnya", other_financing, money),
         ("Jumlah arus kas pendanaan", lambda r: get(r, "financing_cash_flow"), money),
@@ -1710,11 +1747,7 @@ def financials_page(intake, fc=None, va=None, statements=None):
     interest_note = (f" Pendapatan (beban) lain-lain {', '.join(bundled)} termasuk beban bunga "
                      "bersih, karena skenario tidak memisahkan bunga (laba sebelum pajak dikurangi "
                      "laba usaha)." if bundled else "")
-    revolver = [(f.get("label"), _num(f.get("revolver"))) for f in modeled
-                if _num(f.get("revolver"))]
-    revolver_note = (" Utang jangka pendek forecast termasuk pinjaman penyeimbang kas (revolver, "
-                     "asumsi screening): " + "; ".join(f"{label} {money(v)}" for label, v in revolver)
-                     + "." if revolver else "")
+    revolver_note = _revolver_note(modeled, money) if drawn else ""
     official_note = ((" Pendapatan, EBITDA, laba usaha dan D&A aktual mengikuti laporan resmi "
                       "yang sama dengan Key Financials; beban usaha " + ", ".join(derived)
                       + " = laba kotor Sectors dikurangi laba usaha resmi (termasuk pendapatan dan "

@@ -92,7 +92,7 @@ CF_KEYS = ("cash_begin", "operating_cash_flow", "change_in_working_capital",
            "other_operating_cash_flow", "capital_expenditure", "other_investing_cash_flow",
            "investing_cash_flow", "debt_raised", "dividends_paid", "equity_raised",
            "other_financing_cash_flow", "financing_cash_flow", "net_cash_flow",
-           "free_cash_flow", "fcff")
+           "free_cash_flow", "fcff", "revolver_flow")
 PER_SHARE_KEYS = ("eps", "dps", "bvps", "payout", "roe")
 RATIO_KEYS = ("interest_coverage",)
 NON_FINANCIAL_KEYS = IS_KEYS + BS_KEYS + CF_KEYS + PER_SHARE_KEYS + RATIO_KEYS
@@ -125,7 +125,7 @@ _BANK_REASONS = {
     ("cash_and_equivalents", "cash_only", "cash_begin", "operating_cash_flow",
      "investing_cash_flow", "financing_cash_flow", "net_cash_flow", "free_cash_flow",
      "other_operating_cash_flow", "other_investing_cash_flow", "debt_raised",
-     "equity_raised", "other_financing_cash_flow"):
+     "equity_raised", "other_financing_cash_flow", "revolver_flow"):
         "Arus kas dan kas bank tidak diproyeksikan; DDM menilai dividen, bukan arus kas bebas.",
     ("ebitda", "ebit", "depreciation"):
         "EBITDA, EBIT dan D&A tidak bermakna untuk bank; skenario laba bank tidak memecah "
@@ -167,7 +167,7 @@ _BANK_MODEL_REASONS = {
     ("cash_and_equivalents", "cash_only", "cash_begin", "operating_cash_flow",
      "investing_cash_flow", "financing_cash_flow", "net_cash_flow", "free_cash_flow",
      "other_operating_cash_flow", "other_investing_cash_flow", "debt_raised",
-     "equity_raised", "other_financing_cash_flow"):
+     "equity_raised", "other_financing_cash_flow", "revolver_flow"):
         "Arus kas bank tidak diproyeksikan: DDM menilai dividen, dan kas termasuk aset "
         "non-produktif yang model driver bank jaga pada porsi historisnya terhadap total aset.",
     ("short_term_debt", "long_term_debt", "total_debt", "net_debt", "revolver"):
@@ -1133,7 +1133,7 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                  f"{_bn(abs(r['revolver_drawn']))}" for r in rows
                  if abs(r["revolver_drawn"]) > 0.5]
         for r in rows:
-            r.pop("revolver_drawn", None)
+            r["revolver_flow"] = r.pop("revolver_drawn", 0.0)
         assumptions.append(
             "Asumsi screening: utang jangka pendek penyeimbang kas. Kas minimum = "
             f"{cash_floor_basis}; bila kas sebelum pembiayaan di bawah minimum, kekurangannya "
