@@ -429,7 +429,7 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
               (" (data harga belum tersedia)" if missing else ""))
     else:
         problems = []
-        m = re.search(r"\((\d+)M\b", cap)
+        m = re.search(r"\((\d+)\s*(?:M\b|bulan)", cap)
         if m and not 12 <= int(m.group(1)) <= 24:
             problems.append(f"jendela {m.group(1)} bulan (template 12-24)")
         if not re.search(r"IHSG|JCI", cap):

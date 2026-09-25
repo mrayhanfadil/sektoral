@@ -24,7 +24,7 @@ def test_cover_chart_uses_24_months_of_idx_prices_and_says_so():
         chart = render._price_chart("JPFA", "2026-09-24", number=1)
     finally:
         render._NOTES.reset(token)
-    assert "(24M," in chart and "Source: Company, Sektoral Estimates</p>" in chart
+    assert "(24 bulan," in chart and "Source: Company, Sektoral Estimates</p>" in chart
     assert "IDX" in notes[0][2] and "Sectors" not in notes[0][2]
     window = render._price_window("JPFA", "2026-09-24")
     assert (window["price_dates"][-1] - window["price_dates"][0]).days > 540
