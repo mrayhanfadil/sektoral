@@ -8,6 +8,7 @@ import { rp } from "../../lib/format";
 import { ratingLabel, ratingTone } from "../../lib/labels";
 import { useLoad } from "../State";
 import { usePalette } from "../CommandPalette";
+import { IssuerLogo } from "../IssuerLogo";
 
 const TICKER = /^[A-Za-z0-9][A-Za-z0-9.-]{0,9}$/;
 const RATING_INK = { buy: "text-ok-ink", hold: "text-ink-strong", sell: "text-err-ink", review: "text-warn-ink" };
@@ -128,7 +129,10 @@ function StoredRun({ r }: { r: ReportItem }) {
       <Link to={`/laporan/${r.ticker}/putar`} aria-label={`Putar ulang run ${r.ticker}, ${r.name}`}
         className="group grid grid-cols-[58px_minmax(0,1fr)_auto_18px] items-center gap-3 rounded-[4px] py-2 pr-1 pl-1 text-ink no-underline transition-colors hover:bg-raised">
         <span className="font-mono text-[14px] font-bold text-ink-strong">{r.ticker}</span>
-        <span className="truncate text-[13.5px] text-ink-soft">{r.name}</span>
+        <span className="flex min-w-0 items-center gap-2.5">
+          <IssuerLogo ticker={r.ticker} size="sm" className="max-sm:hidden" />
+          <span className="truncate text-[13.5px] text-ink-soft">{r.name}</span>
+        </span>
         <span className="flex items-baseline gap-2.5 font-mono text-[13px] tabular-nums">
           <span className={`font-semibold ${RATING_INK[ratingTone(r)]}`}>{rating}</span>
           {r.published && r.tp !== null && <span className="text-ink max-sm:hidden">TP Rp{rp(r.tp)}</span>}
