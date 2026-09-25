@@ -162,7 +162,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".bullets{margin:0 0 0 4mm;padding:0;font-size:7.7pt;line-height:1.17}"
        ".bullets li{margin:0}"
        # Numbered section heads on inner pages (Roboto Black, black).
-       "h2.sec{font-size:19.2pt;line-height:1.17;color:" + INK + ";font-weight:900;margin:0 0 3.4mm}"
+       "h2.sec{font-size:12pt;line-height:1.17;color:" + INK + ";font-weight:900;margin:0 0 2.5mm}"
        "h2.sec .num{color:" + INK + "}"
        "h2.sub,h3.sub{font-size:9.6pt;line-height:1.17;color:" + INK + ";font-weight:700;margin:0 0 1.7mm}"
        # Thesis cards: claim on the left, the metric that backs it on the right.
