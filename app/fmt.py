@@ -1,5 +1,6 @@
 """Format angka Indonesia: 1.234,5. Nol em-dash, nol emoji di output."""
 import math
+import re
 
 
 def _id(x, dec=1):
@@ -146,16 +147,39 @@ def source_citation(note: str = "") -> str:
     return s
 
 
-def house_source_line(note) -> str:
-    """Struktur rule: every exhibit's source line opens with the house line
-    'Source: Company, Sektoral Estimates'; the exhibit's own provenance
-    (data set, dates, method) follows it instead of replacing it."""
-    import re
+def provenance_detail(note) -> str:
+    """An exhibit's own provenance (data set, dates, method, caveats) with the
+    house line taken off: what the report's source appendix prints for it.
+    The exhibit footer itself is always DEFAULT_SOURCE (spec §5.5)."""
     detail = re.sub(r"^\s*(Source|Sumber)\s*:\s*", "", str(note or "")).strip()
     detail = re.sub(r"^Company,\s*Sektoral Estimates[.;,]?\s*", "", detail)
     detail = re.sub(r"^Sectors,\s*Sektoral Estimates", "Sectors", detail)
     detail = re.sub(r"^Sektoral Estimates[.;,]?\s*", "", detail)
-    return DEFAULT_SOURCE + (f"; {detail}" if detail.strip(" ;.") else "")
+    return detail if detail.strip(" ;.") else ""
+
+
+def house_source_line(note) -> str:
+    """The house line followed by the exhibit's own provenance: the full
+    audit form of a source note (trace, appendix), not the exhibit footer."""
+    detail = provenance_detail(note)
+    return DEFAULT_SOURCE + (f"; {detail}" if detail else "")
+
+
+_NEG_MONEY = re.compile(r"(?<![\w(])((?:Rp|US\$)\s?)[-−]\s?(\d[\d.,]*(?:\s?(?:triliun|miliar|juta|ribu)\b)?)")
+_NEG_CELL = re.compile(r"^[-−]\s?(\d[\d.,]*)(%|x|\s?pp|\s?bps)?$")
+
+
+def bracket_negatives(text: str, whole: bool = False) -> str:
+    """Spec §5.5: negative figures in brackets. Money written inline
+    ("Rp-39,8 miliar") becomes "(Rp39,8 miliar)" anywhere in `text`; with
+    `whole`, a bare negative figure ("-4,1%", "-12") filling the text does too.
+    Ranges ("2024-2025", "8-10x") are left alone."""
+    if not isinstance(text, str):
+        return text
+    out = _NEG_MONEY.sub(r"(\1\2)", text)
+    if whole:
+        out = _NEG_CELL.sub(lambda m: f"({m.group(1)}{m.group(2) or ''})", out.strip())
+    return out
 
 
 def is_valid_source_citation(note: str) -> bool:

@@ -1,169 +1,317 @@
+import { CornerDownRight, ExternalLink } from "lucide-react";
 import type { Intel, Signal } from "../lib/api";
+import { STATUS_WORD, type Status } from "../lib/agents";
 
-const VERDICT: Record<string, string> = { didukung: "pill-ok", "tidak didukung": "pill-err" };
-const ORIGIN: Record<string, [string, string]> = {
-  agent: ["", "sesuai rencana"],
-  agent_adaptive: ["pill-live", "keputusan baru agent"],
-};
-
-/** Section anchors, shared with the trace page's index so labels match headings. */
+/** Section anchors, shared with the trace page's index so labels match headings. Pipeline order. */
 export const INTEL_SECTIONS: [string, string][] = [
-  ["rencana", "Rencana & hipotesis agent"], ["posisi-peer", "Posisi terhadap peer"],
-  ["sinyal", "Sinyal yang perlu dicek"], ["temuan-agent", "Temuan agent analis"],
-  ["berita-web", "Konteks berita web"], ["perubahan", "Sejak riset terakhir"],
-  ["keputusan-tool", "Keputusan tool agent"],
+  ["rencana", "Rencana & hipotesis"], ["keputusan-tool", "Keputusan tool"],
+  ["sinyal", "Sinyal yang perlu dicek"], ["posisi-peer", "Posisi terhadap peer"],
+  ["temuan-agent", "Temuan agent"], ["berita-web", "Konteks berita web"],
+  ["perubahan", "Sejak riset terakhir"],
 ];
 const TITLE = Object.fromEntries(INTEL_SECTIONS);
 
-/** A ruled section on the shared panel surface, not a card of its own. */
-function Card({ id, children }: { id: string; children: React.ReactNode }) {
+/* ------------------------------------------------------------------ */
+/* Primitives shared with the trace page: ruled sections, chips, words. */
+
+const CHIP = {
+  neutral: "border-rule bg-raised text-ink-soft",
+  ok: "border-ok-ink/25 bg-ok-bg text-ok-ink",
+  warn: "border-warn-rule/50 bg-warn-bg text-warn-ink",
+  err: "border-err-ink/25 bg-err-bg text-err-ink",
+  brand: "border-brand-ink/25 bg-brand-50 text-brand-ink",
+  dashed: "border-dashed border-rule-strong bg-transparent text-ink-soft",
+} as const;
+export type ChipTone = keyof typeof CHIP;
+
+export function Chip({ tone = "neutral", mono, children, className = "" }:
+  { tone?: ChipTone; mono?: boolean; children: React.ReactNode; className?: string }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="mt-7 scroll-mt-24 border-t border-rule pt-6">
-      <h3 id={`${id}-title`} className="mb-3 text-[17px]">{TITLE[id]}</h3>
+    <span className={`inline-flex max-w-full items-center gap-1.5 rounded-[5px] border px-1.5 py-px text-[12.5px] leading-5 font-medium ${
+      mono ? "font-mono text-[12px]" : ""} ${CHIP[tone]} ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+const WORD_TONE: Record<Status, string> = {
+  idle: "text-ink-faint", run: "text-brand-ink", ok: "text-done", warn: "text-warn-ink", error: "text-err-ink",
+};
+
+/** A status: dot plus word. The bare status code reads in mono; a sentence in Roboto. */
+export function StatusWord({ status, children }: { status: Status; children?: React.ReactNode }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap ${children ? "text-[12.5px] font-medium" : "data"} ${WORD_TONE[status]}`}>
+      <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      {children ?? STATUS_WORD[status]}
+    </span>
+  );
+}
+
+export function asStatus(value: string | null | undefined): Status {
+  return value === "ok" || value === "warn" || value === "error" || value === "run" ? value : "idle";
+}
+
+/** A ruled section of a console panel. Its id feeds the trace index. */
+export function Section({ id, title, count, aside, children }:
+  { id: string; title: string; count?: number; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section id={id} aria-labelledby={`${id}-title`}
+      className="scroll-mt-20 border-t border-rule px-6 py-6 max-lg:scroll-mt-[116px] max-sm:px-4 max-sm:py-5">
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h3 id={`${id}-title`} className="flex items-baseline gap-2 text-[16.5px]">
+          {title}
+          {count != null && <span className="data font-normal text-ink-faint">{count}</span>}
+        </h3>
+        {aside && <div className="flex flex-wrap items-center gap-2">{aside}</div>}
+      </div>
       {children}
     </section>
   );
+}
+
+/** A small label heading inside a section. */
+export function SubHead({ children }: { children: React.ReactNode }) {
+  return <h4 className="mb-2 text-[13.5px] font-medium text-ink-soft">{children}</h4>;
+}
+
+/** What a section shows when the run recorded nothing for it. */
+export function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="rounded-md border border-dashed border-rule px-4 py-3 text-[14.5px] text-ink-soft">{children}</p>;
+}
+
+export function Source({ url, children = "sumber" }: { url: string | null | undefined; children?: React.ReactNode }) {
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="font-sans">
+      {children}
+      <ExternalLink aria-hidden className="ml-1 inline size-3 align-[-1px]" strokeWidth={2.2} />
+      <span className="sr-only">(tab baru)</span>
+    </a>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+const VERDICT: Record<string, ChipTone> = { didukung: "ok", "tidak didukung": "err" };
+const ORIGIN: Record<string, [ChipTone, string]> = {
+  agent: ["neutral", "sesuai rencana"],
+  agent_adaptive: ["brand", "keputusan baru agent"],
+};
+
+function Card({ id, count, children }: { id: string; count?: number; children: React.ReactNode }) {
+  return <Section id={id} title={TITLE[id]} count={count}>{children}</Section>;
 }
 
 function Citations({ ids, signals }: { ids: string[]; signals: Record<string, Signal> }) {
   const cited = ids.map((id) => signals[id]).filter(Boolean);
   if (!cited.length) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
+    <ul aria-label="Sinyal yang dikutip" className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
       {cited.map((s) => (
-        <span key={s.id} className={`rounded-md border px-2 py-0.5 text-[12.5px] ${s.kind === "web" ? "border-warn-rule/40 bg-warn-bg" : "border-rule-soft bg-canvas"}`}>
-          {s.kind === "web" ? `Web: ${(s.label ?? "").slice(0, 70)}` : `${s.label}: ${s.display}`}
-        </span>
+        <li key={s.id} className="max-w-full">
+          {s.kind === "web" ? (
+            <Chip tone="warn"><span className="truncate">Web: {(s.label ?? "").slice(0, 70)}</span></Chip>
+          ) : (
+            <Chip>
+              <span className="text-ink">{s.label}</span>
+              <span className="font-mono text-[12px] font-semibold text-ink-strong">{s.display}</span>
+            </Chip>
+          )}
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
 /** The analyst agent's result on one surface: headline, then ruled sections. */
 export function IntelPanel({ intel }: { intel: Intel }) {
   return (
-    <div className="card">
-      <IntelHeadline intel={intel} />
+    <div className="panel overflow-clip">
+      <header className="px-6 py-6 max-sm:px-4 max-sm:py-5">
+        <IntelHeadline intel={intel} />
+      </header>
       <IntelSections intel={intel} />
     </div>
   );
 }
 
-function IntelHeadline({ intel }: { intel: Intel }) {
+/** Headline and provenance chips. `as="p"` when the page already has an h2 for the agent. */
+export function IntelHeadline({ intel, as: Tag = "h2" }: { intel: Intel; as?: "h2" | "p" }) {
   const synthesis = intel.synthesis;
+  const byAgent = synthesis.source === "agent";
   return (
-    <header>
-      <h2 className="mb-3.5 max-w-[70ch] text-[22px] leading-snug font-black">{synthesis.headline}</h2>
+    <>
+      <Tag className="mb-3.5 max-w-[72ch] text-[21px] leading-snug font-bold text-ink-strong text-balance max-sm:text-[19px]">
+        {synthesis.headline}
+      </Tag>
       <div className="flex flex-wrap gap-2">
-        <span className="pill">{intel.name ?? intel.ticker}</span>
-        {intel.peers.group && <span className="pill pill-live">Grup: {intel.peers.group}</span>}
-        {intel.market_date && <span className="pill">Data pasar {intel.market_date}</span>}
-        <span className={`pill ${synthesis.source === "agent" ? "pill-ok" : "pill-warn"}`}>
-          {synthesis.source === "agent" ? "Kesimpulan agent tervalidasi" : "Ringkasan aturan host"}
-        </span>
+        <Chip>{intel.name ?? intel.ticker}</Chip>
+        {intel.peers.group && <Chip tone="brand">Grup: {intel.peers.group}</Chip>}
+        {intel.market_date && <Chip mono>Data pasar {intel.market_date}</Chip>}
+        <Chip tone={byAgent ? "ok" : "warn"}>{byAgent ? "Kesimpulan agent tervalidasi" : "Ringkasan aturan host"}</Chip>
+        {intel.status && intel.status !== "ok" && <Chip tone="warn">Status: {intel.status === "partial" ? "parsial" : intel.status}</Chip>}
       </div>
-    </header>
+    </>
   );
 }
 
-function IntelSections({ intel }: { intel: Intel }) {
+const th = "px-2 py-2 text-left text-[12.5px] font-medium text-ink-soft";
+
+function hypothesisText(text: string | null, i: number): [string, string] {
+  const match = (text ?? "").match(/^\s*(H\d+)\s*[:.]\s*/);
+  return match ? [match[1], (text ?? "").slice(match[0].length)] : [`H${i + 1}`, text ?? ""];
+}
+
+export function IntelSections({ intel }: { intel: Intel }) {
   const signals = Object.fromEntries(intel.signals.filter((s) => s.id).map((s) => [s.id as string, s]));
   const verdicts = Object.fromEntries(intel.synthesis.hypotheses.filter((h) => h.index != null).map((h) => [h.index as number, h]));
   const peers = intel.signals.filter((s) => s.kind === "peer");
   const flagged = intel.signals.filter((s) => s.flag && s.kind !== "peer");
   const changes = intel.changes;
   const next = intel.synthesis.next_checks.filter(Boolean) as string[];
-  const th = "px-2 py-2.5 text-left text-[13px] font-bold text-ink-soft";
 
   return (
     <>
       <Card id="rencana">
-        <p className="mb-3.5 max-w-[880px] font-bold">{intel.plan.question}</p>
-        <ol className="m-0 grid max-w-[880px] gap-4 pl-5">
+        <p className="mb-1 max-w-[80ch] text-[16.5px] leading-snug font-bold text-ink-strong">{intel.plan.question}</p>
+        {intel.plan.source && (
+          <p className="mb-4 text-[13px] text-ink-soft">
+            Disusun oleh {intel.plan.source === "agent" ? "agent perencana" : <span className="font-mono">{intel.plan.source}</span>}
+          </p>
+        )}
+        <ol className="m-0 grid max-w-[920px] list-none divide-y divide-rule-soft p-0">
           {intel.plan.hypotheses.map((h, i) => {
             const v = verdicts[i];
+            const [label, text] = hypothesisText(h, i);
             return (
-              <li key={i}>
-                <div className="flex items-start justify-between gap-2.5">
-                  <span>{h}</span>
-                  <span className={`pill flex-none ${VERDICT[v?.verdict ?? ""] ?? ""}`}>{v?.verdict ?? "belum dinilai"}</span>
+              <li key={i} className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-3 py-3 first:pt-0 last:pb-0">
+                <span className="data pt-[3px] font-semibold text-brand-ink">{label}</span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1.5">
+                    <p className="min-w-0 flex-1 basis-[280px] text-[15px]">{text}</p>
+                    <Chip tone={v?.verdict ? VERDICT[v.verdict] ?? "neutral" : "dashed"} className="flex-none">{v?.verdict ?? "belum dinilai"}</Chip>
+                  </div>
+                  {v?.reason && <p className="mt-1 text-[13.5px] text-ink-soft">{v.reason}</p>}
+                  <Citations ids={v?.signal_ids ?? []} signals={signals} />
                 </div>
-                {v?.reason && <p className="text-[13.5px] text-ink-soft">{v.reason}</p>}
-                <Citations ids={v?.signal_ids ?? []} signals={signals} />
               </li>
             );
           })}
         </ol>
       </Card>
 
-      {peers.length > 0 && (
-        <Card id="posisi-peer">
-          {intel.peers.basis && <p className="text-[13.5px] text-ink-soft">Basis: {intel.peers.basis}</p>}
-          <div className="relative overflow-x-auto">
-            <table className="w-full border-collapse text-sm [&_td]:border-b [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_th]:border-b [&_th]:border-rule-soft">
-              <thead><tr>
-                <th scope="col" className={th}>Metrik</th><th scope="col" className={th}>Emiten</th>
-                <th scope="col" className={th}>Peringkat <small className="font-normal">(kiri = tertinggi)</small></th>
-                <th scope="col" className={th}>Median peer</th><th scope="col" className={th}><span className="sr-only">Tanda</span></th>
-              </tr></thead>
-              <tbody>
-                {peers.map((s) => (
-                  <tr key={s.id}>
-                    <th scope="row" className="px-2 py-2.5 text-left font-bold whitespace-nowrap">{s.label}</th>
-                    <td className="tabular-nums whitespace-nowrap">{s.display}</td>
-                    <td>
-                      {s.rank && s.n ? (
-                        <>
-                          <div role="img" aria-label={`peringkat ${s.rank} dari ${s.n}`} className="mb-0.5 flex gap-[3px]">
-                            {Array.from({ length: s.n }, (_, i) => (
-                              <span key={i} className={`size-2.5 rounded-[3px] ${i + 1 === s.rank ? "scale-125 bg-brand" : "bg-rule-soft"}`} />
-                            ))}
-                          </div>
-                          <small className="text-ink-soft">{s.rank} / {s.n}</small>
-                        </>
-                      ) : <small className="text-ink-soft">{s.note || "n.a."}</small>}
-                    </td>
-                    <td className="tabular-nums whitespace-nowrap text-ink-soft">{s.median_display || "—"}</td>
-                    <td>{s.flag && <span className="pill pill-warn">{s.flag}</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {intel.steps.length > 0 && (
+        <Card id="keputusan-tool" count={intel.steps.length}>
+          <ol className="m-0 grid list-none divide-y divide-rule-soft p-0">
+            {intel.steps.map((s, i) => {
+              const [tone, label] = ORIGIN[s.origin ?? ""] ?? ["dashed", "dilengkapi host"];
+              const status = asStatus(s.status);
+              return (
+                <li key={i} className="grid grid-cols-[28px_minmax(0,1fr)] gap-x-3 py-3 first:pt-0 last:pb-0">
+                  <span className="data pt-[3px] text-ink-faint">{String(i + 1).padStart(2, "0")}</span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      <code className="font-mono text-[13.5px] font-semibold text-brand-ink">{s.tool}</code>
+                      <Chip tone={tone}>{label}</Chip>
+                      <span className="ml-auto">
+                        {status === "idle" && s.status ? <StatusWord status="idle"><code className="font-mono text-[12px]">{s.status}</code></StatusWord> : status !== "idle" && <StatusWord status={status} />}
+                      </span>
+                    </div>
+                    {s.why && <p className="mt-1 text-[14.5px]">{s.why}</p>}
+                    {s.summary && (
+                      <p className="mt-1 flex items-start gap-1.5 text-[13.5px] text-ink-soft">
+                        <CornerDownRight aria-hidden className="mt-[3px] size-3.5 flex-none text-ink-faint" strokeWidth={2.2} />
+                        <span className="min-w-0"><span className="sr-only">Hasil: </span>{s.summary}</span>
+                      </p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
         </Card>
       )}
 
       {flagged.length > 0 && (
-        <Card id="sinyal">
-          <div className="relative overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-sm [&_td]:border-b [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top [&_th]:border-b [&_th]:border-rule-soft">
-              <thead><tr>
-                <th scope="col" className={th}>Sinyal</th><th scope="col" className={th}>Nilai</th>
-                <th scope="col" className={th}>Tanda</th><th scope="col" className={th}>Periode dan catatan</th>
-              </tr></thead>
-              <tbody>
-                {flagged.map((s) => (
-                  <tr key={s.id}>
-                    <th scope="row" className="px-2 py-2.5 text-left align-top font-bold">{s.label}</th>
-                    <td className="tabular-nums whitespace-nowrap">{s.display}</td>
-                    <td><span className="pill pill-warn">{s.flag}</span></td>
-                    <td className="text-[13.5px] text-ink-soft">{[s.period, s.note].filter(Boolean).join("; ") || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <Card id="sinyal" count={flagged.length}>
+          <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[14px] [&_td]:border-t [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top">
+            <thead><tr>
+              <th scope="col" className={th}>Sinyal</th><th scope="col" className={`${th} text-right`}>Nilai</th>
+              <th scope="col" className={`${th} max-sm:hidden`}>Tanda</th><th scope="col" className={`${th} max-md:hidden`}>Periode dan catatan</th>
+            </tr></thead>
+            <tbody>
+              {flagged.map((s) => (
+                <tr key={s.id}>
+                  <th scope="row" className="border-t border-rule-soft px-2 py-2.5 text-left align-top font-medium text-ink-strong">
+                    {s.label}
+                    <span className="mt-1 block sm:hidden"><Chip tone="warn">{s.flag}</Chip></span>
+                    <span className="mt-1 block text-[13px] font-normal text-ink-soft md:hidden">{[s.period, s.note].filter(Boolean).join("; ")}</span>
+                  </th>
+                  <td className="text-right font-mono text-[13.5px] tabular-nums text-ink-strong sm:whitespace-nowrap">{s.display}</td>
+                  <td className="max-sm:hidden"><Chip tone="warn">{s.flag}</Chip></td>
+                  <td className="text-[13.5px] text-ink-soft max-md:hidden">{[s.period, s.note].filter(Boolean).join("; ") || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        </Card>
+      )}
+
+      {peers.length > 0 && (
+        <Card id="posisi-peer" count={peers.length}>
+          {intel.peers.basis && <p className="mb-3 text-[13.5px] text-ink-soft">Basis: {intel.peers.basis}</p>}
+          <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[14px] [&_td]:border-t [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top">
+            <thead><tr>
+              <th scope="col" className={th}>Metrik</th><th scope="col" className={`${th} text-right`}>Emiten</th>
+              <th scope="col" className={th}>Peringkat <span className="font-normal max-sm:sr-only">(kiri = tertinggi)</span></th>
+              <th scope="col" className={`${th} text-right max-md:hidden`}>Median peer</th>
+              <th scope="col" className={`${th} max-md:hidden`}><span className="sr-only">Tanda</span></th>
+            </tr></thead>
+            <tbody>
+              {peers.map((s) => (
+                <tr key={s.id}>
+                  <th scope="row" className="border-t border-rule-soft px-2 py-2.5 text-left align-top font-medium text-ink-strong">
+                    {s.label}
+                    <span className="mt-0.5 block text-[12.5px] font-normal text-ink-soft md:hidden">
+                      Median peer <span className="font-mono">{s.median_display || "—"}</span>
+                    </span>
+                    {s.flag && <span className="mt-1 block md:hidden"><Chip tone="warn">{s.flag}</Chip></span>}
+                  </th>
+                  <td className="text-right font-mono text-[13.5px] tabular-nums text-ink-strong sm:whitespace-nowrap">{s.display}</td>
+                  <td>
+                    {s.rank && s.n ? (
+                      <>
+                        <div role="img" aria-label={`peringkat ${s.rank} dari ${s.n}`} className="mt-1 mb-1 flex gap-[2px] sm:gap-[3px]">
+                          {Array.from({ length: s.n }, (_, i) => (
+                            <span key={i} className={`size-2 rounded-[2px] sm:size-2.5 ${i + 1 === s.rank ? "scale-125 bg-brand" : "bg-rule"}`} />
+                          ))}
+                        </div>
+                        <span className="data text-ink-soft">{s.rank} / {s.n}</span>
+                      </>
+                    ) : <span className="text-[13px] text-ink-soft">{s.note || "n.a."}</span>}
+                  </td>
+                  <td className="text-right font-mono text-[13.5px] whitespace-nowrap tabular-nums text-ink-soft max-md:hidden">{s.median_display || "—"}</td>
+                  <td className="max-md:hidden">{s.flag && <Chip tone="warn">{s.flag}</Chip>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           </div>
         </Card>
       )}
 
       {intel.synthesis.findings.length > 0 && (
-        <Card id="temuan-agent">
-          <div className="grid items-start gap-x-8 gap-y-6 [grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr))]">
+        <Card id="temuan-agent" count={intel.synthesis.findings.length}>
+          <div className="grid items-start gap-x-8 gap-y-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))]">
             {intel.synthesis.findings.map((f, i) => (
-              <article key={i} className="grid content-start gap-2 border-t border-rule pt-4">
-                <h4 className="text-base">{f.title}</h4>
+              <article key={i} className="grid content-start gap-1.5 border-t border-rule-soft pt-3.5">
+                <h4 className="text-[15.5px]">{f.title}</h4>
                 <p className="text-[15px]">{f.interpretation}</p>
-                <p className="text-[13.5px] text-ink-soft"><strong>Batas bukti. </strong>{f.caveat}</p>
+                <p className="text-[13.5px] text-ink-soft"><span className="font-medium text-ink">Batas bukti. </span>{f.caveat}</p>
                 <Citations ids={f.signal_ids} signals={signals} />
               </article>
             ))}
@@ -172,64 +320,50 @@ function IntelSections({ intel }: { intel: Intel }) {
       )}
 
       {intel.web_news.items.length > 0 && (
-        <Card id="berita-web">
-          <p className="text-[13.5px] text-ink-soft">
-            Berita {intel.web_news.window ?? ""}. Hanya konteks naratif, bukan data Sectors; tidak ada angka sinyal yang berasal dari sini.
+        <Card id="berita-web" count={intel.web_news.items.length}>
+          <p className="mb-3 text-[13.5px] text-ink-soft">
+            Berita {intel.web_news.window ? <span className="font-mono">{intel.web_news.window}</span> : ""}. Hanya konteks naratif, bukan data
+            Sectors; tidak ada angka sinyal yang berasal dari sini.
           </p>
-          <ul className="mt-2.5 grid list-none gap-2.5 p-0 text-[14.5px]">
-            {intel.web_news.items.map((item) => (
-              <li key={item.url}>
-                <a href={item.url ?? undefined} target="_blank" rel="noopener noreferrer" className="font-medium">{item.title}</a>
-                <span className="text-[13.5px] text-ink-soft"> {item.date}, {item.domain}</span>
+          <ul className="m-0 grid list-none divide-y divide-rule-soft p-0 text-[14.5px]">
+            {intel.web_news.items.map((item, i) => (
+              <li key={item.url ?? i} className="grid gap-x-4 gap-y-0.5 py-2 first:pt-0 sm:grid-cols-[96px_minmax(0,1fr)]">
+                <time dateTime={item.date ?? undefined} title={item.date ?? undefined} className="data pt-[3px] text-ink-soft">{item.date?.slice(0, 10)}</time>
+                <span className="min-w-0">
+                  {item.url ? <Source url={item.url}>{item.title}</Source> : item.title}
+                  {item.domain && <span className="ml-2 font-mono text-[12px] text-ink-faint">{item.domain}</span>}
+                </span>
               </li>
             ))}
           </ul>
         </Card>
       )}
 
-      <div className="grid items-start gap-x-10 min-[881px]:grid-cols-[1fr_1.2fr] [&>*]:min-w-0">
-        <Card id="perubahan">
-          {changes.first_run ? (
-            <p className="text-ink-soft">Riset pertama untuk emiten ini. Hasilnya disimpan sebagai memori untuk dibandingkan pada riset berikutnya.</p>
-          ) : (
-            <>
-              <p className="text-[13.5px] text-ink-soft">
-                Dibanding riset {String(changes.previous_run_at ?? "").slice(0, 16).replace("T", " ")} (data pasar {changes.previous_market_date ?? "—"}).
-              </p>
-              {changes.items.length ? (
-                <ul className="mt-2 grid gap-1 pl-[18px] text-[14.5px]">
-                  {changes.items.map((c, i) => <li key={i} className={c.kind === "new_flag" ? "text-warn-ink" : ""}>{c.text}</li>)}
-                </ul>
-              ) : (
-                <p>{changes.same_market_date ? "Data pasar belum berubah sejak riset terakhir; tidak ada sinyal yang bergeser." : "Tidak ada sinyal yang bergeser."}</p>
-              )}
-            </>
-          )}
-          {next.length > 0 && (
-            <>
-              <h4 className="mt-[18px] mb-1.5 text-sm">Pemeriksaan lanjutan yang disarankan agent</h4>
-              <ul className="m-0 pl-[18px] text-[14.5px]">{next.map((t) => <li key={t}>{t}</li>)}</ul>
-            </>
-          )}
-        </Card>
-        <Card id="keputusan-tool">
-          <ol className="m-0 grid gap-3 pl-5">
-            {intel.steps.map((s, i) => {
-              const [cls, label] = ORIGIN[s.origin ?? ""] ?? ["", "dilengkapi host"];
-              return (
-                <li key={i}>
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <code className="rounded-[5px] bg-brand-50 px-1.5 py-px font-mono text-xs text-brand-ink">{s.tool}</code>
-                    <span className={`pill px-2 py-px text-xs ${cls}`}>{label}</span>
-                  </div>
-                  {s.why && <p className="text-[13.5px]">{s.why}</p>}
-                  {s.summary && <p className="text-[13.5px] text-ink-soft">{s.summary}</p>}
-                </li>
-              );
-            })}
-          </ol>
-        </Card>
-      </div>
+      <Card id="perubahan">
+        {changes.first_run ? (
+          <p className="text-ink-soft">Riset pertama untuk emiten ini. Hasilnya disimpan sebagai memori untuk dibandingkan pada riset berikutnya.</p>
+        ) : (
+          <>
+            <p className="text-[13.5px] text-ink-soft">
+              Dibanding riset <span className="font-mono">{String(changes.previous_run_at ?? "").slice(0, 16).replace("T", " ")}</span> (data
+              pasar <span className="font-mono">{changes.previous_market_date ?? "—"}</span>).
+            </p>
+            {changes.items.length ? (
+              <ul className="mt-2 grid gap-1 pl-[18px] text-[14.5px]">
+                {changes.items.map((c, i) => <li key={i} className={c.kind === "new_flag" ? "text-warn-ink" : ""}>{c.text}</li>)}
+              </ul>
+            ) : (
+              <p className="mt-1">{changes.same_market_date ? "Data pasar belum berubah sejak riset terakhir; tidak ada sinyal yang bergeser." : "Tidak ada sinyal yang bergeser."}</p>
+            )}
+          </>
+        )}
+        {next.length > 0 && (
+          <div className="mt-5">
+            <SubHead>Pemeriksaan lanjutan yang disarankan agent</SubHead>
+            <ul className="m-0 grid gap-1 pl-[18px] text-[14.5px]">{next.map((t) => <li key={t}>{t}</li>)}</ul>
+          </div>
+        )}
+      </Card>
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { featuredReport, progressStep, ratingLabel, ratingTone } from "./labels";
+import { featuredReport, progressStep, ratingLabel, ratingTone, validatorNote } from "./labels";
 import { pct, rp } from "./format";
 import type { ReportItem } from "./api";
 
@@ -45,5 +45,20 @@ describe("progress", () => {
     expect(progressStep("running", ["memory", "plan", "tool"])).toBe(1);
     expect(progressStep("running", ["forecast"])).toBe(3);
     expect(progressStep("completed", [])).toBe(5);
+  });
+});
+
+describe("validator notes", () => {
+  it("cleans and dedupes the tokens the model was asked to remove", () => {
+    const note = validatorNote("prosa tidak boleh memuat angka (angka ditampilkan dari sinyal yang dicite); hapus: 11, 11,, 2026:, 25, 7");
+    expect(note.message).toBe("Prosa tidak boleh memuat angka (angka ditampilkan dari sinyal yang dicite)");
+    expect(note.removed).toEqual(["11", "2026", "25", "7"]);
+  });
+  it("keeps decimal commas, percents and words", () => {
+    expect(validatorNote("x; hapus: 1,5%, (20), 3.2x").removed).toEqual(["1,5%", "20", "3.2x"]);
+    expect(validatorNote("prosa memuat bahasa rekomendasi investasi; hapus kata: beli, beli").removed).toEqual(["beli"]);
+  });
+  it("passes other notes through", () => {
+    expect(validatorNote("hypotheses[0] perlu signal_ids")).toEqual({ message: "hypotheses[0] perlu signal_ids", removed: [] });
   });
 });

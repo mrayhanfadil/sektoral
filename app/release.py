@@ -613,15 +613,32 @@ def assess_ddm_scenario(intake, forecast, valuation, assumption_status):
     lines = detail.get("lines") or []
     if len(lines) != 5 or any(not _number(x.get("dps")) or x["dps"] <= 0 for x in lines):
         blockers.append("five positive forecast dividends are required")
+    model = (forecast or {}).get("bank_model")
+    if isinstance(model, Mapping):
+        # S2.5/S2.8 on the Bank Driver Scenario: a model that does not balance
+        # or whose equity does not roll forward cannot carry a target.
+        blockers.extend(f"bank driver model: {p}"
+                        for p in (model.get("checks") or {}).get("problems") or [])
+        limitations = [
+            "laba dari model driver bank: aktual 1H resmi + H2 dan empat tahun lanjutan dari "
+            "driver asumsi analis (pertumbuhan kredit, NIM, pendapatan non-bunga, rasio biaya, "
+            "biaya kredit), bukan forecast driver terekonsiliasi",
+            "cakupan cadangan, LDR, komposisi dana, porsi aset non-produktif, tarif pajak, "
+            "biaya dana dan rasio modal dijaga pada nilai historis data Sectors (screening); "
+            "penempatan dan surat berharga menyeimbangkan neraca; CAR adalah proksi",
+            "payout historis data Sectors dianggap berlanjut; CoE CAPM dan pertumbuhan jangka "
+            "panjang adalah parameter kebijakan analis"]
+    else:
+        limitations = ["laba FY dan empat tahun lanjutan adalah skenario analis (aktual 1H "
+                       "resmi + asumsi H2 + asumsi tahunan), bukan forecast driver "
+                       "terekonsiliasi",
+                       "payout historis data Sectors dianggap berlanjut; CoE CAPM dan "
+                       "pertumbuhan jangka panjang adalah parameter kebijakan analis"]
     return {
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "DDM (dividend scenario, Cost of Equity)",
         "blockers": blockers,
-        "limitations": ["laba FY dan empat tahun lanjutan adalah skenario analis (aktual 1H "
-                        "resmi + asumsi H2 + asumsi tahunan), bukan forecast driver "
-                        "terekonsiliasi",
-                        "payout historis data Sectors dianggap berlanjut; CoE CAPM dan "
-                        "pertumbuhan jangka panjang adalah parameter kebijakan analis"],
+        "limitations": limitations,
     }
 
 

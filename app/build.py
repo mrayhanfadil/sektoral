@@ -110,6 +110,8 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         print(f"  run_manifest gagal: {e}", flush=True)
         doc["run_manifest"] = {"ticker": str(ticker).upper(), "error": str(e)}
     report_contract.validate_or_raise(doc)
+    from . import run_events  # lazy: run_events reads app.jobs, which imports this module
+    run_events.emit_valuation(doc)
     outdir.mkdir(parents=True, exist_ok=True)
     t = doc["meta"]["ticker"]
     outputs.save(outputs.REPORT, outdir, t, doc)

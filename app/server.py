@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import gallery, outputs, trace_view
+from . import gallery, outputs, run_events, trace_view
 from .jobs import ResearchJobs, TICKER, available_tickers
 from agents.analyst import memory as agent_memory
 
@@ -88,6 +88,13 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         if view is None:
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
         return data(view)
+
+    @app.get("/api/reports/{ticker}/run")
+    def report_run(ticker: str):
+        found = run_events.replay(jobs.reports, ticker) if TICKER.fullmatch(ticker.upper()) else None
+        if found is None:
+            raise HTTPException(404, "Run tersimpan tidak ditemukan.")
+        return data(found)
 
     @app.post("/api/jobs", status_code=201)
     def submit(body: JobRequest):

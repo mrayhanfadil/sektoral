@@ -1,36 +1,36 @@
 {
   "ticker": "GMFI",
   "as_of": "2026-09-25",
-  "group": "Perawatan pesawat (MRO) regional dan global",
-  "basis": "GMFI menjual jasa perawatan pesawat: reparasi dan overhaul 82% pendapatan 1H26 dan line maintenance. Tidak ada emiten MRO lain di BEI, sehingga peer adalah MRO tercatat di Singapura dan Amerika Serikat. Tabel peer Sectors ('Airport Operators') berisi jalan tol, pelabuhan dan energi terbarukan.",
+  "group": "Jasa penerbangan di BEI, diperlebar dari MRO pesawat",
+  "basis": "GMFI menjual jasa perawatan pesawat: reparasi dan overhaul 82% pendapatan 1H26 dan line maintenance. Peer hanya emiten BEI, dan tidak ada emiten MRO pesawat lain di BEI, sehingga grup diperlebar ke emiten BEI yang terkait penerbangan. Yang paling dekat CASS (jasa darat dan line maintenance untuk maskapai); GIAA dan CMPP adalah maskapai, yaitu pelanggan MRO; HELI adalah operator helikopter. Keempatnya jauh dari model bisnis MRO, sehingga multiple-nya adalah konteks sektor penerbangan, bukan pembanding langsung. GIAA dan CMPP rugi dengan ekuitas negatif: P/E dan P/B keduanya tidak masuk median, dan metode yang butuh tiga multiple valid tidak dijalankan bila jumlahnya kurang. Tabel peer Sectors ('Airport Operators') berisi jalan tol, pelabuhan dan energi terbarukan dan tidak dipakai.",
   "peers": [
     {
-      "symbol": "S59.SI",
-      "name": "SIA Engineering",
-      "market": "SGX",
-      "reason": "MRO airframe, line maintenance dan komponen di Asia; model bisnis paling dekat dengan GMFI.",
-      "yahoo": "S59.SI"
+      "symbol": "CASS",
+      "name": "Cahaya Aero Services",
+      "market": "IDX",
+      "reason": "Jasa penerbangan untuk maskapai: ground handling, kargo, katering dan perawatan pesawat (line maintenance); pembanding BEI terdekat, tetapi bukan MRO heavy maintenance.",
+      "yahoo": "CASS.JK"
     },
     {
-      "symbol": "S63.SI",
-      "name": "ST Engineering",
-      "market": "SGX",
-      "reason": "Segmen commercial aerospace adalah MRO pesawat dan komponen; grup juga memiliki segmen pertahanan dan urban solutions.",
-      "yahoo": "S63.SI"
+      "symbol": "GIAA",
+      "name": "Garuda Indonesia",
+      "market": "IDX",
+      "reason": "Maskapai, induk usaha yang mengonsolidasikan GMFI dan pelanggan utamanya; pendapatannya terutama penerbangan, bukan MRO. Rugi dan ekuitas negatif, sehingga P/E dan P/B tidak masuk median.",
+      "yahoo": "GIAA.JK"
     },
     {
-      "symbol": "AIR",
-      "name": "AAR Corp",
-      "market": "NYSE",
-      "reason": "MRO pesawat dan distribusi suku cadang aftermarket.",
-      "yahoo": "AIR"
+      "symbol": "CMPP",
+      "name": "AirAsia Indonesia",
+      "market": "IDX",
+      "reason": "Maskapai berbiaya rendah: pelanggan jasa perawatan, bukan penyedia MRO. Rugi dan ekuitas negatif, sehingga P/E dan P/B tidak masuk median.",
+      "yahoo": "CMPP.JK"
     },
     {
-      "symbol": "VSEC",
-      "name": "VSE Corporation",
-      "market": "NASDAQ",
-      "reason": "Aftermarket penerbangan: distribusi suku cadang dan MRO komponen.",
-      "yahoo": "VSEC"
+      "symbol": "HELI",
+      "name": "Jaya Trishindo",
+      "market": "IDX",
+      "reason": "Operator charter helikopter (Komala Indonesia): jasa penerbangan, bukan perawatan untuk maskapai; skala kecil (pendapatan Rp157 miliar).",
+      "yahoo": "HELI.JK"
     }
   ],
   "excluded": [
@@ -64,11 +64,7 @@
     },
     {
       "symbol": "BREN",
-      "reason": "Pengembang panas bumi dan angin; P/E 156,9x."
-    },
-    {
-      "symbol": "CASS",
-      "reason": "Ground handling dan kargo bandara, bukan perawatan pesawat."
+      "reason": "Produsen listrik panas bumi dan angin."
     }
   ]
 }

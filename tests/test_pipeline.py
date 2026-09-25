@@ -1,5 +1,6 @@
 """End-to-end pipeline dari cache, tanpa network. Ticker tak dikenal ditolak."""
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -86,7 +87,10 @@ def test_forecast_accounting_identity(tmp_path):
 
 
 def test_cli_ok(tmp_path):
+    # The subprocess does not see the per-test database fixture: point it at one
+    # under tmp_path so the run never writes into data/sectoral.db.
+    env = {**os.environ, "SECTORAL_DB": str(tmp_path / "cli.db")}
     r = subprocess.run([sys.executable, "-m", "app.build", "AMMN",
-                        "--out", str(tmp_path)], cwd=ROOT, capture_output=True, text=True)
+                        "--out", str(tmp_path)], cwd=ROOT, capture_output=True, text=True, env=env)
     assert r.returncode == 0, r.stderr
     assert (tmp_path / "AMMN.html").exists()

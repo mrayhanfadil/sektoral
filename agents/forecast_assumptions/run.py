@@ -6,13 +6,15 @@ import json
 import re
 import hashlib
 import os
+import contextvars
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
 from agents.analyst.run import _FLOW_PHRASES
 from agents.estimator.run import _chat, _response_text
-from app import store
+from app import bank_model, store
+from app.progress import emit
 
 
 DRIVERS = {"revenue_growth_pp", "ebitda_margin_pp", "wacc_bps", "coe_bps", "none"}
@@ -20,8 +22,17 @@ SPEC_PATH = Path(__file__).resolve().parents[2] / "spec" / "Instruksi-Report-v3.
 # Validated plans live in the app database, keyed "<TICKER>-<fingerprint>".
 PLAN_COLLECTION = "forecast_plans"
 # Bump when a subagent's required output changes, so cached plans without the
-# new fields are not reused (2: earnings key_risks; 3: thesis_titles).
-PLAN_SCHEMA = 4
+# new fields are not reused (2: earnings key_risks; 3: thesis_titles;
+# 5: Bank Driver Scenario for financial_ddm instead of H2 revenue and margin).
+PLAN_SCHEMA = 5
+# Schema per profile: bumping one profile's plan shape (5: bank drivers) must
+# not discard the stored plans of the others.
+PLAN_SCHEMA_BY_PROFILE = {"financial_ddm": 5}
+PLAN_SCHEMA_DEFAULT = 4
+
+
+def plan_schema(profile) -> int:
+    return PLAN_SCHEMA_BY_PROFILE.get(profile, PLAN_SCHEMA_DEFAULT)
 
 
 def _spec_sections():
@@ -37,8 +48,11 @@ def _spec_sections():
         if start not in full or end not in full:
             raise ValueError(f"report spec section missing: {start}")
         excerpts.append(full.split(start, 1)[1].split(end, 1)[0].strip())
-    return ("\n\n".join(f"{start}\n{body}" for (start, _), body in
-                      zip(markers, excerpts)), hashlib.sha256(full.encode()).hexdigest())
+    text = "\n\n".join(f"{start}\n{body}" for (start, _), body in zip(markers, excerpts))
+    # The plan is pinned to the instruction the agents actually read, so an
+    # edit elsewhere in the spec (layout, harness, exhibit rules) does not
+    # discard validated plans.
+    return text, hashlib.sha256(text.encode()).hexdigest()
 
 
 def _decode_response(raw):
@@ -125,7 +139,28 @@ def _source_payload(intake):
             "annual_actuals": evidence.get("annual_actuals") or [],
         } if actual else None,
         "news": selected_news,
+        "bank": _bank_source(intake, actual, evidence),
     }
+
+
+def _bank_source(intake, actual, evidence):
+    """What the Bank Driver Scenario reads: the issuer's Sectors bank history,
+    the driver reference built from it and the official 1H, and the payout
+    the model rolls equity with. None for other profiles or when the history
+    cannot support the bank model (the earnings scenario then applies)."""
+    rows = intake.get("bank_history")
+    if intake.get("model_profile") != "financial_ddm" or not actual or not rows:
+        return None
+    balance = evidence.get("balance_sheet") or {}
+    reference = bank_model.reference(rows, actual, balance)
+    if not reference:
+        return None
+    return {"reference": reference, "history_rows": rows, "balance_sheet": balance,
+            "payout": intake.get("payout"), "payout_basis": intake.get("payout_basis")}
+
+
+def _bank_mode(source):
+    return source.get("model_profile") == "financial_ddm" and bool(source.get("bank"))
 
 
 def _validate(plan, source, require_news_coverage=True):
@@ -502,6 +537,134 @@ def _validate_earnings(scenario, source):
     return problems
 
 
+def _allowed_ids(source):
+    official = source.get("official") or {}
+    return ({"official"} | {f"news:{item['index']}" for item in source["news"]}
+            | {f"guidance:{i}" for i, _ in enumerate(official.get("guidance") or [])})
+
+
+def _validate_bank_row(row, source, year, prefix):
+    """One year of the Bank Driver Scenario: bounds, rationale, sources, and a
+    dated reason for a driver far from the issuer's own record."""
+    if not isinstance(row, dict):
+        return [f"{prefix} must be an object"]
+    problems = []
+    if row.get("year") != year:
+        problems.append(f"{prefix}.year must be {year}")
+    for field in bank_model.DRIVERS:
+        lower, upper = bank_model.BOUNDS[field]
+        if not _number(row.get(field), lower, upper):
+            problems.append(f"{prefix}.{field} outside bounds [{lower:g}, {upper:g}]")
+    for field in bank_model.OPTIONAL_DRIVERS:
+        lower, upper = bank_model.BOUNDS[field]
+        if row.get(field) is not None and not _number(row.get(field), lower, upper):
+            problems.append(f"{prefix}.{field} must be null or within [{lower:g}, {upper:g}]")
+    rationale = row.get("rationale")
+    if not isinstance(rationale, str) or not 40 <= len(rationale.strip()) <= 450:
+        problems.append(f"{prefix} needs a 40-450 character rationale")
+    elif re.search(r"[\u4e00-\u9fff]", rationale):
+        problems.append(f"{prefix} rationale must use Indonesian text")
+    ids = row.get("source_ids")
+    if (not isinstance(ids, list) or "official" not in ids or
+            any(item not in _allowed_ids(source) for item in ids)):
+        problems.append(f"{prefix} must cite official plus valid news/guidance source_ids")
+        ids = []
+    if not problems:
+        far = bank_model.departures(row, source["bank"]["reference"])
+        if far and not any(str(x).startswith(("news:", "guidance:")) for x in ids):
+            ref = source["bank"]["reference"]
+            detail = "; ".join(
+                f"{field} {row[field]:g} vs rata-rata 3 tahun "
+                f"{ref['three_year_average'].get(field)} dan {ref['period']} "
+                f"{ref['interim'].get(field)} (toleransi {bank_model.TOLERANCE[field]:g}pp)"
+                for field in far)
+            problems.append(f"{prefix} departs from the issuer's record without a cited dated "
+                            f"article or official guidance: {detail}")
+    return problems
+
+
+def _validate_bank_earnings(scenario, source):
+    """FY interim-year Bank Driver Scenario (H2 drivers) plus thesis and risks."""
+    if not _earnings_eligible(source) or not _bank_mode(source):
+        return ["bank driver scenario requires official 1H revenue, NII and net profit and "
+                "the Sectors bank history"]
+    if not isinstance(scenario, dict):
+        return ["earnings_scenario must be an object"]
+    problems = []
+    official = source["official"]
+    if (scenario.get("source_url") != official.get("source_url") or
+            scenario.get("published_at") != official.get("published_at")):
+        problems.append("earnings_scenario source does not match official release")
+    if not _dated_on_or_before(official.get("published_at"), source["as_of"]):
+        problems.append("earnings_scenario official release is future-dated")
+    rationale = scenario.get("rationale")
+    if not isinstance(rationale, str) or not 40 <= len(rationale.strip()) <= 1400:
+        problems.append("earnings_scenario needs a 40-1400 character rationale")
+    elif re.search(r"[\u4e00-\u9fff]", rationale):
+        problems.append("earnings_scenario rationale must use Indonesian text")
+    allowed = _allowed_ids(source)
+    source_ids = scenario.get("source_ids")
+    if (not isinstance(source_ids, list) or "official" not in source_ids or
+            any(item not in allowed for item in source_ids)):
+        problems.append("earnings_scenario must cite official plus valid news source_ids")
+    for field in ("h2_revenue_to_h1", "h2_net_margin_pct"):
+        if field in scenario:
+            problems.append(f"earnings_scenario.{field} is not a bank driver; set bank_drivers")
+    problems.extend(_validate_bank_row(
+        scenario.get("bank_drivers"), source, source["bank"]["reference"]["interim_year"],
+        "earnings_scenario.bank_drivers"))
+    problems.extend(_validate_thesis(scenario, allowed))
+    return problems
+
+
+def _validate_bank_outyears(rows, source):
+    """Four Bank Driver Scenario years after the interim year."""
+    if not isinstance(rows, list) or len(rows) != 4:
+        return ["bank_outyear_scenario must contain exactly four annual rows"]
+    first = source["bank"]["reference"]["interim_year"] + 1
+    problems = []
+    for i, row in enumerate(rows):
+        problems.extend(_validate_bank_row(row, source, first + i,
+                                           f"bank_outyear_scenario[{first + i}]"))
+    official = source.get("official") or {}
+    if not official.get("source_url") or not _dated_on_or_before(
+            official.get("published_at"), source["as_of"]):
+        problems.append("bank_outyear_scenario official evidence is missing or future-dated")
+    return list(dict.fromkeys(problems))
+
+
+def _bank_anchor(source, earnings):
+    """The interim-year result of the validated H2 drivers, for the out-year role."""
+    bank = source["bank"]
+    result = bank_model.project(
+        bank["history_rows"], source["official"], bank["balance_sheet"],
+        [earnings["bank_drivers"]], payout=bank.get("payout") or 0.0,
+        payout_basis=bank.get("payout_basis"))
+    if not result:
+        return None
+    row = result["rows"][0]
+    tn = lambda v: round(v / 1e12, 1) if v is not None else None
+    pct = lambda v: round(v * 100, 2) if v is not None else None
+    return {"year": row["year"], "unit": "Rp triliun; rasio dalam persen",
+            "source_url": source["official"].get("source_url"),
+            "full_year": {
+                "gross_loans": tn(row["gross_loan"]), "earning_assets": tn(
+                    row["non_loan_earning_assets"]),
+                "deposits": tn(row["total_deposit"]), "total_equity": tn(row["total_equity"]),
+                "net_interest_income": tn(row["net_interest_income"]),
+                "non_interest_income": tn(row["non_interest_income"]),
+                "operating_expense": tn(row["operating_expense"]),
+                "provisions": tn(row["provision"]), "net_profit": tn(row["net_cons"]),
+                "net_profit_attributable": tn(row["earnings"]),
+                "nim_pct": pct(row["net_interest_margin"]),
+                "cost_of_credit_pct": pct(row["cost_of_credit"]),
+                "cost_to_income_pct": pct(row["cost_to_income"]),
+                "ldr_pct": pct(row["loan_to_deposit_ratio"]), "roe_pct": pct(row["roe"]),
+                "car_screening_pct": pct(row.get("capital_adequacy_ratio")),
+                "payout_pct": pct(bank.get("payout"))},
+            "warnings": result["checks"]["warnings"]}
+
+
 _RECOMMENDATION = re.compile(
     r"\b(?:rekomendasi|akumulasi|buy|sell|hold|overweight|underweight|"
     r"target\s+harga|(?:beli|jual|tahan|lepas)\s+(?:saham|posisi))\b", re.I)
@@ -547,8 +710,13 @@ def _validate_thesis(scenario, allowed):
     texts.append(str(scenario.get("rationale") or ""))
     # "Net sell asing" describes what investors did, not advice to the reader
     # (the analyst agent's rule); BBCA's scenario was rejected on it.
-    if any(_RECOMMENDATION.search(_FLOW_PHRASES.sub(" ", t)) for t in texts):
-        problems.append("thesis/risks must not contain recommendation or target-price language")
+    advice = next((m.group(0) for t in texts
+                   for m in [_RECOMMENDATION.search(_FLOW_PHRASES.sub(" ", t))] if m), None)
+    if advice:
+        # Name the phrase so a repair can remove it (a bank's "hold" of CASA
+        # reads as advice to the rule).
+        problems.append("thesis/risks must not contain recommendation or target-price language "
+                        f"(found '{advice}')")
     if any(re.search(r"[\u4e00-\u9fff]", t) for t in texts):
         problems.append("thesis/risks must use Indonesian text")
     return problems
@@ -694,6 +862,156 @@ def _drop_dcf_fields(name, fragment, problems):
         fragment["outyear_dcf_fields_dropped"] = list(problems)
 
 
+def _bank_row(row):
+    """The fields of one Bank Driver Scenario year, nothing else. A rationale
+    over 450 characters is cut to whole sentences (length only, as the stage
+    rationale); its content is still validated."""
+    out = {key: row[key] for key in ("year", *bank_model.DRIVERS, *bank_model.OPTIONAL_DRIVERS,
+                                     "rationale", "source_ids") if key in row}
+    if isinstance(out.get("rationale"), str) and len(out["rationale"].strip()) > 450:
+        out["rationale"] = _trim_sentences(out["rationale"], 450)
+    return out
+
+
+_BANK_ENGINE = (
+    "The engine, not you, computes the bank: NII = NIM x average earning assets; "
+    "non-interest income = ratio x NII; operating expense = cost-to-income x (NII + "
+    "non-interest income); provisions = cost of credit x average gross loans; tax at the "
+    "historical effective rate; gross loans grow at your loan growth, deposits keep the last "
+    "fiscal year's LDR unless you set deposit_growth_pct; equity = prior equity + parent "
+    "profit - dividends at the historical payout; non-earning assets keep their share of "
+    "total assets and placements/securities absorb the funding loans do not use (loans that "
+    "outgrow deposits and retained equity draw them down, and a negative balance fails the "
+    "model); CAR is a screening proxy. bank_reference holds the issuer's own "
+    "last three fiscal years (NIM on average earning assets, cost of credit on average gross "
+    "loans, cost-to-income on NII + non-interest income, non-interest income / NII, loan and "
+    "deposit growth, LDR, CASA, ROE, CAR, cost of funds) and its 1H value (NIM annualised, "
+    "loan and deposit growth annualised from 30 June balances; CIR and cost of credit "
+    "implied by a screening split of 1H costs). Start from those. A driver more than "
+    "bank_reference.tolerance away from BOTH the three-year average and the 1H value (NIM "
+    "and cost of credit 0.5pp, cost-to-income and loan or deposit growth 5pp, non-interest "
+    "ratio 10pp) needs a supplied dated article (news:N) or official guidance (guidance:N) "
+    "with a measurable reason (policy rate and funding cost, loan demand or segment "
+    "strategy, asset quality and restructured loans, fees, cost programme) cited in that "
+    "row's source_ids; momentum or sentiment is not a reason. Keep the path coherent: "
+    "faster loan growth needs funding (deposits, LDR) and capital (CAR falls when loans "
+    "outgrow retained earnings at the historical payout); a NIM change should follow rates, "
+    "funding mix or loan mix. Each driver is an analyst scenario judgment, never a reported "
+    "fact; separate reported facts from judgment in the rationale.")
+
+
+def _bank_earnings_role(source):
+    """The Bank Driver Scenario role for the interim year (H2 drivers)."""
+    year = source["bank"]["reference"]["interim_year"]
+    role = (
+        f"Role: BANK DRIVER SCENARIO ANALYST (financial_ddm), FY{year} H2. Return "
+        "{\"earnings_scenario\": object or null}. Anchor on the official 1H revenue, NII and "
+        "net profit, then set bank_drivers = {year: " + str(year) + ", loan_growth_pct (gross "
+        f"loans at end-FY{year} vs end-FY{year - 1}, %), nim_pct (H2 NIM on average earning "
+        "assets, annualised %), non_ii_to_nii_pct (H2 non-interest income / H2 NII, %), "
+        "cost_to_income_pct (H2 operating expense / H2 NII + non-interest income, %), "
+        "cost_of_credit_pct (H2 provisions / average gross loans, annualised %), "
+        "deposit_growth_pct (optional FY %, null keeps the historical LDR), rationale (Indonesian, "
+        "40-450 characters: two or three short sentences naming the evidence behind the "
+        "drivers), source_ids}. Bounds: loan and "
+        "deposit growth [-20,40], NIM [0.5,15], non-interest ratio [0,150], cost-to-income "
+        "[10,90], cost of credit [0,10]. Do not return revenue ratios or net margins. " + _BANK_ENGINE +
+        " Also return rationale (4-6 short Indonesian sentences, 40-1400 characters) and "
+        "source_ids chosen from [\"official\", \"news:0\", ..., \"guidance:0\", ...]. For Tavily "
+        "articles rely on fetched full_text, not the headline. Also return thesis_titles: one "
+        "short Indonesian title per thesis point, same order, 12-60 characters, a noun phrase "
+        "without a final period (e.g. \"NIM tertahan biaya dana\"). And thesis_points: 2-3 "
+        "Indonesian sentences (40-280 characters and at most 30 words each), each a "
+        "forward-looking claim tied to a bank driver (claim -> driver -> earnings or capital "
+        "implication). And catalysts_risks: 2-5 objects {item (short name), timing (date, window "
+        "or condition), driver_path (driver -> NII/fees/cost/provisions/capital -> earnings "
+        "effect), direction (Positif | Negatif | Dua arah), source_ids}; include at least one "
+        "downside risk. Also key_risks: 3-5 objects {category (Operasi | Pendanaan | Modal | "
+        "Komoditas | Regulasi | Tata kelola | Proyek), headline (8-70 characters, a noun phrase "
+        "that starts with a common noun, e.g. \"Kualitas aset kredit mikro\"), explanation "
+        "(Indonesian, 80-450 characters: what could go wrong, the sourced number that sizes it, "
+        "and the path to earnings or valuation), source_ids}. These are the report's 'Risiko "
+        "utama': material downside risks for this issuer, not catalysts, not repeats of the "
+        "thesis. Use only supplied evidence; issuer-specific risks beat generic ones. Never "
+        "write a target price, valuation multiple, rating, buy/sell/hold/akumulasi, "
+        "production_ready or forecast_basis; the engine values the dividends with a DDM. The "
+        "words buy, sell, hold, overweight, underweight, akumulasi, rekomendasi and 'target "
+        "harga' must not appear anywhere in the prose, even in another sense (write "
+        "'mempertahankan' or 'menjaga', not 'hold'). "
+        "Return null if the evidence cannot support a full-year view.")
+    official = source["official"]
+    payload = {"ticker": source["ticker"], "as_of": source["as_of"],
+               "model_profile": source["model_profile"],
+               "official": {key: official.get(key) for key in (
+                   "source_url", "published_at", "period", "period_end", "unit", "metrics",
+                   "guidance", "operating_context", "balance_sheet")},
+               "bank_reference": source["bank"]["reference"],
+               "payout_pct": (round(source["bank"]["payout"] * 100, 1)
+                              if isinstance(source["bank"].get("payout"), (int, float)) else None),
+               "payout_basis": source["bank"].get("payout_basis"),
+               "news": [{key: item.get(key) for key in (
+                   "index", "title", "timestamp", "url", "origin", "body",
+                   "full_text", "full_text_status")} for item in source["news"]],
+               "json_shape": {"earnings_scenario": {
+                   "bank_drivers": {"year": year, "loan_growth_pct": "number",
+                                    "nim_pct": "number", "non_ii_to_nii_pct": "number",
+                                    "cost_to_income_pct": "number",
+                                    "cost_of_credit_pct": "number",
+                                    "deposit_growth_pct": "number or null",
+                                    "rationale": "Indonesian text, 40-450 characters",
+                                    "source_ids": ["official"]},
+                   "rationale": "Indonesian text", "source_ids": ["official"],
+                   "thesis_points": ["Indonesian sentence"],
+                   "thesis_titles": ["short title"],
+                   "catalysts_risks": [{"item": "text", "timing": "text",
+                                        "driver_path": "text", "direction": "Negatif",
+                                        "source_ids": ["official"]}],
+                   "key_risks": [{"category": "Pendanaan", "headline": "text",
+                                  "explanation": "text", "source_ids": ["official"]}]}}}
+    return role, payload
+
+
+def _bank_outyear_role(source, anchor, news_effects):
+    """The Bank Driver Scenario role for the four years after the interim year."""
+    first = source["bank"]["reference"]["interim_year"] + 1
+    years = list(range(first, first + 4))
+    role = (
+        "Role: BANK DRIVER OUTYEAR ANALYST (financial_ddm). Return "
+        "{\"bank_outyear_scenario\": [four rows]} for exactly the years " + str(years) + ". "
+        "Each row: year, loan_growth_pct (gross loan growth, %), nim_pct (NIM on average "
+        "earning assets, %), non_ii_to_nii_pct (non-interest income / NII, %), "
+        "cost_to_income_pct (operating expense / NII + non-interest income, %), "
+        "cost_of_credit_pct (provisions / average gross loans, %), deposit_growth_pct "
+        "(optional %, null keeps the historical LDR), rationale (Indonesian, 40-450 "
+        "characters, at most two short sentences), source_ids chosen from [\"official\", "
+        "\"news:0\", ..., \"guidance:0\", ...] and always including \"official\". Bounds: loan "
+        "and deposit growth [-20,40], NIM [0.5,15], non-interest ratio [0,150], cost-to-income "
+        "[10,90], cost of credit [0,10]. anchor is the engine's result for the interim year "
+        "from the validated H2 drivers (loans, deposits, NII, NIM, cost of credit, CIR, profit, "
+        "ROE, screening CAR, payout) with its warnings; continue from it. " + _BANK_ENGINE +
+        " Do not repeat one flat value every year without a causal explanation, and do not "
+        "force news into the numbers: news_effects shows how each article was classified. "
+        "Return compact JSON only.")
+    news_by_id = {f"news:{item['article_index']}": {
+        "title": item["title"], "timestamp": item["timestamp"], "url": item["source_url"],
+        "driver": item.get("driver"), "change": item.get("change"),
+        "rationale": str(item.get("rationale") or "")[:350]} for item in news_effects or []}
+    official = source["official"]
+    payload = {"ticker": source["ticker"], "as_of": source["as_of"],
+               "official": {key: official.get(key) for key in (
+                   "source_url", "published_at", "period", "period_end", "unit", "metrics",
+                   "guidance", "operating_context")},
+               "anchor": anchor, "bank_reference": source["bank"]["reference"],
+               "news_effects": news_by_id, "required_years": years,
+               "json_shape": {"bank_outyear_scenario": [{
+                   "year": "integer", "loan_growth_pct": "number", "nim_pct": "number",
+                   "non_ii_to_nii_pct": "number", "cost_to_income_pct": "number",
+                   "cost_of_credit_pct": "number", "deposit_growth_pct": "number or null",
+                   "rationale": "Indonesian text, 40-450 characters",
+                   "source_ids": ["official"]}]}}
+    return role, payload
+
+
 def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
     """Run one isolated analyst role and one evidence-preserving repair if needed."""
     common = (
@@ -774,6 +1092,12 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                    "model_profile": source["model_profile"],
                    "official": source["official"]}
+    elif name == "earnings" and _bank_mode(source):
+        role, payload = _bank_earnings_role(source)
+        attempts = 3
+    elif name == "outyears" and _bank_mode(source):
+        role, payload = _bank_outyear_role(source, interim_anchor, news_effects)
+        attempts = 3
     elif name == "earnings":
         role = (
             "Role: FY EARNINGS SCENARIO ANALYST (non-mining). Return "
@@ -980,11 +1304,15 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     problems = ["earnings_scenario must be an object"]
                     fragment = None
                 else:
+                    bank = _bank_mode(source)
+                    keys = (("bank_drivers",) if bank else
+                            ("h2_revenue_to_h1", "h2_net_margin_pct", *FY_DCF_FIELDS))
                     scenario = {key: scenario[key] for key in (
-                        "h2_revenue_to_h1", "h2_net_margin_pct", "rationale",
-                        "source_ids", "thesis_points", "thesis_titles", "catalysts_risks",
-                        "key_risks", *FY_DCF_FIELDS)
+                        *keys, "rationale", "source_ids", "thesis_points", "thesis_titles",
+                        "catalysts_risks", "key_risks")
                                 if key in scenario}
+                    if bank and isinstance(scenario.get("bank_drivers"), dict):
+                        scenario["bank_drivers"] = _bank_row(scenario["bank_drivers"])
                     # Provenance is bound to the official release, not the model.
                     scenario["source_url"] = source["official"]["source_url"]
                     scenario["published_at"] = source["official"]["published_at"]
@@ -993,8 +1321,11 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                         f"guidance:{gi}" for gi, _ in enumerate(source["official"].get("guidance") or [])}
                     salvaged = _salvage_key_risks(scenario, allowed_ids)
                     salvaged += _salvage_titles(scenario)
-                    problems = _validate_earnings(scenario, source)
-                    problems += _dcf_field_problems(scenario, source)
+                    if bank:
+                        problems = _validate_bank_earnings(scenario, source)
+                    else:
+                        problems = _validate_earnings(scenario, source)
+                        problems += _dcf_field_problems(scenario, source)
                     if salvaged and not problems:
                         scenario["salvage_notes"] = salvaged
                     # Resolve cited ids to titles/URLs so the report never
@@ -1009,7 +1340,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                             "timestamp": source["official"]["published_at"]}
                     cited = set(scenario.get("source_ids") or []) | {
                         x for item in (scenario.get("catalysts_risks") or []) +
-                        (scenario.get("key_risks") or [])
+                        (scenario.get("key_risks") or []) + [scenario.get("bank_drivers")]
                         if isinstance(item, dict) for x in item.get("source_ids") or []}
                     scenario["source_refs"] = {
                         x: ({"title": source["official"].get("period") and
@@ -1036,6 +1367,15 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                         sc["rationale"] = _trim_sentences(sc["rationale"], 600)
                     fragment = {"stage_classification": sc}
                     problems = _validate_stage(sc, source)
+            elif name == "outyears" and _bank_mode(source):
+                if set(fragment) != {"bank_outyear_scenario"}:
+                    problems = ["bank outyear agent must return only bank_outyear_scenario"]
+                else:
+                    rows = fragment["bank_outyear_scenario"]
+                    if isinstance(rows, list):
+                        fragment = {"bank_outyear_scenario": [
+                            _bank_row(row) if isinstance(row, dict) else row for row in rows]}
+                    problems = _validate_bank_outyears(fragment["bank_outyear_scenario"], source)
             elif name == "outyears":
                 if set(fragment) != {"outyear_scenario"}:
                     problems = ["outyear agent must return only outyear_scenario"]
@@ -1073,7 +1413,16 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             break
         if attempt + 1 < attempts:
             messages.append({"role": "assistant", "content": raw[:8000]})
-            if name == "outyears":
+            if name == "outyears" and _bank_mode(source):
+                repair = (
+                    "Your prior response may be unparsable. Return one complete JSON object "
+                    "{\"bank_outyear_scenario\": [four rows]} only. Repair every listed "
+                    "validation error. Keep the same four consecutive years and preserve the "
+                    "drivers unless an error names them; a driver far from the issuer's record "
+                    "either moves back within the tolerance or cites the dated article or "
+                    "guidance that supports it. Rationale in Indonesian, 40-450 characters. "
+                    "Do not invent sources. Errors: " + json.dumps(problems, ensure_ascii=False))
+            elif name == "outyears":
                 repair = (
                     "Your prior response may be unparsable. Return one complete JSON "
                     "object only. Repair every listed outyear validation error. Return exactly four "
@@ -1103,6 +1452,35 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
     fragment = _normalize_prose(fragment)
     return {"status": "validated", "fragment": fragment, "problems": [],
             "provenance_binding": binding}
+
+
+SUBAGENT_LABELS = {"news": "Dampak berita", "interim": "Skenario interim",
+                   "earnings": "Skenario laba FY", "stage": "Tahap bisnis",
+                   "outyears": "Tahun lanjutan"}
+
+
+def _emit_result(name, result, reused=False):
+    label = SUBAGENT_LABELS.get(name, name)
+    valid = result.get("status") == "validated"
+    problems = [p for p in result.get("problems") or [] if isinstance(p, str)]
+    emit("forecast", f"{label} tervalidasi" if valid else f"{label} ditolak validator",
+         "dipakai ulang untuk bukti yang sama" if reused and valid else
+         (problems[0] if problems else None),
+         status="ok" if valid else "warn", agent=f"forecast.{name}")
+
+
+def _run_reported(name, source, spec, **kwargs):
+    """``_run_subagent`` with start and finish progress events."""
+    emit("forecast", f"Subagent {SUBAGENT_LABELS.get(name, name)}", status="run",
+         agent=f"forecast.{name}")
+    try:
+        result = _run_subagent(name, source, spec, **kwargs)
+    except Exception as error:
+        emit("forecast", f"{SUBAGENT_LABELS.get(name, name)} gagal", type(error).__name__,
+             status="warn", agent=f"forecast.{name}")
+        raise
+    _emit_result(name, result)
+    return result
 
 
 def run_live(intake):
@@ -1139,7 +1517,9 @@ def run_live(intake):
         tasks.append("stage")
     results = {}
     with ThreadPoolExecutor(max_workers=min(len(tasks), 2) or 1) as pool:
-        futures = {name: pool.submit(_run_subagent, name, source, spec) for name in tasks}
+        # Each worker gets a copy of this context so its progress events reach the listener.
+        futures = {name: pool.submit(contextvars.copy_context().run, _run_reported, name, source,
+                                     spec) for name in tasks}
         for name, future in futures.items():
             try:
                 results[name] = future.result()
@@ -1155,7 +1535,7 @@ def run_live(intake):
         if isinstance(interim, dict):
             anchor = _interim_anchor(source, interim)
             try:
-                results["outyears"] = _run_subagent(
+                results["outyears"] = _run_reported(
                     "outyears", source, spec, interim_anchor=anchor,
                     news_effects=(news_result.get("fragment") or {}).get("news_effects"))
             except Exception as error:  # noqa: BLE001 — preserve the FY actual scenario
@@ -1167,8 +1547,10 @@ def run_live(intake):
         earnings = (earnings_result.get("fragment") or {}).get("earnings_scenario")
         if isinstance(earnings, dict):
             try:
-                results["outyears"] = _run_subagent(
-                    "outyears", source, spec, interim_anchor=_earnings_anchor(source, earnings),
+                anchor = (_bank_anchor(source, earnings) if _bank_mode(source)
+                          else _earnings_anchor(source, earnings))
+                results["outyears"] = _run_reported(
+                    "outyears", source, spec, interim_anchor=anchor,
                     news_effects=(news_result.get("fragment") or {}).get("news_effects"))
             except Exception as error:  # noqa: BLE001 — keep the FY scenario
                 results["outyears"] = {
@@ -1219,7 +1601,7 @@ def evidence_fingerprint(source, spec_sha256):
             for item in source.get("news") or []]
     material = {"ticker": source.get("ticker"), "profile": source.get("model_profile"),
                 "official": source.get("official"), "news": news, "spec": spec_sha256,
-                "plan_schema": PLAN_SCHEMA,
+                "plan_schema": plan_schema(source.get("model_profile")),
                 "model": os.environ.get("SEKTORAL_LLM_MODEL", "MiniMax-M3")}
     return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:20]
 
@@ -1242,6 +1624,10 @@ def run_cached(intake, refresh=False, db=None):
         stored = store.get(PLAN_COLLECTION, key, db)
         if isinstance(stored, dict) and stored.get("plan"):
             stored["reused"] = True
+            emit("forecast", "Rencana forecast dipakai ulang", "bukti sama dengan run sebelumnya")
+            for name, sub in (stored.get("subagents") or {}).items():
+                if isinstance(sub, dict):
+                    _emit_result(name, sub, reused=True)
             return stored
     result = run_live(intake)
     result["fingerprint"] = fingerprint

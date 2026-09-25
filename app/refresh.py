@@ -6,10 +6,12 @@
 Each step needs the network and writes what the offline report build reads:
 
 1. ``fx``: the USD/IDR close (app.fx, app database).
-2. ``commodity``: the copper and gold series (app.commodity, app database).
-3. ``quotes``: each ticker's closing prices (app.market_quote, written to
+2. ``rates``: the US Treasury 10-year yield series, the risk-free rate of a
+   model built in US$ (app.rates, app database).
+3. ``commodity``: the copper and gold series (app.commodity, app database).
+4. ``quotes``: each ticker's closing prices (app.market_quote, written to
    ``data/market_quotes/<T>.json`` for review in git).
-4. ``peers``: peer snapshots from Yahoo Finance (app.peer_fundamentals, app
+5. ``peers``: peer snapshots from Yahoo Finance (app.peer_fundamentals, app
    database): the curated group when the ticker has one, else every peer in
    its Sectors peer table.
 
@@ -23,7 +25,7 @@ import argparse
 import sys
 from typing import Callable
 
-STEPS = ("fx", "commodity", "quotes", "peers")
+STEPS = ("fx", "rates", "commodity", "quotes", "peers")
 
 
 def peer_symbols(tickers) -> tuple[list[str], dict]:
@@ -38,7 +40,8 @@ def peer_symbols(tickers) -> tuple[list[str], dict]:
                 yahoo[symbol] = peer.get("yahoo") or f"{symbol}.JK"
                 if symbol not in symbols:
                     symbols.append(symbol)
-        else:
+        if not group or len(group["peers"]) < peer_groups.MIN_PEERS:
+            # Too few IDX comparables: the report reads the Sectors table instead.
             symbols.extend(s for s in peer_fundamentals.peers_of(ticker) if s not in symbols)
     return symbols, yahoo
 
@@ -47,6 +50,15 @@ def _fx(_tickers, _as_of):
     from . import fx
     quote = fx.refresh_usd_idr()
     return {"stored": {"USD/IDR": f"{quote['rate']:,.0f} ({quote['date']})"}, "failed": {}}
+
+
+def _rates(_tickers, _as_of):
+    from . import rates
+    result = rates.refresh()
+    return {"stored": {name: (f"{data['rows'][-1]['yield_pct']:.3f}% "
+                              f"({data['rows'][-1]['date']})")
+                       for name, data in result["stored"].items()},
+            "failed": result["failed"]}
 
 
 def _commodity(_tickers, _as_of):
@@ -81,8 +93,8 @@ def _peers(tickers, _as_of):
             "failed": result["failed"]}
 
 
-RUNNERS: dict[str, Callable] = {"fx": _fx, "commodity": _commodity, "quotes": _quotes,
-                                "peers": _peers}
+RUNNERS: dict[str, Callable] = {"fx": _fx, "rates": _rates, "commodity": _commodity,
+                                "quotes": _quotes, "peers": _peers}
 
 
 def run(tickers, as_of, steps=STEPS, runners=None, log=print) -> dict:
