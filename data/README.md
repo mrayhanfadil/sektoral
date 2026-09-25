@@ -31,6 +31,17 @@ Finance snapshot instead (`python3 -m app.peer_fundamentals --peers-of INET`).
 Those rows stay labelled Yahoo Finance in every exhibit and note; they are
 never written into `sectors_cache.db` and never called Sectors data.
 
+## Curated peer groups (`peer_groups/`)
+
+The Sectors peer table is the issuer's sub-sector, not its business model
+(GMFI's "Airport Operators" holds toll roads and BREN). A reviewed pack per
+issuer names the comparable peers and the excluded ones, each with a reason.
+Peers in the issuer's Sectors table keep that row; others (including foreign
+listings) come from a dated Yahoo snapshot fetched with
+`python -m app.peer_fundamentals --group <T>`, valued in their own reporting
+currency. With fewer than three peers that have data, the report falls back
+to the Sectors table and says so.
+
 ## Commodity prices from Yahoo Finance (`commodity_prices` in the app database)
 
 The mine valuation prices metal at the average of the last 12 calendar months.

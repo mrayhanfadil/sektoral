@@ -1,0 +1,65 @@
+{
+  "ticker": "JPFA",
+  "as_of": "2026-09-25",
+  "group": "Integrator pakan dan unggas",
+  "basis": "JPFA adalah integrator pakan ternak, pembibitan, unggas komersial dan pengolahan. Pembandingnya adalah integrator pakan-unggas di BEI dan Charoen Pokphand Foods di Thailand. Tabel peer Sectors juga memuat emiten kecil dengan P/E di atas 100x.",
+  "peers": [
+    {
+      "symbol": "CPIN",
+      "name": "Charoen Pokphand Indonesia",
+      "market": "IDX",
+      "reason": "Integrator pakan dan unggas terbesar; pembanding utama.",
+      "yahoo": "CPIN.JK"
+    },
+    {
+      "symbol": "MAIN",
+      "name": "Malindo Feedmill",
+      "market": "IDX",
+      "reason": "Integrator pakan dan unggas.",
+      "yahoo": "MAIN.JK"
+    },
+    {
+      "symbol": "SIPD",
+      "name": "Sreeya Sewu Indonesia",
+      "market": "IDX",
+      "reason": "Pakan, pembibitan dan unggas; laba 12 bulan terakhir tipis.",
+      "yahoo": "SIPD.JK"
+    },
+    {
+      "symbol": "CPRO",
+      "name": "Central Proteina Prima",
+      "market": "IDX",
+      "reason": "Pakan dan akuakultur udang.",
+      "yahoo": "CPRO.JK"
+    },
+    {
+      "symbol": "CPF",
+      "name": "Charoen Pokphand Foods",
+      "market": "SET",
+      "reason": "Integrator pakan, unggas, babi dan akuakultur regional.",
+      "yahoo": "CPF.BK"
+    }
+  ],
+  "excluded": [
+    {
+      "symbol": "RLCO",
+      "reason": "Kapitalisasi Rp13,2 triliun atas laba Rp41 miliar (P/E 646x)."
+    },
+    {
+      "symbol": "NEST",
+      "reason": "P/E 131,9x atas laba Rp23 miliar."
+    },
+    {
+      "symbol": "AGAR",
+      "reason": "P/E 322,9x; laba Rp2 miliar."
+    },
+    {
+      "symbol": "AYAM",
+      "reason": "P/E 1.270x; laba nyaris nol."
+    },
+    {
+      "symbol": "UDNG",
+      "reason": "Rugi; tambak udang kecil."
+    }
+  ]
+}

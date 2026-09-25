@@ -1,0 +1,67 @@
+{
+  "ticker": "SIDO",
+  "as_of": "2026-09-25",
+  "group": "Produsen farmasi, herbal dan kesehatan konsumen",
+  "basis": "SIDO memproduksi jamu, suplemen dan minuman kesehatan. Pembandingnya adalah produsen farmasi dan kesehatan konsumen; distributor farmasi tidak dipakai karena marjin dan asetnya berbeda.",
+  "peers": [
+    {
+      "symbol": "KLBF",
+      "name": "Kalbe Farma",
+      "market": "IDX",
+      "reason": "Farmasi dan kesehatan konsumen; pembanding terdekat.",
+      "yahoo": "KLBF.JK"
+    },
+    {
+      "symbol": "TSPC",
+      "name": "Tempo Scan Pacific",
+      "market": "IDX",
+      "reason": "Farmasi dan produk konsumen.",
+      "yahoo": "TSPC.JK"
+    },
+    {
+      "symbol": "SOHO",
+      "name": "Soho Global Health",
+      "market": "IDX",
+      "reason": "Farmasi dan suplemen herbal.",
+      "yahoo": "SOHO.JK"
+    },
+    {
+      "symbol": "DVLA",
+      "name": "Darya-Varia Laboratoria",
+      "market": "IDX",
+      "reason": "Farmasi dan kesehatan konsumen.",
+      "yahoo": "DVLA.JK"
+    },
+    {
+      "symbol": "MERK",
+      "name": "Merck",
+      "market": "IDX",
+      "reason": "Farmasi.",
+      "yahoo": "MERK.JK"
+    },
+    {
+      "symbol": "PYFA",
+      "name": "Pyridam Farma",
+      "market": "IDX",
+      "reason": "Farmasi; rugi, sehingga P/E tidak dipakai.",
+      "yahoo": "PYFA.JK"
+    },
+    {
+      "symbol": "KAEF",
+      "name": "Kimia Farma",
+      "market": "IDX",
+      "reason": "Farmasi BUMN; rugi, sehingga P/E tidak dipakai.",
+      "yahoo": "KAEF.JK"
+    }
+  ],
+  "excluded": [
+    {
+      "symbol": "MDLA",
+      "reason": "Distributor dan pemasar farmasi."
+    },
+    {
+      "symbol": "PEVE",
+      "reason": "Distributor farmasi."
+    }
+  ]
+}

@@ -3700,8 +3700,8 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
             "ramping atau riwayat singkat (Method Gate 3, §4.1a): EV = median EV/EBITDA "
             f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} x EBITDA {label} "
             "skenario analis (aktual 1H resmi + margin EBITDA asumsi agen).",
-            f"EV/EBITDA tiap peer dihitung dari {ev_s['peer_source']}: market cap tabel peer "
-            "Sectors ditambah utang dikurangi kas dan EBITDA terakhir dari laporan peer "
+            f"EV/EBITDA tiap peer dihitung dari {ev_s['peer_source']}: kapitalisasi pasar "
+            "ditambah utang dikurangi kas dan EBITDA terakhir dari laporan peer "
             "(laporan Sectors FY bila di-cache, selain itu snapshot Yahoo Finance bertanggal, "
             "12 bulan terakhir bila empat kuartal tersedia); "
             "peer dianggap sebanding. Peer tanpa laporan di kedua sumber tidak masuk median.",
@@ -3826,8 +3826,9 @@ def _ev_ebitda_scenario_exhibit(intake, ev, label):
                           "Terhadap harga"], "rows": rows},
         "catatan_sumber": (
             f"Sumber: EV/EBITDA terakhir tiap peer (12 bulan terakhir bila tersedia, selain itu "
-            f"FY terakhir) dari {ev['peer_source']} (market cap tabel "
-            f"peer Sectors + utang - kas laporan peer): {peers}; EBITDA {label} skenario analis; kas "
+            f"FY terakhir) dari {ev['peer_source']} (kapitalisasi pasar dari tabel peer Sectors "
+            f"atau snapshot Yahoo + utang - kas laporan peer): {peers}; EBITDA {label} skenario "
+            f"analis; kas "
             f"Rp{bn(ev['cash'])} miliar ({ev.get('cash_basis') or '-'}), utang "
             f"Rp{bn(ev['debt'])} miliar ({ev.get('debt_basis') or '-'}), minoritas "
             f"Rp{bn(ev['nci'])} miliar"

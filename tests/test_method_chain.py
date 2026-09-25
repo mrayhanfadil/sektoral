@@ -489,5 +489,6 @@ def test_issuer_without_sectors_peers_borrows_the_table_that_lists_it():
     symbols = [p["symbol"] for p in doc_in["peers"]]
     assert "BBRI.JK" in symbols and "BBCA.JK" not in symbols
     assert len([p for p in doc_in["peers"] if 0 < p["pe"] <= 50]) >= 3
+    # JPFA has a curated group; four of its peers sit in its own Sectors table.
     own, _ = intake.load("JPFA", as_of="2026-09-24")
-    assert own["peer_basis"] is None
+    assert own["peer_basis"].startswith("grup peer kurasi")
