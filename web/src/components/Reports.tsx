@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, ChevronRight, FileDown, FileText, Footprints, Play 
 import { reportFiles, type ChainStep, type ReportItem } from "../lib/api";
 import { pct, rp } from "../lib/format";
 import { ratingLabel, ratingTone, type RatingTone } from "../lib/labels";
+import { IssuerLogo } from "./IssuerLogo";
 
 /* ------------------------------------------------------------------ */
 /* Small instruments, also used by the landing page and the trace.     */
@@ -279,13 +280,16 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
         <p className="text-[12px] leading-5 text-ink-soft">{item.profile}</p>
       </div>
 
-      <div style={{ gridArea: "nm" }} className="min-w-0">
+      <div style={{ gridArea: "nm" }} className="flex min-w-0 items-start gap-3">
+        <IssuerLogo ticker={item.ticker} size="sm" className="mt-0.5 max-sm:hidden" />
+        <div className="min-w-0 flex-1">
         <p className="truncate text-[14.5px] leading-6 font-medium text-ink-strong" title={item.name}>{item.name}</p>
         {item.published ? (
           <p className="truncate text-[13px] leading-5 text-ink-soft" title={item.headline}>{item.headline}</p>
         ) : (
           <p className="text-[13px] leading-5 text-warn-ink">Rating ditahan: {item.held_reason || "bukti belum lengkap"}</p>
         )}
+        </div>
       </div>
 
       <div style={{ gridArea: "rt" }} className="pt-px max-lg:text-right">

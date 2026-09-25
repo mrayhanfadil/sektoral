@@ -13,6 +13,7 @@ import {
 import { MethodChain, RatingBadge, signedPct } from "../components/Reports";
 import { Notice, useLoad } from "../components/State";
 import { ReviewPanel } from "../components/Review";
+import { IssuerLogo } from "../components/IssuerLogo";
 
 /* ------------------------------------------------------------------ */
 /* The index: the trace's table of contents, grouped by the agent that */
@@ -293,11 +294,14 @@ function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: Rep
           </ol>
         </nav>
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
-          <div className="min-w-0">
-            <h1 className="text-[clamp(26px,3vw,36px)] font-black tracking-[-.02em]">
-              Jejak riset <span className="font-mono tracking-[.02em] text-brand-ink">{trace.ticker}</span>
-            </h1>
-            {name && <p className="mt-1 text-[15.5px] text-ink-soft">{name}</p>}
+          <div className="flex min-w-0 items-center gap-4">
+            <IssuerLogo ticker={trace.ticker} size="lg" className="max-sm:hidden" />
+            <div className="min-w-0">
+              <h1 className="text-[clamp(26px,3vw,36px)] font-black tracking-[-.02em]">
+                Jejak riset <span className="font-mono tracking-[.02em] text-brand-ink">{trace.ticker}</span>
+              </h1>
+              {name && <p className="mt-1 text-[15.5px] text-ink-soft">{name}</p>}
+            </div>
           </div>
           <div className="flex flex-wrap gap-2.5 max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:[&>*:first-child]:col-span-2 max-sm:[&>*:nth-child(2):last-child]:col-span-2">
             {links.replayUrl && (

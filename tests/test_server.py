@@ -284,3 +284,11 @@ def test_store_import_moves_old_json_into_the_database_once(tmp_path):
     # A second import keeps what the database already has.
     again = store_import.import_caches(data)
     assert again == {"kept": 2}
+
+
+def test_ticker_suggestions_are_the_issuers_with_a_report(make_client, tmp_path, monkeypatch):
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    _report(reports, "AAAA", reviewed=False)
+    monkeypatch.setattr(server, "available_tickers", lambda: ["AAAA", "BBBB", "CCCC"])
+    assert make_client(reports=reports).get("/api/tickers").json() == {"tickers": ["AAAA"]}

@@ -31,29 +31,29 @@ colors:
   err-ink: "#9B1C1C"
   brand-dark: "#3552F0"
   brand-hover-dark: "#4A66F6"
-  brand-ink-dark: "#9DB1FF"
-  brand-50-dark: "#172A68"
-  brand-100-dark: "#20367F"
-  tint-dark: "#2C4190"
-  canvas-dark: "#0A1640"
-  surface-dark: "#0D1B4B"
-  raised-dark: "#122258"
-  ink-strong-dark: "#F6F8FD"
-  ink-dark: "#E6EBF7"
-  ink-soft-dark: "#AEB9D9"
-  ink-faint-dark: "#95A2CC"
-  rule-soft-dark: "#1B2B63"
-  rule-dark: "#26377A"
-  rule-strong-dark: "#3A4E98"
-  wordmark-dark: "#F2F4FA"
+  brand-ink-dark: "#E4E6EA"
+  brand-50-dark: "#1A2036"
+  brand-100-dark: "#222A45"
+  tint-dark: "#2A3352"
+  canvas-dark: "#0F1013"
+  surface-dark: "#16181C"
+  raised-dark: "#1D2025"
+  ink-strong-dark: "#F5F6F8"
+  ink-dark: "#E4E6EA"
+  ink-soft-dark: "#AAAFB9"
+  ink-faint-dark: "#8E94A0"
+  rule-soft-dark: "#22252B"
+  rule-dark: "#2B2F36"
+  rule-strong-dark: "#3B4049"
+  wordmark-dark: "#F2F3F5"
   done-dark: "#4FE0B6"
-  ok-bg-dark: "#0C3340"
-  ok-ink-dark: "#6EE7C0"
-  warn-bg-dark: "#33290F"
-  warn-ink-dark: "#F5C45A"
+  ok-bg-dark: "#11291F"
+  ok-ink-dark: "#E4E6EA"
+  warn-bg-dark: "#2D2412"
+  warn-ink-dark: "#E4E6EA"
   warn-rule-dark: "#B8871F"
-  err-bg-dark: "#3A1630"
-  err-ink-dark: "#FF9A9A"
+  err-bg-dark: "#321719"
+  err-ink-dark: "#E4E6EA"
 typography:
   display:
     fontFamily: "Roboto, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
@@ -225,7 +225,7 @@ components:
 
 Sectoral is a research desk seen through one console. Every agent, tool call and Method Gate decision lands as a ruled row in a single instrument an analyst could audit, and the interface's job is to make that work legible while it happens. The grammar is a trading terminal's: function-key tabs (F1 Riset, F2 Laporan, F3 Cara kerja), a Cmd-K ticker palette, an agent rail that reads ANTRI / JALAN / SELESAI, and mono readings for tool names, endpoints, clocks and Rupiah figures. The materials are Sectoral's own: primary blue, Roboto, the E-mark's three bars, and the brand chart series.
 
-The system runs in two grounds. Light is paper: a cool grey canvas under white console panels. Dark is the console: a navy field drawn along the brand blue's hue, with surfaces that lift by lightness rather than shadow. Density is high but ruled; regions are divided by 1px lines inside one bordered console, never scattered as a card grid. Motion is damped and informational: a changed row holds its light and then settles, a gate needle eases to its reading without overshoot, and nothing bounces.
+The system runs in two grounds. Light is paper: a cool grey canvas under white console panels. Dark is the console: a true dark charcoal field with only a trace of cool, surfaces that lift by lightness rather than shadow, and the brand blue kept as an accent. Density is high but ruled; regions are divided by 1px lines inside one bordered console, never scattered as a card grid. Motion is damped and informational: a changed row holds its light and then settles, a gate needle eases to its reading without overshoot, and nothing bounces.
 
 The system rejects the category defaults it was built against: a chat transcript, or a spinner with a step list.
 
@@ -239,10 +239,10 @@ The system rejects the category defaults it was built against: a chat transcript
 
 ## Colors
 
-A single committed blue on cool paper or navy console, with a small, strictly assigned status set.
+A single committed blue on cool paper or charcoal console, with a small, strictly assigned status set.
 
 ### Primary
-- **Sectoral Blue** (`brand`): fills primary buttons, the replay play control, the scrub bar and the E-mark's first bar. In dark it brightens to a saturated cobalt (`brand-dark`) so fills keep their weight on navy.
+- **Sectoral Blue** (`brand`): fills primary buttons, the replay play control, the scrub bar and the E-mark's first bar. In dark it brightens to a saturated cobalt (`brand-dark`) so fills keep their weight on charcoal.
 - **Blue Ink** (`brand-ink`): blue used as text or a thin mark (links, active tab underline, focus ring, running status word, picked method row). Identical to Sectoral Blue in light; in dark it becomes a pale periwinkle (`brand-ink-dark`) that stays readable on every surface step.
 - **Blue Wash** (`brand-50`, `brand-100`): the running/selected field: pressed rail node, active filter chip, palette selection, the hold light for a running row, and `brand-100` as the 3px focus halo of inputs.
 - **Table Tint** (`tint`): the brand's even-row blue, carried for brand SVGs and chart series.
@@ -258,8 +258,8 @@ A single committed blue on cool paper or navy console, with a small, strictly as
 - **Fault Red** (`err-bg` / `err-ink`): errors, failed runs, "tidak didukung" verdicts.
 
 ### Neutral
-- **Cool Paper / Navy Field** (`canvas`): the page ground behind the console.
-- **Console White / Console Navy** (`surface`): panels, deck bar, footer, cards.
+- **Cool Paper / Charcoal Field** (`canvas`): the page ground behind the console.
+- **Console White / Console Charcoal** (`surface`): panels, deck bar, footer, cards.
 - **Lifted Row** (`raised`): a row or control lifted inside a panel: search button, kbd caps, skeleton bars, palette footer.
 - **Ink ladder** (`ink-strong`, `ink`, `ink-soft`, `ink-faint`): headings and readings; body (the brand charcoal); secondary labels; timestamps and idle states. In dark, body and secondary ink hold at least 4.5:1 up to `brand-50-dark`.
 - **Rules** (`rule-soft`, `rule`, `rule-strong`): inner dividers; region and panel borders (the brand rule grey); hover borders and idle markers.
