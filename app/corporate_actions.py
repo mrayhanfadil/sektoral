@@ -195,3 +195,109 @@ def conditional_scenarios(actions, as_of) -> list[dict]:
              "conditions": a.get("conditions"), "announced_at": a["announced_at"],
              "effective_date": a.get("effective_date"), "source_url": a["source_url"]}
             for a in _known(actions, as_of)[1]]
+
+
+def weighted_average_shares(base_shares, base_date, period_start, period_end, actions, as_of,
+                            shares_before_rights=None) -> dict:
+    """Time-weighted basic share count for an EPS period (IAS 33 / PSAK 56 basis).
+
+    The period runs from ``period_start`` to ``period_end`` inclusive. A split or
+    bonus issue restates every earlier segment as if it had always applied; a
+    rights issue restates earlier segments by its bonus factor (cum-rights price
+    / TERP) and adds its new shares from the effective date; other issues,
+    buybacks and conversions count from their effective date only.
+    """
+    from datetime import timedelta
+    _checked(actions)
+    start, end = _day(period_start), _day(period_end)
+    if start is None or end is None or end < start:
+        raise ValueError("EPS period dates are invalid")
+    opening = shares_on(base_shares, base_date, actions, start - timedelta(days=1), as_of) \
+        if _day(base_date) < start else base_shares
+    segments = []  # [shares, first day] with the count in force from that day
+    current, cursor = opening, start
+    for action in _known(actions, as_of)[0]:
+        effective = _day(action["effective_date"])
+        if not (start <= effective <= end):
+            continue
+        segments.append([current, cursor])
+        if action["kind"] in _RATIO_KINDS:
+            for seg in segments:
+                seg[0] *= action["ratio"]
+        elif action["kind"] == "rights_issue":
+            before = (shares_before_rights or {}).get(action["action_id"], current)
+            bonus = action["cum_rights_price"] / terp(before, action)
+            for seg in segments:
+                seg[0] *= bonus
+        current, cursor = share_change(action, current), effective
+    segments.append([current, cursor])
+    total_days = (end - start).days + 1
+    weighted = 0.0
+    for index, (shares, first) in enumerate(segments):
+        last = segments[index + 1][1] if index + 1 < len(segments) else end + timedelta(days=1)
+        weighted += shares * (last - first).days
+    return {"weighted_average_shares": weighted / total_days, "closing_shares": current,
+            "period_start": start.isoformat(), "period_end": end.isoformat(),
+            "days": total_days}
+
+
+def diluted_eps(earnings, basic_shares, instruments=(), average_price=None) -> dict:
+    """Basic and diluted EPS with anti-dilutive instruments excluded.
+
+    ``instruments``: ``{"kind": "warrant", "shares", "exercise_price"}`` uses the
+    treasury-stock method at ``average_price``; ``{"kind": "convertible",
+    "shares", "interest_after_tax"}`` uses the if-converted method. Instruments
+    are added from the most dilutive and kept only while they lower EPS.
+    """
+    if not _positive(basic_shares):
+        raise ValueError("basic share count must be positive")
+    basic = earnings / basic_shares
+    candidates = []
+    for item in instruments:
+        if item.get("kind") == "warrant":
+            if not (_positive(average_price) and _positive(item.get("shares"))
+                    and _positive(item.get("exercise_price"))):
+                raise ValueError("a warrant needs shares, exercise_price and an average price")
+            incremental = item["shares"] * (1 - item["exercise_price"] / average_price)
+            if incremental > 0:
+                candidates.append((0.0, 0.0, incremental, item))
+        elif item.get("kind") == "convertible":
+            if not _positive(item.get("shares")) or not isinstance(item.get("interest_after_tax"), (int, float)):
+                raise ValueError("a convertible needs shares and interest_after_tax")
+            candidates.append((item["interest_after_tax"] / item["shares"],
+                               item["interest_after_tax"], item["shares"], item))
+        else:
+            raise ValueError(f"unsupported dilutive instrument {item.get('kind')!r}")
+    num, den, included, excluded = earnings, basic_shares, [], []
+    for per_share, add_earnings, add_shares, item in sorted(candidates, key=lambda c: c[0]):
+        trial = (num + add_earnings) / (den + add_shares)
+        if trial < num / den:
+            num, den = num + add_earnings, den + add_shares
+            included.append(item.get("kind"))
+        else:
+            excluded.append(item.get("kind"))
+    return {"basic_eps": basic, "diluted_eps": num / den, "diluted_shares": den,
+            "included": included, "anti_dilutive_excluded": excluded}
+
+
+def financing_effects(actions, period_start, period_end, as_of) -> dict:
+    """Cash and debt effects of completed actions in a period, counted with their dilution."""
+    _checked(actions)
+    start, end = _day(period_start), _day(period_end)
+    rows = []
+    for action in _known(actions, as_of)[0]:
+        effective = _day(action["effective_date"])
+        if not (start <= effective <= end):
+            continue
+        kind = action["kind"]
+        cash = (action["new_shares"] * action["subscription_price"] if kind == "rights_issue" else
+                action["new_shares"] * action["price"] if kind in _ISSUE_KINDS else
+                -action["cash_paid"] if kind == "buyback" else
+                action["proceeds"] if kind == "treasury_resale" else 0.0)
+        debt = -action["debt_converted"] if kind == "conversion" else 0.0
+        if cash or debt:
+            rows.append({"action_id": action["action_id"], "kind": kind,
+                         "effective_date": action["effective_date"],
+                         "cash_effect": cash, "debt_effect": debt})
+    return {"rows": rows, "net_cash": sum(r["cash_effect"] for r in rows),
+            "net_debt_change": sum(r["debt_effect"] for r in rows)}
