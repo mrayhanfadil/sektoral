@@ -2502,7 +2502,8 @@ def chart_forecast_rows(intake, fc):
     """
     fc = fc or {}
     if fc.get("production_ready") is True and \
-            (fc.get("earnings_scenario") or {}).get("basis") != "operating_driver_model":
+            (fc.get("earnings_scenario") or {}).get("basis") not in (
+                "operating_driver_model", "bank_driver_scenario"):
         return [{"year": r.get("year"), "label": r.get("label"), "revenue": r.get("revenue"),
                  "ebitda": r.get("ebitda"), "net": r.get("net"),
                  "net_attr": r.get("net_attr", r.get("net")),

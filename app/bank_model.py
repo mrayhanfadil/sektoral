@@ -381,8 +381,62 @@ def limits(rows, base_year):
 NO_LIMITS = {"car_floor": None, "car_floor_basis": None, "ldr_cap": None, "ldr_cap_basis": None}
 
 
+def _official(anchor, p, inputs):
+    """Replace the screening split, FY ratios and CAR floor with sourced inputs.
+
+    ``inputs`` is a validated ``app.bank_drivers`` file: the 1H lines come from
+    the statements, the balance ratios from the official 30 June balance sheet,
+    the opening balances from the fiscal year-end column of the same
+    statements, and the capital floor from the disclosed regulatory minimum.
+    """
+    h1, mid, fy0 = inputs["h1"], inputs["h1_close"], inputs["fy0_close"]
+    tax_rate = h1["tax"] / h1["earnings_before_tax"]
+    anchor = {**anchor,
+              "net_interest_income": h1["net_interest_income"], "other_income": h1["other_income"],
+              "revenue": h1["net_interest_income"] + h1["other_income"],
+              "net_profit": h1["net_profit"], "net_profit_attributable": h1["net_profit_attributable"],
+              "parent_share": h1["net_profit_attributable"] / h1["net_profit"],
+              "parent_share_basis": f"porsi induk {anchor['period']} resmi",
+              "earning_assets_mid": mid["non_loan_earning_assets"],
+              "earning_assets_mid_basis": f"aset produktif {anchor['period']} resmi (definisi berkas driver)",
+              "loans_mid": mid["gross_loan"], "deposits_mid": mid["total_deposit"],
+              "total_assets_mid": mid["total_assets"], "tax_rate": tax_rate,
+              "tax_rate_basis": f"tarif efektif {anchor['period']} resmi",
+              "split": {"tax": h1["tax"], "earnings_before_tax": h1["earnings_before_tax"],
+                        "operating_expense": h1["operating_expense"],
+                        "provision": h1["provision"], "opex_share": None,
+                        "basis": "baris laba rugi 1H resmi"},
+              "official_inputs": True}
+    dep = mid["total_deposit"]
+    base = {**p["base"], **{k: fy0[k] for k in fy0 if k in (
+        "gross_loan", "allowance_for_loans", "non_loan_earning_assets", "total_assets",
+        "total_deposit", "current_account", "savings_account", "time_deposit",
+        "other_interest_bearing_liabilities", "non_interest_bearing_liabilities",
+        "total_equity", "total_capital", "total_risk_weighted_asset")}}
+    p = {**p, "base": base,
+         "loan_share_ea": mid["gross_loan"] / mid["non_loan_earning_assets"],
+         "coverage": mid["allowance_for_loans"] / mid["gross_loan"], "coverage_known": True,
+         "ldr": (mid["gross_loan"] - mid["allowance_for_loans"]) / dep,
+         "ca_share": mid["current_account"] / dep, "sa_share": mid["savings_account"] / dep,
+         "oibl_ratio": mid["other_interest_bearing_liabilities"] / dep,
+         "nibl_ratio": mid["non_interest_bearing_liabilities"] / dep,
+         "capital_to_equity": mid["total_capital"] / mid["total_equity"],
+         "rwa_density": mid["total_risk_weighted_asset"] / mid["total_assets"],
+         "rwa_per_loan": mid["total_risk_weighted_asset"] / mid["gross_loan"],
+         "cost_of_funds": inputs["cost_of_funds"]["value"],
+         "non_earning_share": (mid["total_assets"] - mid["non_loan_earning_assets"]
+                               + mid["allowance_for_loans"]) / mid["total_assets"],
+         "basis": "neraca 30 Juni resmi (berkas driver bank)"}
+    requirement = inputs["capital_requirement"]
+    limits_ = {"car_floor": requirement["value"],
+               "management_car_target": requirement.get("management_target"),
+               "car_floor_basis": requirement.get("basis") or "CAR minimum regulator yang diungkapkan",
+               "ldr_cap": None, "ldr_cap_basis": None}
+    return anchor, p, limits_, fy0
+
+
 def project(rows, official, balance, drivers, *, payout, payout_basis, shares=None,
-            shares_basis=None, nci=None, nci_basis=None, constrain=True):
+            shares_basis=None, nci=None, nci_basis=None, constrain=True, official_inputs=None):
     """Five (or fewer) forecast years from the Bank Driver Scenario.
 
     ``drivers``: rows with ``year`` and the percent drivers; the first is the
@@ -406,6 +460,9 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
     if not anchor or not drivers or payout is None:
         return None
     p = _parameters(rows, anchor)
+    fy0 = None
+    if official_inputs:
+        anchor, p, official_limits, fy0 = _official(anchor, p, official_inputs)
     base = p["base"]
     if not p["loan_share_ea"] or (not p["ldr"] and not all(
             _num(d.get("deposit_growth_pct")) is not None for d in drivers)):
@@ -414,8 +471,9 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
     if years != list(range(anchor["year"], anchor["year"] + len(drivers))):
         raise ValueError("bank drivers must start at the interim year and be consecutive")
     tax_rate, share = anchor["tax_rate"], anchor["parent_share"]
-    nci0 = _num(nci) or 0.0
-    lim = limits(rows, base["year"]) if constrain else dict(NO_LIMITS)
+    nci0 = fy0["non_controlling_interest"] if fy0 else (_num(nci) or 0.0)
+    lim = (official_limits if official_inputs else limits(rows, base["year"])) \
+        if constrain else dict(NO_LIMITS)
     car_ok = p["capital_to_equity"] is not None and bool(p["rwa_per_loan"])
     floor = lim["car_floor"] if car_ok else None
     notes = {}
@@ -424,6 +482,9 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
     # forecast year's profit, which is paid the year after; its row is dropped.
     run = list(drivers) + [dict(drivers[-1], year=years[-1] + 1)] if constrain else list(drivers)
     payouts = [payout] * len(run)  # payout on each year's parent profit
+    if official_inputs:
+        path = list(official_inputs["payout_path"]["values"])
+        payouts = (path + [path[-1]] * len(run))[:len(run)]
     paid_rate = payout  # on the base year's profit: declared, paid in the first year
     applied = []
 
@@ -431,7 +492,8 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
     prev = {"gross_loan": base["gross_loan"], "earning_assets": base["non_loan_earning_assets"],
             "total_deposit": base["total_deposit"],
             "ibl": base["total_deposit"] + (base["other_interest_bearing_liabilities"] or 0.0),
-            "parent_equity": base["total_equity"] - nci0, "nci": nci0,
+            "parent_equity": (fy0["parent_equity"] if fy0 else base["total_equity"] - nci0),
+            "nci": nci0,
             "total_equity": base["total_equity"], "total_assets": base["total_assets"],
             "earnings": base["earnings"]}
     out, h2 = [], None
@@ -638,8 +700,11 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
                        bvps=row["stockholders_equity"] / shares)
     constraints = {**lim, "applied": applied, "payouts": payouts[:len(drivers)],
                    "historical_payout": payout}
+    if official_inputs:
+        constraints["terminal_payout_cap"] = official_inputs["payout_path"]["values"][-1]
     notes.update(_notes(p, shares))
     return {"rows": out, "anchor": anchor, "h2": h2, "base_year": base["year"],
+            "prior_parent_profit": base["earnings"], "first_payout": payout,
             "parameters": {k: v for k, v in p.items() if k != "base"},
             "constraints": constraints,
             "assumptions": _assumptions(anchor, p, base, drivers, payout, payout_basis,
@@ -657,13 +722,16 @@ def terminal_payout(model, growth):
     """
     rows = (model or {}).get("rows") or []
     constraints = (model or {}).get("constraints") or {}
-    historical = constraints.get("historical_payout")
+    # A sourced payout policy caps the terminal payout; else the history does.
+    historical = constraints.get("terminal_payout_cap", constraints.get("historical_payout"))
     roe = _num(rows[-1].get("roe")) if rows else None
     if not roe or roe <= 0 or historical is None:
         return None, None
     sustainable = max(1 - growth / roe, 0.0)
     if sustainable >= historical:
-        return historical, "payout historis (di bawah payout berkelanjutan 1 - g / ROE)"
+        return historical, ("payout kebijakan bersumber (di bawah payout berkelanjutan 1 - g / ROE)"
+                            if "terminal_payout_cap" in constraints else
+                            "payout historis (di bawah payout berkelanjutan 1 - g / ROE)")
     return sustainable, (f"payout berkelanjutan 1 - g / ROE {rows[-1]['label']} "
                          f"({_pct(growth)} / {_pct(roe)}), di bawah payout historis "
                          f"{_pct(historical)}")
@@ -733,6 +801,14 @@ def checks(out, anchor, h2, base, payout, rows=None, constraints=None):
                             f"{limit.get('car_floor_basis')}): " + ", ".join(below)
                             + "; dividen atas laba FY dasar sudah diumumkan dan kredit tidak "
                             "diturunkan di bawah saldo 30 Juni resmi")
+    target = limit.get("management_car_target")
+    if target:
+        short = [f"{r['label']} {_pct(r['capital_adequacy_ratio'])}" for r in out
+                 if r.get("capital_adequacy_ratio") is not None
+                 and r["capital_adequacy_ratio"] < target - 1e-6]
+        if short:
+            warnings.append(f"CAR di bawah target jangka menengah manajemen ({_pct(target)}), "
+                            "di atas batas regulator: " + ", ".join(short))
     if cap:
         above = [f"{r['label']} {_pct(r['loan_to_deposit_ratio'])}" for r in out
                  if r.get("loan_to_deposit_ratio") is not None
@@ -775,8 +851,44 @@ def checks(out, anchor, h2, base, payout, rows=None, constraints=None):
             "car_min": min((c for _, c in cars), default=None)}
 
 
+def _official_assumptions(anchor, p, drivers, constraints, shares, shares_basis):
+    """Sentences for a bank model built on a sourced driver file."""
+    period = anchor["period"]
+    first = f"FY{anchor['year'] % 100:02d}F"
+    out = [
+        (f"Model bank bersumber: {first} = aktual {period} resmi (NII, pendapatan lain, beban "
+         "operasional, cadangan, pajak dan laba dari laporan laba rugi) + H2 model; saldo awal "
+         "dan rasio neraca (cakupan cadangan, LDR, komposisi DPK, liabilitas berbunga lain, "
+         "porsi kredit dalam aset produktif, rasio modal terhadap ekuitas dan ATMR per kredit) "
+         f"dari neraca 31 Desember dan 30 Juni resmi, definisi yang sama untuk kedua tanggal."),
+        (f"Mekanika model: NII = NIM x rata-rata aset produktif; biaya kredit atas rata-rata "
+         "kredit bruto; beban operasional = CIR x pendapatan; aset produktif selain kredit "
+         "menyeimbangkan neraca; ekuitas induk = saldo awal + laba induk - dividen; dividen "
+         "tahun t = payout x laba induk tahun t-1."),
+        (f"Pajak {_pct(anchor['tax_rate'])} ({anchor['tax_rate_basis']}); biaya dana "
+         f"{_pct(p['cost_of_funds'])} untuk pemisahan pendapatan dan beban bunga."),
+        (f"Batas modal: CAR {_pct(constraints.get('car_floor'))} "
+         f"({constraints.get('car_floor_basis')}); tahun yang akan turun di bawahnya menurunkan "
+         "payout, lalu pertumbuhan kredit."),
+    ]
+    payouts = constraints.get("payouts") or []
+    if payouts:
+        out.append("Payout atas laba tiap tahun forecast: "
+                   + ", ".join(f"FY{(anchor['year'] + i) % 100:02d}F {_pct(v)}"
+                               for i, v in enumerate(payouts)) + ".")
+    for row in drivers:
+        if row.get("rationale"):
+            out.append(f"Driver FY{row['year'] % 100:02d}F: {row['rationale']}")
+    if shares:
+        out.append(f"Asumsi valuasi: jumlah saham {fmt._id(shares / 1e9, 2)} miliar lembar "
+                   f"({shares_basis or 'sumber tidak tercatat'}), flat.")
+    return out
+
+
 def _assumptions(anchor, p, base, drivers, payout, payout_basis, shares, shares_basis, nci0,
                  nci_basis, constraints=None):
+    if anchor.get("official_inputs"):
+        return _official_assumptions(anchor, p, drivers, constraints or {}, shares, shares_basis)
     y0, period = base["year"], anchor["period"]
     fy = f"FY{y0}"
     first = f"FY{anchor['year'] % 100:02d}F"

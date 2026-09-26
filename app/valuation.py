@@ -12,6 +12,8 @@ from . import rate_benchmarks
 from . import terminal_economics
 from . import operating_model
 from . import reference_fcff
+from . import reference_ddm
+from . import bank_drivers
 from . import landbank as landbank_mod
 from . import lom as lom_mod
 from . import release
@@ -255,6 +257,13 @@ def _ddm_scenario_candidate(intake, fc, assumption_status, coe, g):
             intake.get("as_of"), scenario_value.model_currency(intake),
             scenario_value.model_currency(intake),
             rf=house_assumptions.discount_inputs("IDR")["risk_free"])
+        model = fc.get("bank_model") or {}
+        if model.get("sourced_drivers"):
+            # Plan §5.6: an independent closed-form rebuild from the driver file.
+            sourced = bank_drivers.load(intake.get("ticker"), intake.get("as_of"))
+            detail["reference_validation"] = (
+                reference_ddm.compare(sourced, detail, model, model["prior_parent_profit"],
+                                      model["first_payout"]) if sourced else {"status": "missing"})
     gate = (release.assess_ddm_scenario(intake, fc, {"detail": detail}, assumption_status)
             if detail else _NO_GATE)
     if detail:

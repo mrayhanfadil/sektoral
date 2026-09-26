@@ -5366,7 +5366,8 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
     if method == "rnav" and not intake.get("mineops"):
         raise ValueError("method rnav ditolak: tanpa overlay operasional di data Sectors")
     status = (va.get("release") or {}).get("status")
-    operating = (fc.get("earnings_scenario") or {}).get("basis") == "operating_driver_model"
+    operating = (fc.get("earnings_scenario") or {}).get("basis") in (
+        "operating_driver_model", "bank_driver_scenario")
     if status == "distributable_assumption_led" or (status == "distributable" and operating):
         # A Production-Ready operating model renders through the same scenario
         # layout it was valued on; only the release status differs.

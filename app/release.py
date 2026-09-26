@@ -677,6 +677,21 @@ def assess_ddm_scenario(intake, forecast, valuation, assumption_status):
                        "terekonsiliasi",
                        "payout historis data Sectors dianggap berlanjut; CoE CAPM dan "
                        "pertumbuhan jangka panjang adalah parameter kebijakan analis"]
+    if isinstance(model, Mapping) and model.get("sourced_drivers") and not blockers:
+        # A bank model on a sourced driver file is a production candidate
+        # (plan §5.2): every shared blocker, this run's terminal economics and
+        # its independent reference must clear.
+        production = common_blockers(intake.get("model_profile"), intake, forecast, detail)
+        return {
+            "status": "distributable" if not production else "distributable_assumption_led",
+            "method": "DDM (model bank bersumber, Cost of Equity)",
+            "blockers": [], "production_blockers": production,
+            "limitations": (["driver ke depan (pertumbuhan kredit, NIM, pendapatan non-bunga, CIR, "
+                             "biaya kredit) adalah panduan manajemen untuk tahun pertama dan asumsi "
+                             "analis berlabel sesudahnya"]
+                            + ([f"belum Production-Ready: {b}" for b in production]
+                               if production else [])),
+        }
     return {
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "DDM (dividend scenario, Cost of Equity)",

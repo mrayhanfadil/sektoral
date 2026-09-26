@@ -1,4 +1,5 @@
 """TAHAP 2: FORECAST ENGINE (STAGE CHECK S2). Generik, berbasis driver, lima tahun (FY+1 s.d. FY+5)."""
+from . import bank_drivers
 from . import bank_model
 from . import fmt
 from . import scrub
@@ -106,12 +107,20 @@ def _bank_scenario(intake, plan):
     actual = intake.get("latest_official_actual") or {}
     evidence = intake.get("official_evidence") or {}
     outyears = (plan or {}).get("bank_outyear_scenario")
+    sourced = bank_drivers.load(intake.get("ticker"), intake.get("as_of")) \
+        if intake.get("ticker") else None
+    if sourced is not None and bank_drivers.validate(sourced):
+        sourced = None  # an invalid file never feeds the model; the agent scenario stays
     drivers = [scenario["bank_drivers"]]
     if (isinstance(outyears, list) and len(outyears) == 4 and
             [r.get("year") for r in outyears if isinstance(r, dict)] ==
             list(range(scenario["bank_drivers"].get("year", 0) + 1,
                        scenario["bank_drivers"].get("year", 0) + 5))):
         drivers += outyears
+    if sourced is not None:
+        # The sourced driver file replaces the agent's drivers (plan §5.2).
+        drivers = bank_drivers.model_drivers(sourced)
+        outyears = drivers[1:]
     try:
         link = scenario_value.bridge(intake)
     except (KeyError, TypeError, ValueError, AttributeError):
@@ -121,9 +130,12 @@ def _bank_scenario(intake, plan):
         payout=intake.get("payout"), payout_basis=intake.get("payout_basis"),
         shares=link.get("shares") or intake.get("shares"),
         shares_basis=link.get("shares_basis") or "data Sectors",
-        nci=link.get("nci"), nci_basis=link.get("nci_basis"))
+        nci=link.get("nci"), nci_basis=link.get("nci_basis"), official_inputs=sourced)
     if not model:
         return None, None, model
+    if sourced is not None:
+        model["sourced_drivers"] = {"summary": bank_drivers.summary(sourced),
+                                    "sources": sourced.get("sources")}
     first, anchor, h2 = model["rows"][0], model["anchor"], model["h2"]
     earnings = {
         "year": first["year"], "unit": actual.get("unit"),
@@ -552,6 +564,23 @@ def build(intake, n_years=5, assumption_plan=None):
         earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
         outyear_scenario = _outyear_scenario(
             interim_scenario if is_mining else earnings_scenario, normalized_plan)
+    if is_ddm and bank_fc and bank_fc.get("sourced_drivers") and bank_fc["checks"]["ok"]:
+        # A bank model on a sourced driver file (plan §5.2): official 1H lines and
+        # balances, the disclosed capital requirement, labelled drivers.
+        forecast_basis, production_ready = "financial_driver_forecast", True
+        production_blockers = []
+        s2["S2.9_driver_forecast"] = "lolos"
+        s2["catatan"] = [c for c in s2["catatan"] if not c.startswith("S2.9")] + [
+            "S2.9: model bank bersumber (baris 1H resmi, neraca 31 Desember dan 30 Juni resmi, "
+            "CAR minimum regulator) direkonsiliasi: neraca seimbang, roll-forward ekuitas dan "
+            "dividen konsisten, FY = 1H + H2."]
+        sources = bank_fc["sourced_drivers"]["sources"] or {}
+        latest = max(s.get("published_at") or "" for s in sources.values())
+        text = " ; ".join(f"{s['title']} — {s['url']}" for s in sources.values())
+        driver_evidence = {series: {"source": text, "source_date": latest, "page": None,
+                                    "note": "model bank bersumber (data/bank_drivers)",
+                                    "basis": "data/bank_drivers"}
+                           for series in ("net_profit", "equity", "payout")}
     operating = None
     drivers = (operating_model.load(intake.get("ticker"), intake.get("as_of"))
                if intake.get("ticker") and not is_mining and not is_ddm else None)
