@@ -33,7 +33,7 @@ DISPLAY_FORECAST_YEARS = 3
 COMMODITY_UNITS = {"Copper": ("Tembaga", "USD/ton"), "Gold": ("Emas", "USD/oz"),
                    "Nickel": ("Nikel", "USD/ton"), "Coal": ("Batu bara", "USD/ton")}
 # Page order from spec §5.4, matched on page title prefixes.
-PAGE_ORDER = ("Tesis investasi", "Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
+PAGE_ORDER = ("Ringkasan skenario model", "Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
               "Skenario operasi", "Skenario laba", "Berita", "Sensitivitas", "Katalis",
               "Konteks historis", "Target harga", "Cross-check", "Skenario nilai",
               "Perbandingan peer", "Valuasi", "Data keuangan", "Lampiran valuasi")
@@ -821,7 +821,7 @@ def peer_page(intake, valuation_inputs=None):
                      [basis, fmt.mult(pb_median), f"Rp{fmt.rp(fmt.tick(pb_median * inputs['bvps_idr']))}"])
     if cross:
         if inputs.get("tp"):
-            cross.append(["Target harga metode utama", inputs.get("method_label", "-"),
+            cross.append(["Nilai model metode utama", inputs.get("method_label", "-"),
                           f"Rp{fmt.rp(inputs['tp'])}"])
         exhibits.append(_exhibit(
             "Cross-check nilai per saham dengan multiple peer",
@@ -1932,7 +1932,7 @@ def mining_catalysts(doc, intake):
         high = max(r[3] for r in attainment)
         rows.append([f"Pencapaian panduan {_guidance_period(evidence)}",
                      f"Realisasi {period} {fmt.pct(low)} sampai {fmt.pct(high)} dari panduan volume.",
-                     "Volume semester kedua menentukan EBITDA forecast dan target harga.",
+                     "Volume semester kedua menentukan EBITDA forecast dan nilai model per saham.",
                      "Negatif bila semester kedua di bawah laju yang disiratkan panduan"])
     for name in _commodities(intake):
         points = _series(name, intake.get("as_of"))
