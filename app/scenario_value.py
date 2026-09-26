@@ -25,7 +25,7 @@ import re
 from datetime import date
 from statistics import median
 
-from . import bank_model, fmt, house_assumptions
+from . import bank_model, fmt, house_assumptions, period_basis
 
 _IDR_POLICY = house_assumptions.discount_inputs("IDR")
 _USD_POLICY = house_assumptions.discount_inputs("USD")
@@ -89,13 +89,10 @@ def model_currency(intake):
 
 
 def _period_months(period):
-    """Months an interim period covers: 1H26 -> 6, 9M26 -> 9, Q1/3M -> 3, FY -> 12."""
-    text = str(period or "").upper()
-    for pattern, months in ((r"^(1H|H1|6M)", 6), (r"^9M", 9), (r"^(3M|1Q|Q1)", 3),
-                            (r"^(FY|12M)", 12)):
-        if re.match(pattern, text):
-            return months
-    return None
+    """Months an interim period covers: 1H26 -> 6, 9M26 -> 9, Q1/3M -> 3, FY -> 12.
+
+    A standalone later quarter (Q2, 3Q26) returns None; see ``app.period_basis``."""
+    return period_basis.cumulative_months(period)
 
 
 def _official_debt(balance):
