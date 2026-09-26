@@ -5,6 +5,14 @@ them centrally makes each run reproducible; it does not make them externally
 sourced or validated. Dated market/survey observations are shown separately by
 ``app.rate_benchmarks``. Until the unresolved items are approved, this registry
 is a documented baseline and cannot qualify a forecast as Production-Ready.
+
+``parameters`` describes every model-active value (plan §5.5): currency, tenor,
+nominal or real basis, whether it is a fixed policy value or a dated
+observation, its rationale and the dated benchmark it is reviewed against, and
+a review range. ``discount_rates`` holds the same values in the shape the model
+reads; a test keeps the two identical. Terminal economics are checked per run
+(``app.terminal_economics``), not asserted here. An issuer-specific deviation
+from these values is not supported: a pack that carries one fails closed.
 """
 from __future__ import annotations
 
@@ -13,7 +21,7 @@ import json
 from datetime import date
 
 
-POLICY_VERSION = "1.0.0"
+POLICY_VERSION = "1.1.0"
 DOCUMENTED_AS_OF = "2026-09-26"
 
 _POLICY = {
@@ -53,6 +61,67 @@ _POLICY = {
             "screen_growth_sensitivity": [-0.01, 0.0, 0.01],
         },
     },
+    "parameters": [
+        {"id": "IDR.risk_free", "value": 0.065, "currency": "IDR", "tenor": "10Y",
+         "basis": "nominal", "kind": "policy", "review_range": [0.06, 0.075],
+         "benchmark": "rate_benchmarks.rf_idr (INDOGB 10Y close)",
+         "rationale": "Fixed policy rate for rupiah cash flows. The local-currency government "
+                      "yield already carries the sovereign default spread, so rupiah models "
+                      "add no country risk premium. The dated INDOGB close is shown beside "
+                      "it; replacing the policy value with the observation is an open policy "
+                      "item."},
+        {"id": "IDR.equity_risk_premium", "value": 0.04, "currency": "IDR", "tenor": "long-run",
+         "basis": "nominal", "kind": "policy", "review_range": [0.035, 0.06],
+         "benchmark": "rate_benchmarks.erp (Damodaran implied mature-market ERP)",
+         "rationale": "Mature-market equity risk premium; the January 2026 implied premium "
+                      "(4.23%) lies inside the review range."},
+        {"id": "IDR.country_risk_premium", "value": 0.0, "currency": "IDR", "tenor": "long-run",
+         "basis": "nominal", "kind": "policy", "review_range": [0.0, 0.0],
+         "benchmark": "rate_benchmarks.crp (Damodaran country default spread)",
+         "rationale": "Zero for rupiah: the INDOGB-based risk-free rate embeds the sovereign "
+                      "spread (2.46% for Baa2 in January 2026); adding it again would count "
+                      "the same risk twice."},
+        {"id": "IDR.beta", "value": 1.1, "currency": "IDR", "tenor": "n/a", "basis": "n/a",
+         "kind": "policy", "review_range": [0.6, 1.6],
+         "benchmark": "rate_benchmarks.beta (weekly regression on IHSG, raw and Blume-adjusted)",
+         "rationale": "Uniform policy beta; issuer regression betas are shown as benchmarks, "
+                      "not applied."},
+        {"id": "IDR.cost_of_debt_pretax", "value": 0.09, "currency": "IDR", "tenor": "long-run",
+         "basis": "nominal", "kind": "policy", "review_range": [0.07, 0.12],
+         "benchmark": "issuer effective interest cost where the pack reports it",
+         "rationale": "Pre-tax rupiah borrowing cost for the WACC debt weight."},
+        {"id": "IDR.terminal_growth", "value": 0.035, "currency": "IDR", "tenor": "perpetuity",
+         "basis": "nominal", "kind": "policy", "review_range": [0.02, 0.05],
+         "benchmark": "rate_benchmarks.growth (IMF WEO long-run real growth and inflation)",
+         "rationale": "Mature-phase nominal rupiah growth of roughly inflation plus one point: "
+                      "below IMF 2031 nominal GDP growth (about 7.8%) and below the rupiah "
+                      "risk-free rate. Each run checks it against reinvestment and returns."},
+        {"id": "USD.risk_free", "value": None, "currency": "USD", "tenor": "10Y",
+         "basis": "nominal", "kind": "observation",
+         "benchmark": "app.rates UST 10Y close on or before the Report Date",
+         "rationale": "US$ cash flows use the dated US Treasury yield; a missing yield is a "
+                      "gap, never the rupiah rate."},
+        {"id": "USD.country_risk_premium", "value": 0.025, "currency": "USD",
+         "tenor": "long-run", "basis": "nominal", "kind": "policy",
+         "review_range": [0.015, 0.035],
+         "benchmark": "rate_benchmarks.crp (Damodaran, 2.46% Baa2 / 1.60% CDS, January 2026)",
+         "rationale": "Indonesia country risk added to the US$ risk-free rate."},
+        {"id": "USD.equity_risk_premium", "value": 0.04, "currency": "USD", "tenor": "long-run",
+         "basis": "nominal", "kind": "policy", "review_range": [0.035, 0.06],
+         "benchmark": "rate_benchmarks.erp", "rationale": "As for rupiah."},
+        {"id": "USD.beta", "value": 1.1, "currency": "USD", "tenor": "n/a", "basis": "n/a",
+         "kind": "policy", "review_range": [0.6, 1.6], "benchmark": "rate_benchmarks.beta",
+         "rationale": "As for rupiah."},
+        {"id": "USD.cost_of_debt_pretax", "value": None, "currency": "USD",
+         "tenor": "long-run", "basis": "nominal", "kind": "derived",
+         "benchmark": "UST 10Y + CRP; issuer effective cost when higher",
+         "rationale": "Market-based US$ borrowing cost for an Indonesian issuer."},
+        {"id": "USD.terminal_growth", "value": 0.03, "currency": "USD", "tenor": "perpetuity",
+         "basis": "nominal", "kind": "policy", "review_range": [0.015, 0.04],
+         "benchmark": "rate_benchmarks.growth (IMF WEO, US)",
+         "rationale": "Below IMF 2031 US nominal GDP growth (about 4.0%) and the UST yield; "
+                      "each run checks it against reinvestment and returns."},
+    ],
     "screening": {
         "exit_ev_ebitda_multiple": 8.0,
         "exit_multiple_basis": "analyst screening parameter only; selected value requires a supported peer or issuer-history basis",
@@ -62,15 +131,15 @@ _POLICY = {
         "approval_required": True,
         "effective_from": None,
         "independent_reference_validation": "required per Model Profile",
-        "terminal_economics_validation": "reinvestment and incremental-return relationship is not supplied",
+        "terminal_economics_validation": "per_run",
+        "terminal_economics_basis": "app.terminal_economics on the selected valuation of each run",
         "review_owner": "research_governance",
     },
     "unresolved": [
         "approval and effective date of the fixed IDR risk-free, ERP, beta, CRP, cost-of-debt, and terminal-growth policy values",
-        "terminal growth consistency with reinvestment and incremental returns on capital for FCFF methods",
-        "terminal growth consistency with sustainable payout and returns on equity for equity methods",
-        "dated issuer-specific deviations from the house policy",
         "whether and when dated benchmark observations replace or only challenge policy inputs",
+        "treatment of a terminal value that fails the per-run economics check (label only, or restate at the ceiling return)",
+        "whether issuer-specific betas or costs of debt may deviate from the uniform policy, and who approves them",
     ],
 }
 
@@ -118,16 +187,41 @@ def _effective_date_blockers(effective_from, as_of) -> list[str]:
     return []
 
 
-def production_readiness_blockers(as_of: str | None = None) -> list[str]:
-    """Missing controls that must be approved before any Production-Ready path."""
+def parameter(identifier: str) -> dict:
+    """One parameter record (currency, tenor, basis, kind, rationale, range)."""
+    for item in policy_snapshot()["parameters"]:
+        if item["id"] == identifier:
+            return item
+    raise KeyError(identifier)
+
+
+def deviation_violations(pack) -> list[str]:
+    """Issuer-specific house-assumption deviations are not supported: fail closed."""
+    if isinstance(pack, dict) and pack.get("house_deviations"):
+        return ["issuer pack carries house-assumption deviations, which the house policy "
+                "does not support; record the change in the house policy with its reason"]
+    return []
+
+
+def production_readiness_blockers(as_of: str | None = None, terminal: dict | None = None
+                                  ) -> list[str]:
+    """Missing controls that must be approved before any Production-Ready path.
+
+    ``terminal`` is the run's ``app.terminal_economics`` record for the selected
+    valuation; without a consistent (or not-applicable) record the terminal
+    economics are unreconciled for that run.
+    """
     validation = policy_snapshot().get("production_validation") or {}
     blockers = []
     blockers.extend(_effective_date_blockers(validation.get("effective_from"), as_of))
     if validation.get("status") != "approved" and not any(
             blocker.startswith("house discount-rate") for blocker in blockers):
         blockers.append("house discount-rate and terminal-growth assumptions are not approved")
-    if validation.get("terminal_economics_validation") != "complete":
-        blockers.append("terminal growth is not reconciled to reinvestment and incremental return on capital")
+    status = (terminal or {}).get("status")
+    if status not in ("consistent", "not_applicable"):
+        blockers.extend((terminal or {}).get("blockers") or
+                        ["terminal growth is not reconciled to reinvestment and incremental "
+                         "return on capital for this run"])
     if validation.get("independent_reference_validation") != "complete":
         blockers.append("independent reference validation is not recorded for each Model Profile")
     return blockers

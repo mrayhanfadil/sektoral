@@ -4,7 +4,7 @@ from app import (house_assumptions as H, lom, release, research, run_manifest,
 
 def test_house_assumptions_are_versioned_hashed_and_detached():
     snapshot = H.versioned_snapshot()
-    assert snapshot["policy"]["version"] == H.POLICY_VERSION == "1.0.0"
+    assert snapshot["policy"]["version"] == H.POLICY_VERSION == "1.1.0"
     assert snapshot["policy"]["documented_as_of"] == H.DOCUMENTED_AS_OF
     assert snapshot["policy"]["effective_from"] is None
     assert snapshot["policy"]["status"] == "used_by_model_not_independently_validated"
@@ -86,4 +86,41 @@ def test_standalone_audit_trace_shows_active_house_inputs_and_open_validation():
     assert "House assumptions tingkat diskonto" in html
     assert "6.5%" in html and "4.0%" in html and "3.5%" in html
     assert "used_by_model_not_independently_validated" in html
-    assert "terminal growth consistency with reinvestment" in html
+    assert "treatment of a terminal value that fails the per-run economics check" in html
+
+
+def test_parameter_records_match_the_values_the_model_reads():
+    rates = H.policy_snapshot()["discount_rates"]
+    for item in H.policy_snapshot()["parameters"]:
+        currency, name = item["id"].split(".")
+        assert item["currency"] == currency
+        assert item["tenor"] and item["basis"] and item["kind"] and item["rationale"]
+        if item["kind"] == "policy":
+            assert rates[currency][name] == item["value"]
+            low, high = item["review_range"]
+            assert low <= item["value"] <= high
+        else:
+            assert rates[currency][name] is None and item["value"] is None
+    assert H.parameter("IDR.terminal_growth")["basis"] == "nominal"
+
+
+def test_terminal_economics_are_reconciled_per_run_not_asserted():
+    blockers = H.production_readiness_blockers("2026-09-26")
+    assert any("for this run" in b for b in blockers)
+    consistent = H.production_readiness_blockers("2026-09-26", {"status": "consistent"})
+    assert not any("not reconciled" in b for b in consistent)
+    failing = H.production_readiness_blockers(
+        "2026-09-26", {"status": "inconsistent", "blockers": ["ekonomi terminal: x"]})
+    assert "ekonomi terminal: x" in failing
+
+
+def test_issuer_deviations_from_house_policy_fail_closed():
+    assert H.deviation_violations({"house_deviations": [{"parameter": "beta"}]})
+    assert H.deviation_violations({}) == []
+
+
+def test_a_pack_with_deviations_is_a_critical_register_violation():
+    from app import evidence
+    register = evidence.build("XXXX", "2026-09-26", {"official_evidence": {
+        "latest_actual": {}, "house_deviations": [{"parameter": "IDR.beta", "value": 0.8}]}})
+    assert any("house-assumption deviations" in v for v in register["critical_violations"])
