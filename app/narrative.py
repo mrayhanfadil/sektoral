@@ -2970,7 +2970,11 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                   if chain.get("selected") == "sotp_lom" else None)
     lom_page = _lom_exhibits(intake, va, lom_detail) if lom_detail else None
     meta = doc["meta"]
-    meta.update(status="distributable_assumption_led",
+    # A Production-Ready operating model shares this layout; the status is the
+    # release's own, never assumed.
+    released = (va.get("release") or {}).get("status")
+    meta.update(status=("distributable" if released == "distributable"
+                        else "distributable_assumption_led"),
                 model_profile=intake.get("model_profile"),
                 rating=va["rating"],
                 tp=va["tp"], upside_persen=va["upside"] * 100,
@@ -4160,7 +4164,10 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
          "diungkapkan, tidak dirata-rata."
          if dcf_s.get("exit_multiple") is not None else
          "Cross-check Exit EV/EBITDA tidak dihitung karena titik historis yang sebanding belum cukup."),
-        "Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi.",
+        ("Model operasional direkonsiliasi (FCFF, neraca dan likuiditas setiap tahun) dan "
+         "dihitung ulang secara independen; driver ke depan yang berupa asumsi analis diberi label."
+         if operating else
+         "Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi."),
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
     ]
 
