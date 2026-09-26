@@ -131,7 +131,7 @@ _BANK_REASONS = {
         "EBITDA, EBIT dan D&A tidak bermakna untuk bank; skenario laba bank tidak memecah "
         "beban operasional menurut jenisnya.",
     ("capital_expenditure", "fcff", "change_in_working_capital", "working_capital"):
-        "Capex, modal kerja dan FCFF tidak dipakai untuk institusi keuangan (spesifikasi §3.1).",
+        "Capex, modal kerja dan FCFF tidak dipakai untuk institusi keuangan.",
     ("cost_of_revenue", "gross_profit", "interest_expense_non_operating", "trade_receivables",
      "trade_payables", "inventories", "current_assets", "current_liabilities", "fixed_assets",
      "non_current_liabilities", "other_current_assets", "other_non_current_assets",
@@ -863,7 +863,7 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 "hanya dipakai untuk roll-forward kas dan ekuitas, sama dengan forecast "
                 f"screening; dividen tunai tahun t = payout x laba induk tahun t-1; {timing}. "
                 "DPS dan payout tidak ditampilkan karena payout historis tidak tersedia "
-                "(spesifikasi §5.4).")
+                "di data Sectors.")
         if interim:
             assumptions.append(
                 "Mekanika model: "
@@ -1179,7 +1179,7 @@ def _bank_model_rows(intake, fc, model, horizon):
             row.pop("payout", None)
         reasons["dps"] = reasons["payout"] = (
             f"Payout historis tidak tersedia: {_source(payout_basis)}. DPS dan payout forecast "
-            "memerlukan payout atau panduan dividen yang didukung (spesifikasi §5.4).")
+            "memerlukan payout atau panduan dividen yang didukung.")
     universe = tuple(dict.fromkeys(
         BANK_MODELLED + tuple(k for keys in _BANK_MODEL_REASONS for k in keys)
         + tuple(model.get("notes") or {}) + ("dps", "payout")))
@@ -1260,7 +1260,7 @@ def _reasons(*, bank, full, moved_text, da_reason, has_ebitda, has_capex, base, 
     if not payout_sourced:
         reasons["dps"] = reasons["payout"] = (
             f"Payout historis tidak tersedia: {_source(payout_basis)}. DPS dan payout forecast "
-            "memerlukan payout atau panduan dividen yang didukung (spesifikasi §5.4)."
+            "memerlukan payout atau panduan dividen yang didukung."
             if payout is not None else equity_reason)
     return reasons
 

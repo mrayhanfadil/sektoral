@@ -495,7 +495,7 @@ _READER_REASONS = (
     ("financial DDM", "hasil DDM belum tersedia"),
     ("mining forecast is not", "forecast fisik tambang masih screening"),
     ("operating bridge missing", "jembatan operasi fisik ke keuangan belum ada"),
-    ("forecast gate failed", "forecast belum lolos rekonsiliasi S2.9"),
+    ("forecast gate failed", "forecast driver belum lolos rekonsiliasi"),
     ("sourced operating and cash-flow forecast", "forecast driver bersumber belum lengkap"),
     ("forecast is not verified", "forecast masih screening"),
     ("forecast: ", "forecast masih screening"),

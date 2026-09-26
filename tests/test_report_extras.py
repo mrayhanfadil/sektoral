@@ -156,8 +156,10 @@ def test_client_copy_is_scoped_to_report_copy_and_preserves_source_data():
                                 "isi": "Target ini mengimplikasikan 8% growth. Pada target harga, PER 10x."}]},
         "bagian": [{"judul": "Target harga: EV/EBITDA peer",
                     "paragraf": ["Method Gate 5 dan S2.9 lolos."], "exhibit": []}],
-        "exhibits": [{"judul": "S1.2", "catatan_sumber": "§ 5",
-                      "data": {"rows": [["https://example.test/S1.2"]]}}],
+        "exhibits": [{"judul": "Target harga (S1.2)",
+                      "catatan_sumber": "Sumber: https://example.test/S1.2 (spesifikasi §5.4).",
+                      "data": {"rows": [["https://example.test/S1.2", 1234, "Method Gate 3"]],
+                               "source_url": "https://example.test/§5"}}],
     }
     copied = narrative.client_copy(doc)
     assert copied["cover"]["headline"].startswith("Nilai model Rp1.234")
@@ -166,7 +168,13 @@ def test_client_copy_is_scoped_to_report_copy_and_preserves_source_data():
     assert "Pada nilai model" in copied["cover"]["paragraf"][0]["isi"]
     assert "pemeriksaan metode" in copied["bagian"][0]["paragraf"][0]
     assert copied["meta"] == doc["meta"] and copied["log_gate"] == doc["log_gate"]
-    assert copied["exhibits"][0] == doc["exhibits"][0]
+    exhibit = copied["exhibits"][0]
+    # Reader-facing exhibit copy is cleaned, but links and figures survive verbatim.
+    assert exhibit["judul"] == "Nilai model"
+    assert exhibit["catatan_sumber"] == "Sumber: https://example.test/S1.2."
+    assert exhibit["data"]["rows"] == [["https://example.test/S1.2", 1234, "pemeriksaan metode"]]
+    assert exhibit["data"]["source_url"] == "https://example.test/§5"
+    assert doc["exhibits"][0]["judul"] == "Target harga (S1.2)"  # input is not mutated
 
 
 def test_selected_ddm_detail_is_only_returned_for_selected_ddm_without_alias_keys():

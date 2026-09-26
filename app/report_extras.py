@@ -192,8 +192,8 @@ def holding_sotp_exhibit(va):
            "Segmen tanpa harga pasar dinilai pada nilai buku (lahan industri tercatat pada "
            "biaya perolehan). ")
         + "Diskon holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. "
-        + ("Metode utama (Method Gate 0: grup dengan lini usaha berbeda); target memakai diskon 0%."
-           if primary else "Cross-check, bukan dasar target harga."))
+        + ("Metode utama (grup dengan lini usaha berbeda); nilai model memakai diskon 0%."
+           if primary else "Cross-check, bukan dasar nilai model."))
 
 
 def _rp_signed(value):

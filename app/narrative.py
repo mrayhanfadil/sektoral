@@ -3124,7 +3124,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             page["paragraf"] = [
                 "Metode utama adalah FY forecast EV/EBITDA 8x dengan asumsi analis. "
                 "Status rilis distributable_assumption_led berlaku melalui jalur opt-in analyst-target; "
-                "gate operating bridge S2.9 dan SOTP aset tetap gagal. "
+                "pemeriksaan jembatan operasi dan SOTP aset tetap belum lolos. "
                 "LoM/SOTP tetap belum lengkap; daftar di bawah menunjukkan bukti "
                 "yang diperlukan untuk menguji ulang nilai aset dan capex."]
         page["halaman"] = doc["bagian"].index(page) + 2
@@ -4011,7 +4011,7 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
             f"implied exit EV/EBITDA Gordon {fmt.mult(dcf_s['implied_exit'], 1)}"
             + (f"; exit = median EV/EBITDA historis emiten di data Sectors "
                f"({', '.join(fmt.mult(v, 1) for v in dcf_s['exit_points'])}); selisih "
-               f"{fmt.pct(dcf_s['exit_gap'])} diungkapkan, tidak dirata-rata (§4.4)."
+               f"{fmt.pct(dcf_s['exit_gap'])} diungkapkan, tidak dirata-rata."
                if exit_col else "; exit historis kurang dari tiga titik.")
             + (f" Nilai dalam US$ sampai ekuitas per saham, lalu dikonversi ke rupiah satu kali "
                f"pada kurs spot Rp{fmt._id(dcf_s['fx'], 0)}/US$ ({dcf_s.get('fx_date') or '-'})."
@@ -4095,7 +4095,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
     if ev_s:
         return [
             "Nilai model per saham berasal dari EV/EBITDA peer forward, metode untuk aset yang masih "
-            "ramping atau riwayat singkat (Method Gate 3, §4.1a): EV = median EV/EBITDA "
+            "ramping atau riwayat singkat: EV = median EV/EBITDA "
             f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} x EBITDA {label} "
             "skenario analis (aktual 1H resmi + margin EBITDA asumsi agen).",
             f"EV/EBITDA tiap peer dihitung dari {ev_s['peer_source']}: kapitalisasi pasar "
@@ -4109,7 +4109,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
             "Kuartil bawah dan atas peer menjadi sensitivitas.",
             "PER FY skenario menjadi langkah berikutnya di rantai metode, tidak dirata-rata "
             "dengan nilai model. DCF menunggu tiga tahun kondisi stabil.",
-            "Skenario bukan forecast driver terekonsiliasi (S2.9); statusnya berbasis asumsi.",
+            "Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi.",
             "Tanda '-' berarti angka tidak tersedia, bukan nol.",
         ]
     if ddm_s:
@@ -4120,11 +4120,11 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
             (f"Laba {label} dari aktual 1H resmi dan H2 model driver bank; tahun sesudahnya "
              "dari driver bank tahunan asumsi analis (kredit, NIM, pendapatan non-bunga, rasio "
              "biaya, biaya kredit), dengan neraca, pendanaan dan modal pada rasio historis "
-             "emiten (screening). Skenario ini bukan forecast driver terekonsiliasi (S2.9), "
+             "emiten (screening). Skenario ini bukan forecast driver yang sudah direkonsiliasi, "
              "sehingga statusnya berbasis asumsi."
              if ddm_s.get("profit_basis") == "bank_driver_scenario" else
              f"Laba {label} dari aktual 1H resmi dan asumsi H2; tahun sesudahnya asumsi analis "
-             "tahunan. Skenario ini bukan forecast driver terekonsiliasi (S2.9), sehingga "
+             "tahunan. Skenario ini bukan forecast driver yang sudah direkonsiliasi, sehingga "
              "statusnya berbasis asumsi."),
             f"CoE {fmt.pct(ddm_s['coe'])} dari CAPM (rf INDOGB 10Y, beta dan ERP 4% kebijakan "
             f"analis); g {fmt.pct(ddm_s['g'])}. Tanggal valuasi {ddm_s['valuation_date']}; "
@@ -4161,7 +4161,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
          "diungkapkan, tidak dirata-rata."
          if dcf_s.get("exit_multiple") is not None else
          "Cross-check Exit EV/EBITDA tidak dihitung karena titik historis yang sebanding belum cukup."),
-        "Skenario bukan forecast driver terekonsiliasi (S2.9); statusnya berbasis asumsi.",
+        "Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi.",
         "Tanda '-' berarti angka tidak tersedia, bukan nol.",
     ]
 
@@ -4602,7 +4602,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
         deepest = sotp_h["discounts"][-1]
         sotp_lead = (
             f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai SOTP holding, metode utama "
-            "untuk grup dengan lini usaha berbeda (Method Gate 0): anak usaha tercatat pada nilai pasar "
+            "untuk grup dengan lini usaha berbeda: anak usaha tercatat pada nilai pasar "
             f"({parts}) ditambah ekuitas pemilik induk lainnya pada nilai buku "
             f"Rp{bn(sotp_h['remainder_book'])} miliar"
             + (f" dan tambahan nilai landbank Rp{bn(sotp_h['landbank_uplift'])} miliar (RNAV "
@@ -4637,7 +4637,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
             f"nilainya Rp{fmt.rp(va['tp_down'])}. ")
     ev_lead = (
         f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai EV/EBITDA peer forward, metode "
-        f"untuk aset yang masih ramping atau riwayat singkat (Method Gate 3): EV/EBITDA median "
+        f"untuk aset yang masih ramping atau riwayat singkat: EV/EBITDA median "
         f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} (12 bulan terakhir "
         f"atau FY terakhir tiap peer, {ev_s['peer_source']}) atas EBITDA {label} Rp{bn(ev_s['ebitda_idr'])} miliar (aktual 1H "
         f"resmi dan margin EBITDA asumsi agen) memberi EV Rp{bn(ev_s['ev'])} miliar; ditambah "
@@ -4961,7 +4961,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     if sotp_h:
         doc["catatan_metodologi"] = [
             "Nilai model per saham berasal dari SOTP holding, metode utama untuk grup dengan lini "
-            "usaha berbeda (Method Gate 0 framework): anak usaha tercatat pada kapitalisasi pasar dikali "
+            "usaha berbeda: anak usaha tercatat pada kapitalisasi pasar dikali "
             "kepemilikan, sisa ekuitas pemilik induk pada nilai buku.",
             ("Tanah untuk pengembangan dinilai dengan RNAV landbank (laju penjualan historis, "
              "harga marketing terakhir, margin kas segmen properti, CoE kebijakan); hotel dan "
@@ -5955,17 +5955,36 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
     }
 
 
+_URL = re.compile(r"https?://\S+")
+
+
 def _client_prose(text):
-    """Clean reader-facing prose while preserving figures and trace structure."""
+    """Clean reader-facing prose while preserving figures, links and trace structure.
+
+    Links are copied verbatim: a source URL can contain a spec-like token
+    (``S1.2``) and must still resolve."""
     if not isinstance(text, str):
         return text
+    parts, last = [], 0
+    for match in _URL.finditer(text):
+        parts.append(_clean_prose_segment(text[last:match.start()]))
+        parts.append(match.group(0))
+        last = match.end()
+    parts.append(_clean_prose_segment(text[last:]))
+    return "".join(parts)
+
+
+def _clean_prose_segment(text):
     text = re.sub(r"\(news:\s*\d+(?:\s*,\s*news:\s*\d+)*\)",
                   "(berita bertanggal)", text, flags=re.I)
     text = re.sub(r"\(sectors_annuals\)", "(data tahunan Sectors)", text, flags=re.I)
     text = re.sub(r"\(pola BBTN\)", "(pola rentang CoE)", text, flags=re.I)
+    # A code in its own parentheses is dropped; a bare code is named in words.
+    code = r"(?:spesifikasi|spec|framework|Method Gates?\s*\d+|S\d+(?:\.\d+)+|§\s*\d+(?:\.\d+[a-z]?)?)"
+    text = re.sub(rf"\s*\((?:\s*{code}\s*[,;]?)+\)", "", text, flags=re.I)
     text = re.sub(r"Method Gates?\s*\d+(?:\s*[-–/]\s*\d+)?", "pemeriksaan metode",
                   text, flags=re.I)
-    text = re.sub(r"\(?\bS\d+(?:\.\d+)+\)?", "pemeriksaan model", text)
+    text = re.sub(r"\bS\d+(?:\.\d+)+\b", "pemeriksaan model", text)
     text = re.sub(r"§\s*\d+(?:\.\d+[a-z]?)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?",
                   "panduan metodologi", text, flags=re.I)
     text = re.sub(r"\bRating\s+dan\s+target\s+harga\b", "Nilai model", text, flags=re.I)

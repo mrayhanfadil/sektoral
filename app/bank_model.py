@@ -770,7 +770,7 @@ def checks(out, anchor, h2, base, payout, rows=None, constraints=None):
         if below:
             warnings.append("CAR screening di bawah CAR terendah historis data Sectors "
                             f"({_pct(low)}): " + ", ".join(below) + "; payout historis "
-                            "menekan modal untuk pertumbuhan kredit skenario (S2.8)")
+                            "menekan modal untuk pertumbuhan kredit skenario")
     return {"ok": not problems, "problems": problems, "warnings": warnings,
             "car_min": min((c for _, c in cars), default=None)}
 
