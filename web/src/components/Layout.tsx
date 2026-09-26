@@ -77,7 +77,7 @@ function DeckBar() {
       </a>
       <header className="sticky top-0 z-50 border-b border-rule bg-surface">
         <div className="wrap flex h-[52px] items-center gap-5 max-sm:gap-2">
-          <Link to="/" aria-label="Sectoral, beranda" className="flex-none">
+          <Link to="/" aria-label="Sektoral, beranda" className="flex-none">
             <Logo className="h-[22px] max-sm:h-[19px]" />
           </Link>
           <nav aria-label="Navigasi utama" className="flex h-full items-stretch gap-1 max-sm:ml-auto max-sm:gap-0">
@@ -124,8 +124,8 @@ function SiteFooter() {
     <footer className="mt-auto border-t border-rule bg-surface">
       <div className="wrap grid gap-4 pt-6 pb-7">
         <p className="max-w-[88ch] text-[13.5px] text-ink-soft">
-          <strong className="text-ink">Bukan rekomendasi investasi.</strong> Sectoral menyajikan informasi dan analisis untuk mendukung kerja
-          analis. Rating dan target harga hanya muncul setelah pemeriksaan data, forecast, dan valuasi lolos. Sectoral
+          <strong className="text-ink">Informasi dan analisis, bukan saran investasi.</strong> Sektoral menyajikan hasil historis, perhitungan, dan skenario model
+          berdasarkan sumber tertanggal serta asumsi analis. Skenario bukan rekomendasi, prediksi, atau saran investasi; hasil aktual dapat berbeda. Sektoral
           tidak terhubung ke broker dan tidak mengeksekusi transaksi. Keputusan investasi tetap tanggung jawab pembaca.
         </p>
         <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-ink-soft">
@@ -136,7 +136,7 @@ function SiteFooter() {
             <Link to="/#cara-kerja">Cara kerja</Link>
             <Link to="/#batasan">Batasan</Link>
           </nav>
-          <span>© 2026 Sectoral, dibuat untuk Sectors Hackathon 2026</span>
+          <span>© 2026 Sektoral, dibuat untuk Sectors Hackathon 2026</span>
         </div>
       </div>
     </footer>

@@ -85,7 +85,7 @@ def words(s):
     return len(s.split())
 
 
-DEFAULT_SOURCE = "Source: Company, Sektoral Estimates"
+DEFAULT_SOURCE = "Source: Sectors (market and financial data), issuer disclosures; Sektoral analysis and estimates."
 
 
 def pe(v, dec=1):
@@ -195,4 +195,3 @@ def clean_dashes(s: str) -> str:
     if not isinstance(s, str):
         return s
     return s.replace("\u2014", " - ").replace("\u2013", "-")
-

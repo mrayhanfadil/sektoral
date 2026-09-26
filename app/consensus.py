@@ -16,7 +16,7 @@ from pathlib import Path
 from . import fmt
 
 ROOT = Path(__file__).resolve().parent.parent / "data" / "consensus"
-TITLE = "Target harga Sektoral dan konsensus analis"
+TITLE = "Nilai model Sektoral dan konsensus analis"
 
 
 def load(ticker, as_of, root=ROOT):
@@ -35,11 +35,12 @@ def load(ticker, as_of, root=ROOT):
     return doc, None
 
 
-def exhibit(ticker, as_of, target, rating, price, root=ROOT):
-    """House target vs consensus, or a one-row table saying why it is absent."""
+def exhibit(ticker, as_of, target, price, root=ROOT):
+    """Informational model value vs sourced consensus, without house action labels."""
     doc, why = load(ticker, as_of, root)
     rp = lambda v: f"Rp{fmt.rp(v)}"
-    rows = [["Target harga Sektoral", f"{rating or '-'} {rp(target)}" if target else "-"]]
+    rows = [["Skenario nilai indikatif", rp(target) if target else
+             "Belum diterbitkan; menunggu peninjauan"]]
     if not doc:
         rows.append(["Konsensus analis", f"tidak tersedia: {why}"])
         note = "Sumber: Sektoral Estimates."
@@ -48,11 +49,10 @@ def exhibit(ticker, as_of, target, rating, price, root=ROOT):
         rows += [
             [f"Rata-rata target konsensus ({doc['analysts']} analis)", rp(avg)],
             ["Rentang target konsensus", f"{rp(doc['target_low'])} s.d. {rp(doc['target_high'])}"],
-            ["Rekomendasi (beli / tahan / jual)", f"{doc['buy']} / {doc['hold']} / {doc['sell']}"],
-            ["Target Sektoral terhadap rata-rata konsensus",
+            ["Nilai model Sektoral dibanding rata-rata konsensus",
              fmt.pct(target / avg - 1) if target and avg else
-             "tidak dihitung: target harga Sektoral ditahan"],
-            ["Upside rata-rata konsensus terhadap harga",
+             "tidak dihitung: skenario nilai belum diterbitkan"],
+            ["Selisih rata-rata konsensus dari harga terakhir",
              fmt.pct(avg / price - 1) if price else "tidak dihitung: harga pasar tidak tersedia"],
             ["Estimasi konsensus pendapatan, EBITDA, laba", doc.get("estimates_note") or "-"],
             ["Sumber konsensus", f"{doc['source_title']}, diambil {doc['as_of']}"]]

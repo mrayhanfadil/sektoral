@@ -37,6 +37,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from app.harness.profiles import normalize as _normalize_profile  # noqa: E402
+from app.fmt import DEFAULT_SOURCE  # noqa: E402
 
 # Switch: template checks run inside run_all (fail closed). One place to turn
 # them off, e.g. while bisecting a build: SEKTORAL_TEMPLATE_HARNESS=0.
@@ -46,7 +47,7 @@ ENABLED = os.environ.get("SEKTORAL_TEMPLATE_HARNESS", "1") != "0"
 
 BLOCKER, WARNING = "blocker", "warning"
 PASS, FAIL, NA = "lolos", "gagal", "tidak_berlaku"
-HOUSE_SOURCE = "Source: Company, Sektoral Estimates"
+HOUSE_SOURCE = DEFAULT_SOURCE
 
 # id -> (severity, owner, rule). Owners: present (report_extras/narrative),
 # layout (render/fmt), model (forecast_statements/valuation), peers.
@@ -62,16 +63,16 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "TF.chart_forecast_nm": (WARNING, "present", "grafik keempat hanya aktual, alasan tertulis"),
     "TF.valuation_horizon": (BLOCKER, "model", "tabel valuasi lima tahun proyeksi berurutan"),
     "TF.period_labels": (WARNING, "present", "label periode 2024A / FY26F"),
-    "T2.cover_rating_block": (BLOCKER, "present", "rating Buy/Hold/Sell di cover"),
-    "T2.rating_status": (WARNING, "present", "status rating Inisiasi/Dipertahankan/Naik/Turun"),
-    "T2.price_box": (BLOCKER, "present", "harga, TP, upside = TP/harga - 1"),
+    "T2.cover_rating_block": (BLOCKER, "present", "label skenario nilai informasional di cover"),
+    "T2.rating_status": (WARNING, "present", "status skenario nilai indikatif atau dalam peninjauan"),
+    "T2.price_box": (BLOCKER, "present", "harga, nilai model, selisih = nilai model/harga - 1"),
     "T2.stats_block": (WARNING, "present", "saham, kap. pasar Rp/US$, ADTV Rp/US$, free float, pemegang saham"),
     "T2.relative_chart": (WARNING, "present", "exhibit harga relatif terhadap IHSG di cover"),
     "T2.thesis_subtitle": (WARNING, "present", "subjudul tesis, bukan judul generik"),
-    "T2.cover_bullets": (WARNING, "present", "tiga bullet satu kalimat; bullet 3 rating + TP"),
+    "T2.cover_bullets": (WARNING, "present", "tiga bullet satu kalimat; bullet 3 nilai model per saham"),
     "T2.cover_paragraphs": (WARNING, "present", "tiga paragraf dengan subjudul"),
-    "T2.valuation_paragraph": (WARNING, "present", "paragraf valuasi: metode + parameter, CAGR FY26-28F, multiple pada TP"),
-    "T2.cover_tp_method": (BLOCKER, "present", "TP dan metode sama di cover dan halaman valuasi"),
+    "T2.valuation_paragraph": (WARNING, "present", "paragraf valuasi: metode + parameter, CAGR FY26-28F, multiple pada nilai model"),
+    "T2.cover_tp_method": (BLOCKER, "present", "nilai model dan metode sama di cover dan halaman valuasi"),
     "T2.key_financials_rows": (BLOCKER, "present", "baris Key Financials per profile"),
     "T2.key_financials_order": (WARNING, "present", "urutan baris Key Financials"),
     "T2.key_financials_cols": (BLOCKER, "present", "kolom Key Financials 2A+3F"),
@@ -1003,9 +1004,8 @@ def _tf_valuation_horizon(ctx, r):
 
 # =================================================================== T2
 
-_RATING_STATUS = re.compile(
-    r"^\(?(inisiasi|dipertahankan|naik dari \w+|turun dari \w+|initiation|maintained|"
-    r"upgrade from \w+|downgrade from \w+)\)?$", re.I)
+_MODEL_LABELS = {"di atas harga pasar", "di bawah harga pasar", "setara harga pasar", "skenario nilai"}
+_RATING_STATUS = re.compile(r"^(skenario nilai indikatif|dalam peninjauan)$", re.I)
 
 
 @_check("T2.cover_rating_block", "T2.rating_status")
@@ -1013,16 +1013,16 @@ def _t2_rating(ctx, r):
     rating = _clean(ctx.meta.get("rating"))
     status = _clean(ctx.meta.get("rating_status") or ctx.cover.get("rating_status"))
     if not ctx.published:
-        r.na("T2.cover_rating_block", "draft: rating ditahan")
+        r.na("T2.cover_rating_block", "draft: nilai model ditahan")
         ok = not status or status.lower().startswith("dalam peninjauan")
         r.add("T2.rating_status", ok, "draft: dalam peninjauan" if ok
               else f"draft dengan status rating '{status}'")
         return
-    r.add("T2.cover_rating_block", rating.lower() in ("buy", "hold", "sell"),
-          f"rating {rating}" if rating.lower() in ("buy", "hold", "sell")
-          else f"rating '{rating or 'kosong'}' bukan Buy/Hold/Sell")
+    r.add("T2.cover_rating_block", rating.lower() in _MODEL_LABELS,
+          f"skenario nilai {rating}" if rating.lower() in _MODEL_LABELS
+          else f"label skenario '{rating or 'kosong'}' bukan label informasional")
     if not status:
-        r.na("T2.rating_status", "status rating belum diisi (diset sesudah harness)")
+        r.na("T2.rating_status", "status skenario nilai belum diisi")
     else:
         r.add("T2.rating_status", bool(_RATING_STATUS.match(status)), f"status '{status}'")
 
@@ -1030,16 +1030,16 @@ def _t2_rating(ctx, r):
 @_check("T2.price_box")
 def _t2_price_box(ctx, r):
     if not ctx.published:
-        r.na("T2.price_box", "draft: TP ditahan")
+        r.na("T2.price_box", "draft: nilai model ditahan")
         return
     up = num(ctx.meta.get("upside_persen"))
     if not ctx.price or ctx.price <= 0 or ctx.tp is None or up is None:
-        r.add("T2.price_box", False, f"harga {ctx.price}, TP {ctx.tp}, upside {up}: wajib lengkap")
+        r.add("T2.price_box", False, f"harga {ctx.price}, nilai model {ctx.tp}, selisih {up}: wajib lengkap")
         return
     want = (ctx.tp / ctx.price - 1) * 100
     ok = abs(up - want) <= 0.05
-    r.add("T2.price_box", ok, f"upside {up:+.1f}% = TP/harga - 1" if ok
-          else f"upside {up:+.2f}% tetapi TP/harga - 1 = {want:+.2f}%")
+    r.add("T2.price_box", ok, f"selisih {up:+.1f}% = nilai model/harga - 1" if ok
+          else f"selisih {up:+.2f}% tetapi nilai model/harga - 1 = {want:+.2f}%")
 
 
 @_check("T2.stats_block")
@@ -1108,8 +1108,8 @@ def _t2_bullets(ctx, r):
     if ctx.published and len(bullets) >= 3:
         last = str(bullets[2])
         rating = _clean(ctx.meta.get("rating"))
-        if rating and rating.lower() not in last.lower():
-            problems.append("bullet 3 tanpa rating")
+        if not re.search(r"nilai model", last, re.I):
+            problems.append("bullet 3 tanpa nilai model")
         if not re.search(r"Rp\s?\d", last):
             problems.append("bullet 3 tanpa TP")
     r.add("T2.cover_bullets", not problems, "tiga bullet sesuai" if not problems
@@ -1131,7 +1131,9 @@ def _t2_paragraphs(ctx, r):
           else "; ".join(problems))
 
 
-_TP_MENTION = re.compile(r"\b(?:target(?:\s+harga)?|TP)\b(?:\s+(?:baru|menjadi|ke|sebesar|di|kami))*"
+_TP_MENTION = re.compile(r"\b(?:nilai(?:\s+(?:model|skenario(?:\s+indikatif)?))?|skenario\s+nilai|"
+                         r"target(?:\s+harga)?|TP)\b"
+                         r"(?:\s+(?:baru|menjadi|ke|sebesar|di|kami))*"
                          r"\s*(?:menjadi\s+)?Rp\s?(\d{1,3}(?:\.\d{3})+|\d+)", re.I)
 
 
@@ -1143,14 +1145,15 @@ def _cover_texts(ctx):
 
 def _valuation_paragraph(ctx):
     paras = [p for p in ctx.cover.get("paragraf") or [] if isinstance(p, dict)]
-    hit = [p for p in paras if re.search(r"\b(target|TP)\b", str(p.get("isi") or ""), re.I)]
+    hit = [p for p in paras if re.search(r"\b(nilai model|target|TP)\b",
+                                        str(p.get("isi") or ""), re.I)]
     return hit[-1] if hit else (paras[2] if len(paras) >= 3 else None)
 
 
 @_check("T2.valuation_paragraph")
 def _t2_val_para(ctx, r):
     if not ctx.published:
-        r.na("T2.valuation_paragraph", "draft: TP ditahan")
+        r.na("T2.valuation_paragraph", "draft: nilai model ditahan")
         return
     p = _valuation_paragraph(ctx)
     if not p:
@@ -1160,7 +1163,7 @@ def _t2_val_para(ctx, r):
     missing = []
     fam = _FAMILY.get(ctx.method_key or "")
     if not (_TP_MENTION.search(text) and fam and re.search(fam, text)):
-        missing.append("kalimat metodologi (TP + metode)")
+        missing.append("kalimat metodologi (nilai model + metode)")
     rate = any(re.search(r"(wacc|coe|cost of equity|diskonto|diskon|discount|exit multiple|\bg\b)", s, re.I)
                and re.search(r"\d+(?:,\d+)?\s?%", s) for s in _sentences(text))
     multiple = ctx.option == "X" and any(re.search(r"(EV/EBITDA|EV/Sales|PER|P/E|P/BV|PBV)", s)
@@ -1172,12 +1175,13 @@ def _t2_val_para(ctx, r):
     mult = [s for s in _sentences(text) if re.search(r"(PER|P/E|PBV|P/BV|EV/EBITDA)\b", s)
             and re.search(r"\d+(?:,\d+)?x", s)]
     if not mult:
-        missing.append("multiple pada TP")
+        missing.append("multiple pada nilai model")
     else:
         if not any(re.search(r"historis|rata-rata|median|peer|sejarah", s, re.I) for s in mult):
             missing.append("pembanding multiple (historis/peer)")
-        if not any(re.search(r"pada (tp|target)|di (tp|target)|harga target", s, re.I) for s in mult):
-            missing.append("multiple dihitung pada TP (bukan harga kini)")
+        if not any(re.search(r"pada (nilai model|skenario nilai)|di (nilai model|skenario nilai)",
+                             s, re.I) for s in mult):
+            missing.append("multiple dihitung pada nilai model (bukan harga kini)")
     r.add("T2.valuation_paragraph", not missing, "empat elemen valuasi ada" if not missing
           else f"kurang: {', '.join(missing)}")
 
@@ -1191,7 +1195,8 @@ def _primary_per_share(ctx):
     elif ctx.option == "C":
         exs = ctx.find_all(r"sotp|rnav|\bnav\b", exclude=r"sensitivitas|rantai|uji|asumsi|jadwal|jembatan korporat")
     else:
-        exs = [e for e in ctx.exs if re.search(r"^target harga|sotp", _title(e).lower())]
+        exs = [e for e in ctx.exs if re.search(r"^(?:nilai model|target harga)|sotp",
+                                              _title(e).lower())]
     for e in exs:
         rows = _rows(e)
         cols = [_clean(c).lower() for c in _cols(e)]
@@ -1761,6 +1766,10 @@ _DDM_CONCEPTS = [
 
 @_check("T4.ddm_blocks", "T4.ddm_rows")
 def _t4_ddm(ctx, r):
+    if not ctx.published:
+        r.na("T4.ddm_blocks", "nilai DDM ditahan karena laporan masih draft")
+        r.na("T4.ddm_rows", "nilai DDM ditahan karena laporan masih draft")
+        return
     exs = ctx.find_all(r"dividen|dividend|ddm", exclude=r"sensitivitas|rantai")
     if ctx.option != "B" or not exs:
         why = "opsi bukan DDM" if ctx.option != "B" else "tanpa exhibit DDM (lihat T4.valuation_option_exhibits)"
@@ -2233,8 +2242,9 @@ def _t5_implied(ctx, r):
     visible = " ".join([str(p) for p in page.get("paragraf") or []] +
                        [_title(e) + " " + _clean(e.get("narasi")) for e in page.get("exhibit") or []])
     missing = []
-    if not re.search(r"bukan target harga|bukan tp\b|not (the |a )?target price", visible, re.I):
-        missing.append("bukan TP resmi")
+    if not re.search(r"bukan (?:target harga|nilai model)|bukan tp\b|not (the |a )?target price",
+                     visible, re.I):
+        missing.append("bukan nilai model resmi")
     if not re.search(r"driver (fundamental )?(tetap|konstan)|konstan|constant|tetap di level", visible, re.I):
         missing.append("asumsi driver konstan")
     r.add("T5.disclaimer", not missing, "disclaimer lengkap" if not missing

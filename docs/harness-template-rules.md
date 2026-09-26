@@ -22,8 +22,8 @@ Owner = who fixes a real finding: **present** (`report_extras`, `narrative`),
 | # | Topic | Template says | Spec says | Harness enforces |
 |---|---|---|---|---|
 | D1 | Horizon | KF/IS/BS/CF/ratio/charts: 2024A-2028F; FCFF block 1 "5 years" | Model 5 forecast years; display 2A+3F | Display tables and Slide-3 charts: exactly 2A+3F, consecutive. Valuation tables (FCFF, dividend, LoM): 5 consecutive forecast years from last actual + 1. Every forecast cell filled; `n.m.` only with the reason in the exhibit note; bare `NA`, `n.a.`, blank, `-`, null = blocker |
-| D2 | Source line | "Source: Company, Team Estimates", no exception | `Source: Company, [Nama Rumah] Estimates`, detail to appendix | Rendered line under every exhibit is exactly `Source: Company, Sektoral Estimates`; detail lives in the end-of-report source appendix (warning if the appendix is missing) and in `catatan_sumber` (doc) |
-| D3 | Language | English labels ("Revenue", "Net Profit", "Buy", "(Maintained)") | Bahasa Indonesia, English financial terms | Labels matched by concept with Indonesian and English aliases; never requires English. Rating words Buy/Hold/Sell; status Inisiasi/Dipertahankan/Naik/Turun (or English) |
+| D2 | Source line | "Source: Company, Team Estimates", no exception | `Source: Company, [Nama Rumah] Estimates`, detail to appendix | Rendered line under every exhibit is exactly `Source: Sectors (market and financial data), issuer disclosures; Sektoral analysis and estimates.`; detail lives in the end-of-report source appendix (warning if the appendix is missing) and in `catatan_sumber` (doc) |
+| D3 | Language and recommendation boundary | English labels ("Revenue", "Net Profit", "Buy", "(Maintained)") | Bahasa Indonesia, English financial terms; information and analysis must not become investment advice | Financial labels match by concept with Indonesian and English aliases; public report copy labels the per-share estimate as an informational model scenario and does not issue Buy/Hold/Sell recommendations |
 | D4 | Peers | Sector/sub-sector, market-cap range | Comparable business model | IDX (BEI) listings only (blocker); Median + Average rows, issuer row marked/highlighted, criteria and as-of date (warning) |
 | D5 | EPS consensus (Exhibit 1) | "Ga perlu" | forecast vs guidance/consensus when comparable | Not checked |
 | D6 | Method choice | "dipilih manual oleh analis" | Method Gates 0-5 + chain, analyst override | Method taken from the release `method_key` (or the method-chain `Terpilih` row); the matching option's exhibits are mandatory. Methods outside options A/B/C (EV/EBITDA peer, PER FY, P/BV) need chain + TP calculation + sensitivity |
@@ -61,17 +61,17 @@ Owner = who fixes a real finding: **present** (`report_extras`, `narrative`),
 | | `TF.chart_forecast_nm` | warning | chart 4 actual-only with a written reason (D14) | present |
 | Valuation tables 5 forecast years | `TF.valuation_horizon` | blocker | FCFF block 1 / dividend block 1 / LoM annual exhibit: FY(last actual+1)F..+5 consecutive, as columns or row labels | model |
 | Period label style `2024A`, `FY26F` | `TF.period_labels` | warning | display tables: actual labels end in `A`, forecast in `F` | present |
-| **Slide 1** Rating block Buy/Hold/Sell + status | `T2.cover_rating_block` | blocker (published) | `meta.rating` in Buy/Hold/Sell; status wording checked in `T2.rating_status` | present |
-| | `T2.rating_status` | warning | `meta.rating_status`: Inisiasi/Dipertahankan/Naik dari/Turun dari (or English); draft: "Dalam peninjauan" | present |
+| **Slide 1** Informational model scenario label + status | `T2.cover_rating_block` | blocker (published) | `meta.rating` in Di atas harga pasar / Di bawah harga pasar / Setara harga pasar / Skenario nilai; status wording checked in `T2.rating_status` | present |
+| | `T2.rating_status` | warning | `meta.rating_status`: Skenario nilai indikatif; draft: "Dalam peninjauan" | present |
 | Price box: Last Price, TP, Upside = TP/Price-1 with sign | `T2.price_box` | blocker (published) | `meta.harga`, `meta.tp`, `meta.upside_persen` recomputed (0.05pp) | present |
-| | `T2.price_box_rendered` | warning | HTML: price, TP, upside rows; upside has `+`/`-` and one decimal | layout |
+| | `T2.price_box_rendered` | warning | HTML: last price, model value per share, signed difference from market price with one decimal | layout |
 | Secondary stats (shares, mcap Rp/US$, ADTV Rp/US$ with window, free float, major holders) | `T2.stats_block` | warning | `cover.data_pasar`, `holders` | present |
 | Exhibit "[TICKER] relative to JCI" 1-2y, dual axis, month ticks | `T2.relative_chart` | warning | doc: `price_chart` exhibit exists and is first | present |
 | | `T2.relative_chart_rendered` | warning | HTML: caption names IHSG/JCI, window 12-24 months, `Mmm-YY` ticks | layout |
 | Analyst block "Equity Analyst" | `T2.analyst_block` | warning | HTML cover text | layout |
 | Company name + "(TICKER IJ)" | `T2.company_header` | warning | HTML `h1` / cover text | layout |
 | Thesis subtitle, not generic | `T2.thesis_subtitle` | warning | `cover.headline`: <= 10 words, <= 1 number, not the company name | present |
-| 3 bullets, one sentence each; bullet 3 rating + TP | `T2.cover_bullets` | warning | `cover.bullets` | present |
+| 3 bullets, one sentence each; bullet 3 informational model value | `T2.cover_bullets` | warning | `cover.bullets` | present |
 | 3 paragraphs with bold subheadings | `T2.cover_paragraphs` | warning | `cover.paragraf[].judul/isi` | present |
 | Valuation paragraph: method + key parameter %, CAGR FY26-28F, multiple at TP vs history/peers | `T2.valuation_paragraph` | warning (published) | valuation paragraph text | present |
 | TP and method identical on cover and valuation page (spec §4.4) | `T2.cover_tp_method` | blocker (published) | every "target/TP Rp X" on cover = `meta.tp`; `doc.method` and TP sentences name the selected family; method-chain `Terpilih` row value and primary valuation per-share value = TP (one IDX tick) | present / model |

@@ -58,6 +58,17 @@ def test_approval_without_edits_records_the_plan_it_covers(tmp_path):
     assert outputs.load(outputs.TRACE, tmp_path, "UJIA")["assumption_review"]["reviewer"] == "Analis Satu"
 
 
+def test_plan_without_report_is_pending_and_keeps_its_plan_fingerprint(tmp_path):
+    outputs.save(outputs.TRACE, tmp_path, "UJIA",
+                 {"forecast_assumptions": {"plan": PLAN}})
+
+    state = R.status(tmp_path, "UJIA")
+
+    assert state["state"] == "pending"
+    assert state["plan_sha"] == R.plan_sha(PLAN)
+    assert state["review_sha"] is None
+
+
 def test_edits_rebuild_on_the_edited_plan_and_log_each_change(tmp_path):
     _stored(tmp_path)
     calls = []

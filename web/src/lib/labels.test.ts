@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { featuredReport, progressStep, ratingLabel, ratingTone, validatorNote } from "./labels";
+import { featuredReport, heldReason, progressStep, ratingLabel, ratingTone, validatorNote } from "./labels";
 import { pct, rp } from "./format";
 import type { ReportItem } from "./api";
 
@@ -10,15 +10,20 @@ const item = (over: Partial<ReportItem>): ReportItem => ({
   chain: [{ step: "DCF", decision: "Terpilih", value: "Rp110" }], ...over,
 });
 
-describe("rating labels", () => {
-  it("shows the published rating", () => {
-    expect(ratingLabel(item({}))).toBe("Hold");
-    expect(ratingTone(item({ rating: "Sell" }))).toBe("sell");
+describe("model scenario labels", () => {
+  it("describes the model value relative to the dated close", () => {
+    expect(ratingLabel(item({}))).toBe("Di atas harga pasar");
+    expect(ratingTone(item({ rating: "Sell", upside: -10 }))).toBe("below");
   });
-  it("calls a held report a Draft, and Review Required only for Method Gate 5", () => {
-    expect(ratingLabel(item({ rating: null, held_reason: "forecast belum tervalidasi" }))).toBe("Draft");
-    expect(ratingLabel(item({ rating: null, held_reason: "Method Gate 5, hasil ekstrem (Review Required)" }))).toBe("Review Required");
+  it("calls a held report a draft or says it needs review", () => {
+    expect(ratingLabel(item({ rating: null, held_reason: "forecast belum tervalidasi" }))).toBe("Draf");
+    expect(ratingLabel(item({ rating: null, held_reason: "Method Gate 5, hasil ekstrem (Review Required)" }))).toBe("Perlu ditinjau");
     expect(ratingTone(item({ rating: null }))).toBe("review");
+  });
+  it("shows the actual reason a model value is withheld", () => {
+    expect(heldReason(item({ held_reason: "menunggu persetujuan asumsi oleh analis" })))
+      .toBe("menunggu persetujuan asumsi oleh analis");
+    expect(heldReason(item({ held_reason: "" }))).toBe("bukti belum lengkap");
   });
 });
 
