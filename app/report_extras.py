@@ -3206,6 +3206,86 @@ def investability_page(doc, intake):
                  [quality, liquidity])
 
 
+VALUATION_ANCHORS = ("Nilai terminal", "Proyeksi FCFF", "Proyeksi dividen", "Dasar tiap tahun")
+
+
+def valuation_by_year(doc, intake, statements):
+    """Multiples on every forecast year of the five-year model (spec §3: the
+    valuation tables show all five years; Key Financials keeps 2A+3F).
+
+    Forward multiples use the quoted price and, for PER and PBV, also the
+    target; EV/EBITDA uses the valuation's dated cash, debt and minority
+    bridge, as Key Financials does, so a year in both tables reads the same.
+    A released report only: a draft withholds its values.
+    """
+    meta = doc.get("meta") or {}
+    rows = (statements or {}).get("rows") or []
+    price, tp = _num(intake.get("price")), _num(meta.get("tp"))
+    if not rows or not price or not (tp and meta.get("rating")):
+        return None
+    bank = intake.get("model_profile") == "financial_ddm"
+
+    def cell(value, show):
+        return show(value) if value is not None else "n.m."
+
+    def ratio(num, den, cap=True):
+        if num is None or not den or den <= 0 or num <= 0:
+            return None
+        value = num / den
+        return None if cap and value > fmt.MULT_CAP else value
+
+    x = lambda v: fmt.mult(v, 1)  # noqa: E731
+    bn = lambda v: fmt._id(v / 1e9, 1)  # noqa: E731
+    rp = lambda v: fmt.rp(round(v))  # noqa: E731
+    pct = lambda v: fmt.pct(v)  # noqa: E731
+    get = lambda r, k: _num(r.get(k))  # noqa: E731
+    table = [["Laba pemilik induk (Rp miliar)"] + [cell(get(r, "earnings"), bn) for r in rows],
+             ["EPS (Rp)"] + [cell(get(r, "eps"), rp) for r in rows]]
+    if bank:
+        table += [["BVPS (Rp)"] + [cell(get(r, "bvps"), rp) for r in rows]]
+    table += [["DPS (Rp)"] + [cell(get(r, "dps"), rp) for r in rows],
+              ["ROE (%)"] + [cell(get(r, "roe"), pct) for r in rows],
+              ["PER pada harga (x)"] + [cell(ratio(price, get(r, "eps")), x) for r in rows],
+              ["PER pada target (x)"] + [cell(ratio(tp, get(r, "eps")), x) for r in rows],
+              ["PBV pada harga (x)"] + [cell(ratio(price, get(r, "bvps")), x) for r in rows]]
+    if bank:
+        table += [["PBV pada target (x)"] + [cell(ratio(tp, get(r, "bvps")), x) for r in rows]]
+    else:
+        link = scenario_value.bridge(intake)
+        parts = [_num(link.get(k)) for k in ("shares", "cash", "debt")]
+        ev = None
+        if None not in parts:
+            shares, cash_now, debt = parts
+            ev = (price * shares + debt - (cash_now - (_num(link.get("distributions")) or 0))
+                  + (_num(link.get("nci")) or 0))
+        table += [["EV/EBITDA pada harga (x)"]
+                  + [cell(ratio(ev, get(r, "ebitda")), x) for r in rows]]
+    table += [["Dividend yield pada harga (%)"]
+              + [cell(get(r, "dps") / price if get(r, "dps") is not None else None, pct)
+                 for r in rows]]
+    note = (f"Sumber: model lima tahun yang sama dengan Key Financials dan tabel valuasi; harga "
+            f"Rp{fmt.rp(price)} ({intake.get('price_date') or '-'}), target Rp{fmt.rp(tp)}. "
+            + ("" if bank else "EV/EBITDA memakai EV pada harga dengan jembatan kas, utang dan "
+               "minoritas bertanggal valuasi. ")
+            + "PER dan PBV di atas 100x atau dengan basis tidak positif ditulis n.m."
+            + (" DPS dan dividend yield n.m.: model ini tidak memproyeksikan dividen."
+               if all(get(r, "dps") is None for r in rows) else ""))
+    return _exhibit(f"Valuasi per tahun ({rows[0]['label']}-{rows[-1]['label']})",
+                    ["Rp"] + [r["label"] for r in rows], table, note)
+
+
+def attach_valuation_by_year(doc, intake, statements):
+    exhibit = valuation_by_year(doc, intake, statements)
+    if exhibit is None:
+        return
+    for page in doc["bagian"]:
+        anchors = [i for i, e in enumerate(page.get("exhibit") or [])
+                   if str(e.get("judul") or "").startswith(VALUATION_ANCHORS)]
+        if anchors:
+            page["exhibit"].insert(anchors[-1] + 1, exhibit)
+            return
+
+
 def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if not any(e.get("tipe") == "price_chart" for e in doc["exhibits"]):
         doc["exhibits"].insert(0, price_chart_exhibit(intake))
@@ -3259,6 +3339,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
         meta = doc.get("meta") or {}
         released = meta.get("tp") if meta.get("rating") else None
         attach_consensus(pages, intake, va, released_value=released)
+    attach_valuation_by_year(doc, intake, statements)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     slim_mining(doc, intake)
