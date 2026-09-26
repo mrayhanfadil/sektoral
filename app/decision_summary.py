@@ -22,6 +22,10 @@ from datetime import date
 from . import fmt, release_policy
 
 BUY, SELL = 0.15, -0.10
+# A linear reading beyond this many tested steps leaves the tested range too far
+# to mean anything (e.g. a probability above 100%); such a driver is reported
+# as not changing the value or rating alone.
+MAX_STEPS = 5.0
 
 
 def _day(value):
@@ -39,8 +43,11 @@ def _move_to(row, target, base):
     """
     need = target - base
     effect = row["value_effect_high"] if need > 0 else row["value_effect_low"]
-    if not effect or (need > 0) != (effect > 0):
+    if not effect or (need > 0) != (effect > 0) or abs(need / effect) > MAX_STEPS:
         return None
+    room = row.get("max_steps_high" if need > 0 else "max_steps_low")
+    if room is not None and abs(need / effect) > room:
+        return None  # the driver would leave its feasible range (e.g. above 100%)
     return need / effect, (row["high"] if need > 0 else row["low"])
 
 

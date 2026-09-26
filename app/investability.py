@@ -88,6 +88,14 @@ def free_float(intake):
     return {"status": "unavailable", "reason": "porsi publik tidak tersedia di data kepemilikan"}
 
 
+# Why a dimension is unanswered when its file gives no dated evidence (plan
+# Checkpoint 4: never unanswered without a stated reason).
+GOVERNANCE_REASON = ("tidak dijawab: Sektoral Team belum menetapkan sumber penilaian tata kelola "
+                     "bertanggal yang dapat diterima (keputusan D8, 2026-09-26)")
+DEFAULT_REASON = ("tidak dijawab: belum ditelaah; berkas kualitas bisnis tidak memuat bukti "
+                  "bertanggal untuk dimensi ini")
+
+
 def business_quality(ticker, as_of, root=ROOT):
     path = Path(root) / f"{str(ticker).upper()}.json"
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -99,8 +107,10 @@ def business_quality(ticker, as_of, root=ROOT):
                     if isinstance(e, dict) and str(e.get("url") or "").startswith("https://")
                     and _day(e.get("published_at")) and cutoff and _day(e["published_at"]) <= cutoff]
         if not item or not evidence or not str(item.get("assessment") or "").strip():
+            reason = ((item or {}).get("unanswered_reason")
+                      or (GOVERNANCE_REASON if key == "governance" else DEFAULT_REASON))
             out.append({"dimension": key, "label": label, "status": "unanswered",
-                        "assessment": "tidak dijawab: bukti bertanggal belum tersedia",
+                        "assessment": reason, "reason": reason,
                         "model_effect": None, "evidence": []})
             continue
         out.append({"dimension": key, "label": label, "status": "answered",

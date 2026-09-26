@@ -3343,11 +3343,100 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     slim_mining(doc, intake)
+    link_catalysts(doc, intake)
     attach_decision_summary(doc, intake, fc, va)
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2
     renumber(doc)
     return doc
+
+
+CATALYST_TITLE = "Katalis, risiko, dan indikator pemantauan"
+# Words that tie a catalyst row to a model driver (lower case, matched in the row text).
+_DRIVER_WORDS = {
+    "harga tembaga": ("tembaga", "copper"), "harga emas": ("emas", "gold"),
+    "elang": ("elang",), "diskonto": ("suku bunga", "diskonto", "bunga acuan"),
+    "biaya kredit": ("biaya kredit", "provisi", "npl", "kualitas kredit", "cost of credit"),
+    "pertumbuhan kredit": ("pertumbuhan kredit", "ekspansi kredit", "penyaluran kredit",
+                           "kredit korporasi", "dpk", "deposit"),
+    "nim": ("nim", "bi rate", "biaya dana", "yield", "margin bunga"),
+    "non-bunga": ("non-bunga", "fee", "komisi", "buyback", "dividen"),
+    "biaya / pendapatan": ("cir", "efisiensi", "biaya operasional"),
+    "harga terealisasi": ("tarif", "harga jual", "harga listrik"),
+    "pertumbuhan volume": ("volume", "kapasitas", "utilisasi", "ekspansi", "mw", "data center",
+                           "commisioning", "commissioning", "penjualan ke pln"),
+    "bahan bakar": ("gas", "bahan bakar", "fuel"), "capex": ("capex",),
+    "anak usaha tercatat": ("nrca", "konstruksi", "kontrak"),
+    "laju penjualan lahan": ("penjualan lahan", "marketing sales", "tenant", "pipeline", "backlog",
+                             "permintaan lahan"),
+    "harga lahan": ("harga lahan", "asp"),
+    "utilisasi smelter": ("utilisasi", "smelter", "ramp-up", "pemrosesan", "katoda", "volume",
+                          "panduan"),
+}
+
+
+def _driver_for(row, drivers):
+    """The driver-table row a catalyst acts on, read from the catalyst's name
+    (counted twice) and its impact path, not its evidence column (source titles
+    name unrelated things); ties go to the more value-sensitive driver."""
+    name_text = str(row[0]).lower()
+    path_text = str(row[2]).lower() if len(row) > 2 else ""
+    best, score = None, 0
+    for d in drivers:
+        name = d["driver"].lower()
+        words = {w for key, ws in _DRIVER_WORDS.items() if key in name for w in ws}
+        words |= set(re.findall(r"[a-z]{5,}", name))
+        if "pln" in name:
+            words.add("pln")
+        hits = sum(2 for w in words if w in name_text) + sum(1 for w in words if w in path_text)
+        if hits > score:
+            best, score = d, hits
+    return best
+
+
+def link_catalysts(doc, intake):
+    """T6: each catalyst row names the model driver it moves and the move in that
+    driver that changes the rating (linear reading of the tested range, as in the
+    decision summary); rows that touch no model driver say so, with the value per
+    share at which the rating would change."""
+    from . import decision_summary as D
+    meta = doc.get("meta") or {}
+    price, rating = _num(intake.get("price")), meta.get("rating")
+    drivers = (doc.get("driver_value") or {}).get("rows") or []
+    base = (((doc.get("driver_value") or {}).get("cases") or {}).get("base") or {}).get(
+        "per_share") or _num(meta.get("tp"))
+    if not price or rating not in ("Buy", "Hold", "Sell") or not base:
+        return
+    bounds = {"Buy": [price * (1 + D.BUY)], "Sell": [price * (1 + D.SELL)],
+              "Hold": [price * (1 + D.BUY), price * (1 + D.SELL)]}[rating]
+    band_text = "; ".join(
+        f"nilai {'di atas' if b > base else 'di bawah'} Rp{fmt._id(b, 0)} menjadi "
+        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}" for b in bounds)
+    for page in doc.get("bagian") or []:
+        for exhibit in page.get("exhibit") or []:
+            if exhibit.get("judul") != CATALYST_TITLE:
+                continue
+            data = exhibit.get("data") or {}
+            if "Driver model" in (data.get("cols") or []):
+                continue
+            data["cols"] = list(data.get("cols") or []) + ["Driver model", "Ambang perubahan tesis"]
+            for row in data.get("rows") or []:
+                driver = _driver_for(row, drivers) if drivers else None
+                if driver:
+                    moves = [m for m in (D._move_to(driver, b, base) for b in bounds) if m]
+                    threshold = ("; atau ".join(
+                        f"{D._step_text(driver, m)} (rating menjadi "
+                        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))})"
+                        for m, b in zip(moves, bounds)) if moves else
+                        f"driver ini sendiri tidak mengubah rating dalam rentang uji; {band_text}")
+                    row += [f"{driver['driver']} ({driver['base']})", threshold]
+                else:
+                    row += [("tidak terhubung ke driver di tabel driver-ke-nilai" if drivers else
+                             "laporan tanpa tabel driver-ke-nilai (Assumption-Led)"),
+                            f"Rating {rating} berubah bila {band_text}"]
+            exhibit["catatan_sumber"] = (str(exhibit.get("catatan_sumber") or "").rstrip(". ")
+                                         + ". Ambang dibaca linear dari rentang uji tabel "
+                                         "driver-ke-nilai; bukan probabilitas.")
 
 
 def attach_decision_summary(doc, intake, fc, va):
