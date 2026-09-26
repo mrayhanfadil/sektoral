@@ -13,6 +13,7 @@ from . import terminal_economics
 from . import operating_model
 from . import reference_fcff
 from . import reference_ddm
+from . import reference_lom
 from . import bank_drivers
 from . import landbank as landbank_mod
 from . import lom as lom_mod
@@ -805,7 +806,12 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             sotp_result = lom_mod.sotp_result(intake, lom_result)
             detail = {"basis": "scenario", "sotp": sotp_result,
                       "operating_bridge": lom_mod.operating_bridge(intake, lom_result),
-                      "lom": lom_result, "grid": lom_result["grid"], "gaps": []}
+                      "lom": lom_result, "grid": lom_result["grid"], "gaps": [],
+                      "terminal_economics": terminal_economics.finite_life(),
+                      # Plan §5.6: an independent physical-to-NAV implementation.
+                      "reference_validation": reference_lom.compare(
+                          lom_result["inputs"], lom_result["bridge_idr"], lom_result["fx"],
+                          lom_result["per_share"])}
             gate = release.assess_sotp_lom_scenario(intake, fc, {"detail": detail},
                                                     assumption_status)
             per_share = sotp_result.get("target_price_idr")

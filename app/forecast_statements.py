@@ -240,6 +240,7 @@ def scenario_path(intake, fc):
     """
     fc = fc or {}
     if fc.get("production_ready") is True and \
+            fc.get("forecast_basis") != "physical_driver_forecast" and \
             (fc.get("earnings_scenario") or {}).get("basis") not in (
                 "operating_driver_model", "bank_driver_scenario"):
         rows = [{"year": r.get("year"), "label": r.get("label") or _label(r["year"]),
