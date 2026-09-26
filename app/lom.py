@@ -246,6 +246,7 @@ def inputs(intake, fc):
         "stockpile_capex_share": _num(lom.get("stockpile_phase_sustaining_share")),
         "assumptions": lom,
     }
+    values.update(escalation_inputs(intake))
     build, rate_gaps = discount_rate(intake, values["tax_rate"], values["ntgr_rate"])
     values.update(discount=(build or {}).get("rate"), discount_build=build)
     gaps.extend(f"discount_{g}" for g in rate_gaps)
@@ -266,6 +267,33 @@ def inputs(intake, fc):
     if not rates.get("copper_cathode_by_hma_usd_per_tonne"):
         gaps.append("royalty")
     return values, gaps
+
+
+def escalation_inputs(intake):
+    """US inflation that escalates the price deck, unit costs and capex after 2026.
+
+    The discount rate is nominal US$ (UST 10Y + CRP + beta x ERP), so prices and
+    costs held flat in nominal terms would fall in real terms every year. The
+    rate is the IMF WEO long-run US inflation dated on or before the Report Date
+    (app.rate_benchmarks); without it the deck stays flat and says so.
+    """
+    from . import rate_benchmarks
+    data = rate_benchmarks.load()
+    growth = rate_benchmarks._dated(data.get("growth"), intake.get("as_of"), "growth")
+    series = (growth or {}).get("USD") or {}
+    rate = _num(series.get("inflation"))
+    if rate is None:
+        return {"escalation": 0.0, "escalation_basis": None}
+    return {"escalation": rate,
+            "escalation_basis": (f"inflasi AS jangka panjang {fmt.pct(rate)} per tahun "
+                                 f"({growth.get('short_source')})"),
+            "escalation_source": growth.get("source_url"),
+            "escalation_date": growth.get("as_of")}
+
+
+def _esc(inp, year):
+    """Nominal escalation factor for ``year`` (2026 is the deck year)."""
+    return (1 + (inp.get("escalation") or 0.0)) ** max(int(year) - 2026, 0)
 
 
 def working_capital(ev):
@@ -333,12 +361,17 @@ def schedule(inp, prices, export=True):
     in the pit or stockpile is processed later, and concentrate produced above
     smelter capacity in 2H26 is smelted first in the next year.
     """
-    cu_price, au_price = prices
+    deck_cu, deck_au = prices
     rates = inp["royalty"]
-    roy_cathode = _band(rates["copper_cathode_by_hma_usd_per_tonne"], cu_price)
-    roy_gold = _band(rates["primary_refined_gold_by_hma_usd_per_oz"], au_price)
-    roy_conc_cu = _band(rates["copper_in_concentrate_by_hma_usd_per_tonne"], cu_price)
-    roy_conc_au = _band(rates["gold_byproduct_in_copper_concentrate_by_hma_usd_per_oz"], au_price)
+
+    def bands(cu, au):
+        return (_band(rates["copper_cathode_by_hma_usd_per_tonne"], cu),
+                _band(rates["primary_refined_gold_by_hma_usd_per_oz"], au),
+                _band(rates["copper_in_concentrate_by_hma_usd_per_tonne"], cu),
+                _band(rates["gold_byproduct_in_copper_concentrate_by_hma_usd_per_oz"], au))
+    roy_cathode, roy_gold, roy_conc_cu, roy_conc_au = bands(deck_cu, deck_au)
+    deck_bands = {"cathode": roy_cathode, "gold": roy_gold, "conc_cu": roy_conc_cu,
+                  "conc_au": roy_conc_au}
     pools = [
         {"asset": "bh", "kind": "pit", "mt": inp["pit_mt"], "cu": inp["pit_cu_t"],
          "au": inp["pit_au_oz"], "from": 2026},
@@ -353,6 +386,9 @@ def schedule(inp, prices, export=True):
     concentrate = {"asset": "bh", "kind": "concentrate"}
     for year in range(2026, end + 1):
         share = 0.5 if year == 2026 else 1.0          # valuation from 30 Jun 2026
+        esc = _esc(inp, year)
+        cu_price, au_price = deck_cu * esc, deck_au * esc
+        roy_cathode, roy_gold, roy_conc_cu, roy_conc_au = bands(cu_price, au_price)
         draws = []
         smelter_cap = inp["smelter_t"] * inp["utilization"] * share
         if not export and carry["cu"] > 0 and year > 2026:
@@ -418,11 +454,11 @@ def schedule(inp, prices, export=True):
             else:
                 mined = 0.0
             costs = {
-                "mining": mined * inp["mining_usd_t"],
-                "rehandle": (d["mt"] * 1e6 * inp["rehandle_usd_t"]
+                "mining": mined * inp["mining_usd_t"] * esc,
+                "rehandle": (d["mt"] * 1e6 * inp["rehandle_usd_t"] * esc
                              if pool["kind"] == "stockpile" else 0.0),
-                "processing": d["mt"] * 1e6 * inp["processing_usd_t"],
-                "smelting": d_cathode * inp["smelting_usd_t"],
+                "processing": d["mt"] * 1e6 * inp["processing_usd_t"] * esc,
+                "smelting": d_cathode * inp["smelting_usd_t"] * esc,
             }
             ebitda = revenue - royalties - sum(costs.values())
             rows.append({"year": year, "share": share, "asset": pool["asset"],
@@ -434,8 +470,7 @@ def schedule(inp, prices, export=True):
                          "revenue": revenue, "royalties": royalties,
                          "export_duty": sold_conc * inp["export_duty"], **costs,
                          "ebitda": ebitda})
-    return rows, {"cathode": roy_cathode, "gold": roy_gold, "conc_cu": roy_conc_cu,
-                  "conc_au": roy_conc_au}
+    return rows, deck_bands
 
 
 def elang_capex_schedule(inp, rows):
@@ -452,7 +487,8 @@ def elang_capex_schedule(inp, rows):
     if not capex or not feed:
         return capex
     shift = max(0, (feed[0] - 1) - max(capex))
-    return {year + shift: amount for year, amount in capex.items()}
+    grow = (1 + (inp.get("escalation") or 0.0)) ** shift
+    return {year + shift: amount * grow for year, amount in capex.items()}
 
 
 def cash_flows(inp, rows):
@@ -479,17 +515,18 @@ def cash_flows(inp, rows):
     out = []
     for (asset, year), acc in sorted(by.items(), key=lambda kv: (kv[0][1], kv[0][0])):
         share = acc["share"]
+        esc = _esc(inp, year)
         if asset == "bh":
             da = inp["da_usd"] * share
             if year == 2026:
                 capex = inp["h2_capex_usd"] or inp["h1_capex_usd"]
             elif "pit" in acc["kinds"] and year <= inp["pit_end"]:
-                capex = inp["h1_capex_usd"] * 2
+                capex = inp["h1_capex_usd"] * 2 * esc
             else:
-                capex = inp["h1_capex_usd"] * 2 * inp["stockpile_capex_share"]
+                capex = inp["h1_capex_usd"] * 2 * inp["stockpile_capex_share"] * esc
         else:
-            da = elang_dev / len(elang_years) + inp["elang_sustaining_usd"]
-            capex = inp["elang_sustaining_usd"]
+            da = elang_dev / len(elang_years) + inp["elang_sustaining_usd"] * esc
+            capex = inp["elang_sustaining_usd"] * esc
         taxable = max(acc["ebitda"] - da, 0.0)
         tax = taxable * inp["tax_rate"]
         ntgr = max(taxable - tax, 0.0) * inp["ntgr_rate"]
@@ -548,8 +585,8 @@ def navs(inp, flows, rate):
     for f in flows:
         nav[f["asset"]] += f["fcff"] / (1 + rate) ** _t(f["year"])
     last = max(f["year"] for f in flows)
-    overhead = sum(inp["ga_usd"] * (0.5 if y == 2026 else 1.0) / (1 + rate) ** _t(y)
-                   for y in range(2026, last + 1))
+    overhead = sum(inp["ga_usd"] * (0.5 if y == 2026 else 1.0) * _esc(inp, y)
+                   / (1 + rate) ** _t(y) for y in range(2026, last + 1))
     return nav, overhead
 
 
@@ -712,26 +749,33 @@ def forward_rows(intake, res, anchor_year, attributable_share=1.0, years=4):
         acc = by_year.get(year)
         if not acc or not acc["revenue"]:
             break
-        pre_tax = acc["ebitda"] - acc["da"] - interest
+        # The schedule's EBITDA is before corporate G&A, which the NAV deducts as
+        # overhead; the P&L carries it too so EBITDA and profit are after G&A.
+        ga = (inp["ga_usd"] or 0.0) * _esc(inp, year)
+        ebitda = acc["ebitda"] - ga
+        pre_tax = ebitda - acc["da"] - interest
         tax = max(pre_tax, 0.0) * inp["tax_rate"]
         ntgr = max(pre_tax - tax, 0.0) * inp["ntgr_rate"]
         net = pre_tax - tax - ntgr
         p = phys.get(year) or {}
         rows.append({
             "year": year, "label": f"FY{year % 100:02d}F", "revenue": acc["revenue"],
-            "ebitda": acc["ebitda"], "net_profit": net,
+            "ebitda": ebitda, "net_profit": net,
             "net_profit_attributable": net * attributable_share, "capex": acc["capex"],
             "revenue_growth_pct": (acc["revenue"] / previous - 1) * 100 if previous else None,
-            "ebitda_margin_pct": acc["ebitda"] / acc["revenue"] * 100,
+            "ebitda_margin_pct": ebitda / acc["revenue"] * 100,
             "net_income_margin_pct": net / acc["revenue"] * 100,
             "capex_to_revenue_pct": acc["capex"] / acc["revenue"] * 100,
             "rationale": (f"Jadwal LoM: umpan {fmt._id(p.get('feed', 0), 0)} Mt "
                           f"({', '.join(p.get('kinds') or [])}), katoda "
                           f"{fmt._id(p.get('cathode', 0) / 1000, 0)} kt, emas murni "
                           f"{fmt._id(p.get('gold', 0) / 1000, 0)} koz; dek Cu "
-                          f"US${fmt._id(inp['cu_price'], 0)}/t dan Au US${fmt._id(inp['au_price'], 0)}"
-                          "/oz; bunga 2x beban keuangan 1H26; pajak dan PNBP pada tarif efektif "
-                          "1H26."),
+                          f"US${fmt._id(inp['cu_price'] * _esc(inp, year), 0)}/t dan Au "
+                          f"US${fmt._id(inp['au_price'] * _esc(inp, year), 0)}/oz"
+                          + (f" (dek 2026 dieskalasi {inp['escalation_basis']})"
+                             if inp.get("escalation") else "")
+                          + "; EBITDA sesudah beban umum korporat; bunga 2x beban keuangan 1H26; "
+                          "pajak dan PNBP pada tarif efektif 1H26."),
             "source_ids": ["official"]})
         previous = acc["revenue"]
     return rows

@@ -78,13 +78,14 @@ def _year_draws(inp, pools, year, export, carry):
     return draws, share, cap_cu
 
 
-def flows(inp, cu_price, au_price, export=True):
+def _grow(inp, year, y0=2026):
+    """Nominal escalation from the deck year: (1 + US inflation) ^ years after it."""
+    return (1.0 + (inp.get("escalation") or 0.0)) ** max(year - y0, 0)
+
+
+def flows(inp, deck_cu, deck_au, export=True):
     """(asset, year) -> {ebitda, share, kinds} and the development capex by year."""
     rates = inp["royalty"]
-    r_cath = _royalty(rates["copper_cathode_by_hma_usd_per_tonne"], cu_price)
-    r_gold = _royalty(rates["primary_refined_gold_by_hma_usd_per_oz"], au_price)
-    r_ccu = _royalty(rates["copper_in_concentrate_by_hma_usd_per_tonne"], cu_price)
-    r_cau = _royalty(rates["gold_byproduct_in_copper_concentrate_by_hma_usd_per_oz"], au_price)
     pools = _sources(inp)
     carry = (0.0, 0.0)
     acc = {}
@@ -96,6 +97,12 @@ def flows(inp, cu_price, au_price, export=True):
             carry = (0.0, 0.0)
         if not draws:
             break
+        g = _grow(inp, year, y0)
+        cu_price, au_price = deck_cu * g, deck_au * g
+        r_cath = _royalty(rates["copper_cathode_by_hma_usd_per_tonne"], cu_price)
+        r_gold = _royalty(rates["primary_refined_gold_by_hma_usd_per_oz"], au_price)
+        r_ccu = _royalty(rates["copper_in_concentrate_by_hma_usd_per_tonne"], cu_price)
+        r_cau = _royalty(rates["gold_byproduct_in_copper_concentrate_by_hma_usd_per_oz"], au_price)
         cu_rec = sum(d[2] for d in draws) * inp["recovery_cu"]
         au_rec = sum(d[3] for d in draws) * inp["recovery_au"]
         cathode = min(cu_rec, cap_cu)
@@ -120,9 +127,9 @@ def flows(inp, cu_price, au_price, export=True):
                 moved = inp["h1_material_mt"] * 1e6 * part
             else:
                 moved = mt * 1e6 * (1 + inp["strip_ratio"]) if kind == "pit" else 0.0
-            cost = (moved * inp["mining_usd_t"]
-                    + (mt * 1e6 * inp["rehandle_usd_t"] if kind == "stockpile" else 0.0)
-                    + mt * 1e6 * inp["processing_usd_t"] + my_cath * inp["smelting_usd_t"])
+            cost = g * (moved * inp["mining_usd_t"]
+                        + (mt * 1e6 * inp["rehandle_usd_t"] if kind == "stockpile" else 0.0)
+                        + mt * 1e6 * inp["processing_usd_t"] + my_cath * inp["smelting_usd_t"])
             item = acc.setdefault((asset, year), {"ebitda": 0.0, "revenue": 0.0, "share": share,
                                                   "kinds": set()})
             item["ebitda"] += revenue - royalty - cost
@@ -133,7 +140,8 @@ def flows(inp, cu_price, au_price, export=True):
     capex = dict(sorted(inp["elang_capex"].items()))
     if capex and feed_years:
         shift = max(0, (min(feed_years) - 1) - max(capex))
-        capex = {y + shift: v for y, v in capex.items()}
+        later = (1.0 + (inp.get("escalation") or 0.0)) ** shift
+        capex = {y + shift: v * later for y, v in capex.items()}
     return acc, capex
 
 
@@ -176,17 +184,19 @@ def value(inp, bridge, fx, rate=None, deck=None, risk=None, export=None):
             wc_cash[(asset, year)] = out
     for (asset, year), item in acc.items():
         share = item["share"]
+        g = _grow(inp, year, y0)
         if asset == "bh":
             da = inp["da_usd"] * share
             if year == y0:
                 capex = inp["h2_capex_usd"] or inp["h1_capex_usd"]
             elif "pit" in item["kinds"] and year <= inp["pit_end"]:
-                capex = inp["h1_capex_usd"] * 2
+                capex = inp["h1_capex_usd"] * 2 * g
             else:
-                capex = inp["h1_capex_usd"] * 2 * inp["stockpile_capex_share"]
+                capex = inp["h1_capex_usd"] * 2 * inp["stockpile_capex_share"] * g
         else:
-            da = dev_total / len(elang_years) + inp["elang_sustaining_usd"]
-            capex = inp["elang_sustaining_usd"]
+            sustaining = inp["elang_sustaining_usd"] * g
+            da = dev_total / len(elang_years) + sustaining
+            capex = sustaining
         taxable = max(item["ebitda"] - da, 0.0)
         tax = taxable * inp["tax_rate"]
         ntgr = max(taxable - tax, 0.0) * inp["ntgr_rate"]
@@ -196,8 +206,8 @@ def value(inp, bridge, fx, rate=None, deck=None, risk=None, export=None):
         nav["elang"] -= amount / (1 + rate) ** t(year)
     last = max(y for (_, y) in acc)
     last = max([last] + list(dev))
-    overhead = sum(inp["ga_usd"] * (0.5 if y == y0 else 1.0) / (1 + rate) ** t(y)
-                   for y in range(y0, last + 1))
+    overhead = sum(inp["ga_usd"] * (0.5 if y == y0 else 1.0) * _grow(inp, y, y0)
+                   / (1 + rate) ** t(y) for y in range(y0, last + 1))
     assets = nav["bh"] + nav["elang"] * risk + (0.0 if wc else (inp["inventory_usd"] or 0.0))
     equity = (assets - overhead) * fx + bridge["cash"] - bridge["debt"] - bridge["minority"]
     return {"per_share": equity / bridge["shares"], "nav_usd": nav, "overhead_usd": overhead}
