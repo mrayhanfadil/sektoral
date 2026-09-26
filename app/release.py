@@ -268,7 +268,7 @@ def _check_operating_bridge(forecast: object) -> list[str]:
 
 
 def _check_driver_forecast(forecast: object, intake: object,
-                           profile: object = None) -> list[str]:
+                           profile: object = None, valuation_detail=None) -> list[str]:
     if not isinstance(forecast, Mapping):
         return ["sourced operating and cash-flow forecast is incomplete"]
     blockers = []
@@ -289,7 +289,9 @@ def _check_driver_forecast(forecast: object, intake: object,
         blockers.append("forecast is not verified as production-ready")
     else:
         report_date = intake.get("as_of") if isinstance(intake, Mapping) else None
-        blockers.extend(house_assumptions.production_readiness_blockers(report_date))
+        detail = valuation_detail if isinstance(valuation_detail, Mapping) else {}
+        blockers.extend(house_assumptions.production_readiness_blockers(
+            report_date, detail.get("terminal_economics"), detail.get("reference_validation")))
     for reason in forecast.get("production_blockers") or []:
         if isinstance(reason, str) and reason.strip():
             blockers.append(f"forecast: {reason}")
@@ -423,7 +425,7 @@ def _check_sotp(result: object, intake: object) -> list[str]:
     return blockers
 
 
-def common_blockers(profile, intake, forecast):
+def common_blockers(profile, intake, forecast, valuation_detail=None):
     """Data/forecast blockers shared by every valuation method of a profile.
 
     Method-specific completeness (SOTP bridge, DDM result) is checked
@@ -453,7 +455,8 @@ def common_blockers(profile, intake, forecast):
             blockers.append("forecast gate failed: S2.9 physical-to-financial operating bridge is not reconciled")
     elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
         blockers.extend(_official_actual_blockers(intake))
-        blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile))
+        blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile,
+                                               valuation_detail))
     return blockers
 
 
@@ -707,6 +710,20 @@ def assess_fcff_scenario(intake, forecast, valuation, assumption_status):
             blockers.append(f"enterprise-to-equity bridge is missing {key}")
     if not _number(detail.get("equity")) or detail["equity"] <= 0:
         blockers.append("equity value is not positive")
+    if detail.get("operating_model") and not blockers:
+        # A reconciled operating model is a production candidate (plan §5.1):
+        # every shared production blocker, including this run's terminal
+        # economics and independent reference, must clear.
+        production = common_blockers(intake.get("model_profile"), intake, forecast, detail)
+        return {
+            "status": "distributable" if not production else "distributable_assumption_led",
+            "method": "FCFF DCF (model operasional, terminal Gordon)",
+            "blockers": [], "production_blockers": production,
+            "limitations": (["driver ke depan (volume, harga, biaya per unit, capex) adalah "
+                             "asumsi analis berlabel dengan dasar bersumber; lihat daftar driver"]
+                            + ([f"belum Production-Ready: {b}" for b in production]
+                               if production else [])),
+        }
     return {
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "FCFF DCF (earnings scenario, Gordon terminal)",

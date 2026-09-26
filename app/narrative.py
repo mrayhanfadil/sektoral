@@ -4130,9 +4130,15 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
             "dirata-rata dengan target.",
             "Tanda '-' berarti angka tidak tersedia, bukan nol.",
         ]
+    operating = dcf_s.get("operating_model")
     return [
-        "Rating dan target harga memakai DCF FCFF, metode utama going concern, atas skenario "
-        f"analis {label}-{last}: pendapatan, margin EBITDA dan capex dari agen, terminal Gordon.",
+        ("Rating dan target harga memakai DCF FCFF, metode utama going concern, atas model "
+         f"operasional {label}-{last}: volume x harga per segmen, biaya per unit dan tetap, "
+         "penyusutan atas aset tetap, capex, modal kerja dan utang dari berkas driver bersumber; "
+         "terminal Gordon pada imbal hasil modal baru yang konsisten."
+         if operating else
+         "Rating dan target harga memakai DCF FCFF, metode utama going concern, atas skenario "
+         f"analis {label}-{last}: pendapatan, margin EBITDA dan capex dari agen, terminal Gordon."),
         f"FCFF = EBIT x (1 - pajak efektif) + D&A - capex - kenaikan modal kerja; D&A "
         f"{dcf_s['da_basis']}; pajak {dcf_s['tax_basis']}; {dcf_s['nwc_basis']}.",
         (f"Model dalam US$, mata uang pelaporan: WACC US$ {fmt.pct(dcf_s['wacc'])} dari CAPM (UST "
@@ -5352,7 +5358,11 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
         raise ValueError("method ddm ditolak: tanpa payout di data Sectors")
     if method == "rnav" and not intake.get("mineops"):
         raise ValueError("method rnav ditolak: tanpa overlay operasional di data Sectors")
-    if (va.get("release") or {}).get("status") == "distributable_assumption_led":
+    status = (va.get("release") or {}).get("status")
+    operating = (fc.get("earnings_scenario") or {}).get("basis") == "operating_driver_model"
+    if status == "distributable_assumption_led" or (status == "distributable" and operating):
+        # A Production-Ready operating model renders through the same scenario
+        # layout it was valued on; only the release status differs.
         if intake.get("model_profile") == "finite_life_mining":
             return _build_assumption_led(intake, fc, va, s1, method=method)
         chain = va.get("method_chain") or {}

@@ -127,3 +127,43 @@ def test_the_powr_driver_file_reconciles_to_its_official_first_half():
     first = model["rows"][0]
     assert first["revenue"] - first["h2"]["revenue"] == pytest.approx(274783475)
     assert model["terminal"]["excluded_segments"] == ["pln"]
+
+
+def test_stress_cases_keep_the_identities_or_name_the_shortfall():
+    # Revenue shock: volumes -30% a year still reconcile; earnings can turn negative.
+    shocked = _drivers()
+    shocked["segments"][0]["volume_growth_pct"] = A([-30, -30, -30, -30])
+    shocked["fixed_costs"][0]["growth_pct"] = A([40, 40, 40, 40])
+    model = M.project(shocked)
+    assert model["rows"][-1]["net"] < 0
+    for row in model["rows"]:
+        assert row["fcff"] == pytest.approx(row["nopat"] + row["da"] - row["capex"] - row["dnwc"])
+        assert abs(row["balance_gap"]) < 1e-6
+    # Low cash with heavy capex: the shortfall is named and the model is not used.
+    short = _drivers()
+    short["opening"]["h1_close"]["liquidity"] = 5.0
+    short["opening"]["h1_close"]["other_assets"] = 105.0
+    short["capex"]["sustaining_outyears"] = A([400.0, 400.0, 400.0, 400.0])
+    model = M.project(short)
+    assert not M.ok(model)
+    assert any(c["name"].startswith("liquidity_") and not c["ok"] for c in model["checks"])
+
+
+def test_a_production_candidate_needs_its_reference_and_terminal_to_agree():
+    from app import release
+    detail = {"operating_model": True, "lines": [{"revenue": 1, "ebitda": 1, "capex": 1, "fcff": 1}] * 5,
+              "wacc": 0.1, "g": 0.03, "terminal_fcff": 1.0, "cash": 1.0, "debt": 1.0, "shares": 1.0,
+              "equity": 1.0, "terminal_economics": {"status": "consistent"},
+              "reference_validation": {"status": "differs"}}
+    gate = release.assess_fcff_scenario({"model_profile": "going_concern_fcff"}, {}, {"detail": detail},
+                                        "validated")
+    assert gate["status"] != "distributable"
+    from app import house_assumptions as H
+    blockers = H.production_readiness_blockers("2026-09-26", {"status": "consistent"},
+                                               {"status": "differs"})
+    assert "independent reference validation does not agree for this run" in blockers
+    assert H.production_readiness_blockers("2026-09-26", {"status": "consistent"},
+                                           {"status": "agrees"}) == []
+    assert "house-assumption policy became effective after the Report Date" in \
+        H.production_readiness_blockers("2026-09-24", {"status": "consistent"},
+                                        {"status": "agrees"})

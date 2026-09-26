@@ -133,7 +133,8 @@ _POLICY = {
         "approval_required": True,
         "approved_by": "Sektoral Team",
         "effective_from": "2026-09-26",
-        "independent_reference_validation": "required per Model Profile",
+        "independent_reference_validation": "per_run",
+        "independent_reference_basis": "app.reference_fcff (going concern); other profiles have none yet",
         "terminal_economics_validation": "per_run",
         "terminal_economics_basis": "app.terminal_economics on the selected valuation of each run",
         "review_owner": "research_governance",
@@ -205,8 +206,8 @@ def deviation_violations(pack) -> list[str]:
     return []
 
 
-def production_readiness_blockers(as_of: str | None = None, terminal: dict | None = None
-                                  ) -> list[str]:
+def production_readiness_blockers(as_of: str | None = None, terminal: dict | None = None,
+                                  reference: dict | None = None) -> list[str]:
     """Missing controls that must be approved before any Production-Ready path.
 
     ``terminal`` is the run's ``app.terminal_economics`` record for the selected
@@ -224,6 +225,10 @@ def production_readiness_blockers(as_of: str | None = None, terminal: dict | Non
         blockers.extend((terminal or {}).get("blockers") or
                         ["terminal growth is not reconciled to reinvestment and incremental "
                          "return on capital for this run"])
-    if validation.get("independent_reference_validation") != "complete":
-        blockers.append("independent reference validation is not recorded for each Model Profile")
+    # Independent reference validation (plan §5.6) is per run: the selected
+    # valuation's own reference calculation must agree within tolerance.
+    if (reference or {}).get("status") != "agrees":
+        blockers.append("independent reference validation does not agree for this run"
+                        if reference else
+                        "independent reference validation is not recorded for this run")
     return blockers

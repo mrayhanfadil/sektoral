@@ -218,6 +218,46 @@ def _operating_scenarios(intake, model, agent=None):
     return earnings, outyear, None
 
 
+def _operating_rows(intake, model):
+    """The operating model as the forecast's own rows, in rupiah like Sectors rows.
+
+    A US$ model converts at the dated spot rate the scenario DCF uses; EPS is
+    parent profit over the Report Date share count.
+    """
+    fx = scenario_value.fx_rate(intake) if model.get("currency") == "USD" else 1.0
+    if not fx:
+        return None
+    shares = intake.get("shares") or 1.0
+    out = []
+    for r in model["rows"]:
+        m = {k: r[k] * fx for k in ("revenue", "ebitda", "da", "ebit", "tax", "net", "net_attr",
+                                     "capex", "dnwc", "fcff", "dividends", "liquidity", "debt",
+                                     "equity", "assets", "interest_expense", "interest_income",
+                                     "nopat")}
+        out.append({"year": r["year"], "label": r["label"], "revenue": m["revenue"],
+                    "ebitda": m["ebitda"], "margin": r["ebitda"] / r["revenue"], "da": m["da"],
+                    "ebit": m["ebit"], "interest": m["interest_expense"] - m["interest_income"],
+                    "tax": m["tax"], "net": m["net"], "net_attr": m["net_attr"],
+                    "ocf": m["net"] + m["da"] - m["dnwc"], "capex": m["capex"],
+                    "fcf": m["fcff"], "div": m["dividends"], "cash": m["liquidity"],
+                    "debt": m["debt"], "equity": m["equity"], "assets": m["assets"],
+                    "eps": m["net_attr"] / shares, "basis": "model operasional"})
+    return out
+
+
+def _operating_evidence(drivers, model):
+    """Driver evidence rows for the release gate, from the driver file's sources."""
+    sources = drivers.get("sources") or {}
+    latest = max(sources.values(), key=lambda s: s.get("published_at") or "")
+    source = " ; ".join(f"{s['title']} — {s['url']}" for s in sources.values())
+    note = ("model operasional: " + "; ".join(
+        f"{d['driver']} ({'asumsi analis' if d['kind'] == 'analyst_assumption' else 'bersumber'})"
+        for d in model["drivers"][:6]))
+    return {series: {"source": source, "source_date": latest["published_at"], "page": None,
+                     "note": note, "basis": "data/operating_drivers"}
+            for series in ("revenue", "ebitda", "net_profit", "capex")}
+
+
 def _normalization(intake, scenario):
     """FY1 normalized parent earnings from the reviewed ledger (plan §4.4).
 
@@ -520,10 +560,25 @@ def build(intake, n_years=5, assumption_plan=None):
         if operating_model.ok(operating):
             earnings, outyear, problem = _operating_scenarios(intake, operating,
                                                               earnings_scenario)
-            if problem:
-                operating["errors"] = [problem]
+            screen_rows = None if problem else _operating_rows(intake, operating)
+            if problem or screen_rows is None:
+                operating["errors"] = [problem or "dated USD/IDR spot rate is not available"]
             else:
                 earnings_scenario, outyear_scenario = earnings, outyear
+                # The reconciled model is the forecast (plan §5.1): its rows,
+                # checks and sourced driver evidence replace the screening.
+                rows = screen_rows
+                forecast_basis, production_ready = "driver_forecast", True
+                production_blockers = []
+                driver_evidence = _operating_evidence(drivers, operating)
+                s2["S2.9_driver_forecast"] = "lolos"
+                s2["S2.5_neraca"] = "lolos"
+                s2["S2.2_margin"] = "lolos" if all(mmin - 1e-9 <= r["margin"] <= mmax + 1e-9
+                                                   for r in rows) else "gagal-dilabeli"
+                s2["catatan"] = [c for c in s2["catatan"] if not c.startswith("S2.9")] + [
+                    "S2.9: model operasional (volume x harga, biaya, capex, modal kerja, utang) "
+                    "direkonsiliasi: FCFF = NOPAT + D&A - capex - kenaikan modal kerja dan neraca "
+                    "seimbang setiap tahun; 1H sama dengan aktual resmi."]
     normalization = _normalization(intake, earnings_scenario)
     if earnings_scenario and normalization:
         earnings_scenario["normalization"] = normalization
