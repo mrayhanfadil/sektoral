@@ -18,12 +18,6 @@
    "published_at": "2026-01-27",
    "page": "Calculation of Capital Adequacy Ratio: total modal Rp268.244.808 juta dan total ATMR Rp901.270.630 juta (Bank), 31 Desember 2025"
   },
-  "bbca-1h26-broker": {
-   "title": "KB Valbury Sekuritas, BBCA 1H26 Results: Inline 1H26 Earnings; Intact Fundamentals, Unjustified Discount",
-   "url": "https://kbvalbury.com/cfind/source/files/bbca-1h26-results---260729.pdf",
-   "published_at": "2026-07-29",
-   "page": "hal. 1: panduan '26F pertumbuhan kredit 8%-10% dan NIM 5,4%-5,6% (panduan manajemen yang dikutip broker)"
-  },
   "bbca-fy25-dividend": {
    "title": "ANTARA: RUPS BCA tetapkan rasio dividen tahun buku 2025 sebesar 72 persen",
    "url": "https://www.antaranews.com/berita/5470831/rups-bca-tetapkan-rasio-dividen-tahun-buku-2025-sebesar-72-persen",
@@ -121,22 +115,14 @@
   {
    "year": 2026,
    "loan_growth_pct": {
-    "value": 9.0,
-    "kind": "company_guidance",
-    "rationale": "Titik tengah panduan manajemen 8-10% (dikutip KB Valbury); kredit bruto 30 Juni 2026 +4,3% ytd dan +8,0% yoy.",
-    "source_refs": [
-     "bbca-1h26-broker",
-     "bbca-1h26-fs"
-    ]
+    "value": 8.5,
+    "kind": "analyst_assumption",
+    "rationale": "Laju 1H26 disetahunkan: kredit bruto 30 Juni 2026 +4,3% ytd (sekitar 8,7% setahun), dibulatkan ke bawah; emiten tidak menerbitkan panduan pertumbuhan kredit dalam dokumen resminya."
    },
    "nim_pct": {
     "value": 5.4,
-    "kind": "company_guidance",
-    "rationale": "Batas bawah panduan NIM 5,4-5,6% (dikutip KB Valbury); NIM 1H26 5,3% menurut emiten dan 5,47% pada definisi aset produktif berkas driver (NII x 2 / rata-rata aset produktif bruto).",
-    "source_refs": [
-     "bbca-1h26-broker",
-     "bbca-1h26-fs"
-    ]
+    "kind": "analyst_assumption",
+    "rationale": "Sedikit di bawah NIM 1H26 5,47% pada definisi aset produktif berkas driver (5,3% menurut emiten) seiring imbal hasil kredit melunak; emiten tidak menerbitkan panduan NIM dalam dokumen resminya."
    },
    "non_ii_to_nii_pct": {
     "value": 32.0,
@@ -166,14 +152,14 @@
   {
    "year": 2027,
    "loan_growth_pct": {
-    "value": 9.0,
+    "value": 8.5,
     "kind": "analyst_assumption",
-    "rationale": "Sejalan dengan panduan 2026."
+    "rationale": "Tetap pada laju 1H26 disetahunkan."
    },
    "nim_pct": {
     "value": 5.4,
     "kind": "analyst_assumption",
-    "rationale": "Batas bawah panduan; imbal hasil kredit melunak."
+    "rationale": "Tetap pada asumsi 2026."
    },
    "non_ii_to_nii_pct": {
     "value": 32.0,
@@ -201,7 +187,7 @@
    "nim_pct": {
     "value": 5.4,
     "kind": "analyst_assumption",
-    "rationale": "Batas bawah panduan; imbal hasil kredit melunak."
+    "rationale": "Tetap pada asumsi 2026."
    },
    "non_ii_to_nii_pct": {
     "value": 32.0,
