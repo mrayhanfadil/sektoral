@@ -1887,32 +1887,53 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             measures = (("Pendapatan", "revenue"), ("EBITDA", "ebitda"),
                         ("Laba bersih", "net_profit"),
                         ("Belanja modal", "capital_expenditure"))
+            lom_basis = agent_case.get("basis") == "lom_schedule"
             case_exhibit = add(
-                "Skenario FY26 berbasis hasil interim dan asumsi analis",
-                ["US$ juta", "1H26 aktual", "2H26 skenario", "FY26 skenario"],
+                ("FY26 dari hasil interim dan jadwal LoM" if lom_basis else
+                 "Skenario FY26 berbasis hasil interim dan asumsi analis"),
+                ["US$ juta", "1H26 aktual", "2H26 LoM" if lom_basis else "2H26 skenario",
+                 "FY26F" if lom_basis else "FY26 skenario"],
                 [[label, case_money(agent_case["h1"][key]),
                   case_money(agent_case["h2"][key]),
                   case_money(agent_case["full_year"][key])]
                  for label, key in measures],
-                f"Sumber aktual: {agent_case['source_url']} (terbit "
-                f"{agent_case['published_at']}); 2H26 adalah asumsi analis. "
-                "Rasio produksi panduan tidak sama dengan penjualan: persediaan, bauran "
-                "produk, harga realisasi, dan biaya belum direkonsiliasi. Per 24 Sep, "
-                "2H mencakup Jul-Dec; produksi/penjualan Jul-Aug belum tersedia sebagai "
-                "actual publik setelah H1 cutoff.")
+                (f"Sumber aktual: {agent_case['source_url']} (terbit "
+                 f"{agent_case['published_at']}); 2H26 dari jadwal LoM yang dinilai: katoda dan "
+                 "emas murni sesuai panduan FY2026 emiten, dek harga, biaya unit, royalti, beban "
+                 "umum, pajak dan PNBP 1H26. Penjualan persediaan 1H tidak dimodelkan terpisah."
+                 if lom_basis else
+                 f"Sumber aktual: {agent_case['source_url']} (terbit "
+                 f"{agent_case['published_at']}); 2H26 adalah asumsi analis. "
+                 "Rasio produksi panduan tidak sama dengan penjualan: persediaan, bauran "
+                 "produk, harga realisasi, dan biaya belum direkonsiliasi. Per 24 Sep, "
+                 "2H mencakup Jul-Dec; produksi/penjualan Jul-Aug belum tersedia sebagai "
+                 "actual publik setelah H1 cutoff."))
             case_assumptions = agent_case["assumptions"]
+            if lom_basis:
+                # The ratios shown are the LoM's own 2H against the 1H actual.
+                h1, h2 = agent_case["h1"], agent_case["h2"]
+                case_assumptions = {
+                    "h2_revenue_to_h1": h2["revenue"] / h1["revenue"] if h1["revenue"] else 0.0,
+                    "h2_ebitda_margin_pct": h2["ebitda"] / h2["revenue"] * 100 if h2["revenue"] else 0.0,
+                    "h2_net_margin_pct": h2["net_profit"] / h2["revenue"] * 100 if h2["revenue"] else 0.0,
+                    "h2_capex_to_h1": (h2["capital_expenditure"] / h1["capital_expenditure"]
+                                       if h1["capital_expenditure"] else 0.0)}
+            lom_note = "Hasil jadwal LoM, bukan asumsi terpisah."
             ratio_exhibit = add(
-                "Asumsi eksplisit untuk skenario 2H26",
-                ["Driver", "Asumsi", "Dasar dan batasan"],
+                ("Rasio 2H26 dari jadwal LoM" if lom_basis else
+                 "Asumsi eksplisit untuk skenario 2H26"),
+                ["Driver", "Rasio" if lom_basis else "Asumsi", "Dasar dan batasan"],
                 [["Pendapatan 2H / 1H", fmt.pct(case_assumptions["h2_revenue_to_h1"]),
+                  lom_note if lom_basis else
                   "Penilaian dari realisasi 1H dan panduan tahunan; volume produksi "
                   "belum tentu sama dengan penjualan dan harga realisasi bisa berubah."],
                  ["Margin EBITDA 2H", fmt.pct(case_assumptions["h2_ebitda_margin_pct"] / 100),
-                  "Asumsi analis; belum ada panduan margin 2H."],
+                  lom_note if lom_basis else "Asumsi analis; belum ada panduan margin 2H."],
                  ["Margin laba 2H", fmt.pct(case_assumptions["h2_net_margin_pct"] / 100),
-                  "Asumsi analis; pajak dan bunga belum dijembatani."],
+                  lom_note if lom_basis else "Asumsi analis; pajak dan bunga belum dijembatani."],
                  ["Belanja modal 2H / 1H", fmt.pct(case_assumptions["h2_capex_to_h1"]),
-                  "Asumsi analis; jadwal capex proyek belum tervalidasi."]],
+                  "Asumsi analis dari rencana belanja modal 2H26; sama dengan jadwal LoM."
+                  if lom_basis else "Asumsi analis; jadwal capex proyek belum tervalidasi."]],
                 f"Sumber: {agent_case['source_url']}; asumsi numerik adalah "
                 "interpretasi analis untuk skenario internal, bukan guidance emiten.")
             illustrative_pages.append({
