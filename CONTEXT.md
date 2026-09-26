@@ -59,6 +59,14 @@ _Avoid_: share changes, dilution (unqualified)
 The issuer's dated official register counts (outstanding, net of treasury shares), the Corporate-Action Ledger between them, the reported weighted averages and potentially dilutive instruments; consecutive counts must reconcile through the actions. Its Report Date count is the one share count every per-share figure uses.
 _Avoid_: share count (unsourced), issued shares as the denominator
 
+**House Assumption Set**:
+The versioned discount-rate and terminal-growth parameters every run uses, each with currency, tenor, basis, kind, review range, dated benchmark and rationale; issuer-specific deviations are not supported.
+_Avoid_: defaults (unqualified), house view
+
+**Terminal Economics**:
+The per-run check that a perpetuity agrees with its own growth, reinvestment, returns on new capital (FCFF) or retention and ROE (bank), in the cash-flow currency.
+_Avoid_: terminal sanity check
+
 **Core Earnings**:
 First-forecast-year parent earnings after the reviewed normalization bridge; P/E and P/B-ROE value them, while the income statement stays as reported.
 _Avoid_: adjusted profit, recurring profit (undefined)
