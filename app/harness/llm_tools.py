@@ -65,7 +65,7 @@ Checks (pass/fail + fix):
 4 catalyst rows each have time/condition + driver + earnings path + direction + source; no daily-price/broker-flow/index-rebalance without earnings transmission.
 5 method + base year + multiple identical on p1 and valuation page.
 6 downside TP < base TP from same basis.
-7 disclaimer consistent with Buy/Hold/Sell (no denial when publishing rating).
+7 keep the published value informational: describe an analyst model scenario and do not turn it into an investment recommendation.
 8 methodology limits still true after new data (no 'data tidak ada' for exhibited data).
 9 house vs guidance/consensus compared on comparable basis when available.
 10 upside>+100% atau downside<-50% has 1 fundamental-thesis sentence + 1 model-limitation sentence on p1.

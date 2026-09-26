@@ -27,7 +27,7 @@ const LIMITS = [
   ["LLM untuk nalar, bukan data",
     "Model bahasa menyusun rencana, asumsi, dan narasi bersumber. Angka finansial, rasio valuasi, dan tanggal laporan selalu diambil dari data terstruktur."],
   ["Tanpa broker dan transaksi",
-    "Sectoral adalah alat riset. Tidak ada koneksi ke rekening efek, broker, atau jalur eksekusi pesanan dalam bentuk apa pun."],
+    "Sektoral adalah alat informasi dan analisis. Tidak ada koneksi ke rekening efek, broker, atau jalur eksekusi pesanan dalam bentuk apa pun."],
   ["Bukan rekomendasi investasi",
     "Keluaran riset menyajikan informasi dan analisis untuk mendukung kerja analis, bukan ajakan membeli efek atau nasihat keuangan berlisensi."],
 ];
@@ -108,7 +108,7 @@ export default function Landing() {
               Lihat agen meriset emiten BEI langkah demi langkah, lalu Method Gates memilih metode valuasinya.
             </h1>
             <p className="m-0 mt-5 max-w-[46ch] text-[17.5px] leading-relaxed text-ink-soft">
-              Setiap panggilan tool tercatat bersama alasan dan hasilnya, dan rating di company update hanya terbit bila setiap pemeriksaan lolos.
+              Setiap panggilan tool tercatat bersama alasan dan hasilnya, dan nilai model hanya ditampilkan bila setiap pemeriksaan lolos.
             </p>
             <div className="mt-8">
               <Launcher id="riset-atas" />
@@ -157,16 +157,17 @@ export default function Landing() {
       </ConsoleSection>
 
       <Section id="pemeriksaan" title="Apa yang terjadi saat bukti lengkap, dan saat tidak."
-        lede="Validator berbasis kode memastikan tidak ada klaim yang lolos tanpa rujukan yang sahih. Bila bukti kurang, rating ditahan dan alasannya dicatat.">
+        lede="Validator berbasis kode memastikan tidak ada klaim yang lolos tanpa rujukan yang sahih. Bila bukti kurang, nilai model ditahan dan alasannya dicatat.">
         <EvidenceChecks />
         <div className="mt-16 grid gap-16">
           <Ledger title="Status rilis"
-            body="Harness rilis menentukan apakah company update boleh memuat rating dan target harga.">
+            body="Pemeriksaan rilis menentukan apakah company update boleh memuat nilai model per saham."
+            >
             <ReleaseStatuses current={final?.release?.status} ticker={ticker} />
           </Ledger>
           {items.length > 0 && (
-            <Ledger title="Review Required"
-              body="Potensi di atas +100% atau di bawah −50% tidak diberi Buy, Hold, atau Sell. Hasil seperti itu butuh tesis fundamental bersumber dan batasan model yang dinyatakan.">
+            <Ledger title="Ambang peninjauan"
+              body="Nilai yang jauh dari harga pasar ditahan sampai ada tesis fundamental bersumber dan batasan model yang dinyatakan.">
               <ReviewBand items={items} />
             </Ledger>
           )}

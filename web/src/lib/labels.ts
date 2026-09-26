@@ -1,16 +1,39 @@
 import type { ReportItem } from "./api";
 
-export type RatingTone = "buy" | "hold" | "sell" | "review";
+export type RatingTone = "above" | "below" | "equal" | "review";
+type ScenarioLabelInput = { rating?: string | null; upside?: number | string | null; held_reason?: string | null };
 
-/** Published rating; a held report is a Draft unless Method Gate 5 held it. */
-export function ratingLabel(item: Pick<ReportItem, "rating" | "held_reason">): string {
-  if (item.rating) return item.rating;
-  return item.held_reason?.startsWith("Method Gate 5") ? "Review Required" : "Draft";
+function difference(value: number | string | null | undefined): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const cleaned = value.trim().replace(/[−–]/g, "-").replace(/[%\s]/g, "").replace(",", ".");
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function ratingTone(item: Pick<ReportItem, "rating">): RatingTone {
-  const rating = (item.rating ?? "").toLowerCase();
-  return rating === "buy" || rating === "hold" || rating === "sell" ? rating : "review";
+/** Describe the model value relative to the close without an action label. */
+export function ratingLabel(item: ScenarioLabelInput): string {
+  if (!item.rating) return item.held_reason?.startsWith("Method Gate 5") ? "Perlu ditinjau" : "Draf";
+  const upside = difference(item.upside);
+  if (upside !== null) {
+    if (upside > 0) return "Di atas harga pasar";
+    if (upside < 0) return "Di bawah harga pasar";
+    return "Setara harga pasar";
+  }
+  return ["Di atas harga pasar", "Di bawah harga pasar", "Setara harga pasar", "Skenario nilai"]
+    .includes(item.rating) ? item.rating : "Skenario nilai";
+}
+
+export function ratingTone(item: ScenarioLabelInput): RatingTone {
+  if (!item.rating) return "review";
+  const upside = difference(item.upside);
+  if (upside === null || upside === 0) return "equal";
+  return upside > 0 ? "above" : "below";
+}
+
+/** Explain why the gallery is withholding a model value. */
+export function heldReason(item: ScenarioLabelInput): string {
+  return item.held_reason || "bukti belum lengkap";
 }
 
 /** The featured landing report: primary method selected, most cross-checks. */

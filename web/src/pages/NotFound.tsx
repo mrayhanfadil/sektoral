@@ -16,7 +16,7 @@ export default function NotFound() {
         <div className="px-6 py-7 max-sm:px-4">
           <h1 className="text-[28px] font-black tracking-[-.02em]">Halaman tidak ditemukan</h1>
           <p className="mt-2 text-ink-soft">
-            Alamat ini tidak ada di Sectoral. Mulai riset emiten baru di deck, atau buka company update yang sudah terbit.
+            Alamat ini tidak ada di Sektoral. Mulai riset emiten baru di deck, atau buka company update yang sudah terbit.
           </p>
           <div className="mt-6 flex flex-wrap gap-2.5 max-sm:flex-col">
             <Link className="btn btn-primary" to="/research">

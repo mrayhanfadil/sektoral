@@ -20,17 +20,19 @@ def test_consensus_after_the_report_date_is_not_used(tmp_path):
     _write(tmp_path)
     doc, why = C.load("UJI", "2026-09-24", tmp_path)
     assert doc is None and "sesudah tanggal laporan" in why
-    e = C.exhibit("UJI", "2026-09-24", 1000, "Buy", 800, tmp_path)
+    e = C.exhibit("UJI", "2026-09-24", 1000, 800, tmp_path)
     assert e["data"]["rows"][1][1].startswith("tidak tersedia")
 
 
 def test_consensus_on_or_before_the_report_date_is_shown_with_source(tmp_path):
     _write(tmp_path)
-    e = C.exhibit("UJI", "2026-09-25", 1000, "Buy", 800, tmp_path)
+    e = C.exhibit("UJI", "2026-09-25", 1000, 800, tmp_path)
     rows = dict((r[0], r[1]) for r in e["data"]["rows"])
     assert rows["Rata-rata target konsensus (5 analis)"] == "Rp1.200"
-    assert rows["Target Sektoral terhadap rata-rata konsensus"] == "-16,7%"
-    assert rows["Rekomendasi (beli / tahan / jual)"] == "3 / 1 / 1"
+    assert rows["Nilai model Sektoral dibanding rata-rata konsensus"] == "-16,7%"
+    assert rows["Skenario nilai indikatif"] == "Rp1.000"
+    assert "Rekomendasi (beli / tahan / jual)" not in rows
+    assert all(word not in " ".join(rows.values()) for word in ("Buy", "Hold", "Sell"))
     assert rows["Estimasi konsensus pendapatan, EBITDA, laba"] == "estimasi tidak tersedia"
     assert "diambil 2026-09-25" in rows["Sumber konsensus"]
 
@@ -49,7 +51,8 @@ def test_every_covered_ticker_has_a_dated_sourced_consensus():
 
 def test_a_withheld_target_says_why_instead_of_nm(tmp_path):
     _write(tmp_path)
-    e = C.exhibit("UJI", "2026-09-25", None, None, 800, tmp_path)
+    e = C.exhibit("UJI", "2026-09-25", None, 800, tmp_path)
     cells = [c for row in e["data"]["rows"] for c in row]
     assert "n.m." not in cells
-    assert "tidak dihitung: target harga Sektoral ditahan" in cells
+    assert "Belum diterbitkan; menunggu peninjauan" in cells
+    assert "tidak dihitung: skenario nilai belum diterbitkan" in cells

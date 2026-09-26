@@ -29,18 +29,18 @@ function PageLoading() {
 const suspend = (node: React.ReactNode) => <Suspense fallback={<PageLoading />}>{node}</Suspense>;
 
 const TITLES: [RegExp, string][] = [
-  [/^\/$/, "Sectoral: company update emiten BEI dengan metode valuasi berbasis gerbang"],
-  [/^\/research$/, "Deck riset | Sectoral"],
-  [/\/putar$/, "Putar ulang riset | Sectoral"],
-  [/^\/laporan$/, "Laporan | Sectoral"],
-  [/\/jejak$/, "Jejak riset | Sectoral"],
-  [/^\/jobs\//, "Riset emiten | Sectoral"],
+  [/^\/$/, "Sektoral: company update emiten BEI dengan metode valuasi berbasis gerbang"],
+  [/^\/research$/, "Deck riset | Sektoral"],
+  [/\/putar$/, "Putar ulang riset | Sektoral"],
+  [/^\/laporan$/, "Laporan | Sektoral"],
+  [/\/jejak$/, "Jejak riset | Sektoral"],
+  [/^\/jobs\//, "Riset emiten | Sektoral"],
 ];
 
 function DocumentTitle() {
   const { pathname } = useLocation();
   useEffect(() => {
-    document.title = TITLES.find(([re]) => re.test(pathname))?.[1] ?? "Sectoral";
+    document.title = TITLES.find(([re]) => re.test(pathname))?.[1] ?? "Sektoral";
   }, [pathname]);
   return null;
 }

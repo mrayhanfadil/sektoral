@@ -239,15 +239,15 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
           </dd>
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
-          <dt className={dt}>Rating</dt>
-          <dd className="m-0"><RatingBadge item={{ rating: report.published ? report.rating : null, held_reason: item?.held_reason ?? "" }} /></dd>
+          <dt className={dt}>Skenario nilai</dt>
+          <dd className="m-0"><RatingBadge item={{ rating: report.published ? report.rating : null, upside: item?.upside ?? null, held_reason: item?.held_reason ?? "" }} /></dd>
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
-          <dt className={dt}>Target harga</dt>
+          <dt className={dt}>Nilai model per saham</dt>
           <dd className="m-0 font-mono text-[15px] font-semibold tabular-nums text-ink-strong">{report.published ? `Rp${rp(report.target_price)}` : "Ditahan"}</dd>
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
-          <dt className={dt}>Potensi</dt>
+          <dt className={dt}>Selisih dari harga</dt>
           <dd className={`m-0 font-mono text-[15px] font-semibold tabular-nums ${item?.upside == null ? "text-ink-soft" : item.upside < 0 ? "text-err-ink" : "text-ok-ink"}`}>
             {item ? signedPct(item.upside) : "—"}
           </dd>

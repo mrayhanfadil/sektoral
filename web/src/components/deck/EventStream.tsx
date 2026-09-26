@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, TriangleAlert } from "lucide-react";
 import { AGENT, AGENTS, duration, type AgentId, type DeckState, type Step } from "../../lib/agents";
 import { EngineTag, Glyph, Hold, Sweep } from "./kit";
+import { ratingLabel } from "../../lib/labels";
 import { SPRING, clock, useChangeCount, verdictGlyph, verdictTone, words } from "./read";
 
 /** Whether rows mounting in this render are new arrivals (animate) or a jump (don't). */
@@ -322,7 +323,7 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
     text = <><code className="font-mono text-[13px] font-semibold text-ink-strong">{step.title}</code> <span className={d.decision === "Terpilih" ? "font-bold text-brand-ink" : "text-ink-soft"}>{d.decision}</span></>;
     side = <span className="data text-ink-strong">{d.value}</span>;
   } else if (step.kind === "release") {
-    side = d.rating ? <span className="data text-ink-strong">{d.rating} {d.tp}</span> : null;
+    side = d.rating ? <span className="data text-ink-strong">{ratingLabel({ rating: d.rating, upside: d.upside })} · Nilai model Rp{d.tp}</span> : null;
   }
 
   return (

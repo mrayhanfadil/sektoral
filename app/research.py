@@ -98,9 +98,10 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
     as_of = report.get("as_of") or brief.get("as_of")
     published = str(report.get("status") or "").startswith("distributable")
     if published and report.get("rating"):
-        status = f"Terbit · {report['rating']} · TP Rp{fmt.rp(report.get('target_price'))}"
+        status = (f"Terbit · Skenario nilai: {report['rating']} · "
+                  f"Nilai model Rp{fmt.rp(report.get('target_price'))}")
     elif report:
-        status = "Draf · rating ditahan"
+        status = "Draf · nilai model ditahan"
     else:
         status = brief.get("status")
     method = str(report.get("target_method") or "").split(" [")[0]

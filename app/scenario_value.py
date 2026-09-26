@@ -141,7 +141,7 @@ def usd_cost_of_debt(intake, rf):
     if effective is not None and effective >= market:
         return effective, f"bunga efektif emiten ({basis})", effective
     text = ("UST 10Y + CRP, tingkat pasar pinjaman US$ berisiko Indonesia (parameter kebijakan "
-            "analis, §4.2)")
+            "analis)")
     if effective is not None:
         text += (f"; bunga efektif emiten {fmt.pct(effective)} ({basis}) di bawah tingkat pasar, "
                  "tidak dipakai")
@@ -165,7 +165,7 @@ def discount_rates(intake, rf, g):
     rate = _num(ust.get("rate"))
     if rate is None:
         return None, ["imbal hasil UST 10Y bertanggal tidak tersedia pada tanggal laporan; arus "
-                      "kas US$ tidak didiskonto dengan tingkat rupiah (spesifikasi §2, §4.2)"]
+                      "kas US$ tidak didiskonto dengan tingkat rupiah"]
     kd, kd_basis, effective = usd_cost_of_debt(intake, rate)
     return {"currency": "USD", "rf": rate, "rf_label": "UST 10Y", "rf_date": ust.get("date"),
             "rf_source": ust.get("source"), "crp": CRP_INDONESIA, "g": TERMINAL_GROWTH_USD,

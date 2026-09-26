@@ -12,8 +12,8 @@ const FILTERS: [Filter, string][] = [["all", "Semua"], ["published", "Terbit"], 
 const SORTS: [string, Sort, string][] = [
   ["ticker-asc", { key: "ticker", dir: "asc" }, "Kode A–Z"],
   ["ticker-desc", { key: "ticker", dir: "desc" }, "Kode Z–A"],
-  ["upside-desc", { key: "upside", dir: "desc" }, "Potensi tertinggi"],
-  ["upside-asc", { key: "upside", dir: "asc" }, "Potensi terendah"],
+  ["upside-desc", { key: "upside", dir: "desc" }, "Selisih tertinggi"],
+  ["upside-asc", { key: "upside", dir: "asc" }, "Selisih terendah"],
 ];
 const sortId = (s: Sort) => `${s.key}-${s.dir}`;
 
@@ -35,12 +35,12 @@ function compare(a: ReportItem, b: ReportItem, sort: Sort) {
 }
 
 const MARK: Record<ReturnType<typeof ratingTone>, string> = {
-  buy: "bg-ok-ink", hold: "bg-brand-ink", sell: "bg-err-ink", review: "bg-warn-rule",
+  above: "bg-brand-ink", below: "bg-brand-ink", equal: "bg-brand-ink", review: "bg-warn-rule",
 };
 
-/** Rating tallies and the latest report date, read like the deck's status rail. */
+/** Scenario tallies and the latest report date, read like the deck's status rail. */
 function Tally({ items }: { items: ReportItem[] }) {
-  const order = ["Buy", "Hold", "Sell", "Review Required", "Draft"];
+  const order = ["Di atas harga pasar", "Setara harga pasar", "Di bawah harga pasar", "Perlu ditinjau", "Draf"];
   const counts = items.reduce<Record<string, { n: number; tone: ReturnType<typeof ratingTone> }>>((acc, item) => {
     const label = ratingLabel(item);
     acc[label] = { n: (acc[label]?.n ?? 0) + 1, tone: ratingTone(item) };
@@ -129,7 +129,7 @@ export default function Gallery() {
           <div className="max-w-[64ch]">
             <h1 id="gallery-title" className="text-[clamp(28px,3.2vw,38px)] font-black tracking-[-.02em]">Company update</h1>
             <p className="mt-2.5 text-ink-soft">
-              Tiap laporan memilih metode valuasi lewat Method Gates dan menahan rating bila bukti belum cukup. Putar ulang run-nya
+              Tiap laporan memilih metode valuasi lewat pemeriksaan model dan menahan nilai model bila bukti belum cukup. Putar ulang run-nya
               untuk melihat agent bekerja, atau buka jejak audit untuk menelusuri tiap angka.
             </p>
           </div>
