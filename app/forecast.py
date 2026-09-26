@@ -4,6 +4,7 @@ from . import bank_model
 from . import fmt
 from . import scrub
 from . import rnav
+from . import lom
 from . import operating_model
 from . import period_basis
 from . import scenario_value
@@ -564,6 +565,19 @@ def build(intake, n_years=5, assumption_plan=None):
         earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
         outyear_scenario = _outyear_scenario(
             interim_scenario if is_mining else earnings_scenario, normalized_plan)
+    if is_mining:
+        # The physical LoM is the mining forecast (plan §5.3) when every input
+        # it needs is sourced or a labelled analyst assumption.
+        mine, mine_gaps = lom.build(intake, {"interim_scenario": interim_scenario})
+        if mine and not mine_gaps:
+            operating_bridge = lom.operating_bridge(intake, mine)
+            forecast_basis, production_ready = "physical_driver_forecast", True
+            production_blockers = []
+            s2["S2.9_operating_bridge"] = "lolos"
+            s2["catatan"] = [c for c in s2["catatan"] if not c.startswith("S2.9")] + [
+                "S2.9: model fisik LoM (cadangan, kapasitas pabrik dan smelter, recovery, dek "
+                "harga, biaya unit, royalti, pajak, capex) dihitung per aset dan tahun; jembatan "
+                "operasional bersumber di setiap tahap."]
     if is_ddm and bank_fc and bank_fc.get("sourced_drivers") and bank_fc["checks"]["ok"]:
         # A bank model on a sourced driver file (plan §5.2): official 1H lines and
         # balances, the disclosed capital requirement, labelled drivers.

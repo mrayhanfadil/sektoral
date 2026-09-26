@@ -449,7 +449,9 @@ def common_blockers(profile, intake, forecast, valuation_detail=None):
                 "mining forecast is not a verified physical-driver production forecast")
         elif isinstance(forecast, Mapping):
             report_date = intake.get("as_of") if isinstance(intake, Mapping) else None
-            blockers.extend(house_assumptions.production_readiness_blockers(report_date))
+            detail = valuation_detail if isinstance(valuation_detail, Mapping) else {}
+            blockers.extend(house_assumptions.production_readiness_blockers(
+                report_date, detail.get("terminal_economics"), detail.get("reference_validation")))
         s2 = (forecast or {}).get("s2") if isinstance(forecast, Mapping) else None
         if isinstance(s2, Mapping) and s2.get("S2.9_operating_bridge") == "gagal":
             blockers.append("forecast gate failed: S2.9 physical-to-financial operating bridge is not reconciled")
@@ -834,6 +836,21 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
         blockers.append("LoM analyst assumption source is dated after the report")
     if detail.get("gaps"):
         blockers.append("LoM inputs missing: " + ", ".join(detail["gaps"]))
+    if not blockers and (forecast or {}).get("forecast_basis") == "physical_driver_forecast":
+        # The LoM is the forecast (plan §5.3): every shared production blocker,
+        # this run's independent reference and the house policy must clear.
+        production = common_blockers(intake.get("model_profile"), intake, forecast, detail)
+        return {
+            "status": "distributable" if not production else "distributable_assumption_led",
+            "method": "SOTP/LoM (model fisik, asset NAV, tanpa terminal perpetual)",
+            "blockers": [], "production_blockers": production,
+            "limitations": (["capex dan jadwal Elang dari riset broker serta probabilitas "
+                             "pengembangan 50% adalah asumsi analis berlabel; dek harga "
+                             "rata-rata 12 bulan datar; modal kerja dan cadangan Elang sesudah "
+                             "batas izin tidak dinilai"]
+                            + ([f"belum Production-Ready: {b}" for b in production]
+                               if production else [])),
+        }
     return {
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "SOTP/LoM (asset NAV, no perpetual terminal)",
