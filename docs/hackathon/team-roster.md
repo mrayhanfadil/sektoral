@@ -13,7 +13,7 @@
 
 | Name | GitHub handle | Email (login) | Role | Team rep? | Onboarding | API key issued | Credits claimed |
 |---|---|---|---|---|---|---|---|
-| Fadil (Fadiil) | mrayhanfadil | mrayhanfadil@users.noreply.github.com | Dev + lead | TBD | ⚪ | ⚪ | ⚪ |
+| Fadil (Fadiil) | mrayhanfadil | mrayhanfadil@users.noreply.github.com | Dev + lead | TBD | ✅ (confirmed by Fadil, 2026-09-26) | ⚪ | ⚪ |
 | _open slots (up to 3 more)_ | — | — | — | — | — | — | — |
 
 ## Roles to fill
