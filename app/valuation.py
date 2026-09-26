@@ -2,6 +2,7 @@ from . import cache
 from . import ddm
 from . import fmt
 from . import gate_thresholds
+from . import house_assumptions
 from . import method_chain
 from . import model_profiles
 from . import rnav
@@ -32,8 +33,9 @@ def _core(fc, shares, wacc, g, exit_mult, net_debt):
 def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
     """Grid TP 3x3 (WACC±1pp × g ∈ {2,5; 3,5; 4,5}%), rerata Gordon + exit."""
     out = {}
-    for dw in (-0.01, 0.0, 0.01):
-        for gg in (0.025, 0.035, 0.045):
+    policy = house_assumptions.discount_inputs("IDR")
+    for dw in policy["rate_sensitivity"]:
+        for gg in policy["growth_sensitivity"]:
             c = _core(fc, intake["shares"], wacc + dw, gg, exit_mult, net_debt)
             out[(round(dw, 3), gg)] = fmt.tick((c["ps_g"] + c["ps_x"]) / 2)
     return out
@@ -42,10 +44,11 @@ def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
 def gordon_screen_grid(intake, fc, wacc, g, exit_mult, net_debt):
     """Unblended historical-model sensitivity for an explicitly labeled draft."""
     rows = []
-    for delta_wacc in (-0.01, 0.0, 0.01):
+    policy = house_assumptions.discount_inputs("IDR")
+    for delta_wacc in policy["screen_rate_sensitivity"]:
         rate = wacc + delta_wacc
         values = []
-        for delta_growth in (-0.01, 0.0, 0.01):
+        for delta_growth in policy["screen_growth_sensitivity"]:
             growth = g + delta_growth
             values.append(_core(fc, intake["shares"], rate, growth,
                                 exit_mult, net_debt)["ps_g"]
@@ -91,8 +94,9 @@ def _ddm_grid(nets, payout_used, dps_hist, shares, re, g, roae, bvps):
     """CoE±1pp x g {2.5,3.5,4.5}% sensitivity on the DDM Gordon TP."""
     from . import ddm as _ddm
     out = {}
-    for dw in (-0.01, 0.0, 0.01):
-        for gg in (0.025, 0.035, 0.045):
+    policy = house_assumptions.discount_inputs("IDR")
+    for dw in policy["rate_sensitivity"]:
+        for gg in policy["growth_sensitivity"]:
             try:
                 coe = re + dw
                 if coe <= gg:
@@ -380,7 +384,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     notes.append("model dibangun di mata uang pelaporan (Rp); FX = 1.")
 
     # --- WACC IDR: INDOGB 10Y sudah memuat risiko negara, tanpa CRP ganda
-    rf, erp, beta = 0.065, 0.04, 1.1
+    idr_policy = house_assumptions.discount_inputs("IDR")
+    rf, erp, beta = (idr_policy["risk_free"], idr_policy["equity_risk_premium"],
+                     idr_policy["beta"])
     re = rf + beta * erp
     news_coe_bps = sum(
         event["change"] for event in (fc.get("news_assumptions") or [])
@@ -392,7 +398,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         notes.append(f"CoE screen adjusted {news_coe_bps:+g} bp by cited news scenario judgments.")
     teff = fc["rows"][0]["tax"] / max(fc["rows"][0]["ebit"] - fc["rows"][0]["interest"], 1)
     teff = max(0.0, min(0.35, teff))
-    rd = 0.09 * (1 - teff)
+    rd = idr_policy["cost_of_debt_pretax"] * (1 - teff)
     D = fc["base"]["debt"] + fc["base"]["other_liab"]
     E = intake["market_cap"]
     wacc = (re * E + rd * D) / max(E + D, 1)
@@ -404,8 +410,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     wacc += news_wacc_bps / 10000
     if news_wacc_bps:
         notes.append(f"WACC screen adjusted {news_wacc_bps:+g} bp by cited news scenario judgments.")
-    g = 0.035  # terminal growth FIX analis, wajib < rf
-    exit_mult = 8.0
+    g = idr_policy["terminal_growth"]
+    exit_mult = house_assumptions.policy_snapshot()["screening"]["exit_ev_ebitda_multiple"]
     exit_basis = "asumsi analis 8,0x (tanpa EV/EBITDA peer di data Sectors)"
     if intake.get("peer_median_pe"):
         exit_basis += f"; silang cek median PER peer {intake['peer_median_pe']:.1f}x"
@@ -424,7 +430,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
 
     # --- downside + grid: basis SAMA dengan TP (rerata Gordon + exit)
     grid = tp_grid(intake, fc, wacc, g, exit_mult, net_debt)
-    tp_down = grid[(0.01, 0.025)]
+    tp_down = grid[(idr_policy["rate_sensitivity"][-1], idr_policy["growth_sensitivity"][0])]
 
     eq_dcf = ev_g - net_debt
     ratio = eq_dcf / intake["market_cap"]
@@ -742,7 +748,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             try:
                 ddm_grid = _ddm_grid(nets, ddm_result.get("payout_used"),
                                      intake.get("dps_hist") or [], shares, re, g, roae, bvps)
-                ddm_down = ddm_grid.get((0.01, 0.025))
+                policy = house_assumptions.discount_inputs("IDR")
+                ddm_down = ddm_grid.get((policy["rate_sensitivity"][-1],
+                                         policy["growth_sensitivity"][0]))
             except Exception:
                 ddm_grid = {}
         candidates["ddm"] = method_chain.candidate(

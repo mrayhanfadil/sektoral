@@ -129,7 +129,7 @@ def exhibit(ticker, as_of, va, data=None):
     # Indonesia's total (mature market + country risk premium).
     local_rf = rf["value"] - crp["default_spread"] if rf and crp else None
     if not usd:
-        rows.append(["Risk-free (INDOGB 10Y)", pct(rates["rf"]),
+        rows.append(["Risk-free IDR (house policy)", pct(rates["rf"]),
                      (f"{pct(rf['value'], 2)} ({rf['label']})"
                       + (f"; dikurangi default spread {pct(crp['default_spread'], 2)} = "
                          f"{pct(local_rf, 2)} bebas risiko rupiah" if local_rf is not None else ""))

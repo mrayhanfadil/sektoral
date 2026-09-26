@@ -118,6 +118,88 @@ def _deepdive(items) -> list[dict]:
     return out
 
 
+def _manifest(value: object) -> dict | None:
+    """Whitelisted identity for the source and rendered artifact bundle."""
+    if not isinstance(value, dict):
+        return None
+    working = value.get("working_tree") if isinstance(value.get("working_tree"), dict) else {}
+    model = value.get("model") if isinstance(value.get("model"), dict) else {}
+    artifact_hashes = value.get("artifacts") if isinstance(value.get("artifacts"), dict) else {}
+    source_packs = value.get("source_pack_sha256") if isinstance(
+        value.get("source_pack_sha256"), dict) else {}
+    cache_hashes = value.get("cache_snapshot_sha256") if isinstance(
+        value.get("cache_snapshot_sha256"), dict) else {}
+    policy_snapshot = value.get("release_policy") if isinstance(value.get("release_policy"), dict) else {}
+    policy_body = policy_snapshot.get("policy") if isinstance(policy_snapshot.get("policy"), dict) else {}
+    house_snapshot = (value.get("house_assumptions")
+                      if isinstance(value.get("house_assumptions"), dict) else {})
+    house_body = (house_snapshot.get("policy")
+                  if isinstance(house_snapshot.get("policy"), dict) else {})
+    house_rates = (house_body.get("discount_rates")
+                   if isinstance(house_body.get("discount_rates"), dict) else {})
+
+    def house_currency(code):
+        source = house_rates.get(code) if isinstance(house_rates.get(code), dict) else {}
+        return {key: source.get(key) for key in (
+            "risk_free", "risk_free_basis", "country_risk_premium", "beta",
+            "equity_risk_premium", "cost_of_debt_pretax", "cost_of_debt_basis",
+            "terminal_growth", "growth_sensitivity", "rate_sensitivity")}
+
+    artifacts = {text(kind, 20): {
+        "file": text(row.get("file"), 80), "sha256": text(row.get("sha256"), 64),
+    } for kind, row in artifact_hashes.items() if isinstance(row, dict)}
+    return {
+        "publication_id": text(value.get("publication_id"), 64),
+        "code_revision": text(value.get("code_revision"), 40),
+        "source_tree_sha256": text(value.get("source_tree_sha256"), 64),
+        "working_tree": {"dirty": working.get("dirty") if isinstance(
+            working.get("dirty"), bool) else None,
+            "sha256": text(working.get("sha256"), 64)},
+        "as_of": text(value.get("as_of"), 20),
+        "profile": text(value.get("profile"), 40),
+        "forecast_basis": text(value.get("forecast_basis"), 50),
+        "production_ready": value.get("production_ready") if isinstance(
+            value.get("production_ready"), bool) else None,
+        "model": {"forecast_agent": text(model.get("forecast_agent"), 100),
+                  "agent_effort": text(model.get("agent_effort"), 40),
+                  "schema_version": model.get("schema_version") if isinstance(
+                      model.get("schema_version"), int) else None},
+        "spec_sha256": text(value.get("spec_sha256"), 64),
+        "evidence_register_sha256": text(value.get("evidence_register_sha256"), 64),
+        "release_policy": {
+            "version": text(policy_body.get("version"), 24),
+            "effective_date": text(policy_body.get("effective_date"), 20),
+            "status": text(policy_body.get("status"), 40),
+            "sha256": text(policy_snapshot.get("sha256"), 64),
+            "ambiguities": [text(item.get("id"), 80) for item in
+                            (policy_body.get("ambiguities") or [])[:16]
+                            if isinstance(item, dict)],
+        } if policy_body else None,
+        "house_assumptions": {
+            "version": text(house_body.get("version"), 24),
+            "documented_as_of": text(house_body.get("documented_as_of"), 20),
+            "effective_from": text(house_body.get("effective_from"), 20),
+            "status": text(house_body.get("status"), 40),
+            "sha256": text(house_snapshot.get("sha256"), 64),
+            "idr": house_currency("IDR"),
+            "usd": house_currency("USD"),
+            "unresolved": [text(item, 240) for item in (house_body.get("unresolved") or [])[:8]
+                           if isinstance(item, str)],
+        } if house_body else None,
+        "source_pack_sha256": {text(path, 120): text(digest, 64) for path, digest
+                                in source_packs.items()
+                                if isinstance(path, str) and isinstance(digest, str)},
+        "cache_snapshot_sha256": {text(endpoint, 180): {
+            "cache_key": text(row.get("cache_key"), 180),
+            "content_sha256": text(row.get("content_sha256"), 64),
+        } for endpoint, row in cache_hashes.items()
+                                  if isinstance(row, dict)},
+        "artifacts": artifacts,
+        "missing_artifacts": [text(kind, 20) for kind in
+                              (value.get("missing_artifacts") or [])[:4]],
+    }
+
+
 def build(audit: dict | None) -> dict | None:
     """The browser-safe trace, or None when ``audit`` is not a trace."""
     if not isinstance(audit, dict) or not audit.get("ticker"):
@@ -132,5 +214,6 @@ def build(audit: dict | None) -> dict | None:
         "news": _news(audit.get("news_sources") if isinstance(audit.get("news_sources"), dict) else {}),
         "forecast": _forecast(audit.get("forecast_assumptions")
                               if isinstance(audit.get("forecast_assumptions"), dict) else {}),
+        "run_manifest": _manifest(audit.get("run_manifest")),
         "deepdive": _deepdive(audit.get("news_deepdive")),
     }

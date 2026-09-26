@@ -66,7 +66,7 @@ from __future__ import annotations
 
 import re
 
-from . import cache, fmt, scenario_value
+from . import cache, fmt, release_policy, scenario_value
 
 MODE_FULL = "laporan lengkap"
 # Full statements opened from the official interim balance sheet (spec §4.1a):
@@ -471,11 +471,13 @@ def _interim_opening(intake, anchor, fx):
     b = {k: _num(v) for k, v in balance.items() if _num(v) is not None}
     f = {k: _num(v) for k, v in flows.items() if _num(v) is not None}
     scale = max(abs(b["total_assets"]), 1.0)
-    tolerance = max(scale * 1e-9, 1.0)
-    if (abs(b["total_assets"] - b["total_liabilities"] - b["total_equity"]) > tolerance
-            or abs(f["cash_begin"] + f["net_cash_flow"] - b["cash"]) > tolerance
-            or abs(f["operating_cash_flow"] + f["investing_cash_flow"]
-                   + f["financing_cash_flow"] - f["net_cash_flow"]) > tolerance):
+    if (not release_policy.forecast_statement_identity_matches(
+            b["total_assets"], b["total_liabilities"] + b["total_equity"], scale)
+            or not release_policy.forecast_statement_identity_matches(
+                f["cash_begin"] + f["net_cash_flow"], b["cash"], scale)
+            or not release_policy.forecast_statement_identity_matches(
+                f["operating_cash_flow"] + f["investing_cash_flow"]
+                + f["financing_cash_flow"], f["net_cash_flow"], scale)):
         return None
     inv = b.get("inventories", 0.0)
     receivables = b.get("trade_receivables", 0.0)

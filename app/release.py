@@ -24,12 +24,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
+import hashlib
+import json
 from math import isfinite
 from numbers import Real
 import re
 from urllib.parse import urlsplit
 
-from . import method_chain
+from . import evidence as evidence_mod, house_assumptions, method_chain
 
 
 OPERATING_BRIDGE_STAGES = (
@@ -140,6 +142,33 @@ def _page(value: object) -> bool:
     return _text(value)
 
 
+_REBUILT_FORECAST_FIELDS = (
+    "rows", "s2", "bank_model", "operating_bridge", "driver_evidence",
+    "forecast_basis", "production_ready", "production_blockers",
+    "assumption_plan", "interim_scenario", "earnings_scenario",
+    "news_assumptions", "base",
+)
+
+
+def _deterministic_forecast_blockers(forecast: object, intake: object) -> list[str]:
+    """Verify calculation-bearing forecast output by rebuilding its input plan."""
+    if not isinstance(forecast, Mapping) or not isinstance(intake, Mapping):
+        return ["forecast calculation could not be independently rebuilt: intake/output missing"]
+    try:
+        from . import forecast as forecast_mod
+        rebuilt = forecast_mod.build(intake, assumption_plan=forecast.get("assumption_plan"))
+    except Exception as error:
+        return [f"forecast calculation could not be independently rebuilt: {error}"]
+    original = {key: forecast.get(key) for key in _REBUILT_FORECAST_FIELDS}
+    expected = {key: rebuilt.get(key) for key in _REBUILT_FORECAST_FIELDS}
+    digest = lambda value: hashlib.sha256(json.dumps(
+        value, sort_keys=True, ensure_ascii=False, default=str,
+        separators=(",", ":")).encode()).hexdigest()
+    if digest(original) != digest(expected):
+        return ["forecast output differs from deterministic rebuild of its dated inputs and plan"]
+    return []
+
+
 def _evidence_row(row: object) -> list[str]:
     """Return missing/invalid evidence fields for a bridge stage row."""
     errors = []
@@ -247,6 +276,8 @@ def _check_driver_forecast(forecast: object, intake: object,
     if not normalized and isinstance(intake, Mapping):
         normalized = str(intake.get("model_profile") or "").strip().lower()
     is_ddm = normalized == "financial_ddm"
+    blockers.extend(_deterministic_forecast_blockers(forecast, intake))
+
     required_series = _REQUIRED_DRIVER_SERIES_DDM if is_ddm else _REQUIRED_DRIVER_SERIES
     expected_basis = "driver_forecast"
     if forecast.get("forecast_basis") != expected_basis:
@@ -256,6 +287,9 @@ def _check_driver_forecast(forecast: object, intake: object,
             blockers.append("sourced operating and cash-flow forecast is incomplete")
     if forecast.get("production_ready") is not True:
         blockers.append("forecast is not verified as production-ready")
+    else:
+        report_date = intake.get("as_of") if isinstance(intake, Mapping) else None
+        blockers.extend(house_assumptions.production_readiness_blockers(report_date))
     for reason in forecast.get("production_blockers") or []:
         if isinstance(reason, str) and reason.strip():
             blockers.append(f"forecast: {reason}")
@@ -396,11 +430,14 @@ def common_blockers(profile, intake, forecast):
     separately so the method chain can fall back without losing these.
     """
     blockers = []
+    if isinstance(intake, Mapping) and "evidence_register" in intake:
+        blockers.extend(evidence_mod.release_blockers(intake.get("evidence_register")))
     normalized_profile = profile.strip().lower() if isinstance(profile, str) else ""
     supported_profiles = {"finite_life_mining", "going_concern_fcff", "financial_ddm"}
     if normalized_profile not in supported_profiles:
         blockers.append(f"unsupported model profile: {profile or 'missing'}")
     if normalized_profile == "finite_life_mining":
+        blockers.extend(_deterministic_forecast_blockers(forecast, intake))
         blockers.extend(_check_latest_interim_actuals(intake))
         blockers.extend(_check_operating_bridge(forecast))
         if (not isinstance(forecast, Mapping) or
@@ -408,6 +445,9 @@ def common_blockers(profile, intake, forecast):
                 forecast.get("production_ready") is not True):
             blockers.append(
                 "mining forecast is not a verified physical-driver production forecast")
+        elif isinstance(forecast, Mapping):
+            report_date = intake.get("as_of") if isinstance(intake, Mapping) else None
+            blockers.extend(house_assumptions.production_readiness_blockers(report_date))
         s2 = (forecast or {}).get("s2") if isinstance(forecast, Mapping) else None
         if isinstance(s2, Mapping) and s2.get("S2.9_operating_bridge") == "gagal":
             blockers.append("forecast gate failed: S2.9 physical-to-financial operating bridge is not reconciled")

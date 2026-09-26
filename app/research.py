@@ -7,7 +7,8 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import build, fmt, intake, news_fetch, news_sources, outputs, progress, research_context, tavily, ui
+from . import (build, evidence as evidence_mod, fmt, intake, news_fetch, news_sources,
+               outputs, progress, research_context, run_manifest, tavily, ui)
 from .progress import emit
 
 _TRACE_CSS = (
@@ -83,7 +84,8 @@ def _analyst_html(intel, esc):
 
 
 def _trace_html(ticker, research, report_name, forecast_assumptions=None,
-                news_deepdive=None, analyst=None, news_sources=None, report=None):
+                news_deepdive=None, analyst=None, news_sources=None, report=None,
+                run_manifest=None):
     """A small, readable audit view for the analyst and the judging demo."""
     brief = research.get("document") if isinstance(research, dict) else None
     brief = brief if isinstance(brief, dict) else {}
@@ -231,6 +233,37 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
     if forecast_assumptions.get("problems"):
         parts.append("<div class='card muted'>" +
                      esc("; ".join(forecast_assumptions["problems"])) + "</div>")
+    manifest = run_manifest if isinstance(run_manifest, dict) else {}
+    house = manifest.get("house_assumptions") or {}
+    house_policy = house.get("policy") if isinstance(house, dict) else None
+    if isinstance(house_policy, dict):
+        rates = house_policy.get("discount_rates") or {}
+        pct = lambda value: (f"{value * 100:.1f}%" if isinstance(value, (int, float))
+                             and not isinstance(value, bool) else "n.m.")
+        parts.append("<h2>House assumptions tingkat diskonto</h2>")
+        parts.append("<div class='card'><p>" +
+                     f"Versi {esc(house_policy.get('version'))} · status "
+                     f"{esc(house_policy.get('status'))} · didokumentasikan "
+                     f"{esc(house_policy.get('documented_as_of'))} · tanggal efektif "
+                     f"{esc(house_policy.get('effective_from') or 'belum tercatat')}<br>"
+                     f"SHA-256 {esc(house.get('sha256'))}</p>")
+        for currency in ("IDR", "USD"):
+            values = rates.get(currency) if isinstance(rates, dict) else None
+            if not isinstance(values, dict):
+                continue
+            parts.append(f"<p><strong>{esc(currency)}</strong> · Rf "
+                         f"{esc(pct(values.get('risk_free')))} ({esc(values.get('risk_free_basis'))}) · "
+                         f"CRP {esc(pct(values.get('country_risk_premium')))} · beta "
+                         f"{esc(values.get('beta') if values.get('beta') is not None else 'n.m.')} · "
+                         f"ERP {esc(pct(values.get('equity_risk_premium')))} · CoD "
+                         f"{esc(pct(values.get('cost_of_debt_pretax')))} "
+                         f"({esc(values.get('cost_of_debt_basis') or 'parameter kebijakan analis')}) · "
+                         f"g {esc(pct(values.get('terminal_growth')))}</p>")
+        unresolved = [item for item in house_policy.get("unresolved") or [] if isinstance(item, str)]
+        if unresolved:
+            parts.append("<p>Belum diselesaikan:</p><ul>" +
+                         "".join(f"<li>{esc(item)}</li>" for item in unresolved) + "</ul>")
+        parts.append("</div>")
     parts.append("<h2>Deep-dive berita (teks lengkap otomatis)</h2>")
     deepdive = news_deepdive or []
     if not deepdive:
@@ -261,12 +294,13 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
 
 def _build_report(t, destination, want_pdf, report_as_of, illustrative_scenarios, analyst_target,
                   assumption_plan, combined_news, combined_full, web_search, method_override,
-                  assumption_result):
+                  assumption_result, evidence_register):
     return build.build(t, destination, want_pdf=want_pdf, as_of=report_as_of,
                        illustrative_scenarios=illustrative_scenarios or analyst_target,
                        assumption_plan=assumption_plan,
                        news_evidence={"rows": combined_news, "full": combined_full,
-                                      "search": web_search},
+                                      "search": web_search,
+                                      "evidence_register": evidence_register},
                        analyst_target=analyst_target,
                        method_override=method_override,
                        spec_sha=assumption_result.get("spec_sha256"),
@@ -383,16 +417,37 @@ def _run(ticker, outdir, want_pdf=False, as_of=None,
     forecast_intake["news_full"] = combined_full
     forecast_intake["news_search"] = web_search
     forecast_intake["news_register"] = register
+    try:
+        pre_agent_register = evidence_mod.build(
+            t, report_as_of, forecast_intake, register, combined_full, None)
+    except Exception as error:
+        pre_agent_register = {
+            "ticker": t, "as_of": report_as_of, "rows": [], "violations": [],
+            "critical_violations": [f"register construction error: {error}"],
+            "error": str(error),
+        }
+    forecast_intake["evidence_register"] = pre_agent_register
     print(f"{t}: news Sectors+Tavily {len(combined_news)} artikel; "
           f"Tavily {web_search['status']}", flush=True)
     emit("news", f"{len(combined_news)} artikel relevan, "
          f"{len(register.get('rejected') or [])} ditolak", f"Tavily {web_search['status']}",
          status="warn" if web_search["status"] in ("failed", "unavailable", "partial_failure")
          else "ok", agent="berita")
-    emit("forecast", "Agent asumsi forecast membaca berita dan rilis resmi", status="run")
-    assumption_result = forecast_agent(forecast_intake, refresh=refresh_assumptions)
-    reused = " (dipakai ulang untuk bukti yang sama)" if assumption_result.get("reused") else ""
-    print(f"{t}: forecast agent {assumption_result['status']}{reused}", flush=True)
+    evidence_blockers = evidence_mod.release_blockers(pre_agent_register)
+    if evidence_blockers:
+        # Invalid or empty evidence must not be handed to an assumption agent.
+        assumption_result = {"status": "blocked", "plan": None,
+                             "problems": evidence_blockers}
+        emit("forecast", "Agent asumsi forecast dilewati karena register bukti gagal",
+             "; ".join(evidence_blockers[:3]), status="warn")
+        reused = ""
+        print(f"{t}: forecast agent dilewati; evidence register has "
+              f"{len(evidence_blockers)} blocker", flush=True)
+    else:
+        emit("forecast", "Agent asumsi forecast membaca berita dan rilis resmi", status="run")
+        assumption_result = forecast_agent(forecast_intake, refresh=refresh_assumptions)
+        reused = " (dipakai ulang untuk bukti yang sama)" if assumption_result.get("reused") else ""
+        print(f"{t}: forecast agent {assumption_result['status']}{reused}", flush=True)
     emit("forecast", "Asumsi forecast selesai" + reused, assumption_result.get("status"))
     assumption_plan = assumption_result.get("plan")
     emit("report", "Menyusun company update dan memeriksa gate valuasi", status="run")
@@ -403,7 +458,8 @@ def _run(ticker, outdir, want_pdf=False, as_of=None,
     with rebuild_mod.market_inputs(None, market_used, {}):
         report = _build_report(t, destination, want_pdf, report_as_of, illustrative_scenarios,
                                analyst_target, assumption_plan, combined_news, combined_full,
-                               web_search, method_override, assumption_result)
+                               web_search, method_override, assumption_result,
+                               pre_agent_register)
     normalized_plan = (report.get("forecast_assumptions") or {}).get("plan")
     if isinstance(normalized_plan, dict) and isinstance(assumption_plan, dict):
         if normalized_plan != assumption_plan:
@@ -422,7 +478,7 @@ def _run(ticker, outdir, want_pdf=False, as_of=None,
     emit("report", "Company update tersusun", report["meta"].get("status"))
     # build.build already assembled both from the same register and plan;
     # reuse them so the trace and the stored manifest cannot disagree.
-    evidence_register = report.get("evidence_register") or {}
+    evidence_register = report.get("evidence_register") or pre_agent_register
     manifest = report.get("run_manifest") or {"ticker": t, "as_of": report_as_of}
     manifest["market_inputs"] = market_used
     audit = {
@@ -456,8 +512,12 @@ def _run(ticker, outdir, want_pdf=False, as_of=None,
                                       forecast_intake.get("news_full"),
                                       analyst=intel,
                                       news_sources=audit["news_sources"],
-                                      report=audit["report"]), encoding="utf-8")
-    outputs.save(outputs.MANIFEST, destination, t, manifest)
+                                      report=audit["report"],
+                                      run_manifest=manifest), encoding="utf-8")
+    publication_manifest = run_manifest.finalize_manifest(manifest, destination, t)
+    audit["run_manifest"] = publication_manifest
+    outputs.save(outputs.TRACE, destination, t, audit)
+    outputs.save(outputs.MANIFEST, destination, t, publication_manifest)
     emit("done", "Selesai")
     return {"ticker": t, "research_ok": safe_research["ok"], "intel": intel,
             "report_status": report["meta"].get("status"),

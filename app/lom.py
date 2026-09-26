@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 
-from . import commodity, fmt, scenario_value
+from . import commodity, fmt, house_assumptions, scenario_value
 
 OZ_PER_T = 32150.7466
 G_PER_OZ = 31.1034768
@@ -37,8 +37,9 @@ LICENCE_EXTENSION_END = 2100  # H1 2026 presentation: "up to 220,000 tonnes ... 
 
 # Discount-rate policy of the US$ LoM: the same analyst policy as the
 # going-concern DCFs (valuation.build), labelled "parameter kebijakan analis".
-BETA = 1.1
-ERP = 0.04
+_USD_POLICY = house_assumptions.discount_inputs("USD")
+BETA = _USD_POLICY["beta"]
+ERP = _USD_POLICY["equity_risk_premium"]
 
 
 def _num(value):

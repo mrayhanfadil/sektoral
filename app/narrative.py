@@ -2540,7 +2540,7 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
         wi = va["wacc_inputs"]
         add("Komponen Cost of Equity", ["Komponen", "Nilai"],
             [["Jalur CAPM:", ""],
-             ["Risk-free rate (INDOGB 10Y)", fmt.pct(wi["rf"])],
+             ["Risk-free rate IDR (house policy)", fmt.pct(wi["rf"])],
              ["Beta (kebijakan analis)", fmt.mult(wi["beta"])],
              ["Equity Risk Premium (kebijakan analis)", fmt.pct(wi["erp"])],
              ["(=) Cost of Equity dipakai", fmt.pct(wi["re"])],
@@ -2548,8 +2548,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
              ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
              ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
              ["Offset dari mean", "n.a.: dipakai hasil CAPM"]],
-            "Source: Company, Sektoral Estimates; Rf = INDOGB 10Y; beta 1,1 dan ERP 4% "
-            "adalah parameter kebijakan analis menurut metodologi Sektoral, bukan data Bloomberg/Damodaran")
+            "Source: Company, Sektoral Estimates; Rf, beta dan ERP mengikuti parameter house policy, "
+            "bukan data Bloomberg/Damodaran. Yield INDOGB bertanggal ditampilkan terpisah.")
 
         _cg_rows = []
         for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
@@ -2819,8 +2819,9 @@ def _lom_exhibits(intake, va, detail):
             ["WACC US$ (Batu Hijau dan Elang)", fmt.pct(inp["discount"])]]},
         "catatan_sumber": (
             f"Sumber: model US$; Rf = UST 10Y ({_rf_source(rate.get('rf_source'))}, "
-            f"{rate.get('rf_date')}); CRP Indonesia, beta dan ERP mature market parameter "
-            f"kebijakan analis, sama dengan DCF lain; biaya utang {rate.get('kd_basis')}; bobot "
+            f"{rate.get('rf_date')}); CRP Indonesia {fmt.pct(rate.get('crp'))}, beta "
+            f"{fmt._id(rate.get('beta'), 2)} dan ERP mature market {fmt.pct(rate.get('erp'))} "
+            f"parameter house policy; biaya utang {rate.get('kd_basis')}; bobot "
             f"dari utang finansial jembatan SOTP US${fmt._id((rate.get('debt_usd') or 0) / 1e6, 0)} "
             f"juta dan kapitalisasi pasar US${fmt._id((rate.get('equity_usd') or 0) / 1e6, 0)} "
             f"juta (harga {intake.get('price_date')}, kurs Rp{fmt.rp(fx)}/USD). WACC dibulatkan "
@@ -2828,7 +2829,7 @@ def _lom_exhibits(intake, va, detail):
             "probabilitas pengembangan. Tanpa nilai terminal.")}
     assumption_rows = [
         ["Tingkat diskonto USD", fmt.pct(inp["discount"]),
-         "WACC US$ dari UST 10Y + CRP 2,5% + beta x ERP 4% (parameter kebijakan analis) dan "
+         "WACC US$ dari UST 10Y, CRP, beta dan ERP sesuai house policy serta "
          "biaya utang berbasis pasar; komponen di tabel WACC US$."],
         ["Probabilitas pengembangan Elang", fmt.pct(risk), lom.get("elang_risk_basis")],
         ["Capex pengembangan Elang",
@@ -3838,8 +3839,7 @@ def _ddm_scenario_exhibits(intake, ddm_s, label):
                 ["Nilai Inverse CoE per saham (Rp, silang cek)",
                  fmt.rp(fmt.tick(ddm_s["per_share_inverse"]))]]
                if ddm_s.get("per_share_inverse") else [])},
-        "catatan_sumber": ("Sumber: Sektoral Estimates; CoE CAPM (rf INDOGB 10Y 6,5%, beta 1,1 "
-                           "dan ERP 4% kebijakan analis); g 3,5% kebijakan analis."
+        "catatan_sumber": ("Sumber: Sektoral Estimates; CoE CAPM dan g menggunakan house policy "
                            + (f" Payout terminal: {ddm_s['terminal_payout_basis']}."
                               if ddm_s.get("terminal_payout") is not None else "")
                            + (f" Inverse CoE memakai ROAE dan BVPS {ddm_s['fwd_label']} model "
@@ -4009,7 +4009,7 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
                f"pada kurs spot Rp{fmt._id(dcf_s['fx'], 0)}/US$ ({dcf_s.get('fx_date') or '-'})."
                if usd_model else ""))}
     rf_row = ([f"Risk-free (UST 10Y, {dcf_s.get('rf_date') or '-'})", fmt.pct(dcf_s["rf"])]
-              if usd_model else ["Risk-free (INDOGB 10Y)", fmt.pct(dcf_s["rf"])])
+              if usd_model else ["Risk-free IDR (house policy)", fmt.pct(dcf_s["rf"])])
     crp_rows = ([["Country risk premium Indonesia (parameter kebijakan analis)",
                   fmt.pct(dcf_s["crp"])]] if usd_model else [])
     wacc = {
@@ -4034,7 +4034,7 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
              f"{dcf_s.get('kd_basis')}; bobot dari kapitalisasi pasar (harga {intake['price_date']}, "
              f"ke US$ pada kurs Rp{fmt._id(dcf_s['fx'], 0)}/US$) dan utang "
              f"({dcf_s['debt_basis']})" if usd_model else
-             f"Sumber: rf, beta dan ERP 4% kebijakan analis; bobot dari kapitalisasi pasar "
+             f"Sumber: rf, beta dan ERP house policy; bobot dari kapitalisasi pasar "
              f"(harga {intake['price_date']}) dan utang ({dcf_s['debt_basis']})")
             + (f"; penyesuaian berita {dcf_s['wacc_bps']:+g} bp" if dcf_s.get("wacc_bps") else "")
             + (f". WACC tersirat harga Rp{fmt.rp(intake['price'])} ({intake['price_date']}) "
@@ -4118,7 +4118,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
              f"Laba {label} dari aktual 1H resmi dan asumsi H2; tahun sesudahnya asumsi analis "
              "tahunan. Skenario ini bukan forecast driver yang sudah direkonsiliasi, sehingga "
              "statusnya berbasis asumsi."),
-            f"CoE {fmt.pct(ddm_s['coe'])} dari CAPM (rf INDOGB 10Y, beta dan ERP 4% kebijakan "
+            f"CoE {fmt.pct(ddm_s['coe'])} dari CAPM (rf IDR house policy, beta dan ERP 4% kebijakan "
             f"analis); g {fmt.pct(ddm_s['g'])}. Tanggal valuasi {ddm_s['valuation_date']}; "
             "dividen diterima satu kuartal sesudah tahun buku."
             + (f" Pada harga Rp{fmt.rp(intake_price)}, jalur dividen yang sama menyiratkan CoE "
@@ -4792,7 +4792,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                      "rows": grid_rows},
             "catatan_sumber": (
                 f"Sumber: ROE {label} = laba pemilik induk skenario / ekuitas pemilik induk "
-                f"({pbv['equity_source']}); CoE CAPM (rf INDOGB 10Y, beta dan ERP 4% kebijakan "
+                f"({pbv['equity_source']}); CoE CAPM (rf IDR house policy, beta dan ERP 4% kebijakan "
                 f"analis); P/BV wajar = (ROE - g) / (CoE - g) x BVPS; "
                 + (f"saham dari {_shares_source(intake.get('official_evidence'))}"
                    if _shares_source(intake.get("official_evidence"))
@@ -5716,7 +5716,7 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
         E("Komponen Cost of Equity", "tabel",
           {"cols": ["Komponen", "Nilai"],
            "rows": [["Jalur CAPM:", ""],
-                     ["Risk-free rate (INDOGB 10Y)", fmt.pct(wi["rf"])],
+                     ["Risk-free rate IDR (house policy)", fmt.pct(wi["rf"])],
                      ["Beta (kebijakan analis)", fmt.mult(wi["beta"])],
                      ["Equity Risk Premium (kebijakan analis)", fmt.pct(wi["erp"])],
                      ["(=) Cost of Equity dipakai", fmt.pct(wi["re"])],
@@ -5724,8 +5724,8 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
                      ["CoE mean 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
                      ["CoE SD 5 tahun", "n.a. (tanpa histori CoE di data Sectors)"],
                      ["Offset dari mean", "n.a.: dipakai hasil CAPM"]]},
-          note="Source: Company, Sektoral Estimates; Rf = INDOGB 10Y; beta 1,1 dan ERP 4% "
-               "adalah parameter kebijakan analis menurut metodologi Sektoral, bukan data Bloomberg/Damodaran")
+          note="Source: Company, Sektoral Estimates; Rf, beta dan ERP mengikuti house policy, "
+               "bukan data Bloomberg/Damodaran. Yield INDOGB bertanggal ditampilkan terpisah.")
         _cg_rows = []
         for _d in (-0.01, -0.005, 0.0, 0.005, 0.01):
             _cg_rows.append(

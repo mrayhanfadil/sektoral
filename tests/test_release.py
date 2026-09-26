@@ -5,7 +5,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app.release import OPERATING_BRIDGE_STAGES, _verified_source_reference, assess_release  # noqa: E402
+from app.release import (OPERATING_BRIDGE_STAGES, _check_latest_interim_actuals,
+                         _verified_source_reference, assess_release)  # noqa: E402
 from app.sotp import calculate_sotp  # noqa: E402
 
 
@@ -70,15 +71,17 @@ def _sotp():
     return result
 
 
-def test_complete_finite_life_mining_inputs_are_distributable():
+def test_manual_mining_bridge_and_sotp_do_not_prove_a_calculated_forecast():
     intake = _intake()
     intake["as_of"] = "2026-09-11"
     result = assess_release("finite_life_mining", intake, _forecast(), _sotp())
 
-    assert result == {"status": "distributable", "blockers": []}
+    assert result["status"] == "draft_non_distributable"
+    assert any("forecast calculation could not be independently rebuilt" in blocker
+               for blocker in result["blockers"])
 
 
-def test_sectors_cache_is_an_allowed_data_source_for_release_inputs():
+def test_sectors_cache_actuals_are_valid_but_manual_forecast_still_blocks():
     intake = _intake()
     intake["as_of"] = "2026-09-11"
     actuals = intake["latest_interim_actuals"]
@@ -86,9 +89,11 @@ def test_sectors_cache_is_an_allowed_data_source_for_release_inputs():
     actuals["source"] = "Sectors cache /financials/quarterly/TEST/"
     actuals["page"] = None
 
+    assert _check_latest_interim_actuals(intake) == []
     result = assess_release("finite_life_mining", intake, _forecast(), _sotp())
-
-    assert result == {"status": "distributable", "blockers": []}
+    assert result["status"] == "draft_non_distributable"
+    assert any("forecast calculation could not be independently rebuilt" in blocker
+               for blocker in result["blockers"])
 
 
 def test_missing_latest_interim_actuals_blocks_with_explicit_gaps():
@@ -178,7 +183,7 @@ def _driver_evidence():
     }
 
 
-def test_sourced_going_concern_can_clear_non_mining_release_gate():
+def test_caller_supplied_production_flag_without_engine_output_is_rejected():
     intake = {"as_of": "2026-09-22", "latest_official_actual": {
         "period": "1H26", "period_end": "2026-06-30",
         "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
@@ -189,10 +194,30 @@ def test_sourced_going_concern_can_clear_non_mining_release_gate():
         "driver_evidence": _driver_evidence(),
     }
 
-    assert assess_release("going_concern_fcff", intake, forecast, None) == {
-        "status": "distributable", "blockers": []}
-    assert assess_release("financial_ddm", intake, forecast, None)["status"] == \
-        "draft_non_distributable"
+    result = assess_release("going_concern_fcff", intake, forecast, None)
+    assert result["status"] == "draft_non_distributable"
+    assert any("forecast calculation could not be independently rebuilt" in blocker
+               for blocker in result["blockers"])
+    # Model Profile routing still avoids applying mining or bank-specific
+    # requirements to this forged object.
+    assert not any("SOTP" in blocker or "DDM" in blocker for blocker in result["blockers"])
+
+
+def test_evidence_register_violation_blocks_otherwise_eligible_release():
+    intake = {"as_of": "2026-09-22", "latest_official_actual": {
+        "period": "1H26", "period_end": "2026-06-30",
+        "published_at": "2026-09-18", "source_url": "https://issuer.example/1h26.pdf",
+        "metrics": {"revenue": 100, "net_profit": 8}},
+        "evidence_register": {"ticker": "TEST", "as_of": "2026-09-22",
+                              "rows": [{"kind": "official_actual"}],
+                              "violations": ["official actual is after report date"]}}
+    result = assess_release("going_concern_fcff", intake, {
+        "forecast_basis": "driver_forecast", "production_ready": True,
+        "driver_evidence": _driver_evidence()}, None)
+
+    assert result["status"] == "draft_non_distributable"
+    assert "evidence register violation: official actual is after report date" in \
+        result["blockers"]
 
 
 def test_driver_forecast_missing_driver_evidence_is_blocked():

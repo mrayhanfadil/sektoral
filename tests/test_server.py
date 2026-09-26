@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 import sys
 import time
@@ -15,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import jobs as jobs_module, outputs, server  # noqa: E402
-from test_gallery import _report, approve  # noqa: E402
+from app import jobs as jobs_module, outputs, run_events, server  # noqa: E402
+from test_gallery import PLAN, _report, approve  # noqa: E402
 
 
 @pytest.fixture
@@ -77,24 +78,18 @@ def test_run_returns_partial_status_and_only_known_artifacts(monkeypatch, make_c
     assert state["report_status"] == "draft_non_distributable"
     dumped = json.dumps(state)
     assert "private" not in dumped and "/etc/passwd" not in dumped
-    assert state["report_url"] == f"/files/jobs/{job_id}/AMMN.html"
-    assert state["trace_url"] == f"/jobs/{job_id}/jejak"
-
-    report = client.get(state["report_url"])
-    assert report.status_code == 200 and report.headers["content-type"].startswith("text/html")
-    assert "Validated company update" in report.text
-    # The standalone trace links to its report by relative filename.
-    assert "Agent trace" in client.get(f"/files/jobs/{job_id}/AMMN-trace.html").text
+    assert "report_url" not in state and "trace_url" not in state and "pdf_url" not in state
+    assert client.get(f"/files/jobs/{job_id}/AMMN.html").status_code == 404
+    assert client.get(f"/files/jobs/{job_id}/AMMN-trace.html").status_code == 404
     for bad in (f"/files/jobs/{job_id}/BBCA.html", f"/files/jobs/{job_id}/AMMN.pdf",
                 f"/files/jobs/{job_id}/..%2F..%2Fetc%2Fpasswd", "/api/jobs/..%2F..%2Fetc%2Fpasswd",
                 "/api/jobs/not-a-job"):
         assert client.get(bad).status_code == 404, bad
-    # The trace JSON is served only as its public view.
-    view = client.get(f"/api/jobs/{job_id}/trace").json()
-    assert view["ticker"] == "AMMN" and "secret" not in json.dumps(view)
+    # Completed but unreviewed run traces do not become public artifacts.
+    assert client.get(f"/api/jobs/{job_id}/trace").status_code == 404
 
 
-def test_repeated_ticker_runs_keep_artifacts_isolated(monkeypatch, make_client):
+def test_repeated_ticker_runs_do_not_expose_unreviewed_job_artifacts(monkeypatch, make_client):
     runs = []
 
     def fake_run(ticker, outdir, want_pdf=False):
@@ -108,10 +103,12 @@ def test_repeated_ticker_runs_keep_artifacts_isolated(monkeypatch, make_client):
     client = make_client()
     ids = [submit(client, "AMMN") for _ in range(2)]
     for job_id in ids:
-        assert wait_for_job(client, job_id)["state"] == "completed"
+        state = wait_for_job(client, job_id)
+        assert state["state"] == "completed"
+        assert "report_url" not in state and "trace_url" not in state
     assert len(set(runs)) == 2
-    assert client.get(f"/files/jobs/{ids[0]}/AMMN.html").text == "run-1"
-    assert client.get(f"/files/jobs/{ids[1]}/AMMN.html").text == "run-2"
+    assert client.get(f"/files/jobs/{ids[0]}/AMMN.html").status_code == 404
+    assert client.get(f"/files/jobs/{ids[1]}/AMMN.html").status_code == 404
 
 
 def test_failure_detail_is_not_returned_over_http(monkeypatch, make_client):
@@ -193,24 +190,54 @@ def test_history_lists_remembered_runs(make_client):
     assert sido["flags"] == 1 and sido["market_date"] == "2026-09-22"
 
 
-def test_reports_api_and_files_are_confined(make_client, tmp_path):
+def test_reports_api_and_files_are_confined(make_client, tmp_path, monkeypatch):
     reports = tmp_path / "reports"
     reports.mkdir()
     _report(reports, "AAAA")
     _report(reports, "BBBB", published=False)
+    _report(reports, "CCCC", reviewed=False)
+    outputs.save(outputs.TRACE, reports, "CCCC", {"forecast_assumptions": {"plan": PLAN}})
     client = make_client(reports=reports)
     items = client.get("/api/reports").json()["items"]
-    assert [i["ticker"] for i in items] == ["AAAA", "BBBB"]
+    assert [i["ticker"] for i in items] == ["AAAA", "BBBB", "CCCC"]
+    assert items[0]["published"] and items[0]["files"]["html"]
+    assert not items[1]["published"] and not any(items[1]["files"].values())
+    assert not items[2]["published"] and not any(items[2]["files"].values())
+    assert run_events.replay(reports, "CCCC") is not None
+    assert client.get("/api/reports/CCCC/run").status_code == 404
+    approve(reports, "CCCC")
+    assert client.get("/api/reports/CCCC/run").status_code == 200
     pdf = client.get("/files/reports/AAAA.pdf")
     assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf"
     assert pdf.headers["cache-control"] == "no-cache" and pdf.headers["etag"]
+    assert client.get("/files/reports/AAAA.html").status_code == 200
     assert client.get("/files/reports/AAAA-trace.html").status_code == 200
+    monkeypatch.setattr(server.gallery.shutil, "which", lambda _name: "/usr/bin/pdftoppm")
+
+    def render_cover(command, **_kwargs):
+        Path(command[-1] + ".png").write_bytes(b"approved cover")
+
+    monkeypatch.setattr(server.gallery.subprocess, "run", render_cover)
+    cover = client.get("/files/reports/AAAA/cover.png")
+    assert cover.status_code == 200 and cover.content == b"approved cover"
+    for kind in ("pdf", "html", "-trace.html"):
+        assert client.get(f"/files/reports/BBBB{kind}").status_code == 404
+    assert client.get("/files/reports/BBBB/cover.png").status_code == 404
+    assert client.get("/api/reports/BBBB/trace").status_code == 404
     for bad in ("/files/reports/AAAA.json", "/files/reports/AAAA-trace.json", "/files/reports/AAAA.secrets",
                 "/files/reports/..%2FAAAA.pdf", "/files/reports/ZZZZ.pdf"):
         assert client.get(bad).status_code == 404, bad
 
+    trace = outputs.load(outputs.TRACE, reports, "AAAA")
+    trace["forecast_assumptions"]["plan"]["outyear_scenario"][0]["revenue_growth_pct"] = 9.0
+    outputs.save(outputs.TRACE, reports, "AAAA", trace)
+    for url in ("/files/reports/AAAA.pdf", "/files/reports/AAAA.html",
+                "/files/reports/AAAA-trace.html", "/files/reports/AAAA/cover.png",
+                "/api/reports/AAAA/trace", "/api/reports/AAAA/run"):
+        assert client.get(url).status_code == 404, url
 
-def test_report_trace_view_returns_only_public_fields(make_client, tmp_path):
+
+def test_report_trace_view_returns_only_public_fields(make_client, tmp_path, monkeypatch):
     reports = tmp_path / "reports"
     reports.mkdir()
     _report(reports, "AAAA")
@@ -229,16 +256,42 @@ def test_report_trace_view_returns_only_public_fields(make_client, tmp_path):
         "evidence_register": {"private": "must-not-appear"},
     }
     outputs.save(outputs.TRACE, reports, "AAAA", audit)
-    pending = make_client(reports=reports).get("/api/reports/AAAA/trace").json()
-    # Until an analyst approves the plan, the gallery trace holds the rating.
-    assert pending["review_state"] == "pending" and pending["report"]["target_price"] is None
+    client = make_client(reports=reports)
+    # A trace is a public artifact, so its API route stays closed until approval.
+    assert client.get("/api/reports/AAAA/trace").status_code == 404
+    review_secret = "review-secret-for-server-test-0001"
+    monkeypatch.setenv("SECTORAL_REVIEWERS", json.dumps([{
+        "id": "reviewer-server-test", "name": "Configured Reviewer", "role": "reviewer",
+        "token_sha256": hashlib.sha256(review_secret.encode()).hexdigest(),
+    }]))
+    review_url = "/api/reports/AAAA/review"
+    pending_review = client.get(review_url)
+    assert pending_review.json() == {"state": "pending", "enabled": True}
+    authorized_review = client.get(review_url, headers={"X-Review-Token": review_secret})
+    assert authorized_review.status_code == 200
+    assert authorized_review.json()["fields"][0]["path"].startswith("outyear_scenario")
+    assert authorized_review.json()["current_reviewer"] == {
+        "id": "reviewer-server-test", "name": "Configured Reviewer", "role": "reviewer"}
+    preview_url = "/api/reports/AAAA/trace/preview"
+    assert client.get(preview_url).status_code == 403
+    preview = client.get(preview_url, headers={"X-Review-Token": review_secret})
+    assert preview.status_code == 200 and preview.json()["review_state"] == "pending"
+    artifact_url = "/api/reports/AAAA/artifact-preview/pdf"
+    assert client.get(artifact_url).status_code == 403
+    private_pdf = client.get(artifact_url, headers={"X-Review-Token": review_secret})
+    assert private_pdf.status_code == 200 and private_pdf.content.startswith(b"%PDF")
+    assert private_pdf.headers["cache-control"] == "no-store"
     approve(reports, "AAAA")
-    view = client_view = make_client(reports=reports).get("/api/reports/AAAA/trace")
+    view = client.get("/api/reports/AAAA/trace")
     assert view.status_code == 200
-    body = client_view.json()
+    body = view.json()
     assert body["review_state"] == "approved"
     assert body["report"]["method"] == "FY26F PER" and body["report"]["target_price"] == 1100
     assert body["research"]["endpoints"] == ["/daily/AAAA/"]
+    approved_review = client.get(review_url).json()
+    assert approved_review["state"] == "approved"
+    assert approved_review["reviewer"] == "Penguji"
+    assert "fields" not in approved_review
     assert body["news"]["articles"][0]["url"] is None  # only http(s) links pass
     assert body["forecast"]["outyears"][0]["revenue_growth_pct"] == 5
     dumped = json.dumps(body)

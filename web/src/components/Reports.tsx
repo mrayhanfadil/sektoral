@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowDown, ArrowUp, ChevronRight, FileDown, FileText, Footprints, Play } from "lucide-react";
-import { reportFiles, type ChainStep, type ReportItem } from "../lib/api";
+import { api, reportFiles, type ArchivedPublication, type ChainStep, type ReportItem } from "../lib/api";
 import { pct, rp } from "../lib/format";
 import { ratingLabel, ratingTone, type RatingTone } from "../lib/labels";
 import { IssuerLogo } from "./IssuerLogo";
@@ -17,13 +17,33 @@ const TONE: Record<RatingTone, string> = {
   review: "border-warn-rule/60 bg-warn-bg text-warn-ink",
 };
 
-/** The published rating, or Draft / Review Required when it is withheld. */
-export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "held_reason"> }) {
+const RELEASE_STATUS_LABEL: Record<string, string> = {
+  production_ready: "Production-Ready",
+  distributable_assumption_led: "Assumption-Led",
+  draft_non_distributable: "Draft",
+};
+const PUBLICATION_STATE_LABEL: Record<string, string> = {
+  built: "Belum lolos release",
+  review_pending: "Menunggu review",
+  published: "Terbit",
+  superseded: "Superseded",
+  withdrawn: "Dicabut",
+};
+
+/** The rating, analytical Release Status, and separate publication state. */
+export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "held_reason" | "release_status" | "publication_state"> }) {
   return (
-    <span className={`inline-flex h-6 items-center gap-1.5 rounded-[5px] border px-2 font-mono text-[12px] leading-none font-semibold whitespace-nowrap ${TONE[ratingTone(item)]}`}>
-      <span aria-hidden className="size-1.5 rounded-[1.5px] bg-current" />
-      <span className="sr-only">Rating </span>
-      {ratingLabel(item)}
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span className={`inline-flex h-6 items-center gap-1.5 rounded-[5px] border px-2 font-mono text-[12px] leading-none font-semibold whitespace-nowrap ${TONE[ratingTone(item)]}`}>
+        <span aria-hidden className="size-1.5 rounded-[1.5px] bg-current" />
+        <span className="sr-only">Rating </span>{ratingLabel(item)}
+      </span>
+      {item.release_status && <span className="inline-flex h-6 items-center rounded-[5px] border border-rule bg-raised px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-ink-soft">
+        Release: {RELEASE_STATUS_LABEL[item.release_status] ?? item.release_status}
+      </span>}
+      <span className={`inline-flex h-6 items-center rounded-[5px] border px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap ${item.publication_state === "published" ? "border-ok-ink/30 bg-ok-bg text-ok-ink" : "border-warn-rule/50 bg-warn-bg/60 text-warn-ink"}`}>
+        {PUBLICATION_STATE_LABEL[item.publication_state] ?? item.publication_state}
+      </span>
     </span>
   );
 }
@@ -168,30 +188,71 @@ export function ReportActions({ item, className = "" }: { item: ReportItem; clas
   const icon = "size-3.5 flex-none max-sm:hidden";
   const who = <span className="sr-only"> {item.ticker}</span>;
   return (
-    <div role="group" aria-label={`Tindakan untuk ${item.ticker}`}
-      className={`inline-flex items-stretch divide-x divide-rule rounded-md border border-rule bg-surface ${className}`}>
-      <Link to={`/laporan/${item.ticker}/putar`} className={`${cell} font-semibold text-brand-ink hover:bg-brand-50`}>
-        <Play aria-hidden className="size-3.5 flex-none" strokeWidth={2.2} />
-        Putar ulang<span className="max-sm:hidden"> run</span>{who}
-      </Link>
-      {item.files.html && (
-        <a href={files.html} className={quiet}>
-          <FileText aria-hidden className={icon} strokeWidth={2.2} />
-          <span className="max-sm:hidden">Buka laporan</span><span className="sm:hidden">Laporan</span>{who}
-        </a>
-      )}
-      {item.files.pdf && (
-        <a href={files.pdf} className={quiet}>
-          <FileDown aria-hidden className={icon} strokeWidth={2.2} />
-          PDF{who}
-        </a>
-      )}
-      {(item.files.trace_json || item.files.trace) && (trace.startsWith("/laporan") ? (
-        <Link to={trace} className={quiet}><Footprints aria-hidden className={icon} strokeWidth={2.2} />Jejak{who}</Link>
-      ) : (
-        <a href={trace} className={quiet}><Footprints aria-hidden className={icon} strokeWidth={2.2} />Jejak{who}</a>
-      ))}
-    </div>
+    <>
+      <div role="group" aria-label={`Tindakan untuk ${item.ticker}`}
+        className={`inline-flex items-stretch divide-x divide-rule rounded-md border border-rule bg-surface ${className}`}>
+        <Link to={`/laporan/${item.ticker}/putar`} className={`${cell} font-semibold text-brand-ink hover:bg-brand-50`}>
+          <Play aria-hidden className="size-3.5 flex-none" strokeWidth={2.2} />
+          Putar ulang<span className="max-sm:hidden"> run</span>{who}
+        </Link>
+        {item.files.html && (
+          <a href={files.html} className={quiet}>
+            <FileText aria-hidden className={icon} strokeWidth={2.2} />
+            <span className="max-sm:hidden">Buka laporan</span><span className="sm:hidden">Laporan</span>{who}
+          </a>
+        )}
+        {item.files.pdf && (
+          <a href={files.pdf} className={quiet}>
+            <FileDown aria-hidden className={icon} strokeWidth={2.2} />
+            PDF{who}
+          </a>
+        )}
+        {(item.files.trace_json || item.files.trace) && (trace.startsWith("/laporan") ? (
+          <Link to={trace} className={quiet}><Footprints aria-hidden className={icon} strokeWidth={2.2} />Jejak{who}</Link>
+        ) : (
+          <a href={trace} className={quiet}><Footprints aria-hidden className={icon} strokeWidth={2.2} />Jejak{who}</a>
+        ))}
+      </div>
+      <ArchivedVersions ticker={item.ticker} />
+    </>
+  );
+}
+
+/** Earlier approved bundles stay reachable with an explicit archived label. */
+function ArchivedVersions({ ticker }: { ticker: string }) {
+  const [archives, setArchives] = useState<ArchivedPublication[] | null>(null);
+  useEffect(() => {
+    let current = true;
+    api.reportArchives(ticker).then((rows) => {
+      if (current) setArchives(rows);
+    }).catch(() => {
+      if (current) setArchives([]);
+    });
+    return () => { current = false; };
+  }, [ticker]);
+
+  if (!archives?.length) return null;
+  return (
+    <details className="relative text-[12.5px] text-ink-soft">
+      <summary className="flex h-8 cursor-pointer list-none items-center rounded-md border border-rule bg-surface px-2.5 font-medium hover:bg-raised focus-visible:outline-offset-2">
+        Arsip ({archives.length})
+      </summary>
+      <div className="absolute right-0 z-20 mt-1.5 w-[min(360px,calc(100vw-2rem))] rounded-md border border-rule bg-surface p-3 shadow-[var(--shadow-pop)]">
+        <p className="m-0 mb-2 text-[12px] text-ink-soft">Versi terdahulu yang disetujui, disimpan sebagai arsip.</p>
+        <ul className="m-0 list-none divide-y divide-rule-soft p-0">
+          {archives.map((archive) => (
+            <li key={archive.publication_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0">
+              <span className="min-w-0 flex-1 truncate font-medium text-ink" title={archive.publication_id}>
+                Arsip · {formatDay(archive.archived_at)} · {archive.publication_id.slice(0, 10)}
+              </span>
+              {archive.files.html && <a className="underline underline-offset-2" href={archive.files.html}>HTML</a>}
+              {archive.files.pdf && <a className="underline underline-offset-2" href={archive.files.pdf}>PDF</a>}
+              {archive.files.trace && <a className="underline underline-offset-2" href={archive.files.trace}>Audit Trace</a>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
   );
 }
 
@@ -297,7 +358,9 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
         <time dateTime={item.date} className="data mt-1.5 block text-ink-soft lg:hidden">{formatDay(item.date)}</time>
       </div>
 
-      <p style={{ gridArea: "me" }} className="truncate pt-0.5 text-[13.5px] text-ink max-xl:hidden" title={item.method}>{primaryMethod(item)}</p>
+      <p style={{ gridArea: "me" }} className="truncate pt-0.5 text-[13.5px] text-ink max-xl:hidden" title={item.published ? item.method : ""}>
+        {item.published ? primaryMethod(item) : "Metode ditampilkan setelah publikasi"}
+      </p>
 
       <dl style={{ gridArea: "num" }}
         className="m-0 mt-2.5 grid grid-cols-3 gap-x-3 border-t border-rule-soft pt-2 lg:contents">
@@ -321,7 +384,8 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
       <time style={{ gridArea: "dt" }} dateTime={item.date} className="data pt-1 text-right text-ink-soft max-xl:hidden">{formatDay(item.date)}</time>
 
       <div style={{ gridArea: "l2" }} className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2.5 lg:mt-2">
-        <MethodChain chain={item.chain} className="min-w-[200px] flex-1 basis-0" />
+        {item.published ? <MethodChain chain={item.chain} className="min-w-[200px] flex-1 basis-0" />
+          : <span className="text-[13px] text-ink-faint">Company Update menunggu publikasi</span>}
         <time dateTime={item.date} className="data hidden text-ink-soft lg:block xl:hidden">{formatDay(item.date)}</time>
         <ReportActions item={item} className="max-sm:basis-full" />
       </div>

@@ -1015,6 +1015,7 @@
     {
       "name": "Concentrate (dmt)",
       "value": 900000,
+      "unit": "dmt",
       "status": "management guidance",
       "period": "FY2026",
       "source_title": "AMMAN H1 2026 Earnings Release",
@@ -1025,6 +1026,7 @@
     {
       "name": "Tembaga dalam konsentrat (Mlbs)",
       "value": 485,
+      "unit": "Mlbs",
       "status": "management guidance",
       "period": "FY2026",
       "source_title": "AMMAN H1 2026 Earnings Release",
@@ -1035,6 +1037,7 @@
     {
       "name": "Emas dalam konsentrat (koz)",
       "value": 775,
+      "unit": "koz",
       "status": "management guidance",
       "previous_value": 579,
       "revision_change_pct": 33.9,
@@ -1054,6 +1057,7 @@
     {
       "name": "Katoda tembaga (kt)",
       "value": 130,
+      "unit": "kt",
       "status": "management guidance",
       "period": "FY2026",
       "source_title": "AMMAN H1 2026 Earnings Release",
@@ -1064,6 +1068,7 @@
     {
       "name": "Emas murni (koz)",
       "value": 350,
+      "unit": "koz",
       "status": "management guidance",
       "period": "FY2026",
       "source_title": "AMMAN H1 2026 Earnings Release",

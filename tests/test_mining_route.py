@@ -30,6 +30,7 @@ def test_ammn_publishes_on_the_validated_interim_scenario(tmp_path):
     doc = build.build("AMMN", tmp_path, as_of="2026-09-24", assumption_plan=PLAN,
                       assumption_status="validated")
     assert doc["meta"]["status"] == "distributable_assumption_led"
+    assert doc["meta"]["model_profile"] == "finite_life_mining"
     assert doc["harness"]["blockers"] == []
     assert doc["meta"]["rating"] in {"Buy", "Hold", "Sell"} and doc["meta"]["tp"]
     # The branch that raised NameError builds this table from the sales bridge;

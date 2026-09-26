@@ -84,7 +84,9 @@ from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app import build, commodity, fx, intake, outputs, peer_fundamentals, progress, rates, render, rnav, run_manifest  # noqa: E402
+from app import (assumption_review, build, commodity, fx, intake, outputs,
+                 peer_fundamentals, progress, publication_archive, rates, render,
+                 rnav, run_manifest)  # noqa: E402
 
 KEY_FINANCIALS = "Key Financials"
 REVENUE_CHART = "Pendapatan"  # Slide 3 revenue combo chart
@@ -464,6 +466,20 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     pins = None if live_inputs else copy.deepcopy(recorded)
     pinned = [] if pins is None else ["snapshot pasar dari manifest sumber"]
     out.mkdir(parents=True, exist_ok=True)
+    # Rebuild may target an existing reports folder. Archive the old approved
+    # bundle before its report, HTML, trace or manifest can be replaced.
+    review = assumption_review.status(out, t, db)
+    if (review.get("state") == "approved" and
+            all(kind in (review.get("artifact_hashes") or {})
+                for kind in ("html", "pdf", "trace_html"))):
+        archived = publication_archive.archive_approved_bundle(out, t, db=db)
+        if archived is None:
+            raise OSError(f"refusing to rebuild approved {t}: publication archive failed")
+    # The rebuild writes a fresh trace and only writes a PDF when requested.
+    # Clear old rendered files now so a failed/HTML-only rebuild cannot leave
+    # artifacts from the previous publication attached to the new manifest.
+    (out / f"{t}.pdf").unlink(missing_ok=True)
+    (out / f"{t}-trace.html").unlink(missing_ok=True)
     doc, events, text, used, seen = _build_once(t, out, kwargs, pins)
     last_built = doc
     if log:
@@ -515,7 +531,6 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         trace["forecast_assumptions"] = fa
     trace.update(copy.deepcopy(trace_extra or {}))
     outputs.save(outputs.TRACE, out, t, trace, db)
-    outputs.save(outputs.MANIFEST, out, t, manifest, db)
     stored_events = outputs.load(outputs.EVENTS, source, t, db)
     if isinstance(stored_events, list) and stored_events:
         outputs.save(outputs.EVENTS, out, t, merged_events(stored_events, events), db)
@@ -524,12 +539,17 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         t, trace.get("research") or {}, f"{t}.html", trace.get("forecast_assumptions"),
         trace.get("news_deepdive"), analyst=trace.get("analyst"),
         news_sources=trace.get("news_sources"), report=trace.get("report")), encoding="utf-8")
-    result = {"ticker": t, **compare(source_doc, doc), "pinned": pinned,
-              "intake_peer_basis": seen.get("peer_basis"), "pdf": None}
+    pdf_path = None
     if want_pdf:
         if build.pdf_mod is None:
             raise RuntimeError("PDF requested but Playwright is not available")
-        result["pdf"] = str(build.pdf_mod.to_pdf(t, out))
+        pdf_path = str(build.pdf_mod.to_pdf(t, out))
+    publication_manifest = run_manifest.finalize_manifest(manifest, out, t)
+    trace["run_manifest"] = publication_manifest
+    outputs.save(outputs.TRACE, out, t, trace, db)
+    outputs.save(outputs.MANIFEST, out, t, publication_manifest, db)
+    result = {"ticker": t, **compare(source_doc, doc), "pinned": pinned,
+              "intake_peer_basis": seen.get("peer_basis"), "pdf": pdf_path}
     return result
 
 

@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app import release_policy
+
 
 class ValidationError(ValueError):
     """Raised when a document violates the report data contract."""
@@ -262,7 +264,7 @@ def check_rule_3_segments_share(doc: dict[str, Any]) -> list[str]:
             total_share += float(share)
 
     if not has_invalid_share:
-        if abs(total_share - 100.0) > 0.5:
+        if not release_policy.segment_share_sum_is_valid(total_share):
             errors.append(
                 f"Rule 3: Segments share_pct must sum to 100 ± 0.5, got {total_share:.2f}"
             )

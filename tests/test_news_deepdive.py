@@ -62,6 +62,10 @@ def test_enrich_all_preserves_order_offline(tmp_path, monkeypatch):
 def test_source_payload_carries_full_text_and_quote_validates():
     intake = {"ticker": "AMMN", "as_of": "2026-09-11", "model_profile": "finite_life_mining",
               "latest_official_actual": None, "official_evidence": {},
+              "evidence_register": {"ticker": "AMMN", "as_of": "2026-09-11",
+                                    "rows": [{"kind": "sectors_article",
+                                              "register_id": "src-0"}],
+                                    "violations": [], "critical_violations": []},
               "news": [{"title": "Copper update", "timestamp": "2026-09-10T10:00:00",
                         "source": "https://news.test/copper", "body": "snippet"}],
               "news_full": [{"source_url": "https://news.test/copper",
@@ -69,6 +73,7 @@ def test_source_payload_carries_full_text_and_quote_validates():
                              "full_text": "Copper output rose on higher mill throughput."}]}
     source = _source_payload(intake)
     assert source["news"][0]["full_text"].startswith("Copper output")
+    assert source["evidence_register"] == intake["evidence_register"]
     plan = {"news_effects": [{"article_index": 0, "title": "Copper update",
                               "timestamp": "2026-09-10T10:00:00",
                               "source_url": "https://news.test/copper",
