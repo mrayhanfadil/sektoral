@@ -69,6 +69,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # Plan §6: driver effects on value and investability, before the exhibits.
     doc["driver_value"] = driver_value.assess(doc_in, fc, va)
     doc["investability"] = investability.assess(doc_in)
+    doc["model_inputs"] = driver_value.model_inputs(doc_in, fc, va)
     report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va, fc=fc)
     doc = narrative.client_copy(doc)
     scrub.normalize_doc_prose(doc)

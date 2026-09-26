@@ -234,6 +234,49 @@ def _result(rows, base_v, down_v, up_v, base_p=None, down_p=None, up_p=None):
                       "tanpa probabilitas"}
 
 
+def _jsonable(value):
+    import json
+    return json.loads(json.dumps(value, default=str))
+
+
+def model_inputs(intake, fc, va):
+    """The inputs a reference calculation needs to rebuild this version's value.
+
+    Stored on the report so two versions can be bridged exactly (plan §8):
+    the driver file (or LoM input set) plus the valuation's rates, bridge,
+    share count and spot rate. None when the model has no reference.
+    """
+    chain = (va or {}).get("method_chain") or {}
+    selected = chain.get("selected")
+    detail = next((t.get("detail") for t in chain.get("trace") or [] if t.get("key") == selected),
+                  None) or {}
+    if selected == "fcff_dcf" and detail.get("operating_model"):
+        drivers = operating_model.load(intake.get("ticker"), intake.get("as_of"))
+        view = detail.get("native") or detail
+        if drivers:
+            return _jsonable({"kind": "operating", "drivers": drivers, "valuation": {
+                "wacc": detail["wacc"], "g": detail["g"], "valuation_date": detail["valuation_date"],
+                "terminal_ronic": detail.get("terminal_ronic"), "cash": view["cash"],
+                "debt": view["debt"], "nci": view.get("nci"),
+                "distributions": view.get("distributions") or 0.0, "shares": detail["shares"],
+                "to_idr": detail.get("fx") or 1.0,
+                "parent_share": detail.get("attributable_share") or 1.0}})
+    if selected == "ddm" and ((fc or {}).get("bank_model") or {}).get("sourced_drivers"):
+        from . import bank_drivers
+        data = bank_drivers.load(intake.get("ticker"), intake.get("as_of"))
+        model = fc["bank_model"]
+        if data:
+            return _jsonable({"kind": "bank", "drivers": data, "valuation": {
+                "coe": detail["coe"], "g": detail["g"], "valuation_date": detail["valuation_date"],
+                "shares": detail["shares"], "to_idr": detail.get("fx") or 1.0,
+                "prior_profit": model["prior_parent_profit"], "first_payout": model["first_payout"]}})
+    if selected == "sotp_lom" and detail.get("lom"):
+        lom = detail["lom"]
+        return _jsonable({"kind": "mining", "inputs": lom["inputs"], "bridge": lom["bridge_idr"],
+                          "fx": lom["fx"]})
+    return None
+
+
 def _link_register(result, register):
     """Each row's Evidence Register row IDs for its source keys (plan §6 exit)."""
     from . import evidence
