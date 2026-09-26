@@ -43,6 +43,18 @@ _Avoid_: manual input, source pack
 The issuer's most recent official period result (for example 1H26) published by the Report Date, treated as actual rather than context.
 _Avoid_: latest quarter, recent results
 
+**Period Basis**:
+Whether a period figure is cumulative year to date (Q1, 1H, 9M, FY) or a standalone later quarter or second half derived from them; growth compares only the same length, basis and consolidated or parent scope.
+_Avoid_: quarter (unqualified), YTD mixed with quarterly
+
+**Earnings Normalization Ledger**:
+Reviewed, dated bridge from reported to recurring attributable earnings: each one-off item with its tax and minority effect, restatements kept as new vintages; without it earnings are used as reported.
+_Avoid_: adjusted earnings, core profit (unsourced)
+
+**Corporate-Action Ledger**:
+Dated, sourced splits, rights issues, placements, buybacks and conversions that set the share count and per-share history known at a Report Date; pending actions stay conditional scenarios.
+_Avoid_: share changes, dilution (unqualified)
+
 **Market Quote Override**:
 A dated closing price newer than the one in the Sectors Snapshot.
 
