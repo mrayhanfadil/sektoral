@@ -16,6 +16,13 @@ Kinds and their terms:
 - ``buyback``: ``shares`` repurchased and ``cash_paid``; ``treasury_resale``:
   ``shares`` and ``proceeds``.
 - ``conversion``: ``new_shares`` and ``debt_converted``.
+
+``timing: "aggregate"`` marks a net change reported only as a total over an
+interval (a buyback programme between two register counts); its cash may be
+undisclosed, so ``cash_paid``/``proceeds`` are optional for it and its
+financing effect is then listed as unknown rather than zero. A rights issue
+whose bonus element fell in an earlier period (the tail of an issue that went
+ex-rights before the period) sets ``bonus_restated: false``.
 """
 from __future__ import annotations
 
@@ -32,6 +39,7 @@ _TERMS = {
     "conversion": ("new_shares", "debt_converted"),
 }
 STATUSES = {"completed", "pending", "cancelled"}
+_CASH_TERMS = {"cash_paid", "proceeds"}
 
 
 def _day(value):
@@ -85,6 +93,9 @@ def validate(actions) -> list[str]:
         if not (str(action.get("source_url") or "").strip() and str(action.get("source_title") or "").strip()):
             errors.append(f"{label} needs source_title and source_url")
         for term in _TERMS[kind]:
+            if term in _CASH_TERMS and action.get("timing") == "aggregate" and \
+                    action.get(term) is None:
+                continue
             if not _positive(action.get(term)):
                 errors.append(f"{label} {term} must be a positive number")
         if kind == "reverse_split" and _positive(action.get("ratio")) and action["ratio"] >= 1:
@@ -180,7 +191,7 @@ def price_adjustment_factor(actions, from_date, to_date, as_of, shares_before_ri
             continue
         if action["kind"] in _RATIO_KINDS:
             factor /= action["ratio"]
-        elif action["kind"] == "rights_issue":
+        elif action["kind"] == "rights_issue" and action.get("bonus_restated", True):
             before = (shares_before_rights or {}).get(action["action_id"])
             if not _positive(before):
                 raise ValueError(f"rights issue {action['action_id']!r} needs the share count before it")
@@ -224,7 +235,7 @@ def weighted_average_shares(base_shares, base_date, period_start, period_end, ac
         if action["kind"] in _RATIO_KINDS:
             for seg in segments:
                 seg[0] *= action["ratio"]
-        elif action["kind"] == "rights_issue":
+        elif action["kind"] == "rights_issue" and action.get("bonus_restated", True):
             before = (shares_before_rights or {}).get(action["action_id"], current)
             bonus = action["cum_rights_price"] / terp(before, action)
             for seg in segments:
@@ -284,12 +295,15 @@ def financing_effects(actions, period_start, period_end, as_of) -> dict:
     """Cash and debt effects of completed actions in a period, counted with their dilution."""
     _checked(actions)
     start, end = _day(period_start), _day(period_end)
-    rows = []
+    rows, unknown = [], []
     for action in _known(actions, as_of)[0]:
         effective = _day(action["effective_date"])
         if not (start <= effective <= end):
             continue
         kind = action["kind"]
+        if any(term in _CASH_TERMS and action.get(term) is None for term in _TERMS[kind]):
+            unknown.append(action["action_id"])
+            continue
         cash = (action["new_shares"] * action["subscription_price"] if kind == "rights_issue" else
                 action["new_shares"] * action["price"] if kind in _ISSUE_KINDS else
                 -action["cash_paid"] if kind == "buyback" else
@@ -300,4 +314,5 @@ def financing_effects(actions, period_start, period_end, as_of) -> dict:
                          "effective_date": action["effective_date"],
                          "cash_effect": cash, "debt_effect": debt})
     return {"rows": rows, "net_cash": sum(r["cash_effect"] for r in rows),
-            "net_debt_change": sum(r["debt_effect"] for r in rows)}
+            "net_debt_change": sum(r["debt_effect"] for r in rows),
+            "undisclosed_cash": unknown}
