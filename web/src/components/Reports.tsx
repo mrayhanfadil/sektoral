@@ -11,18 +11,18 @@ import { IssuerLogo } from "./IssuerLogo";
 /* Small instruments, also used by the landing page and the trace.     */
 
 const TONE: Record<RatingTone, string> = {
-  above: "border-brand-ink/30 bg-brand-50 text-brand-ink",
-  below: "border-brand-ink/30 bg-brand-50 text-brand-ink",
-  equal: "border-brand-ink/30 bg-brand-50 text-brand-ink",
+  buy: "border-ok-ink/30 bg-ok-bg text-ok-ink",
+  hold: "border-brand-ink/30 bg-brand-50 text-brand-ink",
+  sell: "border-err-ink/30 bg-err-bg text-err-ink",
   review: "border-warn-rule/60 bg-warn-bg text-warn-ink",
 };
 
-/** The model-value scenario, or a review state when it is withheld. */
-export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "upside" | "held_reason"> }) {
+/** The published rating, or Draft / Review Required when it is withheld. */
+export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "held_reason"> }) {
   return (
     <span className={`inline-flex h-6 items-center gap-1.5 rounded-[5px] border px-2 font-mono text-[12px] leading-none font-semibold whitespace-nowrap ${TONE[ratingTone(item)]}`}>
       <span aria-hidden className="size-1.5 rounded-[1.5px] bg-current" />
-      <span className="sr-only">Skenario nilai </span>
+      <span className="sr-only">Rating </span>
       {ratingLabel(item)}
     </span>
   );
@@ -41,15 +41,15 @@ export function signedPct(value: number | null | undefined): string {
   return typeof value === "number" && value > 0 ? `+${pct(value)}` : pct(value);
 }
 
-const upsideTone = (_v: number | null | undefined) => "text-ink-strong";
+const upsideTone = (v: number | null | undefined) => (typeof v !== "number" ? "text-ink-soft" : v < 0 ? "text-err-ink" : "text-ok-ink");
 
 export function Stats({ item }: { item: ReportItem }) {
   return (
     <dl className="m-0 grid grid-cols-3 divide-x divide-rule rounded-md border border-rule bg-surface">
       {[
-        ["Nilai model", `Rp${rp(item.tp)}`, "text-ink-strong"],
-        ["Selisih dari harga", signedPct(item.upside), "text-ink-strong"],
-        ["Harga penutupan", `Rp${rp(item.price)}`, "text-ink-strong"],
+        ["Target", `Rp${rp(item.tp)}`, "text-ink-strong"],
+        ["Potensi", signedPct(item.upside), upsideTone(item.upside)],
+        ["Harga", `Rp${rp(item.price)}`, "text-ink-strong"],
       ].map(([label, value, cls]) => (
         <div key={label} className="min-w-0 px-3 py-2">
           <dt className="text-[12px] text-ink-soft">{label}</dt>
@@ -137,15 +137,16 @@ export function ChainLegend() {
   );
 }
 
-/** A neutral diverging bar for the difference from the dated close. */
+/** A diverging bar for upside: right of the centre line is upside, left is downside. */
 function UpsideMeter({ value, scale }: { value: number | null; scale: number }) {
   const reduce = useReducedMotion();
   if (typeof value !== "number" || !scale) return <span aria-hidden className="block h-1.5 w-14 rounded-full bg-rule-soft" />;
   const width = `${(Math.min(1, Math.abs(value) / scale) * 50).toFixed(1)}%`;
+  const up = value >= 0;
   return (
     <span aria-hidden className="relative block h-1.5 w-14 flex-none rounded-full bg-rule-soft">
       <motion.span
-        className={`absolute inset-y-0 ${value >= 0 ? "left-1/2 origin-left rounded-r-full" : "right-1/2 origin-right rounded-l-full"} bg-brand-ink`}
+        className={`absolute inset-y-0 ${up ? "left-1/2 origin-left rounded-r-full bg-ok-ink" : "right-1/2 origin-right rounded-l-full bg-err-ink"}`}
         style={{ width }}
         initial={reduce ? false : { scaleX: 0 }}
         animate={{ scaleX: 1 }}
@@ -255,11 +256,11 @@ function RegisterHead({ sort, onSort }: { sort?: Sort; onSort?: (s: Sort) => voi
     <div className={`${HEAD} sticky top-[52px] z-20 border-b border-rule bg-surface px-5 py-2 text-[12.5px] font-medium text-ink-soft`}>
       <span style={{ gridArea: "tk" }} className={cell}><SortButton label="Kode" col="ticker" sort={sort} onSort={onSort} /></span>
       <span style={{ gridArea: "nm" }} className={cell}>Emiten</span>
-      <span style={{ gridArea: "rt" }} className={cell}>Skenario nilai</span>
+      <span style={{ gridArea: "rt" }} className={cell}>Rating</span>
       <span style={{ gridArea: "me" }} className={`${cell} max-xl:hidden`}>Metode utama</span>
-      <span style={{ gridArea: "tp" }} className={`${cell} justify-end`}>Nilai model</span>
+      <span style={{ gridArea: "tp" }} className={`${cell} justify-end`}>Target</span>
       <span style={{ gridArea: "px" }} className={`${cell} justify-end`}>Harga</span>
-      <span style={{ gridArea: "up" }} className={`${cell} justify-end`}><SortButton label="Selisih dari harga" col="upside" sort={sort} onSort={onSort} align="right" /></span>
+      <span style={{ gridArea: "up" }} className={`${cell} justify-end`}><SortButton label="Potensi" col="upside" sort={sort} onSort={onSort} align="right" /></span>
       <span style={{ gridArea: "dt" }} className={`${cell} justify-end max-xl:hidden`}>Tanggal</span>
     </div>
   );
@@ -286,7 +287,7 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
         {item.published ? (
           <p className="truncate text-[13px] leading-5 text-ink-soft" title={item.headline}>{item.headline}</p>
         ) : (
-          <p className="text-[13px] leading-5 text-warn-ink">Nilai model ditahan: {item.held_reason || "bukti belum lengkap"}</p>
+          <p className="text-[13px] leading-5 text-warn-ink">Rating ditahan: {item.held_reason || "bukti belum lengkap"}</p>
         )}
         </div>
       </div>
@@ -301,15 +302,15 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
       <dl style={{ gridArea: "num" }}
         className="m-0 mt-2.5 grid grid-cols-3 gap-x-3 border-t border-rule-soft pt-2 lg:contents">
         <div className={`${figure} lg:[grid-area:tp]`}>
-          <dt className={label}>Nilai model</dt>
+          <dt className={label}>Target</dt>
           <dd className={value}>Rp{rp(item.tp)}</dd>
         </div>
         <div className={`${figure} lg:[grid-area:px]`}>
-          <dt className={label}>Harga penutupan</dt>
+          <dt className={label}>Harga</dt>
           <dd className={`${value} !text-ink`}>Rp{rp(item.price)}</dd>
         </div>
         <div className={`${figure} lg:[grid-area:up]`}>
-          <dt className={label}>Selisih dari harga</dt>
+          <dt className={label}>Potensi</dt>
           <dd className="m-0 flex items-center gap-2 lg:justify-end">
             <span className="order-2 lg:order-1"><UpsideMeter value={item.upside} scale={scale} /></span>
             <span className={`order-1 font-mono text-[14px] font-semibold tabular-nums lg:order-2 ${upsideTone(item.upside)}`}>{signedPct(item.upside)}</span>

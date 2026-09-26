@@ -124,8 +124,8 @@ function SiteFooter() {
     <footer className="mt-auto border-t border-rule bg-surface">
       <div className="wrap grid gap-4 pt-6 pb-7">
         <p className="max-w-[88ch] text-[13.5px] text-ink-soft">
-          <strong className="text-ink">Informasi dan analisis, bukan saran investasi.</strong> Sektoral menyajikan hasil historis, perhitungan, dan skenario model
-          berdasarkan sumber tertanggal serta asumsi analis. Skenario bukan rekomendasi, prediksi, atau saran investasi; hasil aktual dapat berbeda. Sektoral
+          <strong className="text-ink">Bukan rekomendasi investasi.</strong> Sektoral menyajikan informasi dan analisis untuk mendukung kerja
+          analis. Rating dan target harga hanya muncul setelah pemeriksaan data, forecast, dan valuasi lolos. Sektoral
           tidak terhubung ke broker dan tidak mengeksekusi transaksi. Keputusan investasi tetap tanggung jawab pembaca.
         </p>
         <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-ink-soft">

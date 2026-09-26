@@ -116,7 +116,7 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
     const match = (text: string) => !q || text.toUpperCase().includes(q);
     for (const r of reports.filter((r) => match(`${r.ticker} ${r.name}`)).slice(0, 6)) {
       out.push({ id: `replay-${r.ticker}`, group: "Putar ulang run tersimpan", label: r.ticker, sub: r.name,
-        hint: r.published ? `${ratingLabel(r)}, nilai model Rp${rp(r.tp)}` : ratingLabel(r), icon: "replay",
+        hint: r.published ? `${ratingLabel(r)}, TP Rp${rp(r.tp)}` : ratingLabel(r), icon: "replay",
         run: () => go(`/laporan/${r.ticker}/putar`) });
     }
     for (const r of reports.filter((r) => q && r.ticker === q && r.files.html)) {

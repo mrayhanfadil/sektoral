@@ -76,11 +76,18 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # With the release status final, drop screening values that would read as
     # a withheld or second target.
     report_extras.drop_screening_values(doc)
-    # State that the published value is an analyst model scenario.
+    # Cover rating status (Inisiasi/Dipertahankan/Naik/Turun), set after the
+    # harness so it reflects the final release. A draft publishes no rating,
+    # so it never claims one is maintained; history is shown as context only.
+    from . import rating_history as _rh
     meta = doc["meta"]
-    rating_status = ("Skenario nilai indikatif"
-                     if meta.get("status") != "draft_non_distributable" else
-                     "Dalam peninjauan")
+    if meta.get("status") != "draft_non_distributable" and \
+            meta.get("rating") in ("Buy", "Hold", "Sell"):
+        rating_status = _rh.cover_status(ticker, meta["rating"])
+    else:
+        history = _rh.load(ticker)
+        rating_status = ("Dalam peninjauan" + (f" (rating terakhir {history[-1]['rating']})"
+                                              if history else ""))
     meta["rating_status"] = rating_status
     if isinstance(doc.get("cover"), dict):
         doc["cover"]["rating_status"] = rating_status

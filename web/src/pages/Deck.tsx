@@ -79,8 +79,7 @@ function fromRelease(state: DeckState): ResultData | undefined {
   const release = state.release;
   if (!release) return undefined;
   const heldByGate5 = state.gates[5]?.verdict === "gagal";
-  const item = { rating: release.rating ?? null, upside: release.upside ?? null,
-    held_reason: heldByGate5 ? "Method Gate 5" : "" };
+  const item = { rating: release.rating ?? null, held_reason: heldByGate5 ? "Method Gate 5" : "" };
   return {
     rating: ratingLabel(item), tone: ratingTone(item),
     tp: release.tp ?? "ditahan", upside: release.upside ?? "-",

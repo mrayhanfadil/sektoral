@@ -156,7 +156,7 @@ def test_right_column_stacks_two_short_exhibits_against_a_tall_one():
 
 def test_header_and_footer_follow_the_template():
     header = render._report_header("2026-09-24", {"ticker": "AMMN", "rating": "Sell", "tp": 2840})
-    assert "<div class='report-title'>AMMN IJ | NILAI MODEL Rp 2.840</div>" in header
+    assert "<div class='report-title'>AMMN IJ | SELL · TP Rp 2.840</div>" in header
     assert "<div class='report-subtitle'>Equity Research - Company Update | 24 Sep 2026</div>" in header
     draft = render._report_header("2026-09-24", {"ticker": "AMMN", "rating": "Sell", "tp": 2840,
                                                  "status": "draft_non_distributable"})

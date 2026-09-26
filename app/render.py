@@ -111,7 +111,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        "grid-template-rows:auto 0.5mm;column-gap:5mm;row-gap:0.4mm;"
        "align-items:center;padding:0 0 1.7mm;margin:0 0 1.7mm}"
        ".report-heading{grid-column:1;grid-row:1;min-width:0}"
-       # Header line 1: stock code + model-scenario label (Roboto Black, blue);
+       # Header line 1: stock code + rating action (Roboto Black, blue);
        # line 2: report type + date (Roboto Regular, black).
        ".report-title{font-size:9.6pt;line-height:1.17;color:" + PRIMARY + ";"
        "font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
@@ -1400,21 +1400,21 @@ def _display_date(report_date):
 
 
 def _header_title(meta):
-    """Header line 1: stock code and an informational model value.
+    """Header line 1: stock code, then the rating action and target price.
 
-    A draft or an analysis without a released model value shows its status instead
+    A draft or an analysis without a released rating shows its status instead
     of a TP, so an unreviewed number never reaches the running header.
     """
     meta = meta or {}
     code = f"{meta.get('ticker', '')} IJ".strip()
     if meta.get("status") == "draft_non_distributable":
         return f"{code} | DRAFT"
-    scenario = meta.get("rating")
-    if not scenario:
+    rating = meta.get("rating")
+    if not rating:
         return code
     if meta.get("tp") is None:
-        return f"{code} | SKENARIO MODEL: {str(scenario).upper()}"
-    return f"{code} | NILAI MODEL Rp {fmt.rp(meta['tp'])}"
+        return f"{code} | {str(rating).upper()}"
+    return f"{code} | {str(rating).upper()} \u00b7 TP Rp {fmt.rp(meta['tp'])}"
 
 
 def _header_subtitle(report_date):
@@ -1424,7 +1424,7 @@ def _header_subtitle(report_date):
 
 
 def _report_header(report_date, meta=None):
-    """Report header (Figma node 2627:900): stock code, model value in
+    """Report header (Figma node 2627:900): stock code, rating and TP in
     Roboto Black blue; report type and date in Roboto Regular black; the logo
     top right; the blue-to-lime divider under both."""
     return ("<div class='report-header'>"
@@ -1443,7 +1443,7 @@ def _draft_banner(meta):
         return ""
     if meta.get("illustrative_scenarios"):
         return ("<div class='draft-banner'>DRAFT ILUSTRATIF: skenario memakai fakta "
-                "bersumber dan asumsi analis; nilai model belum layak disajikan.</div>")
+                "bersumber dan asumsi analis; belum layak sebagai target harga.</div>")
     return ("<div class='draft-banner'>DRAFT: BUKTI BELUM LENGKAP: "
             "skenario nilai belum disajikan sampai data dan model tervalidasi.</div>")
 
@@ -1568,7 +1568,7 @@ def _running_header(m):
 
     Section headers live inside each section's HTML, so a section that spills
     onto a second sheet would otherwise print without header or draft label.
-    Figma header content: stock code and model value over the report type and
+    Figma header content: stock code, rating and TP over the report type and
     date top left, the logo top right. app/pdf.py replaces this with the captured page-1 header; this
     text form is what browser printing of the HTML shows.
     """
@@ -1673,12 +1673,12 @@ def _render(doc):
     h.append(_report_header(m["tanggal"], m))
     h.append(_draft_banner(m))
     draft = m.get("status") == "draft_non_distributable"
-    scenario_status = m.get("rating") or ("Draft" if draft else "Analisis")
+    rating_word = m.get("rating") or ("Draft" if draft else "Analisis")
     rating_status = m.get("rating_status") or cov.get("rating_status")
     if draft:
         rating_status = rating_status or "Dalam peninjauan"
     elif m.get("rating"):
-        rating_status = rating_status or scenario_status
+        rating_status = rating_status or "Inisiasi"
     else:
         rating_status = "Skenario informasional"
     sep = (f"<img class='rating-sep' src='data:image/svg+xml;base64,{REPORT_SEPARATOR}' alt=''>")
@@ -1693,19 +1693,19 @@ def _render(doc):
     both = lambda rp, usd: f"{rp} / {usd}" if usd else rp
     h.append("<div class='cover'><div class='left'>")
     h.append("<div class='rating-block'><div class='rating-head'>"
-             "<div class='rating-label'>Skenario nilai</div>"
+             f"<div class='rating-label'>{html.escape(str(rating_word))}</div>"
              f"<div class='rating-detail'>({html.escape(str(rating_status))})</div>"
              "<div class='rating-method'>"
-             + ("Hasil model ditahan hingga pemeriksaan selesai.<br>" if draft else "")
+             + ("Rating ditahan hingga pemeriksaan selesai.<br>" if draft else "")
              + f"Valuasi: {html.escape(doc.get('method', 'DCF'))}</div></div>" + sep)
     price_label = (f"Harga Terakhir (Rp; {m['harga_tanggal']})"
                    if m.get("harga_tanggal") and m.get("harga_tanggal") != m["tanggal"]
                    else "Harga Terakhir (Rp)")
     h.append(row(price_label, fmt.rp(m["harga"]) if m.get("harga") is not None else "NA",
                  m.get("harga") is None))
-    h.append(row("Nilai model per saham (Rp)", fmt.rp(m["tp"]) if released else "NA", not released))
-    h.append(row("Nilai model sebelumnya (Rp)", str(prev_tp) if prev_tp else "NA", not prev_tp))
-    h.append(row("Selisih dari harga (%)", f"{m['upside_persen']:+.1f}%".replace(".", ",")
+    h.append(row("Target Harga (Rp)", fmt.rp(m["tp"]) if released else "NA", not released))
+    h.append(row("TP Sebelumnya (Rp)", str(prev_tp) if prev_tp else "NA", not prev_tp))
+    h.append(row("Upside/Downside (%)", f"{m['upside_persen']:+.1f}%".replace(".", ",")
                  if released and m.get("upside_persen") is not None else "NA", not released))
     h.append(row("Jumlah Saham (juta)",
                  fmt._id(dp["saham"] / 1e6, 1) if dp.get("saham") is not None else "NA"))
@@ -1764,15 +1764,13 @@ def _render(doc):
         h.append(_render_page_content(b))
         h.append("</div>")
 
-    disclosure = ("INFORMASI DAN ANALISIS, BUKAN SARAN INVESTASI. Laporan ini menyajikan "
-                  "data historis, perhitungan, dan skenario model berbasis sumber tertanggal "
-                  "serta asumsi analis. Skenario bukan rekomendasi, prediksi, atau saran "
-                  "investasi; hasil aktual dapat berbeda. Keputusan investasi sepenuhnya "
-                  "menjadi tanggung jawab pembaca. Kinerja masa lalu tidak menjamin hasil ke depan."
+    disclosure = ("Laporan ini memuat rekomendasi model bersyarat berdasarkan "
+                  "asumsi dan sumber yang dinyatakan; keputusan investasi menjadi "
+                  "tanggung jawab pembaca. Kinerja masa lalu tidak menjamin hasil ke depan."
                   if m.get("rating") else
-                  "INFORMASI DAN ANALISIS, BUKAN SARAN INVESTASI. Dokumen ini masih dalam "
-                  "peninjauan; hasil model belum disajikan karena syarat data atau model "
-                  "belum terpenuhi. Keputusan investasi sepenuhnya menjadi tanggung jawab pembaca.")
+                  "Dokumen ini adalah bahan riset dalam peninjauan. Rating dan target "
+                  "harga belum diterbitkan karena syarat data atau model belum terpenuhi. "
+                  "Keputusan investasi menjadi tanggung jawab pembaca.")
     if SHOW_SOURCE_APPENDIX:
         h.append(_source_appendix(_NOTES.get(), m))
     h.append(f"<div class='page'>{_report_header(m['tanggal'], m)}"

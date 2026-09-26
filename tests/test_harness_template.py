@@ -14,11 +14,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.harness import template as T  # noqa: E402
-from app.fmt import DEFAULT_SOURCE  # noqa: E402
 
 YEARS = ["2024A", "2025A", "FY26F", "FY27F", "FY28F"]
 FC5 = ["FY26F", "FY27F", "FY28F", "FY29F", "FY30F"]
-SRC = DEFAULT_SOURCE
+SRC = "Source: Company, Sektoral Estimates"
 
 
 def idn(v, dec=0):
@@ -319,9 +318,9 @@ def _peers(bank=False):
     return paras, [sel, comp, band_table, pe, pb]
 
 
-COVER_PARA3 = ("Nilai model Rp1.200 dihitung dengan {family}, dengan asumsi {param} sebesar 10,9%. "
-               "Nilai model ini mengimplikasikan EBITDA CAGR FY26-28F sebesar 10,0%, didukung kapasitas baru. "
-               "Pada nilai model tersebut, saham diperdagangkan pada PER 26F sebesar 9,9x, dibandingkan rata-rata historis 10,0x. "
+COVER_PARA3 = ("Kami menetapkan target Rp1.200 menggunakan {family}, dengan asumsi {param} sebesar 10,9%. "
+               "TP ini mengimplikasikan pertumbuhan EBITDA CAGR FY26-28F sebesar 10,0%, didukung kapasitas baru. "
+               "Pada TP tersebut, saham diperdagangkan pada PER 26F sebesar 9,9x, dibandingkan rata-rata historis 10,0x. "
                "Risiko utama: harga bahan baku.")
 
 
@@ -338,7 +337,7 @@ def make_doc(profile="going_concern_fcff", status="distributable_assumption_led"
     fin = [_is(bank), _bs(bank), _cf(), _ratio(bank)]
     pages = [
         {"halaman": 2, "judul": "Kinerja keuangan", "paragraf": ["Kinerja per grafik."], "exhibit": charts},
-        {"halaman": 3, "judul": f"Nilai model berbasis {family}", "paragraf": ["Valuasi."],
+        {"halaman": 3, "judul": f"Target harga berbasis {family}", "paragraf": ["Valuasi."],
          "exhibit": val_exhibits},
         {"halaman": 4, "judul": "Perbandingan peer", "paragraf": peer_paras, "exhibit": peer_exhibits},
         {"halaman": 5, "judul": "Data keuangan", "paragraf": ["Laporan keuangan."], "exhibit": fin},
@@ -349,16 +348,15 @@ def make_doc(profile="going_concern_fcff", status="distributable_assumption_led"
     return {
         "meta": {"ticker": "TEST", "emiten": "PT Uji Coba Tbk", "tanggal": "2026-09-24",
                  "harga": 1000.0, "status": status, "model_profile": profile,
-                 "rating": "Di atas harga pasar", "tp": 1200, "upside_persen": 20.0,
-                 "rating_status": "Skenario nilai indikatif"},
+                 "rating": "Buy", "tp": 1200, "upside_persen": 20.0, "rating_status": "Inisiasi"},
         "cover": {
             "headline": "Kapasitas Baru Mendorong Laba Tumbuh Konsisten",
             "bullets": ["Pendapatan 1H26 naik 12% yoy ke Rp600 miliar.",
                         "Kapasitas baru menambah volume mulai 2H26.",
-                        f"Nilai model per saham Rp1.200 (+20,0%) dari {family}."],
+                        f"Buy: target Rp1.200 (+20,0%) dari {family}."],
             "paragraf": [{"judul": "Hasil 1H26 melampaui run-rate", "isi": "Pendapatan 1H26 naik 12%."},
                          {"judul": "Kapasitas baru menopang volume", "isi": "Volume naik 8%."},
-                         {"judul": f"Nilai model berbasis {family}",
+                         {"judul": f"Target harga berbasis {family}",
                           "isi": COVER_PARA3.format(family=family, param=param)}],
             "data_pasar": {"harga": 1000.0, "saham": 1e9, "market_cap": 1e12, "market_cap_usd": "60,0",
                            "adtv": "5,0", "adtv_usd": "0,3", "free_float": "40,0"},
@@ -599,19 +597,8 @@ def test_draft_skips_published_only_checks():
         doc["meta"].pop(k)
     res = results(doc)
     for cid in ("T2.cover_rating_block", "T2.price_box", "T2.cover_tp_method",
-                "T4.valuation_option_exhibits", "T2.valuation_paragraph",
-                "T4.ddm_blocks", "T4.ddm_rows"):
+                "T4.valuation_option_exhibits", "T2.valuation_paragraph"):
         assert res[cid]["status"] == T.NA, cid
-    assert not [k for k, c in res.items() if c["status"] == T.FAIL]
-
-
-def test_draft_ddm_skips_published_valuation_completeness():
-    doc = make_doc("financial_ddm", status="draft_non_distributable")
-    for key in ("rating", "tp", "upside_persen", "rating_status"):
-        doc["meta"].pop(key)
-    res = results(doc)
-    assert res["T4.ddm_blocks"]["status"] == T.NA
-    assert res["T4.ddm_rows"]["status"] == T.NA
     assert not [k for k, c in res.items() if c["status"] == T.FAIL]
 
 
@@ -646,14 +633,14 @@ def test_thesis_bullets_paragraphs_warn():
 def test_valuation_paragraph_elements():
     doc = make_doc()
     p = doc["cover"]["paragraf"][2]
-    p["isi"] = p["isi"].replace("CAGR FY26-28F", "CAGR FY25-FY28F").replace("Pada nilai model tersebut", "Pada harga kini")
+    p["isi"] = p["isi"].replace("CAGR FY26-28F", "CAGR FY25-FY28F").replace("Pada TP tersebut", "Pada harga kini")
     msg = failed(doc)["T2.valuation_paragraph"]["message"]
-    assert "CAGR FY26-28F" in msg and "multiple dihitung pada nilai model" in msg
+    assert "CAGR FY26-28F" in msg and "multiple dihitung pada TP" in msg
 
 
 def test_cover_tp_and_method_must_match_valuation_page():
     doc = make_doc()
-    doc["cover"]["bullets"][2] = "Nilai model Rp1.300 (+30,0%) dari DCF FCFF."
+    doc["cover"]["bullets"][2] = "Buy: target Rp1.300 (+30,0%) dari DCF FCFF."
     assert failed(doc)["T2.cover_tp_method"]["blocker"]
     doc = make_doc()
     doc["method"] = "DDM dividen skenario"
@@ -1115,3 +1102,13 @@ def test_doc_is_not_mutated():
     before = copy.deepcopy(doc)
     T.check_template(doc)
     assert doc == before
+
+
+def test_draft_ddm_skips_published_valuation_completeness():
+    doc = make_doc("financial_ddm", status="draft_non_distributable")
+    for key in ("rating", "tp", "upside_persen", "rating_status"):
+        doc["meta"].pop(key)
+    res = results(doc)
+    assert res["T4.ddm_blocks"]["status"] == T.NA
+    assert res["T4.ddm_rows"]["status"] == T.NA
+    assert not [k for k, c in res.items() if c["status"] == T.FAIL]
