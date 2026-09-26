@@ -305,6 +305,14 @@ def _terminal_note(record):
                 f"{pct(m.get('terminal_roe'))}, payout terminal {pct(m.get('terminal_payout'))}; "
                 f"pertumbuhan dari laba ditahan {pct(m.get('sustainable_growth'))}.")
     effect = m.get("per_share_effect_idr")
+    restated = record.get("restatement")
+    if restated:
+        return (f"Ekonomi terminal disesuaikan: FCFF terminal = NOPAT x (1 - g / RONIC) dengan "
+                f"g {pct(m.get('g'))} dan imbal hasil modal baru {pct(restated['ronic'])} "
+                + ("(ROIC periode eksplisit)" if m.get("explicit_roic") is not None
+                   else "(dua kali WACC)")
+                + f"; nilai per saham Rp{fmt._id(restated['per_share_before'], 0)} menjadi "
+                  f"Rp{fmt._id(restated['per_share_after'], 0)}.")
     return (f"Ekonomi terminal ({verdict}): g {pct(m.get('g'))}, reinvestasi neto "
             f"{pct(m.get('reinvestment_rate'))} dari NOPAT, imbal hasil modal baru implisit "
             f"{pct(m.get('implied_ronic'))} vs batas {pct(m.get('ronic_ceiling'))} "
@@ -324,9 +332,23 @@ def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wa
     detail, reasons = ((None, gaps) if gaps else
                        scenario_value.fcff(intake, fc, rf, erp, beta, g, wacc_bps, rates=rates))
     if detail:
-        detail["terminal_economics"] = terminal_economics.fcff(
-            detail, _invested_capital(intake, detail), rate_benchmarks.load(),
-            intake.get("as_of"), scenario_value.model_currency(intake))
+        capital, bench = _invested_capital(intake, detail), rate_benchmarks.load()
+        cash_currency = scenario_value.model_currency(intake)
+        record = terminal_economics.fcff(detail, capital, bench, intake.get("as_of"),
+                                         cash_currency)
+        restate = terminal_economics.restatement_ronic(record)
+        if restate:
+            # House policy: restate at the ceiling return, then re-check.
+            restated, _ = scenario_value.fcff(intake, fc, rf, erp, beta, g, wacc_bps,
+                                              rates=rates, terminal_ronic=restate)
+            if restated:
+                before = detail["per_share"]
+                detail = restated
+                record = terminal_economics.fcff(detail, capital, bench, intake.get("as_of"),
+                                                 cash_currency)
+                record["restatement"] = {"ronic": restate, "per_share_before": before,
+                                         "per_share_after": detail["per_share"]}
+        detail["terminal_economics"] = record
     gate = (release.assess_fcff_scenario(intake, fc, {"detail": detail}, assumption_status)
             if detail else _NO_GATE)
     if detail:

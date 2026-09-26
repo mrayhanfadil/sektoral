@@ -144,6 +144,25 @@ def ddm(detail, bank_rows, benchmarks, as_of, cash_currency, currency, rf=None):
     return _result("financial_ddm", checks, measures, notes)
 
 
+RESTATABLE = {"reinvestment_for_growth", "ronic_not_above_explicit"}
+
+
+def restatement_ronic(record):
+    """The ceiling return to restate an FCFF terminal at, or None.
+
+    Only reinvestment or return failures are restated (house policy 1.2.0); a
+    rate or currency failure cannot be repaired by reinvestment and stays a label.
+    """
+    if (record or {}).get("status") != "inconsistent" or record.get("profile") != "going_concern_fcff":
+        return None
+    failed = {c["name"] for c in record["checks"] if not c["ok"]}
+    if not failed or not failed <= RESTATABLE:
+        return None
+    ceiling = (record.get("measures") or {}).get("ronic_ceiling")
+    g = (record.get("measures") or {}).get("g")
+    return ceiling if _num(ceiling) and _num(g) is not None and ceiling > g else None
+
+
 def not_applicable(method):
     return {"profile": None, "status": "not_applicable", "checks": [], "measures": {},
             "blockers": [], "notes": [f"metode terpilih {method} tidak memakai nilai terminal abadi"]}

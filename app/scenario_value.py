@@ -602,7 +602,7 @@ _DETAIL_MONEY = ("cash", "debt", "nci", "distributions", "equity_market", "termi
                  "ev_exit", "tv_exit", "pv_tv_exit", "equity_exit", "prior_revenue")
 
 
-def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
+def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=None):
     """FCFF DCF on the scenario path (Opsi A), in the model currency.
 
     FCFF = EBIT x (1 - effective tax) + D&A - capex - ΔNWC. Revenue, EBITDA
@@ -617,6 +617,10 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
     flows, balance sheet (``bridge_native``), EV and equity; the value per
     share alone converts to rupiah at the dated spot rate. The detail's usual
     money keys hold rupiah mirrors (US$ x that one rate), ``native`` the US$.
+
+    ``terminal_ronic`` restates the terminal on the value-driver identity
+    FCFF = NOPAT x (1 - g / RONIC) at that return on new capital (house policy:
+    a terminal failing the reinvestment or return check, ``app.terminal_economics``).
     """
     rows = path(fc)
     if not rows:
@@ -706,7 +710,10 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
             pv += line["fcff"] * share * factor
             out.append({"share": share, "t": t, "factor": factor,
                         "pv": line["fcff"] * share * factor})
-        terminal = terminal_base * (1 + growth)
+        if terminal_ronic:
+            terminal = last["nopat"] * (1 + growth) * (1 - growth / terminal_ronic)
+        else:
+            terminal = terminal_base * (1 + growth)
         tv = terminal / (rate - growth)
         factor_tv = 1 / (1 + rate) ** end_last
         ev = pv + tv * factor_tv
@@ -764,6 +771,7 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
               "erp": erp, "beta": beta, "kd_pretax": kd_pretax, "kd_after": kd_after,
               "kd_basis": rates.get("kd_basis"), "kd_effective": rates.get("kd_effective"),
               "weight_debt": weight_debt, "wacc_bps": wacc_bps, "g": g,
+              "terminal_ronic": terminal_ronic,
               "implied_wacc": implied_wacc, "implied_coe": implied_coe,
               "tax_rate": tax, "tax_basis": tax_basis, "da_ratio": da_ratio,
               "da_basis": da_basis, "nwc_ratio": nwc_ratio, "nwc_basis": nwc_basis,
