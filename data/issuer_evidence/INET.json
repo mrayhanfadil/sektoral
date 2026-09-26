@@ -216,5 +216,154 @@
     "dividend_paid_1h26": 894468398,
     "dividend_basis": "dividen tunai tahun buku 2025 Rp894.468.398 (Akta No. 31, 19 Mei 2026), dibayar pada 1H26 (hlm. 10 dan 67, PDF 20 dan 77)"
   },
-  "operating_context": []
+  "operating_context": [],
+  "filing_sources": {
+    "inet-1h26-note30": {
+      "title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/INET_Q2_2026.pdf",
+      "published_at": "2026-09-11",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+      "page": "PDF 76-77 (Catatan 30, modal saham 30 Juni 2026 dan 31 Desember 2025)"
+    },
+    "inet-1h26-equity": {
+      "title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/INET_Q2_2026.pdf",
+      "published_at": "2026-09-11",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+      "page": "PDF 18 (perubahan ekuitas 1H26: PMHMETD Rp127.813.416.090 modal saham, pelaksanaan waran Rp116.941.830)"
+    },
+    "inet-1h26-note1b": {
+      "title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/INET_Q2_2026.pdf",
+      "published_at": "2026-09-11",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+      "page": "PDF 22 (Catatan 1b: PUT I 12.800.000.000 saham Rp250 dan 2.304.000.000 Waran Seri II)"
+    },
+    "inet-1h26-eps": {
+      "title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/INET_Q2_2026.pdf",
+      "published_at": "2026-09-11",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+      "page": "PDF 82 (Catatan 38, laba per saham)"
+    },
+    "inet-1h26-pl": {
+      "title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/INET_Q2_2026.pdf",
+      "published_at": "2026-09-11",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+      "page": "PDF 14 (laporan laba rugi)"
+    },
+    "inet-idx-close": {
+      "title": "IDX ringkasan perdagangan harian INET (harga penutupan)",
+      "url": "https://www.idx.co.id/en/listed-companies/company-profiles/INET",
+      "published_at": "2026-01-02",
+      "page": "penutupan 2 Januari 2026 Rp770"
+    }
+  },
+  "share_ledger": {
+    "reviewed_through": "2026-09-26",
+    "review_basis": "issuer 30 June 2026 interim statements (share capital, treasury and EPS notes) and the cited register counts",
+    "register_counts": [
+      {
+        "date": "2025-12-31",
+        "shares_outstanding": 9581075296,
+        "source_ref": "inet-1h26-note30"
+      },
+      {
+        "date": "2026-06-30",
+        "shares_outstanding": 22374111088,
+        "source_ref": "inet-1h26-note30"
+      }
+    ],
+    "actions": [
+      {
+        "action_id": "warrant-i-final",
+        "kind": "warrant_exercise",
+        "status": "completed",
+        "new_shares": 11694183,
+        "price": 91,
+        "announced_at": "2023-07-14",
+        "effective_date": "2026-01-21",
+        "source_ref": "inet-1h26-equity",
+        "description": "Series I warrants exercised in 1H26 (Rp116.941.830 / Rp10 par); dated at the end of the exercise period."
+      },
+      {
+        "action_id": "put-i-rights",
+        "kind": "rights_issue",
+        "status": "completed",
+        "new_shares": 12781341609,
+        "subscription_price": 250,
+        "cum_rights_price": 770,
+        "shares_before": 9581075296,
+        "announced_at": "2025-12-22",
+        "ex_date": "2026-01-05",
+        "effective_date": "2026-01-22",
+        "source_ref": "inet-1h26-equity",
+        "description": "PUT I shares issued (Rp127.813.416.090 / Rp10 par, proceeds Rp3.195.335.402.250 at Rp250); dated at the end of the HMETD exercise window; cum-rights close 2 January 2026 (IDX)."
+      }
+    ],
+    "reported_weighted_average": [
+      {
+        "period": "1H26",
+        "start": "2026-01-01",
+        "end": "2026-06-30",
+        "shares": 10761020118,
+        "source_ref": "inet-1h26-eps"
+      }
+    ],
+    "dilutive_instruments": [
+      {
+        "instrument_id": "waran-seri-ii",
+        "kind": "warrant",
+        "shares": 2304000000,
+        "exercise_price": 300,
+        "exercisable_from": "2026-07-13",
+        "expires_at": "2028-07-11",
+        "source_ref": "inet-1h26-note1b"
+      }
+    ],
+    "notes": [
+      "Series II warrant exercises after 13 July 2026 are reported monthly to IDX and are not in this ledger; the Report Date count may be understated by up to 2.304.000.000 shares, which the treasury-stock dilution covers economically.",
+      "The issuer's 1H26 weighted average (10.761.020.118) does not reflect the PUT I shares issued in January; see the derived figure."
+    ]
+  },
+  "normalization_ledger": {
+    "policy": "One-off: gains or losses on disposal of investments, investment property or fixed assets, fixed-asset write-offs, fair-value gains or losses on investments, tax penalties, reversals of prior-period accruals, and net foreign-exchange gains or losses (the forecast does not project exchange movements). Recurring: operating other income (rent, penalties charged, insurance claims, scrap and by-product sales), inventory provisions and expected-credit-loss movements on operating receivables. Tax effect at the 22% statutory rate unless the item is non-deductible; the minority effect is the group's non-controlling share of profit where the entity bearing the item is not disclosed. An undisclosed composite line of 5% or more of period attributable earnings (release policy 1.2.0 materiality) blocks affirmative review.",
+    "periods_assessed": [
+      "1H26"
+    ],
+    "scope_note": "FY2025 and earlier are not assessed in this ledger; the forecast's first year uses the 1H26 actual plus a modelled second half, so the 1H26 bridge is the one that reaches FY1.",
+    "adjustments_assessed": false,
+    "reported_results": [
+      {
+        "vintage_id": "1h26-v1",
+        "period": "1H26",
+        "published_at": "2026-09-11",
+        "available_at": "2026-09-11",
+        "currency": "IDR",
+        "unit": "unit",
+        "reported_attributable_earnings": 33671188228,
+        "source_refs": [
+          "inet-1h26-pl"
+        ]
+      }
+    ],
+    "adjustments": [],
+    "assessment_note": "Penghasilan (beban) usaha lain-lain - neto Rp(1.817.582.645) is 5,4% of 1H26 parent profit and the statements give no breakdown; the ledger cannot be affirmed complete until the issuer discloses it."
+  }
 }
