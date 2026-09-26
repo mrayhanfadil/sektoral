@@ -1,0 +1,17 @@
+{
+ "schema_version": 1,
+ "note": "Tickers whose filings do not disclose what an operating driver file needs; checked sources and the missing disclosure (plan T2). A ticker listed here stays Assumption-Led until the disclosure exists.",
+ "JPFA": {
+  "checked_at": "2026-09-26",
+  "missing": "segment sales volumes and realized prices (feed tonnes, DOC and broiler volumes); the operating model needs volume x price per segment",
+  "checked": [
+   {"title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026 (tidak diaudit)",
+    "url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+    "finding": "Catatan 42 (PDF 145-148): pendapatan dan hasil per segmen (pakan, pembibitan, peternakan komersial, pengolahan dan produk konsumen, budidaya perairan, perdagangan dan lain-lain); tanpa volume atau harga"},
+   {"title": "PT Japfa Comfeed Indonesia Tbk 1H2026 Investor Presentation",
+    "url": "https://d1be5sn7lppxuh.cloudfront.net/assets/files/files/investor_presentation/2026/1h2026-tbk-investor-presentation.pdf",
+    "published_at": "2026-08-20",
+    "finding": "pendapatan naik 29% yoy 'mainly driven by higher sales volumes and ASPs', tanpa angka volume atau ASP"}
+  ]
+ }
+}

@@ -20,6 +20,19 @@ from pathlib import Path
 
 from . import bank_drivers, investability, operating_model, outputs
 
+GAPS = Path(__file__).resolve().parent.parent / "data" / "operating_drivers" / "_disclosure_gaps.json"
+
+
+def disclosure_gap(ticker, path=None):
+    """The recorded missing disclosure that keeps a ticker off the operating model, or None."""
+    try:
+        gaps = json.loads(Path(path or GAPS).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    gap = gaps.get(str(ticker).upper())
+    return gap if isinstance(gap, dict) and gap.get("missing") else None
+
+
 STATUS_LABEL = {"distributable": "Production-Ready", "distributable_assumption_led": "Assumption-Led",
                 "draft_non_distributable": "Draft"}
 
@@ -47,7 +60,11 @@ def next_actions(ticker, doc):
     blockers = list(rel.get("production_blockers") or rel.get("underlying_primary") or [])
     if status == "draft_non_distributable":
         actions.extend(f"release: {b}" for b in (doc.get("harness") or {}).get("blockers") or [])
-    if profile == "going_concern_fcff" and operating_model.load(ticker, as_of) is None:
+    gap = disclosure_gap(ticker)
+    if profile == "going_concern_fcff" and operating_model.load(ticker, as_of) is None and gap:
+        actions.append(f"issuer does not disclose {gap['missing']} (checked {gap.get('checked_at')}: "
+                       + "; ".join(c.get("title", "") for c in gap.get("checked") or []) + ")")
+    elif profile == "going_concern_fcff" and operating_model.load(ticker, as_of) is None:
         actions.append(f"no sourced operating driver file (data/operating_drivers/{ticker}.json) "
                        "known by the Report Date")
     elif profile == "financial_ddm" and bank_drivers.load(ticker, as_of) is None:
