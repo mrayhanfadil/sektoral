@@ -4,9 +4,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import (assumption_review, evidence as evidence_mod, forecast, intake, narrative, outputs,
-               publication_archive, publication_monitor, render, report_contract, report_extras,
-               run_manifest, scrub, valuation)
+from . import (assumption_review, earnings_quality, evidence as evidence_mod, forecast, intake,
+               narrative, outputs, publication_archive, publication_monitor, render,
+               report_contract, report_extras, run_manifest, scrub, valuation)
 
 PDF_OK = True
 try:
@@ -72,6 +72,11 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # Materiality bases (release policy 1.2.0): what the publication monitor
     # compares between a published report and its rebuilt replacement.
     doc["model_summary"] = publication_monitor.summarize_model(fc, va)
+    # Plan §4.4: the reviewed normalization bridge and corporate-action share
+    # basis, recorded for review; they do not change the forecast or release.
+    doc["earnings_quality"] = earnings_quality.assess(
+        doc_in.get("official_evidence"), pre_agent_register,
+        doc_in.get("as_of") or as_of, model_shares=doc_in.get("shares"))
     doc["evidence_register"] = pre_agent_register
     if doc["evidence_register"].get("error"):
         print(f"  evidence_register gagal: {doc['evidence_register']['error']}", flush=True)
