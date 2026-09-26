@@ -328,7 +328,7 @@
     ],
     "dilutive_instruments": [
       {
-        "instrument_id": "waran-seri-ii",
+        "instrument_id": "Waran Seri II",
         "kind": "warrant",
         "shares": 2304000000,
         "exercise_price": 300,
