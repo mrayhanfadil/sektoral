@@ -5380,8 +5380,11 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
     operating = (fc.get("earnings_scenario") or {}).get("basis") in (
         "operating_driver_model", "bank_driver_scenario")
     physical = fc.get("forecast_basis") == "physical_driver_forecast"
+    # A holding SOTP values listed stakes and assets on the Report Date, not a
+    # forecast; Production-Ready or not, it renders through its own layout.
+    holding = (va.get("method_chain") or {}).get("selected") == "holding_sotp"
     if status == "distributable_assumption_led" or (status == "distributable"
-                                                   and (operating or physical)):
+                                                   and (operating or physical or holding)):
         # A Production-Ready operating model renders through the same scenario
         # layout it was valued on; only the release status differs.
         if intake.get("model_profile") == "finite_life_mining":

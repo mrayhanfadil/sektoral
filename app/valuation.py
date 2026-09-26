@@ -14,6 +14,8 @@ from . import operating_model
 from . import reference_fcff
 from . import reference_ddm
 from . import reference_lom
+from . import reference_holding
+from . import market_quote
 from . import bank_drivers
 from . import landbank as landbank_mod
 from . import lom as lom_mod
@@ -458,19 +460,44 @@ def _holding_sotp_candidate(intake, coe=None):
             history = ((own.get("financials") or {}).get("historical_financials") or [])
             book = (history[-1] if history else {}).get("total_equity")
         held, total = sub.get("shares_held"), sub.get("shares_total")
+        market_source = (f"tabel peer Sectors {intake['ticker']}" if row
+                         else f"Sectors company/report {ticker}")
+        market_date = book_date = book_source = None
+        # A dated close on or before the parent's own price date and the
+        # subsidiary's book equity at the parent's balance date, when sourced.
+        quote = market_quote.close_on_or_before(
+            ticker, intake.get("price_date") or intake.get("as_of"))
+        if quote and total:
+            market_cap = quote["price"] * total
+            market_date = quote["date"]
+            market_source = (f"{quote['source_title']} {quote['date']} (Rp{quote['price']:,.0f} x "
+                             f"{total:,.0f} saham)").replace(",", ".")
+        if isinstance(sub.get("book_equity_idr"), (int, float)):
+            book, book_date = sub["book_equity_idr"], sub.get("book_equity_date")
+            book_source = (f"{sub.get('book_equity_source_title')}, "
+                           f"{sub.get('book_equity_page') or '-'}")
         listed.append({"ticker": ticker, "name": sub.get("name") or ticker,
                        "segment": sub.get("segment") or "-",
                        "stake": held / total if held and total else None,
                        "market_cap": market_cap, "book_equity": book,
-                       "book_year": row.get("year"), "stake_source": sub.get("source"),
-                       "market_source": (f"tabel peer Sectors {intake['ticker']}" if row
-                                         else f"Sectors company/report {ticker}")})
+                       "book_year": (book_date or row.get("year")), "book_date": book_date,
+                       "book_source": book_source, "market_date": market_date,
+                       "stake_source": sub.get("source"), "market_source": market_source})
     equity = balance.get("equity_attributable")
     shares = share_basis.report_date_shares(intake)[0]
     land, _ = landbank_mod.value(intake, coe) if coe else (None, [])
     candidate = method_chain.holding_sotp(listed, equity * fx if equity and fx else None, shares,
                                           landbank=land)
     candidate["detail"]["balance_period"] = balance.get("period_end")
+    if candidate.get("per_share") is not None:
+        # Plan §5.6: an independent recomputation of the holding value.
+        candidate["detail"]["reference_validation"] = reference_holding.compare(
+            listed, equity * fx if equity and fx else None, shares, land,
+            candidate["per_share"])
+        candidate["detail"]["terminal_economics"] = {
+            "profile": "holding_sotp", "status": "not_applicable", "checks": [],
+            "measures": {}, "blockers": [],
+            "notes": ["nilai aset pada tanggal laporan; tanpa nilai terminal"]}
     return candidate
 
 

@@ -12,9 +12,11 @@ def _doc(status, profile, method, blockers=(), as_of="2026-09-24"):
 
 
 def test_missing_driver_files_and_policy_vintage_are_named_precisely():
-    gmfi = coverage.row("GMFI", _doc("distributable_assumption_led", "going_concern_fcff", "fcff_dcf",
+    gmfi = coverage.row("UJIA", _doc("distributable_assumption_led", "going_concern_fcff", "fcff_dcf",
                                      ["forecast is not verified as production-ready"]))
-    assert any("data/operating_drivers/GMFI.json" in a for a in gmfi["next_actions"])
+    assert any("data/operating_drivers/UJIA.json" in a for a in gmfi["next_actions"])
+    sido = coverage.row("SIDO", _doc("distributable_assumption_led", "going_concern_fcff", "fcff_dcf"))
+    assert any(a.startswith("issuer does not disclose") for a in sido["next_actions"])
     bank = coverage.row("BBNI", _doc("distributable_assumption_led", "financial_ddm", "ddm"))
     assert any("data/bank_drivers/BBNI.json" in a for a in bank["next_actions"])
     powr = coverage.row("POWR", _doc("distributable_assumption_led", "going_concern_fcff", "fcff_dcf",

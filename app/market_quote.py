@@ -50,6 +50,23 @@ def load(ticker, as_of, cache_date, max_age_days=5):
     return row
 
 
+def close_on_or_before(ticker, day, root=None):
+    """The latest reviewed close of ``ticker`` on or before ``day`` from its pack,
+    as {price, date, source_title, source_url}, or None."""
+    path = (root or ROOT) / f"{str(ticker).upper()}.json"
+    if not path.is_file():
+        return None
+    row = json.loads(path.read_text(encoding="utf-8"))
+    closes = [c for c in row.get("closes") or [] if isinstance(c, dict)
+              and str(c.get("date")) <= str(day)[:10]
+              and isinstance(c.get("price"), (int, float)) and c["price"] > 0]
+    if row.get("currency") != "IDR" or not closes:
+        return None
+    latest = max(closes, key=lambda c: c["date"])
+    return {"price": latest["price"], "date": latest["date"],
+            "source_title": row.get("source_title"), "source_url": row.get("source_url")}
+
+
 def fetch_close(ticker, as_of, ticker_factory=None):
     """Latest completed Yahoo daily close on or before the Report Date."""
     if ticker_factory is None:
