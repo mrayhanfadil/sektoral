@@ -436,19 +436,24 @@ def _lom_schedule(va, fc, fx, path):
     inputs, base = lom.get("inputs") or {}, lom.get("base") or {}
     if not inputs or not base.get("flows") or not _num(inputs.get("da_usd")):
         return None
-    by_year = {}
+    by_year, wc_year = {}, {}
     for flow in base["flows"]:
         by_year[flow["year"]] = by_year.get(flow["year"], 0.0) + (flow.get("da") or 0.0)
+        # Working capital and the customer advance settled in product (lom._working_capital).
+        wc_year[flow["year"]] = (wc_year.get(flow["year"], 0.0) + (flow.get("dnwc") or 0.0)
+                                 + (flow.get("advance_settled") or 0.0))
     da = []
     for i, row in enumerate(path):
         value = by_year.get(row["year"])
         if value is None:
             return None
         da.append((value + (inputs["da_usd"] / 2 if i == 0 else 0.0)) * fx)
+    dnwc = ([wc_year.get(row["year"], 0.0) * fx for row in path]
+            if inputs.get("wc") else None)
     tax, ntgr = _num(inputs.get("tax_rate")), _num(inputs.get("ntgr_rate"))
     if tax is None or ntgr is None:
         return None
-    return {"da": da, "tax": tax, "ntgr": ntgr, "inputs": inputs}
+    return {"da": da, "tax": tax, "ntgr": ntgr, "inputs": inputs, "dnwc": dnwc}
 
 
 def _lom_interest(intake, fx):
@@ -756,8 +761,16 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             f": tarif pajak efektif {fmt.pct(tax)}, sumber {_source(tax_basis)}; sama dengan "
             "valuasi. Laba sebelum pajak = laba bersih konsolidasi skenario / (1 - tarif); "
             "pajak = selisihnya.")
-        if mining:
-            # The LoM (and the mining last step) do not model working capital.
+        if lom and lom.get("dnwc"):
+            # The LoM's working capital; the first year holds the H2 change only
+            # (the 1H change is in the official interim cash flow).
+            dnwc_list = lom["dnwc"]
+            nwc_sentence = (
+                "Jadwal LoM: perubahan modal kerja dari hari piutang, persediaan produk dan utang "
+                "operasi 30 Jun 2026 atas pendapatan tahunan, ditambah penyelesaian uang muka "
+                "pelanggan dengan produk, sama dengan valuasi; tahun pertama memuat perubahan H2.")
+        elif mining:
+            # The mining last step without a LoM schedule does not model working capital.
             dnwc_list = [0.0] * len(path)
             nwc_sentence = (
                 "Asumsi valuasi: jadwal LoM dan metode tambang tidak memodelkan perubahan modal "
@@ -824,7 +837,8 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         interim["da_h2"] = da_list[0] - interim["da_1h"]
         interim["capex_1h"] = abs(interim["flows"]["capital_expenditure"])
         interim["capex_h2"] = first["capex"] - interim["capex_1h"]
-        interim["dnwc_h2"] = dnwc_list[0] * interim["h2_share"]
+        interim["dnwc_h2"] = (dnwc_list[0] if lom and lom.get("dnwc")
+                              else dnwc_list[0] * interim["h2_share"])
         short = [name for name, key in (("D&A", "da_h2"), ("capex", "capex_h2"))
                  if interim[key] < 0]
         if short:

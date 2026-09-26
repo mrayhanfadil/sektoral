@@ -221,6 +221,7 @@ def inputs(intake, fc):
         "h2_capex_usd": _num(((fc.get("interim_scenario") or {}).get("h2") or {})
                              .get("capital_expenditure")),
         "inventory_usd": inventory_usd,
+        "wc": working_capital(ev),
         "cu_price": _num((mineops.get("cu_price") or {}).get("avg12")),
         "au_price": _num((mineops.get("au_price") or {}).get("avg12")),
         "cu_price_date": (mineops.get("cu_price") or {}).get("date"),
@@ -265,6 +266,36 @@ def inputs(intake, fc):
     if not rates.get("copper_cathode_by_hma_usd_per_tonne"):
         gaps.append("royalty")
     return values, gaps
+
+
+def working_capital(ev):
+    """Operating working capital, supplies and the customer advance from the official
+    balance sheet (US$), or None when the pack does not carry them.
+
+    Levels are days of annual revenue at the 30 June balances; the customer
+    advance unwinds on its disclosed current / non-current split (the current
+    part over the next twelve months, the rest by the delivery commitment's end).
+    """
+    wc = ev.get("working_capital_balances") or {}
+    sales = _num(wc.get("first_half_net_sales"))
+    rec, pay = _num(wc.get("trade_receivables")), _num(wc.get("trade_payables_and_accruals"))
+    inv = _num((wc.get("product_inventory") or {}).get("total"))
+    accrued = _num(wc.get("accrued_capital_expenditure")) or 0.0
+    adv = wc.get("customer_advance") or {}
+    if not all(v is not None for v in (sales, rec, pay, inv)) or not sales:
+        return None
+    annual = sales * 2 * 1000
+    k = 1000.0
+    operating_pay = (pay - accrued) * k
+    current, later = (_num(adv.get("current")) or 0.0) * k, (_num(adv.get("non_current")) or 0.0) * k
+    return {"receivable_days": rec * k / annual * 365, "inventory_days": inv * k / annual * 365,
+            "payable_days": operating_pay / annual * 365,
+            "opening": {"receivables": rec * k, "product_inventory": inv * k,
+                        "payables": operating_pay},
+            "supplies": (_num(wc.get("materials_and_supplies")) or 0.0) * k,
+            # 2H of the first year is half the current portion; the next year the rest.
+            "advance_unwind": {2026: current / 2, 2027: current / 2 + later},
+            "source": wc.get("source_url"), "published_at": wc.get("published_at")}
 
 
 def deck_basis(mineops):
@@ -464,6 +495,7 @@ def cash_flows(inp, rows):
         ntgr = max(taxable - tax, 0.0) * inp["ntgr_rate"]
         out.append({**acc, "da": da, "tax": tax, "ntgr": ntgr, "capex": capex,
                     "fcff": acc["ebitda"] - tax - ntgr - capex})
+    _working_capital(inp, out)
     for year, amount in sorted(elang_capex.items()):
         out.append({"asset": "elang", "year": year, "share": 1.0, "ebitda": 0.0,
                     "revenue": 0.0, "feed_mt": 0.0, "cathode_t": 0.0, "refined_oz": 0.0,
@@ -471,6 +503,39 @@ def cash_flows(inp, rows):
                     "kinds": ["development"], "da": 0.0, "tax": 0.0, "ntgr": 0.0,
                     "capex": amount, "fcff": -amount})
     return out
+
+
+def _working_capital(inp, flows):
+    """Add each asset-year's working-capital change and the customer advance to its FCFF.
+
+    Net operating working capital (receivables + product inventory - operating
+    payables, in days of revenue) follows each asset's annual revenue and is
+    released in its last operating year; materials and supplies are released
+    when the mine stops; the customer advance is delivered against (less cash
+    received) on its disclosed schedule. Taxes are unaffected.
+    """
+    wc = inp.get("wc")
+    if not wc:
+        return
+    days = wc["receivable_days"] + wc["inventory_days"] - wc["payable_days"]
+    opening = (wc["opening"]["receivables"] + wc["opening"]["product_inventory"]
+               - wc["opening"]["payables"])
+    last = {}
+    for f in flows:
+        last[f["asset"]] = max(last.get(f["asset"], 0), f["year"])
+    mine_end = max(last.values())
+    held = {"bh": opening, "elang": 0.0}
+    for f in sorted(flows, key=lambda f: (f["year"], f["asset"])):
+        annual = f["revenue"] / f["share"] if f["share"] else f["revenue"]
+        target = 0.0 if f["year"] == last[f["asset"]] else days / 365 * annual
+        change = target - held[f["asset"]]
+        held[f["asset"]] = target
+        advance = wc["advance_unwind"].get(f["year"], 0.0) if f["asset"] == "bh" else 0.0
+        supplies = -wc["supplies"] if f["year"] == mine_end and f["asset"] == max(
+            last, key=lambda a: last[a]) else 0.0
+        f["dnwc"] = change + supplies
+        f["advance_settled"] = advance
+        f["fcff"] -= change + supplies + advance
 
 
 def _t(year):
@@ -496,7 +561,9 @@ def value(inp, bridge_idr, fx, deck_name="base", rate=None, risk=None, export=No
     rows, royalty = schedule(inp, deck(inp, deck_name), export=export)
     flows = cash_flows(inp, rows)
     nav, overhead = navs(inp, flows, rate)
-    assets_usd = nav["bh"] + nav["elang"] * risk + (inp["inventory_usd"] or 0.0)
+    # With a working-capital schedule the inventory is inside the flows, not added at book.
+    inventory = 0.0 if inp.get("wc") else (inp["inventory_usd"] or 0.0)
+    assets_usd = nav["bh"] + nav["elang"] * risk + inventory
     equity_idr = (assets_usd - overhead) * fx + bridge_idr["cash"] - bridge_idr["debt"] \
         - bridge_idr["minority"]
     return {"rows": rows, "flows": flows, "royalty": royalty, "nav": nav,
@@ -703,17 +770,21 @@ def sotp_result(intake, res):
          "provenance": ("Cadangan Elang resmi 30 Jun 2026; capex pengembangan dan pemeliharaan "
                         "dari " + str(lom.get("broker_source_title")) + " (" +
                         str(lom.get("broker_source_date")) + ", " +
-                        str(lom.get("broker_source_page")) + "), asumsi analis, bukan data emiten."),
+                        str(lom.get("broker_source_page")) + "), asumsi analis, bukan data emiten."
+                        + (" " + str(lom["elang_risk_basis"]).split(": (1)")[0] + "."
+                           if lom.get("elang_risk_basis") else "")),
          "source_date": actual.get("published_at"), "page": mlc.get("source_page") or 6,
          "nav_idr": base["nav"]["elang"] * inp["elang_risk"] * fx, "ownership_pct": 100.0},
-        {"name": "Persediaan logam dan konsentrat", "stage": "inventory",
-         "method": "nilai buku 30 Jun 2026",
-         "source": statements or release,
-         "provenance": "Konsentrat, proses smelter, katoda dan emas murni pada nilai tercatat.",
-         "source_date": actual.get("published_at"),
-         "page": inventory.get("inventory_source_page") or 61,
-         "nav_idr": (inp["inventory_usd"] or 0.0) * fx, "ownership_pct": 100.0},
     ]
+    if not inp.get("wc"):
+        assets.append(
+            {"name": "Persediaan logam dan konsentrat", "stage": "inventory",
+             "method": "nilai buku 30 Jun 2026",
+             "source": statements or release,
+             "provenance": "Konsentrat, proses smelter, katoda dan emas murni pada nilai tercatat.",
+             "source_date": actual.get("published_at"),
+             "page": inventory.get("inventory_source_page") or 61,
+             "nav_idr": (inp["inventory_usd"] or 0.0) * fx, "ownership_pct": 100.0})
     b = res["bridge_idr"]
     overhead_idr = base["overhead_usd"] * fx
     result = sotp_mod.calculate_sotp(
@@ -810,9 +881,16 @@ def operating_bridge(intake, res):
                      "(dijadwalkan sebelum bijih pertama Elang dalam jadwal LoM)",
                      "USD", "LoM", "analyst assumption", lom.get("broker_source_url"),
                      lom.get("broker_source_date"), lom.get("broker_source_page")),
-        "nwc": row("Modal kerja", "Perubahan modal kerja tidak dimodelkan; persediaan 30 Jun "
-                   "2026 dinilai pada nilai buku", "USD", "LoM", "analyst assumption", fs,
-                   rel_date, 61),
+        "nwc": (row("Modal kerja: piutang, persediaan produk dan utang operasi 30 Jun 2026",
+                    f"{wc['receivable_days']:.0f} hari piutang + {wc['inventory_days']:.0f} hari "
+                    f"persediaan - {wc['payable_days']:.0f} hari utang operasi atas pendapatan "
+                    "tahunan; dilepas pada tahun terakhir tiap aset, bahan pendukung pada akhir "
+                    "tambang; uang muka pelanggan diselesaikan dengan produk 2026-2027",
+                    "USD", "LoM", "reported actual", fs, rel_date, "8, 9, 67, 77, 105")
+                if (wc := inp.get("wc")) else
+                row("Modal kerja", "Perubahan modal kerja tidak dimodelkan; persediaan 30 Jun "
+                    "2026 dinilai pada nilai buku", "USD", "LoM", "analyst assumption", fs,
+                    rel_date, 61)),
         "tax": row("Tarif pajak efektif dan PNBP 1H26",
                    f"pajak {inp['tax_rate'] * 100:.1f}%; PNBP {inp['ntgr_rate'] * 100:.1f}%",
                    "%", "1H26", "reported actual", rel, rel_date, 5),

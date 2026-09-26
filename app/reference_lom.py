@@ -123,8 +123,10 @@ def flows(inp, cu_price, au_price, export=True):
             cost = (moved * inp["mining_usd_t"]
                     + (mt * 1e6 * inp["rehandle_usd_t"] if kind == "stockpile" else 0.0)
                     + mt * 1e6 * inp["processing_usd_t"] + my_cath * inp["smelting_usd_t"])
-            item = acc.setdefault((asset, year), {"ebitda": 0.0, "share": share, "kinds": set()})
+            item = acc.setdefault((asset, year), {"ebitda": 0.0, "revenue": 0.0, "share": share,
+                                                  "kinds": set()})
             item["ebitda"] += revenue - royalty - cost
+            item["revenue"] += revenue
             item["kinds"].add(kind)
             if asset == "elang" and mt > 0:
                 feed_years.add(year)
@@ -146,6 +148,32 @@ def value(inp, bridge, fx, rate=None, deck=None, risk=None, export=None):
     elang_years = sorted({y for (a, y) in acc if a == "elang"})
     dev_total = sum(dev.values())
     nav = {"bh": 0.0, "elang": 0.0}
+    wc = inp.get("wc")
+    wc_cash = {}
+    if wc:
+        # Net operating working capital in days of annual revenue, released in each
+        # asset's last operating year; supplies released at mine end; the customer
+        # advance delivered against on its schedule.
+        net_days = wc["receivable_days"] + wc["inventory_days"] - wc["payable_days"]
+        level = {"bh": wc["opening"]["receivables"] + wc["opening"]["product_inventory"]
+                 - wc["opening"]["payables"], "elang": 0.0}
+        ends = {}
+        for asset, year in acc:
+            ends[asset] = max(ends.get(asset, 0), year)
+        all_years = sorted(acc, key=lambda k: (k[1], k[0]))
+        final_year = max(ends.values())
+        final_asset = max(ends, key=lambda a: ends[a])
+        for asset, year in all_years:
+            item = acc[(asset, year)]
+            yearly = item["revenue"] / item["share"]
+            new = 0.0 if year == ends[asset] else net_days / 365 * yearly
+            out = new - level[asset]
+            level[asset] = new
+            if year == final_year and asset == final_asset:
+                out -= wc["supplies"]
+            if asset == "bh":
+                out += wc["advance_unwind"].get(year, wc["advance_unwind"].get(str(year), 0.0))
+            wc_cash[(asset, year)] = out
     for (asset, year), item in acc.items():
         share = item["share"]
         if asset == "bh":
@@ -162,14 +190,15 @@ def value(inp, bridge, fx, rate=None, deck=None, risk=None, export=None):
         taxable = max(item["ebitda"] - da, 0.0)
         tax = taxable * inp["tax_rate"]
         ntgr = max(taxable - tax, 0.0) * inp["ntgr_rate"]
-        nav[asset] += (item["ebitda"] - tax - ntgr - capex) / (1 + rate) ** t(year)
+        nav[asset] += (item["ebitda"] - tax - ntgr - capex - wc_cash.get((asset, year), 0.0)) \
+            / (1 + rate) ** t(year)
     for year, amount in dev.items():
         nav["elang"] -= amount / (1 + rate) ** t(year)
     last = max(y for (_, y) in acc)
     last = max([last] + list(dev))
     overhead = sum(inp["ga_usd"] * (0.5 if y == y0 else 1.0) / (1 + rate) ** t(y)
                    for y in range(y0, last + 1))
-    assets = nav["bh"] + nav["elang"] * risk + (inp["inventory_usd"] or 0.0)
+    assets = nav["bh"] + nav["elang"] * risk + (0.0 if wc else (inp["inventory_usd"] or 0.0))
     equity = (assets - overhead) * fx + bridge["cash"] - bridge["debt"] - bridge["minority"]
     return {"per_share": equity / bridge["shares"], "nav_usd": nav, "overhead_usd": overhead}
 
