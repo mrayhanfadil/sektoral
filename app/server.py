@@ -224,6 +224,8 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
             jobs.reports, t, publication_id) if publication_id else None
         return data({**publication,
                      "enabled": enabled,
+                     "attestation_draft": (assumption_review.attestation_draft(jobs.reports, t)
+                                           if identity else None),
                      "predecessor_publication_id": predecessor_id,
                      "supersession_required": predecessor_id is not None,
                      "current_reviewer": ({"id": identity["id"], "name": identity["name"],

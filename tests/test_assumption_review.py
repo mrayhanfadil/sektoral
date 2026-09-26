@@ -484,3 +484,24 @@ def test_plan_without_report_is_pending_and_keeps_its_plan_fingerprint(tmp_path)
     assert state["state"] == "pending"
     assert state["plan_sha"] == R.plan_sha(PLAN)
     assert state["review_sha"] is None
+
+
+def test_the_attestation_draft_is_written_from_the_report_and_leaves_conflicts_to_the_reviewer(tmp_path):
+    _stored(tmp_path)
+    draft = R.attestation_draft(tmp_path, "UJIA")
+    assert set(draft["checklist"]) == set(R.REVIEW_CHECKS)
+    actual = draft["checklist"]["latest_official_actual_and_period"]
+    assert actual["period"] == "1H26" and "terbit 2026-08-01" in actual["note"]
+    # The reviewer's own declarations are never pre-asserted.
+    assert "issuer_relationship" not in draft["disclosures"]
+    assert "economic_or_ownership_conflicts" not in draft["disclosures"]
+    attestation = {"schema_version": R.ATTESTATION_SCHEMA, "disposition": "approved",
+                   "checklist": draft["checklist"], "objections": [], "required_edits": [],
+                   "overrides": [],
+                   "reviewed_source_ids": sorted({i for c in draft["checklist"].values()
+                                                  for i in c["source_ids"]}),
+                   "disclosures": {**draft["disclosures"], "reviewer_role": "reviewer"}}
+    errors = R.attestation_errors(attestation)
+    assert errors and all("issuer_relationship" in e or "economic_or_ownership" in e
+                          or "top_three" in e or "exactly_three" in e for e in errors)
+    assert R.attestation_draft(tmp_path, "NONE") is None

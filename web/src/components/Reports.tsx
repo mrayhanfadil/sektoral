@@ -25,7 +25,8 @@ const RELEASE_STATUS_LABEL: Record<string, string> = {
 const PUBLICATION_STATE_LABEL: Record<string, string> = {
   built: "Belum lolos release",
   review_pending: "Menunggu review",
-  published: "Terbit",
+  auto_published: "Terbit otomatis · belum direview analis",
+  published: "Terbit · direview analis",
   superseded: "Superseded",
   withdrawn: "Dicabut",
 };
@@ -53,7 +54,7 @@ export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "held_
       {item.release_status && <span className="inline-flex h-6 items-center rounded-[5px] border border-rule bg-raised px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-ink-soft">
         Release: {RELEASE_STATUS_LABEL[item.release_status] ?? item.release_status}
       </span>}
-      <span className={`inline-flex h-6 items-center rounded-[5px] border px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap ${item.publication_state === "published" ? "border-ok-ink/30 bg-ok-bg text-ok-ink" : "border-warn-rule/50 bg-warn-bg/60 text-warn-ink"}`}>
+      <span className={`inline-flex h-6 items-center rounded-[5px] border px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap ${item.publication_state === "published" ? "border-ok-ink/30 bg-ok-bg text-ok-ink" : item.publication_state === "auto_published" ? "border-rule bg-raised text-ink-soft" : "border-warn-rule/50 bg-warn-bg/60 text-warn-ink"}`}>
         {PUBLICATION_STATE_LABEL[item.publication_state] ?? item.publication_state}
       </span>
     </span>

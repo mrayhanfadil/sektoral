@@ -198,6 +198,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         publication_manifest = run_manifest.finalize_manifest(
             doc.get("run_manifest"), outdir, t)
         outputs.save(outputs.MANIFEST, outdir, t, publication_manifest)
+        forecast_ledger.freeze_if_auto_published(outdir, t)
     except Exception as e:
         print(f"  publication manifest gagal: {e}", flush=True)
     return doc

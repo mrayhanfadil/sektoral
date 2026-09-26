@@ -15,7 +15,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import assumption_review, outputs, publication_archive, publication_monitor
+from . import assumption_review, outputs, publication_archive, publication_monitor, release_policy
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
@@ -80,8 +80,12 @@ def _publication(doc, folder: Path, stored_ticker: str, db=None) -> dict:
     analytical = valid_identity and meta.get("status") in ANALYTICALLY_ELIGIBLE
     review = assumption_review.status(folder, ticker, db) if valid_identity else {
         "state": "no_report", "record": None}
+    approved = review.get("state") == "approved"
+    automatic = (analytical and not approved and release_policy.auto_publish_enabled()
+                 and meta.get("status") in release_policy.AUTO_PUBLISH_STATUSES)
     publication_state = ("built" if not analytical else
-                         "published" if review.get("state") == "approved" else "review_pending")
+                         "published" if approved else
+                         "auto_published" if automatic else "review_pending")
     if analytical and review.get("state") == "approved":
         manifest = outputs.load(outputs.MANIFEST, folder, ticker, db)
         publication_id = manifest.get("publication_id") if isinstance(manifest, dict) else None
@@ -97,7 +101,9 @@ def _publication(doc, folder: Path, stored_ticker: str, db=None) -> dict:
     return {"analytically_eligible": analytical,
             "publication_state": publication_state,
             "review": review,
-            "published": analytical and review.get("state") == "approved"}
+            "published": analytical and (approved or automatic),
+            "basis": ("analyst_reviewed" if analytical and approved else
+                      "automatic" if automatic else None)}
 
 
 def is_publishable(folder, ticker: str, db=None) -> bool:
@@ -138,6 +144,9 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
         "publication_state": publication["publication_state"],
         "price": meta.get("harga"),
         "published": published,
+        # Policy 1.3.0: "automatic" (gates passed, not analyst-reviewed) or
+        # "analyst_reviewed" (an authenticated approval of this bundle).
+        "publication_basis": publication.get("basis"),
         "rating": meta.get("rating") if published else None,
         "rating_status": meta.get("rating_status"),
         "tp": meta.get("tp") if published else None,

@@ -83,7 +83,8 @@ def test_summaries_hold_drafts_and_read_the_method_chain(tmp_path):
     assert held["publication_state"] == "built" and not held["analytically_eligible"]
 
 
-def test_a_passing_report_is_a_draft_until_an_analyst_approves_its_plan(tmp_path):
+def test_a_passing_report_is_a_draft_until_an_analyst_approves_its_plan(tmp_path, monkeypatch):
+    monkeypatch.setenv("SECTORAL_AUTO_PUBLISH", "0")  # review-gated publication
     _report(tmp_path, "AAAA", reviewed=False)
     outputs.save(outputs.TRACE, tmp_path, "AAAA", {"forecast_assumptions": {"plan": PLAN}})
     item = gallery.load(tmp_path)[0]
@@ -104,6 +105,28 @@ def test_a_passing_report_is_a_draft_until_an_analyst_approves_its_plan(tmp_path
         "plan": {**PLAN, "outyear_scenario": [{**PLAN["outyear_scenario"][0],
                                                "revenue_growth_pct": 9.0}]}}})
     assert not gallery.load(tmp_path)[0]["published"]
+
+
+def test_a_passing_report_publishes_automatically_and_review_adds_the_badge(tmp_path):
+    _report(tmp_path, "AAAA", reviewed=False)
+    outputs.save(outputs.TRACE, tmp_path, "AAAA", {"forecast_assumptions": {"plan": PLAN}})
+    item = gallery.load(tmp_path)[0]
+    assert item["published"] and item["rating"] == "Hold"
+    assert item["publication_state"] == "auto_published"
+    assert item["publication_basis"] == "automatic" and item["review"]["state"] == "pending"
+    approve(tmp_path, "AAAA")
+    item = gallery.load(tmp_path)[0]
+    assert item["publication_state"] == "published"
+    assert item["publication_basis"] == "analyst_reviewed"
+
+
+def test_a_draft_is_never_published_automatically(tmp_path):
+    _report(tmp_path, "AAAA", reviewed=False)
+    doc = outputs.load(outputs.REPORT, tmp_path, "AAAA")
+    doc["meta"]["status"] = "draft_non_distributable"
+    outputs.save(outputs.REPORT, tmp_path, "AAAA", doc)
+    item = gallery.load(tmp_path)[0]
+    assert not item["published"] and item["publication_basis"] is None
 
 
 def test_artifacts_are_confined_to_the_reports_folder(tmp_path):

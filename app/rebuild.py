@@ -561,6 +561,8 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     trace["run_manifest"] = publication_manifest
     outputs.save(outputs.TRACE, out, t, trace, db)
     outputs.save(outputs.MANIFEST, out, t, publication_manifest, db)
+    from . import forecast_ledger
+    forecast_ledger.freeze_if_auto_published(out, t, db)
     result = {"ticker": t, **compare(source_doc, doc), "pinned": pinned,
               "intake_peer_basis": seen.get("peer_basis"), "pdf": pdf_path}
     return result

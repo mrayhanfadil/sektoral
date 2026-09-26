@@ -520,6 +520,8 @@ def _run(ticker, outdir, want_pdf=False, as_of=None,
     audit["run_manifest"] = publication_manifest
     outputs.save(outputs.TRACE, destination, t, audit)
     outputs.save(outputs.MANIFEST, destination, t, publication_manifest)
+    from . import forecast_ledger
+    forecast_ledger.freeze_if_auto_published(destination, t)
     emit("done", "Selesai")
     return {"ticker": t, "research_ok": safe_research["ok"], "intel": intel,
             "report_status": report["meta"].get("status"),

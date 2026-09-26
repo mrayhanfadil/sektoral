@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { ReviewAttestation, ReviewAttestationSchema, ReviewView } from "../lib/api";
+import { useEffect, useState } from "react";
+import type { AttestationDraft, ReviewAttestation, ReviewAttestationSchema, ReviewView } from "../lib/api";
 
 type AssumptionDraft = { id: string; description: string; sensitivity: string; sourceIds: string };
 type CheckDraft = { status: string; note: string; sourceIds: string; period: string; assumptions: AssumptionDraft[] };
@@ -59,6 +59,25 @@ const emptyForm = (): FormState => ({
   conflicts: Object.fromEntries(conflictKeys.map((key) => [key, { status: "none", details: "" }])),
   objections: [], requiredEdits: [], overrides: [],
 });
+/** The form pre-filled from the report's draft; conflicts stay for the reviewer to declare. */
+const draftForm = (draft: AttestationDraft): FormState => {
+  const form = emptyForm();
+  for (const key of checkKeys) {
+    const item = draft.checklist[key];
+    if (!item) continue;
+    form.checks[key] = {
+      ...form.checks[key], status: item.status, note: item.note,
+      sourceIds: item.source_ids.join(","), period: item.period ?? "",
+      assumptions: item.items ? item.items.map((a) => ({ id: a.assumption_id, description: a.description,
+        sensitivity: a.value_sensitivity, sourceIds: a.source_ids.join(",") })) : form.checks[key].assumptions,
+    };
+  }
+  for (const [key, value] of Object.entries(draft.disclosures)) {
+    if (key in form.disclosures) form.disclosures[key] = value;
+  }
+  return form;
+};
+
 const sourceIds = (text: string) => [...new Set(text.split(/[\n,;]+/).map((part) => part.trim()).filter(Boolean))];
 
 function makeAttestation(form: FormState, schema: ReviewAttestationSchema): ReviewAttestation {
@@ -106,17 +125,23 @@ function makeAttestation(form: FormState, schema: ReviewAttestationSchema): Revi
   };
 }
 
-export function ReviewAttestationForm({ schema, identity, availableSourceIds, onChange }: {
+export function ReviewAttestationForm({ schema, identity, availableSourceIds, draft, onChange }: {
   schema: ReviewAttestationSchema;
   identity: ReviewView["current_reviewer"];
   availableSourceIds: NonNullable<ReviewView["available_source_ids"]>;
+  draft?: AttestationDraft | null;
   onChange: (attestation: ReviewAttestation) => void;
 }) {
   const [form, setForm] = useState<FormState>(() => {
-    const initial = emptyForm();
+    const initial = draft ? draftForm(draft) : emptyForm();
     if (identity?.role) initial.disclosures.reviewer_role = identity.role;
     return initial;
   });
+  // A pre-filled form is a candidate from the start; report it once.
+  useEffect(() => {
+    if (draft) onChange(makeAttestation(form, schema));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const properties = schema.properties.checklist?.properties ?? {};
   const labelClass = "mb-1 block text-[12.5px] font-medium text-ink-soft";
   const inputClass = "min-h-10 w-full rounded-md border border-rule bg-raised px-3 py-2 text-[14px] text-ink-strong placeholder:text-ink-faint focus:border-brand-ink";
@@ -173,6 +198,11 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, on
           Checklist ini ikut diikat ke Publication Bundle. Reviewer: {identity?.name ?? "belum terautentikasi"}
           {identity?.role ? ` · ${identity.role}` : ""}.
         </p>
+        {draft && (
+          <p className="m-0 mt-2 rounded-md border border-warn-rule/50 bg-warn-bg/50 px-3 py-2 text-[13px] text-warn-ink">
+            {draft.note}
+          </p>
+        )}
       </div>
 
       <details className="rounded-md border border-rule bg-surface">
