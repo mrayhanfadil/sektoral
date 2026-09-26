@@ -852,6 +852,10 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
         blockers.append("LoM inputs missing: " + ", ".join(detail["gaps"]))
     factor = lom.get("elang_risk_factor")
     risk = f"{factor * 100:.0f}%" if _number(factor) else "tanpa angka"
+    escalation = ((detail.get("lom") or {}).get("inputs") or {}).get("escalation")
+    deck = (f"dieskalasi {escalation * 100:.1f}% per tahun (inflasi AS), biaya dan capex ikut "
+            "dieskalasi".replace(".", ",") if _number(escalation) and escalation > 0
+            else "dianggap datar")
     unvalued = ("cadangan Elang sesudah batas izin"
                 if (((detail.get("lom") or {}).get("inputs") or {}).get("wc")) else
                 "modal kerja dan cadangan Elang sesudah batas izin")
@@ -865,7 +869,7 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
             "blockers": [], "production_blockers": production,
             "limitations": ([f"capex dan jadwal Elang dari riset broker serta probabilitas "
                              f"pengembangan {risk} adalah asumsi analis berlabel; dek harga "
-                             f"rata-rata 12 bulan datar; {unvalued} tidak dinilai"]
+                             f"rata-rata 12 bulan {deck}; {unvalued} tidak dinilai"]
                             + ([f"belum Production-Ready: {b}" for b in production]
                                if production else [])),
         }
@@ -874,7 +878,7 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
         "method": "SOTP/LoM (asset NAV, no perpetual terminal)",
         "blockers": blockers,
         "limitations": [
-            "dek harga rata-rata 12 bulan kalender terakhir dianggap datar sepanjang umur tambang; "
+            f"dek harga rata-rata 12 bulan kalender terakhir {deck} sepanjang umur tambang; "
             "harga cadangan JORC emiten ditampilkan sebagai sensitivitas",
             "capex dan jadwal Elang tidak diungkapkan emiten; capex dari riset broker dan "
             f"probabilitas pengembangan {risk} adalah asumsi analis",

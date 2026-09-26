@@ -2703,13 +2703,19 @@ def _lom_exhibits(intake, va, detail):
          f"sampai {int(inp['licence_end'])}; capex dari riset broker"],
         [f"NAV Elang x probabilitas pengembangan {fmt.pct(risk)}", usd(nav_el * risk),
          bn(nav_el * risk * fx), "pra-FID; asumsi analis"],
-        ["Persediaan logam dan konsentrat", usd(inp["inventory_usd"]),
-         bn(inp["inventory_usd"] * fx), "nilai buku 30 Jun 2026"],
+    ]
+    # With a working-capital schedule the product inventory is inside the LoM
+    # cash flows (lom.value), so it is not added again at book value.
+    inventory = 0.0 if inp.get("wc") else (inp["inventory_usd"] or 0.0)
+    if not inp.get("wc"):
+        rows.append(["Persediaan logam dan konsentrat", usd(inventory), bn(inventory * fx),
+                     "nilai buku 30 Jun 2026"])
+    rows += [
         # Template Option C rows: ownership, sum of NAV and the discount to RNAV.
         ["Porsi kepemilikan emiten atas aset", "100%", "100%",
          "aset dikonsolidasi; kepentingan nonpengendali dikurangkan di bawah"],
-        ["Jumlah NAV aset", usd(nav_bh + nav_el * risk + inp["inventory_usd"]),
-         bn((nav_bh + nav_el * risk + inp["inventory_usd"]) * fx), ""],
+        ["Jumlah NAV aset", usd(nav_bh + nav_el * risk + inventory),
+         bn((nav_bh + nav_el * risk + inventory) * fx), ""],
         ["(-) PV overhead korporat", f"({usd(base['overhead_usd'])})",
          f"({bn(base['overhead_usd'] * fx)})", "beban umum 1H26 x2"],
         ["(+) Kas", usd(b["cash"] / fx), bn(b["cash"]), "neraca 30 Jun 2026"],
@@ -3058,13 +3064,16 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                  f"EBITDA margin {fmt.pct(row['ebitda_margin_pct'] / 100)}; "
                  f"net margin {fmt.pct(row['net_income_margin_pct'] / 100)}; "
                  f"capex/revenue {fmt.pct(row['capex_to_revenue_pct'] / 100)}"),
+                (row.get("rationale") or "Jadwal LoM yang sama dengan valuasi.")
+                + " Bukan panduan emiten." if lom_schedule else
                 "Angka kolom ini adalah asumsi analis untuk tahun tersebut, bukan panduan emiten."])
         assumptions_exhibit = {
             "n": len(doc["exhibits"]) + 1,
             "judul": (f"Dasar tiap tahun {forecast_label}-FY30F: skenario interim dan jadwal LoM"
                       if lom_schedule else f"Asumsi skenario laba {forecast_label}-FY30F"),
             "tipe": "tabel",
-            "data": {"cols": ["Tahun", "Asumsi analis", "Dasar dan batasan"],
+            "data": {"cols": ["Tahun", "Jadwal LoM" if lom_schedule else "Asumsi analis",
+                              "Dasar dan batasan"],
                      "rows": assumption_rows},
             "catatan_sumber": (
                 "Sumber referensi: " + "; ".join(dict.fromkeys(cited_urls)) +
