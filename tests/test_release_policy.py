@@ -13,14 +13,14 @@ from app import release_policy
 def test_policy_snapshot_is_detached_serializable_and_deterministically_hashed():
     snapshot = release_policy.policy_snapshot()
     json.dumps(snapshot, ensure_ascii=False, allow_nan=False)
-    assert snapshot["version"] == release_policy.POLICY_VERSION == "1.1.0"
+    assert snapshot["version"] == release_policy.POLICY_VERSION == "1.2.0"
     assert snapshot["effective_date"] == release_policy.EFFECTIVE_DATE == "2026-09-26"
     assert release_policy.policy_sha256(snapshot) == release_policy.policy_sha256()
     assert release_policy.policy_sha256(dict(reversed(list(snapshot.items())))) == (
         release_policy.policy_sha256(snapshot))
 
     snapshot["version"] = "edited-copy"
-    assert release_policy.policy_snapshot()["version"] == "1.1.0"
+    assert release_policy.policy_snapshot()["version"] == "1.2.0"
     assert release_policy.policy_sha256(snapshot) != release_policy.policy_sha256()
     package = release_policy.versioned_snapshot()
     assert package["sha256"] == release_policy.policy_sha256(package["policy"])
@@ -97,7 +97,11 @@ def test_profile_materiality_bases_and_critical_risks_cover_supported_profiles()
     for profile in profiles.values():
         assert profile["materiality_bases"]
         assert profile["qualitative_critical_risks"]
-        assert profile["quantitative_materiality_threshold"] is None
+        threshold = profile["quantitative_materiality_threshold"]
+        assert threshold["fy1_attributable_earnings"]["threshold"] == 5.0
+        assert threshold["value_per_share"]["threshold"] == 5.0
+        assert all(rule["inclusive"] for rule in threshold.values())
+        assert profile["enforcement_status"] == "enforced_by_publication_monitor"
         assert profile["severity_if_material_and_unresolved"] == "blocker"
         assert profile["review_owner"] in policy["review_owner_roles"]
 
@@ -116,15 +120,20 @@ def test_established_tolerance_fields_and_policy_ambiguities_are_explicit():
     assert tolerances["segment_share_sum"]["absolute_tolerance"] == 0.5
     assert {item["enforcement_status"] for item in tolerances.values()} == {"enforced"}
     assert all(item["enforced_by"] for item in tolerances.values())
-    assert policy["enforcement_summary"]["profile_materiality"].startswith("documented_only")
+    assert policy["enforcement_summary"]["profile_materiality"].startswith(
+        "enforced_by_publication_monitor")
 
     ambiguity_ids = {item["id"] for item in policy["ambiguities"]}
-    assert {
-        "issuer_actual_calendar", "quantitative_materiality_cutoffs",
+    # Policy 1.2.0 resolved materiality, the filing calendar and public
+    # staleness; the rest stay open for a policy owner.
+    assert ambiguity_ids == {
         "display_tieout_tolerance", "commodity_fallback_status",
         "indogb_benchmark_freshness", "review_role_authorization",
+    }
+    assert {d["id"] for d in policy["decisions"]} == {
+        "issuer_actual_calendar", "quantitative_materiality_cutoffs",
         "public_staleness_and_withdrawal",
-    } <= ambiguity_ids
+    }
 
 
 def test_active_tolerance_checks_cover_inside_outside_and_near_zero_boundaries():

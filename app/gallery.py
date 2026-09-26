@@ -15,7 +15,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import assumption_review, outputs, publication_archive
+from . import assumption_review, outputs, publication_archive, publication_monitor
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
@@ -27,6 +27,18 @@ ANALYTICALLY_ELIGIBLE = frozenset({"production_ready", "distributable",
                                    "distributable_assumption_led"})
 RELEASE_STATUSES = ANALYTICALLY_ELIGIBLE | frozenset({"draft_non_distributable"})
 
+
+
+def _freshness(folder, ticker) -> dict | None:
+    """Stale label for a published report; never hides it (withdrawal is an event)."""
+    try:
+        decision = publication_monitor.assess(folder, ticker)
+    except (OSError, ValueError, KeyError):
+        return None
+    if decision.get("state") not in {"stale", "withdrawal_due"}:
+        return {"state": "current"}
+    return {"state": decision["state"], "reason": decision.get("reason"),
+            "triggers": [t.get("detail") for t in decision.get("triggers") or []]}
 
 def _chain(doc):
     """Method-chain rows as (step, decision, value) from the report exhibit."""
@@ -148,6 +160,9 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
                         "publikasi ini telah digantikan" if publication["publication_state"] == "superseded" else
                         "menunggu review publikasi oleh reviewer" if releasable else
                         "laporan belum tersedia untuk umum"),
+        # Release policy 1.2.0: a published view stays visible but is labelled
+        # stale once a newer official period is due or has been published.
+        "freshness": (_freshness(folder, ticker) if published else None),
         "review": {"state": review["state"], "reviewer": reviewed.get("reviewer"),
                    "reviewed_at": reviewed.get("reviewed_at"),
                    "decision": reviewed.get("decision"),

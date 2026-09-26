@@ -31,6 +31,18 @@ const PUBLICATION_STATE_LABEL: Record<string, string> = {
 };
 
 /** The rating, analytical Release Status, and separate publication state. */
+/** Release policy 1.2.0: a published view that a newer official period has overtaken. */
+export function StaleBadge({ item }: { item: Pick<ReportItem, "freshness"> }) {
+  const state = item.freshness?.state;
+  if (state !== "stale" && state !== "withdrawal_due") return null;
+  const why = [item.freshness?.reason, ...(item.freshness?.triggers ?? [])].filter(Boolean).join(" ");
+  return (
+    <span title={why} className="mt-1 inline-flex h-6 items-center rounded-[5px] border border-warn-rule/60 bg-warn-bg px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-warn-ink">
+      {state === "withdrawal_due" ? "Stale · penarikan jatuh tempo" : "Stale · perlu ditinjau"}
+    </span>
+  );
+}
+
 export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "held_reason" | "release_status" | "publication_state"> }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -355,6 +367,7 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
 
       <div style={{ gridArea: "rt" }} className="pt-px max-lg:text-right">
         <RatingBadge item={item} />
+        <StaleBadge item={item} />
         <time dateTime={item.date} className="data mt-1.5 block text-ink-soft lg:hidden">{formatDay(item.date)}</time>
       </div>
 

@@ -23,6 +23,8 @@ export type ReportItem = {
   chain: ChainStep[];
   blockers: number | null;
   held_reason: string;
+  /** Release policy freshness: a stale view stays visible with its reason. */
+  freshness?: { state: "current" | "stale" | "withdrawal_due"; reason?: string | null; triggers?: string[] } | null;
   files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean };
   review?: { state: ReviewState; reviewer: string | null; reviewed_at: string | null; decision: string | null; edits: number };
 };
