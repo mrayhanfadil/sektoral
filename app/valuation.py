@@ -1047,8 +1047,24 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         grid, tp_down = dcf_grid, dcf_down
     elif selected == "ddm":
         grid = ddm_grid
+    dilution = None
     if sel and not is_draft:
-        tp = fmt.tick(sel["per_share"])
+        # Potentially dilutive instruments from the reviewed share ledger: a
+        # warrant dilutes the value per share only when that value exceeds
+        # its exercise price, with its exercise proceeds added.
+        instruments = (intake.get("share_basis") or {}).get("instruments") or []
+        per_share = sel["per_share"]
+        if instruments:
+            dilution = share_basis.dilute_at_value(per_share, intake["shares"], instruments)
+            per_share = dilution["per_share"]
+            notes.append(
+                "Waran yang berpotensi dilutif: " + (
+                    f"{', '.join(dilution['included'])} masuk karena nilai per saham di atas "
+                    "harga pelaksanaan; hasil pelaksanaan ditambahkan ke ekuitas."
+                    if dilution["included"] else
+                    f"{', '.join(dilution['excluded'])} tidak dilutif pada nilai per saham ini "
+                    "(di bawah harga pelaksanaan)."))
+        tp = fmt.tick(per_share)
         upside = tp / price - 1
         if tp_down is None and sel["per_share_down"] is not None:
             tp_down = fmt.tick(sel["per_share_down"])
@@ -1171,7 +1187,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "news_coe_bps": news_coe_bps},
             "pv_explicit": pv_exp, "pv_terminal": pv_tv, "tv_share": pv_tv / ev_g,
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
-            "ps_exit": ps_x, "dcf_blend": fmt.tick((ps_g + ps_x) / 2), "tp": tp, "tp_down": tp_down, "tp_grid": grid,
+            "ps_exit": ps_x, "dcf_blend": fmt.tick((ps_g + ps_x) / 2), "dilution": dilution,
+            "tp": tp, "tp_down": tp_down, "tp_grid": grid,
             "upside": upside, "rating": rating,
             "implied": impl, "lom": lom, "s3": s3, "notes": notes,
             "method_chain": chain}
