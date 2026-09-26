@@ -432,7 +432,8 @@ def _build_once(t, out, kwargs, pins):
 def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
                 analyst_target: bool = False, live_inputs: bool = False,
                 refresh_assumptions: bool = False, db=None, log=None,
-                plan_override: dict | None = None, trace_extra: dict | None = None) -> dict:
+                plan_override: dict | None = None, trace_extra: dict | None = None,
+                as_of: str | None = None) -> dict:
     """Rebuild one ticker from ``source`` into ``out``; returns the comparison.
 
     ``refresh_assumptions`` re-runs the Forecast Assumption Agent on the stored
@@ -452,6 +453,14 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     source_manifest = outputs.load(outputs.MANIFEST, source, t, db) or \
         stored_trace.get("run_manifest") or {}
     kwargs = build_inputs(stored_trace, source_doc, analyst_target=analyst_target)
+    if as_of:
+        # A later Report Date on the same stored evidence: the evidence cutoff,
+        # price and policy vintages are re-checked against it; nothing newer
+        # than the pinned snapshot is fetched.
+        if str(as_of)[:10] < str(kwargs.get("as_of") or "")[:10]:
+            raise ValueError(f"{t}: --as-of {as_of} precedes the source Report Date "
+                             f"{kwargs.get('as_of')}")
+        kwargs["as_of"] = str(as_of)[:10]
     fresh_plan = None
     if refresh_assumptions:
         fresh_plan = refreshed_assumptions(dict(stored_trace, ticker=t), kwargs["as_of"])
@@ -511,6 +520,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         "pinned": pinned, "live_inputs": live_inputs,
         "analyst_target": kwargs["analyst_target"], "method_override": kwargs["method_override"],
         "refreshed_assumptions": bool(refresh_assumptions),
+        "as_of_override": as_of,
     }
     doc["run_manifest"] = manifest
     outputs.save(outputs.REPORT, out, t, doc, db)
@@ -611,6 +621,8 @@ def main(argv=None) -> int:
     parser.add_argument("--refresh-assumptions", action="store_true",
                         help="re-run the forecast assumption agent (paid LLM) on the stored "
                              "evidence of the named tickers before rebuilding")
+    parser.add_argument("--as-of", dest="as_of",
+                        help="a later Report Date for the rebuild (same stored evidence)")
     parser.add_argument("tickers", nargs="*", help="default: every report in --from")
     args = parser.parse_args(argv)
     source, out = Path(args.source), Path(args.out)
@@ -629,6 +641,7 @@ def main(argv=None) -> int:
                                  analyst_target=args.analyst_target,
                                  live_inputs=args.live_inputs,
                                  refresh_assumptions=args.refresh_assumptions,
+                                 as_of=args.as_of,
                                  log=(lambda text: print(text, end="")) if args.verbose else None)
         except Exception as error:  # report every ticker, then fail the command
             failed += 1
