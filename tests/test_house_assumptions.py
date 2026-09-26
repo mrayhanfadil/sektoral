@@ -110,8 +110,8 @@ def test_terminal_economics_are_reconciled_per_run_not_asserted():
     consistent = H.production_readiness_blockers("2026-09-26", {"status": "consistent"})
     assert not any("not reconciled" in b for b in consistent)
     failing = H.production_readiness_blockers(
-        "2026-09-26", {"status": "inconsistent", "blockers": ["ekonomi terminal: x"]})
-    assert "ekonomi terminal: x" in failing
+        "2026-09-26", {"status": "inconsistent", "blockers": ["syarat ekonomi terminal belum terpenuhi: x"]})
+    assert "syarat ekonomi terminal belum terpenuhi: x" in failing
 
 
 def test_issuer_deviations_from_house_policy_fail_closed():
