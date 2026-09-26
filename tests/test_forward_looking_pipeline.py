@@ -136,7 +136,7 @@ def test_run_manifest_has_contract_fields():
     assert manifest["release_policy"]["policy"]["status"] == "mixed_enforcement_and_documentation"
     assert manifest["house_assumptions"]["sha256"]
     assert manifest["house_assumptions"]["policy"]["status"] == \
-        "used_by_model_not_independently_validated"
+        "approved_not_independently_validated"
     assert manifest["ticker"] == "BBRI"
     assert manifest["selected_news_urls"] == ["https://a.example/1"]
 

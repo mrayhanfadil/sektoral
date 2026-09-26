@@ -4,10 +4,10 @@ from app import (house_assumptions as H, lom, release, research, run_manifest,
 
 def test_house_assumptions_are_versioned_hashed_and_detached():
     snapshot = H.versioned_snapshot()
-    assert snapshot["policy"]["version"] == H.POLICY_VERSION == "1.1.0"
+    assert snapshot["policy"]["version"] == H.POLICY_VERSION == "1.2.0"
     assert snapshot["policy"]["documented_as_of"] == H.DOCUMENTED_AS_OF
-    assert snapshot["policy"]["effective_from"] is None
-    assert snapshot["policy"]["status"] == "used_by_model_not_independently_validated"
+    assert snapshot["policy"]["effective_from"] == "2026-09-26"
+    assert snapshot["policy"]["status"] == "approved_not_independently_validated"
     assert snapshot["sha256"] == H.policy_sha256(snapshot["policy"])
     snapshot["policy"]["discount_rates"]["IDR"]["risk_free"] = 99
     assert H.discount_inputs("IDR")["risk_free"] == 0.065
@@ -85,8 +85,8 @@ def test_standalone_audit_trace_shows_active_house_inputs_and_open_validation():
                                 run_manifest={"house_assumptions": H.versioned_snapshot()})
     assert "House assumptions tingkat diskonto" in html
     assert "6.5%" in html and "4.0%" in html and "3.5%" in html
-    assert "used_by_model_not_independently_validated" in html
-    assert "treatment of a terminal value that fails the per-run economics check" in html
+    assert "approved_not_independently_validated" in html
+    assert "whether and when dated benchmark observations replace" in html
 
 
 def test_parameter_records_match_the_values_the_model_reads():
