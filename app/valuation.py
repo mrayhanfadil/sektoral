@@ -296,6 +296,25 @@ def _terminal_labels(record):
             for b in record["blockers"]]
 
 
+def _terminal_note(record):
+    m = record.get("measures") or {}
+    pct = lambda v: fmt.pct(v) if isinstance(v, (int, float)) else "-"  # noqa: E731
+    verdict = "konsisten" if record["status"] == "consistent" else "belum konsisten"
+    if record["profile"] == "financial_ddm":
+        return (f"Ekonomi terminal ({verdict}): g {pct(m.get('g'))}, ROE terminal "
+                f"{pct(m.get('terminal_roe'))}, payout terminal {pct(m.get('terminal_payout'))}; "
+                f"pertumbuhan dari laba ditahan {pct(m.get('sustainable_growth'))}.")
+    effect = m.get("per_share_effect_idr")
+    return (f"Ekonomi terminal ({verdict}): g {pct(m.get('g'))}, reinvestasi neto "
+            f"{pct(m.get('reinvestment_rate'))} dari NOPAT, imbal hasil modal baru implisit "
+            f"{pct(m.get('implied_ronic'))} vs batas {pct(m.get('ronic_ceiling'))} "
+            + ("(ROIC periode eksplisit)" if m.get("explicit_roic") is not None
+               else "(dua kali WACC)")
+            + (f"; terminal dengan reinvestasi pada batas itu mengubah nilai sekitar "
+               f"Rp{fmt._id(effect, 0)} per saham." if isinstance(effect, (int, float))
+               and record["status"] == "inconsistent" else "."))
+
+
 def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wacc_bps):
     """Going-concern primary: FCFF DCF on the validated FY path, discounted in
     the model currency (a US$ reporter at a US$ rate, spec §2 and §4.2)."""
@@ -1218,7 +1237,13 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     elif stage_info.get("source") == "override":
         notes.append("klasifikasi tahap operasi dari override analis.")
 
-    out = {"method": method, "model_profile": profile,
+    terminal = (terminal_economics.finite_life() if is_miner else
+                (sel or {}).get("detail", {}).get("terminal_economics") if scenario_sel else None)
+    if terminal is None and sel:
+        terminal = terminal_economics.not_applicable(method)
+    if terminal and terminal.get("status") in ("consistent", "inconsistent"):
+        notes.append(_terminal_note(terminal))
+    out = {"method": method, "model_profile": profile, "terminal_economics": terminal,
             "release": release_result, "sotp": sotp_result,
             # The FY EV/EBITDA value stays attached as the mining cross-check.
             "scenario_target": (scenario_target if analyst_target or

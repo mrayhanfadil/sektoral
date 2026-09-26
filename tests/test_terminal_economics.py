@@ -76,3 +76,14 @@ def test_bank_growth_is_bounded_by_retained_earnings():
 
 def test_finite_life_has_no_perpetuity_to_reconcile():
     assert T.finite_life()["status"] == "not_applicable"
+
+
+def test_the_per_share_effect_of_a_consistent_terminal_is_estimated():
+    detail = {**_dcf(lines=[_line(100, 20, 20, 0, 100)] * 5), "pv_tv": 1000.0, "shares": 10,
+              "attributable_share": 1.0}
+    record = T.fcff(detail, invested_capital=300, benchmarks=BENCH, as_of="2026-09-26",
+                    cash_currency="IDR")
+    ratio = record["measures"]["terminal_value_ratio"]
+    assert ratio < 1
+    assert record["measures"]["per_share_effect_idr"] == pytest.approx((ratio - 1) * 100)
+    assert T.not_applicable("SOTP")["status"] == "not_applicable"

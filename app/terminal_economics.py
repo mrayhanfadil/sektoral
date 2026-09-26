@@ -101,12 +101,18 @@ def fcff(detail, invested_capital, benchmarks, as_of, cash_currency):
                                  + ("ROIC periode eksplisit" if roic is not None
                                     else "dua kali WACC")))
     consistent_fcff = nopat * (1 - g / ceiling) if ceiling > 0 else None
+    ratio = consistent_fcff / terminal_fcff if consistent_fcff and terminal_fcff > 0 else None
+    # Rupiah per share if the terminal reinvested at the ceiling return (the
+    # detail's rupiah mirror of the discounted terminal value, parent share).
+    pv_tv, shares = _num(detail.get("pv_tv")), _num(detail.get("shares"))
+    per_share_effect = ((ratio - 1) * pv_tv * (detail.get("attributable_share") or 1.0) / shares
+                        if ratio is not None and pv_tv is not None and shares else None)
     measures = {"g": g, "wacc": wacc, "terminal_nopat": nopat, "terminal_fcff": terminal_fcff,
                 "reinvestment_rate": rate, "implied_ronic": ronic, "explicit_roic": roic,
                 "ronic_ceiling": ceiling,
                 "consistent_terminal_fcff": consistent_fcff,
-                "terminal_value_ratio": (consistent_fcff / terminal_fcff
-                                         if consistent_fcff and terminal_fcff > 0 else None)}
+                "terminal_value_ratio": ratio,
+                "per_share_effect_idr": per_share_effect}
     notes = []
     if roic is None:
         notes.append("modal diinvestasikan tidak tersedia; batas RONIC memakai dua kali WACC")
@@ -136,6 +142,11 @@ def ddm(detail, bank_rows, benchmarks, as_of, cash_currency, currency, rf=None):
                 "payout_for_g": 1 - g / roe if roe else None}
     notes = [] if sustainable is not None else ["ROE atau payout terminal tidak tersedia"]
     return _result("financial_ddm", checks, measures, notes)
+
+
+def not_applicable(method):
+    return {"profile": None, "status": "not_applicable", "checks": [], "measures": {},
+            "blockers": [], "notes": [f"metode terpilih {method} tidak memakai nilai terminal abadi"]}
 
 
 def finite_life():

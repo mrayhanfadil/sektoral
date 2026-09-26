@@ -492,6 +492,7 @@ def _run(ticker, outdir, want_pdf=False, as_of=None,
                          "stats": register.get("stats")},
         "evidence_register": evidence_register,
         "earnings_quality": report.get("earnings_quality"),
+        "terminal_economics": report.get("terminal_economics"),
         "run_manifest": manifest,
         "product_sales_scenario": report.get("forecast_assumptions", {}).get(
             "product_sales_scenario"),
