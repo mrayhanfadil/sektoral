@@ -284,8 +284,9 @@ def rebuilt_trace(stored: dict, doc: dict) -> dict:
         trace["run_manifest"] = doc["run_manifest"]
     if doc.get("evidence_register") is not None:
         trace["evidence_register"] = doc["evidence_register"]
-    if doc.get("earnings_quality") is not None:
-        trace["earnings_quality"] = doc["earnings_quality"]
+    for key in ("earnings_quality", "terminal_economics"):
+        if doc.get(key) is not None:
+            trace[key] = doc[key]
     if "product_sales_scenario" in trace:
         trace["product_sales_scenario"] = (doc.get("forecast_assumptions") or {}).get(
             "product_sales_scenario")

@@ -80,6 +80,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # compares between a published report and its rebuilt replacement.
     doc["model_summary"] = publication_monitor.summarize_model(fc, va)
     doc["earnings_quality"] = doc_in["earnings_quality"]
+    doc["terminal_economics"] = va.get("terminal_economics")
     doc["evidence_register"] = pre_agent_register
     if doc["evidence_register"].get("error"):
         print(f"  evidence_register gagal: {doc['evidence_register']['error']}", flush=True)
