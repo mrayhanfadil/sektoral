@@ -1,15 +1,14 @@
 // The stored company updates as one ruled table in the deck's voice: ticker
-// in mono, model scenario, value difference, selected method, and two ways in
+// in mono, rating, target, upside, the selected method, and the two ways in
 // (replay the run, or open the report).
 import { Link } from "react-router-dom";
 import { FileText, Play } from "lucide-react";
 import { reportFiles, type ReportItem } from "../../lib/api";
 import { pct, rp } from "../../lib/format";
-import { heldReason } from "../../lib/labels";
 import { RatingBadge } from "../Reports";
 
 const signed = (v: number | null) => (typeof v === "number" && v > 0 ? "+" : "") + pct(v);
-const upTone = (_v: number | null) => "text-ink-strong";
+const upTone = (v: number | null) => (typeof v !== "number" ? "text-ink-faint" : v < 0 ? "text-err-ink" : "text-ok-ink");
 
 function selected(item: ReportItem) {
   return item.chain.find((s) => s.decision === "Terpilih")?.step ?? (item.published ? item.method : "");
@@ -43,9 +42,9 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
           <tr>
             <th scope="col" className={th}>Emiten</th>
             <th scope="col" className={`${th} max-xl:hidden`}>Profil</th>
-            <th scope="col" className={th}>Skenario nilai</th>
-            <th scope="col" className={`${th} text-right`}>Nilai model</th>
-            <th scope="col" className={`${th} text-right`}>Selisih dari harga</th>
+            <th scope="col" className={th}>Rating</th>
+            <th scope="col" className={`${th} text-right`}>Target</th>
+            <th scope="col" className={`${th} text-right`}>Potensi</th>
             <th scope="col" className={th}>Metode terpilih</th>
             <th scope="col" className={`${th} text-right`}><span className="sr-only">Aksi</span></th>
           </tr>
@@ -68,7 +67,7 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
               <td className="px-4 py-3">
                 {item.published
                   ? <span className="font-mono text-[13.5px] text-ink" title={item.method}>{selected(item)}</span>
-                  : <span className="text-[13.5px] text-warn-ink">Ditahan: {heldReason(item)}</span>}
+                  : <span className="text-[13.5px] text-warn-ink">Ditahan: {item.held_reason || "bukti belum lengkap"}</span>}
               </td>
               <td className="px-4 py-3"><Actions item={item} /></td>
             </tr>
@@ -88,16 +87,16 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
             </div>
             <dl className="m-0 mt-2.5 grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-5 text-[13px]">
               <div>
-                <dt className="text-ink-soft">Nilai model</dt>
+                <dt className="text-ink-soft">Target</dt>
                 <dd className="m-0 font-mono font-semibold text-ink-strong tabular-nums">{item.published ? `Rp${rp(item.tp)}` : "ditahan"}</dd>
               </div>
               <div>
-                <dt className="text-ink-soft">Selisih dari harga</dt>
+                <dt className="text-ink-soft">Potensi</dt>
                 <dd className={`m-0 font-mono tabular-nums ${upTone(item.upside)}`}>{item.published ? signed(item.upside) : "-"}</dd>
               </div>
               <div className="min-w-0">
                 <dt className="text-ink-soft">Metode</dt>
-                <dd className="m-0 truncate font-mono text-ink">{item.published ? selected(item) : heldReason(item)}</dd>
+                <dd className="m-0 truncate font-mono text-ink">{item.published ? selected(item) : "ditahan"}</dd>
               </div>
             </dl>
             <div className="mt-3"><Actions item={item} /></div>

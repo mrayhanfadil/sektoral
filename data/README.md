@@ -18,8 +18,8 @@ Everything the app writes at run time lives in one SQLite file: agent memory,
 forecast plans, fetched news and article text, Yahoo peer and USD/IDR
 snapshots, and the report, trace and manifest of every run (see `app/store.py`,
 `app/outputs.py`). The hand-curated packs in this folder (`issuer_evidence/`,
-`idx_history/`, `market_quotes/`, `analyst_scenarios/`, `method_overrides/`)
-stay reviewed JSON in git. Import JSON caches written by older
+`idx_history/`, `market_quotes/`, `analyst_scenarios/`, `method_overrides/`,
+`rating_history/`) stay reviewed JSON in git. Import JSON caches written by older
 versions with `python -m app.store_import`.
 
 ## Peer fundamentals from Yahoo Finance (`yahoo_fundamentals` in the app database)

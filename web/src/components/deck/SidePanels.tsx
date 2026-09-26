@@ -221,7 +221,7 @@ export function ChainTable({ state }: { state: DeckState }) {
 
 export type ResultData = {
   rating: string;
-  tone: "above" | "below" | "equal" | "review";
+  tone: "buy" | "hold" | "sell" | "review";
   tp: string;
   upside: string;
   price?: string;
@@ -229,15 +229,15 @@ export type ResultData = {
   release?: string;
 };
 
-const RATING_INK = { above: "text-ink-strong", below: "text-ink-strong", equal: "text-ink-strong", review: "text-warn-ink" };
+const RATING_INK = { buy: "text-ok-ink", hold: "text-ink-strong", sell: "text-err-ink", review: "text-warn-ink" };
 
-/** The informational model scenario, per-share value and dated close. */
+/** The result as a ruled data row: rating, target, upside, price; then the method and actions. */
 export function ResultBlock({ result, actions }: { result?: ResultData; actions?: ReactNode }) {
   if (!result && !actions) return null;
   const cells: [string, ReactNode][] = result ? [
-    ["Skenario model", <span className={RATING_INK[result.tone]}>{result.rating}</span>],
-    ["Nilai model", result.tp],
-    ["Selisih dari harga", result.upside],
+    ["Rating", <span className={RATING_INK[result.tone]}>{result.rating}</span>],
+    ["Target harga", result.tp],
+    ["Upside", result.upside],
     ...(result.price ? [["Harga", result.price] as [string, ReactNode]] : []),
   ] : [];
   return (
