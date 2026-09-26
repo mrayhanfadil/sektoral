@@ -14,6 +14,8 @@ import json
 from datetime import date
 from urllib.parse import urlsplit
 
+from . import house_assumptions
+
 
 def _day(value):
     try:
@@ -267,6 +269,7 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
     critical_violations = []
     if cutoff is None:
         critical_violations.append(f"invalid report as-of date: {as_of!r}")
+    critical_violations.extend(house_assumptions.deviation_violations(evidence))
     for row in rows:
         kind = row.get("kind")
         pub = row.get("published_at")
