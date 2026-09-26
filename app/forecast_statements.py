@@ -239,7 +239,8 @@ def scenario_path(intake, fc):
     conversion as ``report_extras.chart_forecast_rows`` but never truncated.
     """
     fc = fc or {}
-    if fc.get("production_ready") is True:
+    if fc.get("production_ready") is True and \
+            (fc.get("earnings_scenario") or {}).get("basis") != "operating_driver_model":
         rows = [{"year": r.get("year"), "label": r.get("label") or _label(r["year"]),
                  "revenue": _num(r.get("revenue")), "ebitda": _num(r.get("ebitda")),
                  "net_cons": _num(r.get("net")),
@@ -273,7 +274,9 @@ def scenario_path(intake, fc):
                      "net_cons": idr(r.get("net_profit")),
                      "earnings": idr(r.get("net_profit_attributable")),
                      "capex": idr(r.get("capex"))})
-    return "skenario analis", rows, anchor, fx, None
+    basis = ("model operasional" if anchor.get("basis") == "operating_driver_model"
+             else "skenario analis")
+    return basis, rows, anchor, fx, None
 
 
 def parent_share(intake, anchor):
@@ -717,6 +720,11 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         elif basis == "forecast produksi" and all(r.get("da") is not None for r in path):
             da_list = [r["da"] for r in path]
             assumptions.append("Forecast produksi: D&A per tahun dari forecast yang sama.")
+        elif (dcf or {}).get("operating_model") and len((dcf or {}).get("lines") or []) == len(path):
+            # The operating model's own D&A, the lines the DCF values.
+            da_list = [line["da"] for line in dcf["lines"]]
+            assumptions.append("Model operasional: D&A per tahun = tarif penyusutan x aset tetap "
+                               "neto awal, sama dengan DCF.")
         else:
             da_ratio = _num((dcf or {}).get("da_ratio"))
             da_basis = (dcf or {}).get("da_basis")
@@ -741,7 +749,8 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             if tax is None:
                 tax, tax_basis = scenario_value.tax_rate(intake)
         assumptions.append(
-            ("Jadwal LoM" if lom else "Asumsi screening") +
+            ("Jadwal LoM" if lom else "Model operasional" if (dcf or {}).get("operating_model")
+             else "Asumsi screening") +
             f": tarif pajak efektif {fmt.pct(tax)}, sumber {_source(tax_basis)}; sama dengan "
             "valuasi. Laba sebelum pajak = laba bersih konsolidasi skenario / (1 - tarif); "
             "pajak = selisihnya.")
@@ -752,6 +761,11 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 "Asumsi valuasi: jadwal LoM dan metode tambang tidak memodelkan perubahan modal "
                 "kerja (persediaan dinilai terpisah di SOTP); modal kerja non-kas dijaga pada "
                 f"saldo FY{base_year or first['year'] - 1}.")
+        elif (dcf or {}).get("operating_model") and len((dcf or {}).get("lines") or []) == len(path):
+            dnwc_list = [line["dnwc"] for line in dcf["lines"]]
+            nwc_sentence = ("Model operasional: kenaikan modal kerja dari hari piutang atas "
+                            "pendapatan serta hari persediaan dan utang usaha atas biaya variabel, "
+                            "sama dengan DCF.")
         else:
             nwc_ratio = _num((dcf or {}).get("nwc_ratio"))
             nwc_basis = (dcf or {}).get("nwc_basis")

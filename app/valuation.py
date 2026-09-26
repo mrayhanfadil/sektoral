@@ -10,6 +10,8 @@ from . import scenario_value
 from . import share_basis
 from . import rate_benchmarks
 from . import terminal_economics
+from . import operating_model
+from . import reference_fcff
 from . import landbank as landbank_mod
 from . import lom as lom_mod
 from . import release
@@ -349,6 +351,11 @@ def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wa
                 record["restatement"] = {"ronic": restate, "per_share_before": before,
                                          "per_share_after": detail["per_share"]}
         detail["terminal_economics"] = record
+        if detail.get("operating_model"):
+            # Plan §5.6: an independent implementation from the same driver file.
+            drivers = operating_model.load(intake.get("ticker"), intake.get("as_of"))
+            detail["reference_validation"] = (reference_fcff.compare(drivers, detail) if drivers
+                                              else {"status": "missing"})
     gate = (release.assess_fcff_scenario(intake, fc, {"detail": detail}, assumption_status)
             if detail else _NO_GATE)
     if detail:
@@ -1070,7 +1077,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                                   blockers=release_result["blockers"] + [extreme_blocker])
     elif sel is not None and sel.get("gate"):
         release_result = dict(sel["gate"])
-        release_result["underlying_primary"] = release.common_blockers(profile, intake, fc)
+        release_result["underlying_primary"] = release.common_blockers(
+            profile, intake, fc, (sel or {}).get("detail"))
         release_result["route"], release_result["method_key"] = chain["route"], selected
         extreme_blocker = method_chain.summary_blocker(chain)
         if extreme_blocker:

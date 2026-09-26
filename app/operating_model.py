@@ -382,6 +382,10 @@ def _checks(rows, drivers, h1):
                     "value": r["fcff"], "bound": identity})
         out.append({"name": f"balance_{r['year']}", "ok": abs(r["balance_gap"]) <= TOLERANCE,
                     "value": r["balance_gap"], "bound": 0.0})
+        # Dividends and capex must be fundable: negative liquidity is a
+        # financing shortfall the model does not fund, not a balancing item.
+        out.append({"name": f"liquidity_{r['year']}", "ok": r["liquidity"] >= -TOLERANCE,
+                    "value": r["liquidity"], "bound": 0.0})
     return out
 
 

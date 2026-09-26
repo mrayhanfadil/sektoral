@@ -47,7 +47,7 @@ def _earnings_gate_passes(intake, forecast, valuation, assumption_status,
         if assess is None:
             return False
     again = assess(intake, forecast, {"detail": trace.get("detail") or {}}, assumption_status)
-    return again["status"] == "distributable_assumption_led"
+    return again["status"] in ("distributable_assumption_led", "distributable")
 
 
 def _template_mods():
