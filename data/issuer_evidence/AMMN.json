@@ -1961,5 +1961,38 @@
         ]
       }
     ]
+  },
+  "working_capital_balances": {
+    "period_end": "2026-06-30",
+    "unit": "USD thousand",
+    "source_title": "AMMAN H1 2026 Financial Statements",
+    "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+    "published_at": "2026-09-21",
+    "trade_receivables": 284275,
+    "trade_receivables_page": "PDF 8 (posisi keuangan)",
+    "product_inventory": {
+      "in_process_mill": 9715,
+      "concentrate": 78132,
+      "in_process_smelter": 198022,
+      "finished_cathode": 13225,
+      "finished_refined_gold": 47513,
+      "total": 346607
+    },
+    "materials_and_supplies": 342065,
+    "inventory_page": "PDF 67 (Catatan persediaan)",
+    "trade_payables_and_accruals": 464569,
+    "trade_payables_page": "PDF 9 (posisi keuangan: pihak ketiga 462.809 + pihak berelasi 1.760)",
+    "accrued_capital_expenditure": 99524,
+    "accrued_capex_page": "PDF 77",
+    "customer_advance": {
+      "total": 388421,
+      "current": 258957,
+      "non_current": 129464,
+      "page": "PDF 9 dan 105 (Catatan liabilitas lainnya: uang muka pelanggan)",
+      "settlement": "dipotong secara proporsional dari penerimaan pengiriman katoda Glencore; komitmen pengiriman sampai 31 Desember 2027"
+    },
+    "first_half_net_sales": 2052410,
+    "net_sales_page": "PDF 11 (laba rugi)",
+    "definitions": "Modal kerja operasional = piutang usaha + persediaan produk (proses pabrik, konsentrat, proses smelter, katoda dan emas murni) - utang usaha dan akrual di luar akrual capex; bahan dan suku cadang dipisahkan; uang muka pelanggan adalah kewajiban pengiriman, bukan utang berbunga."
   }
 }

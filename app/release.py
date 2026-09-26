@@ -836,6 +836,11 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
         blockers.append("LoM analyst assumption source is dated after the report")
     if detail.get("gaps"):
         blockers.append("LoM inputs missing: " + ", ".join(detail["gaps"]))
+    factor = lom.get("elang_risk_factor")
+    risk = f"{factor * 100:.0f}%" if _number(factor) else "tanpa angka"
+    unvalued = ("cadangan Elang sesudah batas izin"
+                if (((detail.get("lom") or {}).get("inputs") or {}).get("wc")) else
+                "modal kerja dan cadangan Elang sesudah batas izin")
     if not blockers and (forecast or {}).get("forecast_basis") == "physical_driver_forecast":
         # The LoM is the forecast (plan §5.3): every shared production blocker,
         # this run's independent reference and the house policy must clear.
@@ -844,10 +849,9 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
             "status": "distributable" if not production else "distributable_assumption_led",
             "method": "SOTP/LoM (model fisik, asset NAV, tanpa terminal perpetual)",
             "blockers": [], "production_blockers": production,
-            "limitations": (["capex dan jadwal Elang dari riset broker serta probabilitas "
-                             "pengembangan 50% adalah asumsi analis berlabel; dek harga "
-                             "rata-rata 12 bulan datar; modal kerja dan cadangan Elang sesudah "
-                             "batas izin tidak dinilai"]
+            "limitations": ([f"capex dan jadwal Elang dari riset broker serta probabilitas "
+                             f"pengembangan {risk} adalah asumsi analis berlabel; dek harga "
+                             f"rata-rata 12 bulan datar; {unvalued} tidak dinilai"]
                             + ([f"belum Production-Ready: {b}" for b in production]
                                if production else [])),
         }
@@ -859,12 +863,12 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
             "dek harga rata-rata 12 bulan kalender terakhir dianggap datar sepanjang umur tambang; "
             "harga cadangan JORC emiten ditampilkan sebagai sensitivitas",
             "capex dan jadwal Elang tidak diungkapkan emiten; capex dari riset broker dan "
-            "probabilitas pengembangan 50% adalah asumsi analis",
+            f"probabilitas pengembangan {risk} adalah asumsi analis",
             "tanpa izin ekspor, umpan pabrik dibatasi kapasitas smelter sehingga jadwal pit, "
             "stockpile dan Elang lebih lambat dari jadwal emiten; kasus ekspor diperpanjang "
             "ditampilkan sebagai sensitivitas",
-            "cadangan Elang sesudah 2050 dan modal kerja tidak dinilai (penambangan sampai "
-            "cadangan habis ditampilkan sebagai sensitivitas)"],
+            f"{unvalued} tidak dinilai (penambangan sampai cadangan habis ditampilkan "
+            "sebagai sensitivitas)"],
     }
 
 

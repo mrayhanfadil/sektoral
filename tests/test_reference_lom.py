@@ -34,3 +34,20 @@ def test_a_lom_with_input_gaps_stays_off_the_physical_forecast_route():
     fc = forecast.build(doc)
     assert fc["forecast_basis"] != "physical_driver_forecast"
     assert fc["production_ready"] is False
+
+
+def test_working_capital_is_modelled_and_lowers_value_against_book_inventory():
+    _, inp, bridge, _ = _inputs()
+    assert inp["wc"] and inp["wc"]["advance_unwind"]
+    with_wc = lom.value(inp, bridge, 16900.0)["per_share"]
+    assert reference_lom.value(inp, bridge, 16900.0)["per_share"] == pytest.approx(with_wc, rel=1e-9)
+    no_advance = {**inp, "wc": {**inp["wc"], "advance_unwind": {}}}
+    # Settling the customer advance in product is a cash outflow the reference also carries.
+    assert lom.value(no_advance, bridge, 16900.0)["per_share"] > with_wc
+    assert reference_lom.value(no_advance, bridge, 16900.0)["per_share"] == pytest.approx(
+        lom.value(no_advance, bridge, 16900.0)["per_share"], rel=1e-9)
+
+
+def test_the_elang_probability_is_the_documented_two_gate_assumption():
+    _, inp, _, _ = _inputs()
+    assert inp["elang_risk"] == pytest.approx(0.65)
