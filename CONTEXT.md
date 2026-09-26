@@ -180,6 +180,17 @@ _Avoid_: recommendation, call
 **Review Required**:
 The rating when upside exceeds +100% or downside is worse than -50%; it needs a sourced fundamental thesis and a stated model limitation.
 
+### Publication
+
+**Publication Bundle**:
+The frozen Company Update, Audit Trace, manifest, rendered files, and analyst attestation identified by one publication ID.
+
+**Publication State**:
+Whether a Publication Bundle is built, analytically eligible, awaiting review, approved, published, superseded, or withdrawn; it is separate from Release Status.
+
+**Archived Company Update**:
+A previously approved Publication Bundle retained with its original identity after a newer bundle replaces it.
+
 ## Relationships
 
 - A **Model Profile** and a **Stage Classification** feed the **Method Gates**, whose verdicts fix the **Method Chain**.
@@ -190,4 +201,3 @@ The rating when upside exceeds +100% or downside is worse than -50%; it needs a 
 - An **Analyst Scenario** is anchored to **Latest Interim Actuals**; a **Screening Forecast** is not.
 - A **Bank Driver Scenario** is an **Analyst Scenario**: the DDM values the parent profit and dividends the bank model derives from it, so it stays **Assumption-Led**.
 - A **Run Replay** shows the same steps and **Method Gates** verdicts as the live run it replays; it never adds a step the **Audit Trace** does not hold.
-

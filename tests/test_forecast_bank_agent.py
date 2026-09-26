@@ -37,7 +37,21 @@ def _row(year, **kw):
            "rationale": "Kredit tumbuh sejalan rekam jejak; NIM dekat 1H26 karena biaya dana stabil.",
            "source_ids": ["official"]}
     row.update(kw)
+    if "uncertainty_ranges" not in kw:
+        row["uncertainty_ranges"] = _valid_ranges(row)
     return row
+
+
+def _valid_ranges(row):
+    ranges = {}
+    for field in bank_model.DRIVERS + bank_model.OPTIONAL_DRIVERS:
+        center = row.get(field)
+        if center is None:
+            continue
+        lower, upper = bank_model.BOUNDS[field]
+        ranges[field] = {"driver": field, "low": max(lower, center - 1.0),
+                         "high": min(upper, center + 1.0), "unit": "%"}
+    return ranges
 
 
 def _thesis():
@@ -125,6 +139,58 @@ def test_bank_row_bounds_sources_and_record():
     assert agent._validate_bank_row(_row(2026, deposit_growth_pct=9.0), source, 2026, "r") == []
 
 
+def test_bank_driver_ranges_are_required_and_validate_shape_center_and_engine_bounds():
+    source = _source()
+    missing = _row(2026)
+    del missing["uncertainty_ranges"]["nim_pct"]
+    assert any("nim_pct is required" in p for p in
+               agent._validate_bank_row(missing, source, 2026, "r"))
+
+    malformed = _row(2026)
+    malformed["uncertainty_ranges"]["nim_pct"].update(
+        {"low": "5.0", "high": 5.8, "driver": "loan_growth_pct", "unit": "bps"})
+    problems = agent._validate_bank_row(malformed, source, 2026, "r")
+    assert any("low must be a finite number" in p for p in problems)
+    assert any("driver must be exactly nim_pct" in p for p in problems)
+    assert any("unit must be %" in p for p in problems)
+
+    nonfinite = _row(2026)
+    nonfinite["uncertainty_ranges"]["nim_pct"].update({"low": float("nan")})
+    assert any("low must be a finite number" in p for p in
+               agent._validate_bank_row(nonfinite, source, 2026, "r"))
+
+    reversed_range = _row(2026)
+    reversed_range["uncertainty_ranges"]["nim_pct"].update({"low": 6.0, "high": 5.8})
+    assert any("low must be less than or equal to high" in p for p in
+               agent._validate_bank_row(reversed_range, source, 2026, "r"))
+
+    excludes_center = _row(2026)
+    excludes_center["uncertainty_ranges"]["nim_pct"].update({"low": 5.0, "high": 5.5})
+    assert any("must contain the center value nim_pct" in p for p in
+               agent._validate_bank_row(excludes_center, source, 2026, "r"))
+
+    out_of_bounds = _row(2026)
+    out_of_bounds["uncertainty_ranges"]["nim_pct"].update({"low": 0.4, "high": 6.0})
+    assert any("low outside engine bounds [0.5, 15]" in p for p in
+               agent._validate_bank_row(out_of_bounds, source, 2026, "r"))
+
+
+def test_bank_driver_ranges_are_preserved_by_row_normalization_and_both_prompts():
+    row = _row(2026, deposit_growth_pct=9.0)
+    normalized = agent._bank_row(row)
+    assert normalized["uncertainty_ranges"] == row["uncertainty_ranges"]
+    source = _source()
+    earnings_role, earnings_payload = agent._bank_earnings_role(source)
+    outyear_role, outyear_payload = agent._bank_outyear_role(source, {}, [])
+    for role in (earnings_role, outyear_role):
+        assert "uncertainty_ranges" in role
+        assert "both endpoints must stay within" in role
+        assert "omit it when null" in role
+    assert "uncertainty_ranges" in earnings_payload["json_shape"]["earnings_scenario"][
+        "bank_drivers"]
+    assert "uncertainty_ranges" in outyear_payload["json_shape"]["bank_outyear_scenario"][0]
+
+
 def test_a_driver_far_from_the_record_needs_a_dated_source():
     source = _source()
     ref = source["bank"]["reference"]
@@ -167,10 +233,13 @@ def test_bank_run_sets_drivers_and_passes_the_model_anchor(monkeypatch):
     plan = result["plan"]
     drivers = plan["earnings_scenario"]["bank_drivers"]
     assert drivers["year"] == 2026 and drivers["nim_pct"] == 5.6
+    assert drivers["uncertainty_ranges"] == _valid_ranges(drivers)
     assert "h2_revenue_to_h1" not in plan["earnings_scenario"]
     assert plan["earnings_scenario"]["source_url"] == OFFICIAL["source_url"]
     assert set(plan["earnings_scenario"]["source_refs"]) == {"official", "news:0"}
     assert [r["year"] for r in plan["bank_outyear_scenario"]] == [2027, 2028, 2029, 2030]
+    assert all(row["uncertainty_ranges"] == _valid_ranges(row)
+               for row in plan["bank_outyear_scenario"])
     assert plan["outyear_scenario"] is None
     roles = [role for role, _ in calls]
     assert "FY EARNINGS SCENARIO ANALYST" not in " ".join(roles)
@@ -224,12 +293,12 @@ def test_plan_schema_moves_the_fingerprint():
     before = agent.evidence_fingerprint(source, "spec")
     original = dict(agent.PLAN_SCHEMA_BY_PROFILE)
     try:
-        agent.PLAN_SCHEMA_BY_PROFILE["financial_ddm"] = 4
+        agent.PLAN_SCHEMA_BY_PROFILE["financial_ddm"] = 5
         assert agent.evidence_fingerprint(source, "spec") != before
     finally:
         agent.PLAN_SCHEMA_BY_PROFILE.clear()
         agent.PLAN_SCHEMA_BY_PROFILE.update(original)
-    assert agent.plan_schema("financial_ddm") == 5
+    assert agent.plan_schema("financial_ddm") == 6
 
 
 def test_a_bank_schema_bump_keeps_other_profiles_plans():

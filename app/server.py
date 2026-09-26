@@ -26,7 +26,8 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import assumption_review, gallery, outputs, run_events, trace_view
+from . import (assumption_review, gallery, outputs, publication_archive,
+               reviewer_auth, run_events, trace_view)
 from .jobs import ResearchJobs, TICKER, available_tickers
 from agents.analyst import memory as agent_memory
 
@@ -52,9 +53,17 @@ class ReviewEdit(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    reviewer: str
+    # Retained for old clients. Server-side identity comes from the reviewer
+    # token registry, so the client-supplied value is ignored.
+    reviewer: str = ""
     note: str = ""
+    supersession_reason: str = ""
     edits: list[ReviewEdit] = []
+    attestation: dict | None = None
+
+
+class WithdrawalRequest(BaseModel):
+    reason: str
 
 
 def live_runs() -> str:
@@ -71,10 +80,8 @@ def run_token_ok(given: str | None) -> bool:
 
 
 def review_token_ok(given: str | None) -> bool:
-    """Approvals need the reviewer token the server was started with
-    (``SECTORAL_REVIEW_TOKEN``); without one, approving is switched off."""
-    expected = os.environ.get("SECTORAL_REVIEW_TOKEN") or ""
-    return bool(expected) and hmac.compare_digest(str(given or ""), expected)
+    """True only when a token resolves to a configured reviewer identity."""
+    return reviewer_auth.authenticate(given) is not None
 
 
 def _history(reports: Path) -> list[dict]:
@@ -85,7 +92,7 @@ def _history(reports: Path) -> list[dict]:
     return [{"ticker": r["ticker"], "runs": r["runs"], "market_date": r.get("market_date"),
              "flags": r["flags"],
              "pdf_url": f"/files/reports/{r['ticker']}.pdf"
-             if gallery.artifact(reports, r["ticker"], "pdf") else None}
+             if gallery.public_artifact(reports, r["ticker"], "pdf") else None}
             for r in rows]
 
 
@@ -140,7 +147,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
     @app.get("/api/config")
     def config():
         return data({"live_runs": live_runs(),
-                     "review": bool(os.environ.get("SECTORAL_REVIEW_TOKEN"))})
+                     "review": reviewer_auth.approvals_enabled()})
 
     @app.get("/api/history")
     def history():
@@ -152,26 +159,76 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
 
     @app.get("/api/reports/{ticker}/trace")
     def report_trace(ticker: str):
-        view = trace_view.build(outputs.load(outputs.TRACE, jobs.reports, ticker)
-                                if TICKER.fullmatch(ticker.upper()) else None)
+        t = ticker.upper()
+        if not gallery.is_publishable(jobs.reports, t):
+            raise HTTPException(404, "Jejak riset tidak ditemukan.")
+        view = trace_view.build(outputs.load(outputs.TRACE, jobs.reports, t)
+                                if TICKER.fullmatch(t) else None)
         if view is None:
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
-        view["audit_appendix"] = _audit_appendix(outputs.load(outputs.REPORT, jobs.reports, ticker.upper()))
-        # A gallery report is published only once its plan is approved.
-        review = assumption_review.status(jobs.reports, ticker.upper())
-        view["review_state"] = review["state"]
-        if review["state"] != "approved" and view["report"].get("published"):
-            view["report"].update(published=False, rating=None, target_price=None, method=None,
-                                  held_reason="menunggu persetujuan asumsi oleh analis")
+        view["audit_appendix"] = _audit_appendix(outputs.load(outputs.REPORT, jobs.reports, t))
+        view["review_state"] = "approved"
         return data(view)
 
+    @app.get("/api/reports/{ticker}/trace/preview")
+    def report_trace_preview(ticker: str,
+                             x_review_token: str | None = Header(default=None)):
+        """Reviewer-only preview for reports that are not public yet."""
+        if not review_token_ok(x_review_token):
+            raise HTTPException(403, "Token reviewer tidak valid atau review belum diaktifkan.")
+        t = ticker.upper()
+        if not TICKER.fullmatch(t):
+            raise HTTPException(404, "Jejak riset tidak ditemukan.")
+        view = trace_view.build(outputs.load(outputs.TRACE, jobs.reports, t))
+        if view is None:
+            raise HTTPException(404, "Jejak riset tidak ditemukan.")
+        view["audit_appendix"] = _audit_appendix(outputs.load(outputs.REPORT, jobs.reports, t))
+        view["review_state"] = assumption_review.status(jobs.reports, t)["state"]
+        return data(view)
+
+    @app.get("/api/reports/{ticker}/artifact-preview/{kind}")
+    def report_artifact_preview(ticker: str, kind: str,
+                                x_review_token: str | None = Header(default=None)):
+        """Serve the exact report bundle to an authenticated reviewer only."""
+        if not review_token_ok(x_review_token):
+            raise HTTPException(403, "Token reviewer tidak valid atau review belum diaktifkan.")
+        t = ticker.upper()
+        if not TICKER.fullmatch(t) or kind not in gallery.FILES:
+            raise HTTPException(404, "Pratinjau laporan tidak ditemukan.")
+        found = gallery.artifact(jobs.reports, t, kind)
+        if found is None:
+            raise HTTPException(404, "Pratinjau laporan tidak ditemukan.")
+        return FileResponse(found[0], media_type=found[1], headers={"Cache-Control": "no-store"})
+
     @app.get("/api/reports/{ticker}/review")
-    def report_review(ticker: str):
+    def report_review(ticker: str, x_review_token: str | None = Header(default=None)):
         t = ticker.upper()
         if not TICKER.fullmatch(t) or not outputs.exists(outputs.REPORT, jobs.reports, t):
             raise HTTPException(404, "Laporan tidak ditemukan.")
-        return data({**assumption_review.public(jobs.reports, t),
-                     "enabled": bool(os.environ.get("SECTORAL_REVIEW_TOKEN"))})
+        enabled = reviewer_auth.approvals_enabled()
+        if not review_token_ok(x_review_token):
+            review_state = assumption_review.status(jobs.reports, t)["state"]
+            if review_state != "approved":
+                return data({"state": review_state, "enabled": enabled})
+            # Publication makes the reviewer attestation public, but the current
+            # editable Forecast Plan values remain available only to reviewers.
+            public_view = assumption_review.public(jobs.reports, t)
+            public_view.pop("fields", None)
+            public_view.pop("attestation_schema", None)
+            return data({**public_view, "enabled": enabled})
+        identity = reviewer_auth.authenticate(x_review_token)
+        publication = assumption_review.public(jobs.reports, t)
+        manifest = outputs.load(outputs.MANIFEST, jobs.reports, t)
+        publication_id = manifest.get("publication_id") if isinstance(manifest, dict) else None
+        predecessor_id = publication_archive.predecessor_candidate(
+            jobs.reports, t, publication_id) if publication_id else None
+        return data({**publication,
+                     "enabled": enabled,
+                     "predecessor_publication_id": predecessor_id,
+                     "supersession_required": predecessor_id is not None,
+                     "current_reviewer": ({"id": identity["id"], "name": identity["name"],
+                                           "role": identity["role"]}
+                                          if identity else None)})
 
     @app.post("/api/reports/{ticker}/review")
     def report_approve(ticker: str, body: ReviewRequest,
@@ -179,22 +236,144 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         t = ticker.upper()
         if not TICKER.fullmatch(t) or not outputs.exists(outputs.REPORT, jobs.reports, t):
             raise HTTPException(404, "Laporan tidak ditemukan.")
-        if not review_token_ok(x_review_token):
+        identity = reviewer_auth.authenticate(x_review_token)
+        if identity is None:
             raise HTTPException(403, "Token reviewer tidak valid atau review belum diaktifkan.")
+        if identity["role"] not in {"reviewer", "compliance"}:
+            raise HTTPException(403, "Identitas ini tidak memiliki peran reviewer.")
+        manifest = outputs.load(outputs.MANIFEST, jobs.reports, t)
+        publication_id = manifest.get("publication_id") if isinstance(manifest, dict) else None
+        try:
+            predecessor_id = publication_archive.predecessor_candidate(
+                jobs.reports, t, publication_id) if publication_id else None
+        except publication_archive.PublicationHistoryError as error:
+            raise HTTPException(409, str(error)) from None
+        if predecessor_id and len(body.supersession_reason.strip()) < 12:
+            raise HTTPException(400, "Alasan penggantian publikasi wajib diisi (minimal 12 karakter).")
         try:
             record = assumption_review.approve(
-                jobs.reports, t, body.reviewer, body.note,
-                [edit.model_dump() for edit in body.edits])
+                jobs.reports, t, identity["name"], body.note,
+                [edit.model_dump() for edit in body.edits],
+                attestation=body.attestation,
+                reviewer_identity={"id": identity["id"], "name": identity["name"],
+                                   "role": identity["role"],
+                                   "source": "authenticated_registry"})
         except assumption_review.ReviewError as error:
             raise HTTPException(400, str(error)) from None
-        return data({"record": record, **assumption_review.public(jobs.reports, t)})
+        try:
+            lineage = publication_archive.record_approved_publication(
+                jobs.reports, t, reviewer_token=x_review_token,
+                supersession_reason=body.supersession_reason)
+        except publication_archive.PublicationMutationDenied as error:
+            raise HTTPException(403, str(error)) from None
+        except publication_archive.SupersessionReasonRequired as error:
+            raise HTTPException(400, str(error)) from None
+        except publication_archive.PublicationHistoryError as error:
+            raise HTTPException(409, str(error)) from None
+        except publication_archive.UnknownPublicationError as error:
+            raise HTTPException(404, str(error)) from None
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+        return data({"record": record, "lineage": lineage,
+                     **assumption_review.public(jobs.reports, t)})
 
     @app.get("/api/reports/{ticker}/run")
     def report_run(ticker: str):
-        found = run_events.replay(jobs.reports, ticker) if TICKER.fullmatch(ticker.upper()) else None
+        t = ticker.upper()
+        if not TICKER.fullmatch(t) or not gallery.is_publishable(jobs.reports, t):
+            raise HTTPException(404, "Run tersimpan tidak ditemukan.")
+        found = run_events.replay(jobs.reports, t)
         if found is None:
             raise HTTPException(404, "Run tersimpan tidak ditemukan.")
         return data(found)
+
+    @app.get("/api/reports/{ticker}/archives")
+    def report_archives(ticker: str):
+        """List verified prior publications with explicit archived identity."""
+        t = ticker.upper()
+        if not TICKER.fullmatch(t):
+            raise HTTPException(404, "Arsip laporan tidak ditemukan.")
+        items = []
+        for manifest in publication_archive.list_archives(jobs.reports, t):
+            publication_id = manifest.get("publication_id")
+            hashes = manifest.get("artifact_hashes") or {}
+            file_names = manifest.get("files") or {}
+            if not isinstance(publication_id, str):
+                continue
+            lineage = publication_archive.publication_history(
+                jobs.reports, t, publication_id)
+            publication_state = lineage.get("state")
+            files = {}
+            for archive_kind, route_kind in (("html", "html"), ("pdf", "pdf"),
+                                             ("trace_html", "trace")):
+                if (publication_state not in {"withdrawn", "history_invalid"}
+                        and archive_kind in file_names
+                        and isinstance(hashes.get(archive_kind), str)):
+                    files[route_kind] = (f"/files/reports/{t}/archives/"
+                                         f"{publication_id}/{route_kind}")
+                else:
+                    files[route_kind] = None
+            items.append({"state": "withdrawn" if publication_state == "withdrawn" else "archived",
+                          "publication_state": publication_state, "ticker": t,
+                          "publication_id": publication_id,
+                          "archived_at": manifest.get("archived_at"),
+                          "review_sha": manifest.get("review_sha"),
+                          "predecessor_publication_id": lineage.get("predecessor_publication_id"),
+                          "successor_publication_id": lineage.get("successor_publication_id"),
+                          "supersession_reason": lineage.get("supersession_reason"),
+                          "withdrawal_reason": lineage.get("withdrawal_reason"),
+                          "withdrawn_at": lineage.get("withdrawn_at"),
+                          "artifact_hashes": {key: hashes.get(key)
+                                              for key in ("html", "pdf", "trace_html")},
+                          "files": files})
+        return data({"ticker": t, "items": items})
+
+    @app.post("/api/reports/{ticker}/archives/{publication_id}/withdraw")
+    def withdraw_report_publication(ticker: str, publication_id: str, body: WithdrawalRequest,
+                                    x_review_token: str | None = Header(default=None)):
+        """Withdraw a verified publication while preserving its archived bundle."""
+        t = ticker.upper()
+        if not TICKER.fullmatch(t):
+            raise HTTPException(404, "Arsip laporan tidak ditemukan.")
+        identity = reviewer_auth.authenticate(x_review_token)
+        if identity is None or identity["role"] not in {"reviewer", "compliance"}:
+            raise HTTPException(403, "Token tidak memiliki peran reviewer atau compliance.")
+        try:
+            lineage = publication_archive.withdraw_publication(
+                jobs.reports, t, publication_id, reason=body.reason,
+                reviewer_token=x_review_token)
+        except publication_archive.PublicationMutationDenied as error:
+            raise HTTPException(403, str(error)) from None
+        except publication_archive.UnknownPublicationError as error:
+            raise HTTPException(404, str(error)) from None
+        except publication_archive.PublicationHistoryError as error:
+            raise HTTPException(409, str(error)) from None
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+        return data({"ticker": t, "publication_id": publication_id,
+                     "state": "withdrawn", "lineage": lineage})
+
+    @app.get("/files/reports/{ticker}/archives/{publication_id}/{kind}")
+    def archived_report_file(ticker: str, publication_id: str, kind: str):
+        """Serve a hash-verified historical artifact from an approved bundle."""
+        t = ticker.upper()
+        archive_kinds = {"html": ("html", "text/html; charset=utf-8"),
+                         "pdf": ("pdf", "application/pdf"),
+                         "trace": ("trace_html", "text/html; charset=utf-8")}
+        mapped = archive_kinds.get(kind)
+        if not TICKER.fullmatch(t) or mapped is None:
+            raise HTTPException(404, "Arsip laporan tidak ditemukan.")
+        state = publication_archive.publication_state(jobs.reports, t, publication_id)
+        if state == "withdrawn":
+            raise HTTPException(410, "Publikasi ini telah ditarik.")
+        if state in {"history_invalid", "unknown"}:
+            raise HTTPException(404, "Arsip laporan tidak ditemukan.")
+        path = publication_archive.artifact(jobs.reports, t, publication_id, mapped[0])
+        if path is None:
+            raise HTTPException(404, "Arsip laporan tidak ditemukan.")
+        return FileResponse(path, media_type=mapped[1],
+                            headers={"Cache-Control": "public, max-age=31536000, immutable",
+                                     "X-Sektoral-Artifact-State": "archived"})
 
     @app.post("/api/jobs", status_code=201)
     def submit(body: JobRequest, x_run_token: str | None = Header(default=None)):
@@ -217,10 +396,9 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
 
     @app.get("/api/jobs/{job_id}/trace")
     def job_trace(job_id: str):
-        view = trace_view.build(jobs.trace(job_id)) if jobs_id_ok(job_id) else None
-        if view is None:
-            raise HTTPException(404, "Jejak riset tidak ditemukan.")
-        return data(view)
+        # Job IDs identify execution attempts, not approved publication bundles.
+        # Public traces use /api/reports/{ticker}/trace after the bundle passes review.
+        raise HTTPException(404, "Jejak riset tidak ditemukan.")
 
     @app.get("/files/reports/{ticker}/cover.png")
     def cover(ticker: str):
@@ -236,17 +414,16 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
     @app.get("/files/reports/{name}")
     def report_file(name: str):
         match = _REPORT_FILE.fullmatch(name)
-        found = gallery.artifact(jobs.reports, match.group(1), _KIND[match.group(2)]) if match else None
+        found = gallery.public_artifact(jobs.reports, match.group(1), _KIND[match.group(2)]) if match else None
         if found is None:
             raise HTTPException(404)
         return FileResponse(found[0], media_type=found[1], headers=_REVALIDATE)
 
     @app.get("/files/jobs/{job_id}/{name}")
     def job_file(job_id: str, name: str):
-        path = jobs.artifact(job_id, name)
-        if path is None:
-            raise HTTPException(404)
-        return FileResponse(path, media_type="text/html; charset=utf-8")
+        # A run directory is mutable and can be superseded. It is never a
+        # public artifact namespace; snapshots link to the gated gallery bundle.
+        raise HTTPException(404)
 
     static = Path(static_dir).resolve() if static_dir else None
     if static and (static / "index.html").is_file():

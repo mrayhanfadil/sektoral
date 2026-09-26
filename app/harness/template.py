@@ -36,6 +36,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from app import release_policy as _release_policy  # noqa: E402
 from app.harness.profiles import normalize as _normalize_profile  # noqa: E402
 from app.fmt import DEFAULT_SOURCE  # noqa: E402
 
@@ -1396,7 +1397,7 @@ def _chart_unit(e, s):
 
 
 def _close(a, b, tol=0.0) -> bool:
-    return abs(a - b) <= max(0.001 * max(abs(a), abs(b)), tol)
+    return _release_policy.report_value_tieout_matches(a, b, tol)
 
 
 def tieout_key_financials(ctx_or_doc) -> tuple[list[str], int]:
@@ -1432,7 +1433,8 @@ def tieout_key_financials(ctx_or_doc) -> tuple[list[str], int]:
                     compared += 1
                     (a, ta), (b, tb) = ebitda[year], rev[year]
                     margin = a / b * 100
-                    if abs(margin - value) > 100 * abs(a / b) * (ta / abs(a or 1) + tb / abs(b)) + 0.1:
+                    if not _release_policy.derived_margin_chart_tieout_matches(
+                            value, a, b, ta, tb):
                         bad.append(f"Exhibit {e.get('n')} margin EBITDA {year}: grafik {value:.1f}% "
                                    f"vs KF {margin:.1f}%")
             continue
@@ -1444,19 +1446,23 @@ def tieout_key_financials(ctx_or_doc) -> tuple[list[str], int]:
         grow_row = _match_rows(_rows(ctx.kf), [(growth_key, extra[growth_key])]).get(growth_key) \
             if ctx.kf else None
         for year, value in line.items():
-            shown, tol = None, 0.0
+            shown = None
+            direct_growth = False
             if grow_row:
                 idx = next((i for i, p in _period_cols(ctx.kf) if p[0] == year), None)
                 shown = num(grow_row[idx]) if idx is not None and idx < len(grow_row) else None
-                tol = 0.1 + 0.001 * abs(shown) if shown is not None else 0.0
+                direct_growth = shown is not None
             if shown is None and year in kf_vals and (year - 1) in kf_vals and kf_vals[year - 1][0]:
                 (a, ta), (b, tb) = kf_vals[year], kf_vals[year - 1]
                 shown = (a / b - 1) * 100
-                tol = 100 * abs(a / b) * (ta / abs(a or 1) + tb / abs(b)) + 0.1
             if shown is not None and not (concept == "net_profit" and growth_key == "eps_growth"
                                           and "eps" not in label):
                 compared += 1
-                if abs(shown - value) > tol:
+                matches = (_release_policy.growth_chart_tieout_matches(value, shown)
+                           if direct_growth
+                           else _release_policy.derived_growth_chart_tieout_matches(
+                               value, *kf_vals[year], *kf_vals[year - 1]))
+                if not matches:
                     bad.append(f"Exhibit {e.get('n')} pertumbuhan {concept} {year}: grafik {value:.1f}% "
                                f"vs KF {shown:.1f}%")
     return bad, compared

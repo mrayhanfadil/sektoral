@@ -132,7 +132,7 @@ def wacc_exhibit(intake, fc, val):
     E = intake["market_cap"]
     wD, wE = D / max(D + E, 1), E / max(D + E, 1)
     rows = [
-        ["Risk-free rate (INDOGB 10Y)", fmt.pct(wi["rf"])],
+        ["Risk-free rate IDR (house policy)", fmt.pct(wi["rf"])],
         ["Beta", fmt.mult(wi["beta"])],
         ["Equity Risk Premium", fmt.pct(wi["erp"])],
         ["(=) Cost of Equity (Rf + Beta x ERP)", fmt.pct(wi["re"])],
@@ -146,7 +146,7 @@ def wacc_exhibit(intake, fc, val):
         ["WACC", fmt.pct(val["wacc"])],
     ]
     return _exhibit("Komponen WACC", ["Komponen", "Nilai"], rows,
-                    "Source: Company, Sektoral Estimates; Rf = INDOGB 10Y, "
+                    "Source: Company, Sektoral Estimates; Rf = house policy parameter, compared with dated INDOGB 10Y in the policy benchmark table; "
                     "ERP = Damodaran, Beta = Bloomberg; tanpa CRP ganda")
 
 

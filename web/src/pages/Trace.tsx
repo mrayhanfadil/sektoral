@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
-import { api, reportFiles, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
+import { api, ApiError, reportFiles, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
 import { validatorNote } from "../lib/labels";
 import { AGENT, derive, type AgentId, type Status } from "../lib/agents";
@@ -12,7 +12,7 @@ import {
 } from "../components/Intel";
 import { MethodChain, RatingBadge, signedPct } from "../components/Reports";
 import { Notice, useLoad } from "../components/State";
-import { ReviewPanel } from "../components/Review";
+import { ReviewPanel, keepReviewToken, readReviewToken } from "../components/Review";
 import { IssuerLogo } from "../components/IssuerLogo";
 
 /* ------------------------------------------------------------------ */
@@ -240,7 +240,12 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
           <dt className={dt}>Rating</dt>
-          <dd className="m-0"><RatingBadge item={{ rating: report.published ? report.rating : null, held_reason: item?.held_reason ?? "" }} /></dd>
+          <dd className="m-0"><RatingBadge item={{
+            rating: report.published ? report.rating : null,
+            held_reason: item?.held_reason ?? "",
+            release_status: "",
+            publication_state: item?.publication_state ?? (report.published ? "published" : "review_pending"),
+          }} /></dd>
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
           <dt className={dt}>Target harga</dt>
@@ -641,10 +646,69 @@ function TraceBody({ trace }: { trace: TraceView }) {
         </AgentGroup>
 
         {(trace.audit_appendix?.length ?? 0) > 0 && <AuditAppendix pages={trace.audit_appendix!} />}
+        {trace.run_manifest && <RunManifest manifest={trace.run_manifest} />}
 
         <p className="text-[13px] text-ink-soft">Materi informasi dan analisis; bukan rekomendasi investasi.</p>
       </div>
     </div>
+  );
+}
+
+function RunManifest({ manifest }: { manifest: NonNullable<TraceView["run_manifest"]> }) {
+  const artifacts = Object.entries(manifest.artifacts);
+  const sources = Object.entries(manifest.source_pack_sha256);
+  const caches = Object.entries(manifest.cache_snapshot_sha256);
+  const row = (label: string, value: string | null | undefined) => (
+    <div className="grid gap-1 border-t border-rule-soft px-5 py-3 sm:grid-cols-[180px_1fr] max-sm:px-4">
+      <dt className="text-[13px] text-ink-soft">{label}</dt>
+      <dd className="m-0 break-all font-mono text-[12.5px] text-ink-strong">{value || "—"}</dd>
+    </div>
+  );
+  const houseRate = (rates: NonNullable<typeof manifest.house_assumptions>["idr"]) => {
+    const pct = (value: number | null) => value == null ? "n.m." : `${(value * 100).toFixed(1)}%`;
+    return `Rf ${pct(rates.risk_free)} · CRP ${pct(rates.country_risk_premium)} · ` +
+      `beta ${rates.beta == null ? "n.m." : rates.beta.toFixed(2)} · ERP ${pct(rates.equity_risk_premium)} · ` +
+      `CoD ${pct(rates.cost_of_debt_pretax)} · g ${pct(rates.terminal_growth)}`;
+  };
+  return (
+    <details className="panel scroll-mt-20">
+      <summary className="cursor-pointer list-none px-6 py-5 text-[20px] font-semibold text-ink-strong max-sm:px-4">
+        Provenance dan identitas bundle
+      </summary>
+      <dl className="m-0">
+        {row("Publication ID", manifest.publication_id)}
+        {row("Kode dan source tree", `${manifest.code_revision ?? "—"} · ${manifest.source_tree_sha256 ?? "—"}`)}
+        {row("Working tree", `${manifest.working_tree.dirty == null ? "unknown" : manifest.working_tree.dirty ? "dirty" : "clean"} · ${manifest.working_tree.sha256 ?? "—"}`)}
+        {row("Tanggal data / profile", `${manifest.as_of ?? "—"} · ${manifest.profile ?? "—"}`)}
+        {row("Forecast agent", `${manifest.model.forecast_agent ?? "—"} · ${manifest.model.agent_effort ?? "—"}`)}
+        {row("Spec / evidence register", `${manifest.spec_sha256 ?? "—"} · ${manifest.evidence_register_sha256 ?? "—"}`)}
+        {manifest.release_policy && row("Release policy", `${manifest.release_policy.version ?? "—"} · ${manifest.release_policy.status ?? "—"} · ${manifest.release_policy.sha256 ?? "—"}`)}
+        {manifest.release_policy?.ambiguities.length ? row("Policy ambiguities", manifest.release_policy.ambiguities.join(", ")) : null}
+        {manifest.house_assumptions && row("House assumptions", `${manifest.house_assumptions.version ?? "—"} · documented ${manifest.house_assumptions.documented_as_of ?? "—"} · effective date ${manifest.house_assumptions.effective_from ?? "unrecorded"} · ${manifest.house_assumptions.status ?? "—"} · ${manifest.house_assumptions.sha256 ?? "—"}`)}
+        {manifest.house_assumptions && row("IDR discount inputs", houseRate(manifest.house_assumptions.idr))}
+        {manifest.house_assumptions && row("USD discount inputs", `${houseRate(manifest.house_assumptions.usd)} · ${manifest.house_assumptions.usd.risk_free_basis ?? ""}`)}
+        {manifest.house_assumptions?.unresolved.length ? row("House-policy open items", manifest.house_assumptions.unresolved.join("; ")) : null}
+        <div className="border-t border-rule-soft px-5 py-3 max-sm:px-4">
+          <dt className="text-[13px] text-ink-soft">Source pack hashes</dt>
+          <dd className="m-0 mt-1 grid gap-1">
+            {sources.length ? sources.map(([path, hash]) => <code key={path} className="break-all text-[11.5px]">{path} · {hash}</code>) : <span className="text-[13px] text-ink-faint">Tidak tercatat</span>}
+          </dd>
+        </div>
+        <div className="border-t border-rule-soft px-5 py-3 max-sm:px-4">
+          <dt className="text-[13px] text-ink-soft">Cache snapshot hashes</dt>
+          <dd className="m-0 mt-1 grid gap-1">
+            {caches.length ? caches.map(([endpoint, value]) => <code key={endpoint} className="break-all text-[11.5px]">{endpoint} · {value.cache_key ?? "—"} · {value.content_sha256 ?? "—"}</code>) : <span className="text-[13px] text-ink-faint">Tidak tercatat</span>}
+          </dd>
+        </div>
+        <div className="border-t border-rule-soft px-5 py-3 max-sm:px-4">
+          <dt className="text-[13px] text-ink-soft">Rendered artifact hashes</dt>
+          <dd className="m-0 mt-1 grid gap-1">
+            {artifacts.length ? artifacts.map(([kind, value]) => <code key={kind} className="break-all text-[11.5px]">{kind} · {value.file ?? "—"} · {value.sha256 ?? "—"}</code>) : <span className="text-[13px] text-ink-faint">Tidak tercatat</span>}
+            {manifest.missing_artifacts.map((kind) => <span key={kind} className="text-[13px] text-warn-ink">Artefak hilang: {kind}</span>)}
+          </dd>
+        </div>
+      </dl>
+    </details>
   );
 }
 
@@ -705,7 +769,18 @@ function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix
 export function ReportTrace() {
   const { ticker = "" } = useParams();
   const T = ticker.toUpperCase();
-  const state = useLoad(() => api.reportTrace(T), [T]);
+  const [reviewToken, setReviewToken] = useState(readReviewToken);
+  const state = useLoad(async () => {
+    try {
+      return await api.reportTrace(T);
+    } catch (error) {
+      if (reviewToken && error instanceof ApiError && error.status === 404) {
+        return api.reportTracePreview(T, reviewToken);
+      }
+      throw error;
+    }
+  }, [T, reviewToken]);
+  const reviewState = useLoad(() => api.review(T), [T]);
   // The gallery entry and the stored run are optional context: the trace renders without them.
   const reports = useLoad(() => api.reports().catch(() => [] as ReportItem[]), []);
   const run = useLoad(() => api.reportRun(T).catch(() => undefined), [T]);
@@ -714,7 +789,47 @@ export function ReportTrace() {
   return (
     <TracePage state={state} item={item} run={run.data ?? undefined} missing={`Jejak riset ${T} tidak ditemukan.`}
       links={{ reportUrl: files.html, pdfUrl: item?.files.pdf ? files.pdf : undefined, replayUrl: `/laporan/${T}/putar` }}
-      review={<ReviewPanel ticker={T} onApproved={() => { state.reload(); reports.reload(); }} />} />
+      review={<ReviewPanel ticker={T}
+        reviewToken={state.data?.review_state === "pending" ? reviewToken || undefined : undefined}
+        onApproved={() => { state.reload(); reports.reload(); }} />}
+      reviewAccess={reviewState.data?.enabled && reviewState.data.state === "pending"
+        ? <ReviewerPreviewAccess ticker={T} error={state.status === 403 ? state.error : undefined}
+            onUnlock={(token) => { keepReviewToken(token); setReviewToken(token); }} />
+        : undefined} />
+  );
+}
+
+function ReviewerPreviewAccess({ ticker, error, onUnlock }: {
+  ticker: string; error?: string; onUnlock: (token: string) => void;
+}) {
+  const [token, setToken] = useState(readReviewToken);
+  const label = "mb-1 block text-[12.5px] font-medium text-ink-soft";
+  const input = "h-10 w-full rounded-md border border-rule bg-raised px-3 text-[14.5px] text-ink-strong placeholder:text-ink-faint focus:border-brand-ink";
+  return (
+    <section className="panel grid gap-4 p-6 max-sm:p-4" aria-labelledby="preview-access-title">
+      <div>
+        <h2 id="preview-access-title" className="m-0 text-[18px]">Jejak ini menunggu review publikasi</h2>
+        <p className="mb-0 mt-1 text-[14px] text-ink-soft">
+          Masukkan token reviewer untuk membuka pratinjau privat dan memeriksa laporan sebelum diterbitkan.
+        </p>
+      </div>
+      <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={(event) => {
+        event.preventDefault();
+        if (token.trim()) onUnlock(token.trim());
+      }}>
+        <div>
+          <label htmlFor="preview-review-token" className={label}>Token reviewer</label>
+          <input id="preview-review-token" type="password" value={token}
+            onChange={(event) => setToken(event.target.value)} autoComplete="off"
+            className={input} />
+        </div>
+        <button type="submit" disabled={!token.trim()} className="btn btn-primary disabled:cursor-not-allowed">
+          Buka pratinjau
+        </button>
+      </form>
+      {error && <p role="alert" className="m-0 text-[14px] text-err-ink">{error}</p>}
+      <p className="m-0 text-[12.5px] text-ink-faint">Emiten {ticker} · Nilai model tetap tidak tersedia untuk umum sampai review lolos.</p>
+    </section>
   );
 }
 
@@ -728,9 +843,9 @@ export function JobTrace() {
   );
 }
 
-function TracePage({ state, item, run, links, missing, review }:
+function TracePage({ state, item, run, links, missing, review, reviewAccess }:
   { state: ReturnType<typeof useLoad<TraceView>>; item?: ReportItem; run?: RunReplay; links: Links; missing: string;
-    review?: React.ReactNode }) {
+    review?: React.ReactNode; reviewAccess?: React.ReactNode }) {
   if (state.data) {
     return (
       <div className="min-h-full bg-canvas">
@@ -752,7 +867,7 @@ function TracePage({ state, item, run, links, missing, review }:
         </div>
       )}
       {state.error && (
-        <Notice tone={state.status === 404 ? "muted" : "error"}>
+        reviewAccess ?? <Notice tone={state.status === 404 ? "muted" : "error"}>
           {state.status === 404 ? (
             <>
               <p><strong className="text-ink-strong">{missing}</strong> Buka jejak dari galeri laporan atau dari deck riset.</p>

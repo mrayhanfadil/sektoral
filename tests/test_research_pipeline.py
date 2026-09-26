@@ -9,6 +9,18 @@ sys.path.insert(0, str(ROOT))
 from app import outputs, research, research_context, store
 
 
+def _valid_intake(ticker, as_of=None):
+    return ({
+        "ticker": ticker, "name": "Test Issuer", "model_profile": "going_concern_fcff",
+        "news": [], "news_full": [],
+        "official_evidence": {"latest_actual": {
+            "period": "1H26", "period_end": "2026-06-30",
+            "published_at": "2026-08-31", "source_url": "https://issuer.example/1h.pdf",
+            "source_title": "1H report", "page": 4, "unit": "IDR",
+            "metrics": {"revenue": 100, "net_profit": 8}}},
+    }, {})
+
+
 def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path):
     from agents.research import run as agent
 
@@ -41,7 +53,7 @@ def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path
                          "research_status": "loaded"}}
 
     monkeypatch.setattr(research.build, "build", fake_build)
-    monkeypatch.setattr(research.intake, "load", lambda ticker, as_of=None: ({}, {}))
+    monkeypatch.setattr(research.intake, "load", _valid_intake)
     monkeypatch.setattr("agents.forecast_assumptions.run.run_live",
                         lambda intake: {"status": "validated", "interim_status": "validated",
                                         "plan": {}})
@@ -63,6 +75,53 @@ def test_research_command_writes_report_and_readable_trace(monkeypatch, tmp_path
     assert trace["report"]["market_price_date"] == "2026-09-11"
 
 
+def test_normalized_evidence_register_reaches_forecast_agent_and_report(monkeypatch, tmp_path):
+    from agents.research import run as research_agent
+    from agents.forecast_assumptions import run as forecast_agent
+
+    monkeypatch.setattr(research_agent, "run_live", lambda ticker: {
+        "ok": False, "status": "insufficient", "document": None,
+        "agent_trace": {}})
+    source_intake = {
+        "ticker": "TEST", "name": "Test Issuer", "as_of": "2026-09-23",
+        "model_profile": "going_concern_fcff", "news": [], "news_full": [],
+        "official_evidence": {"latest_actual": {
+            "period": "1H26", "period_end": "2026-06-30",
+            "published_at": "2026-08-31", "source_url": "https://issuer.example/1h.pdf",
+            "source_title": "1H report", "page": 4, "unit": "IDR",
+            "metrics": {"revenue": 100, "net_profit": 8}}},
+    }
+    monkeypatch.setattr(research.intake, "load", lambda ticker, as_of=None: (source_intake, {}))
+    monkeypatch.setattr(research.tavily, "news_context", lambda *args, **kwargs: {
+        "items": [], "queries": [], "status": "no_relevant_results"})
+    monkeypatch.setattr(research.news_sources, "build_register", lambda *args, **kwargs: {
+        "articles": [], "rejected": [], "merged": [], "stats": {}})
+    agent_seen = {}
+
+    def fake_forecast_agent(agent_intake, refresh=False):
+        agent_seen["register"] = agent_intake["evidence_register"]
+        return {"status": "validated", "interim_status": "validated", "plan": {}}
+
+    monkeypatch.setattr(forecast_agent, "run_cached", fake_forecast_agent)
+    report_seen = {}
+
+    def fake_build(ticker, outdir, want_pdf=False, as_of=None, **kwargs):
+        report_seen["register"] = kwargs["news_evidence"]["evidence_register"]
+        return {"meta": {"status": "draft_non_distributable", "tanggal": as_of,
+                          "harga_tanggal": "2026-09-23"},
+                "evidence_register": report_seen["register"],
+                "forecast_assumptions": {"plan": {}}}
+
+    monkeypatch.setattr(research.build, "build", fake_build)
+    monkeypatch.setattr(research.research_context, "load_analysis",
+                        lambda ticker, as_of: (None, {"status": "insufficient"}))
+
+    research.run("TEST", tmp_path, as_of="2026-09-23")
+
+    assert agent_seen["register"]["rows"][0]["kind"] == "official_actual"
+    assert agent_seen["register"] == report_seen["register"]
+
+
 def test_rejected_agent_prose_is_not_published_in_trace(monkeypatch, tmp_path):
     from agents.research import run as agent
 
@@ -78,7 +137,7 @@ def test_rejected_agent_prose_is_not_published_in_trace(monkeypatch, tmp_path):
         "meta": {"status": "draft_non_distributable", "tanggal": "2026-09-23",
                  "harga_tanggal": "2026-09-11",
                  "research_status": "insufficient"}})
-    monkeypatch.setattr(research.intake, "load", lambda ticker, as_of=None: ({}, {}))
+    monkeypatch.setattr(research.intake, "load", _valid_intake)
     monkeypatch.setattr("agents.forecast_assumptions.run.run_live",
                         lambda intake: {"status": "invalid", "interim_status": "invalid",
                                         "plan": None})

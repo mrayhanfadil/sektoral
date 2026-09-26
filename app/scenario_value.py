@@ -25,19 +25,22 @@ import re
 from datetime import date
 from statistics import median
 
-from . import bank_model, fmt
+from . import bank_model, fmt, house_assumptions
 
-KD_PRETAX = 0.09          # market cost of debt, policy parameter (as the screen)
+_IDR_POLICY = house_assumptions.discount_inputs("IDR")
+_USD_POLICY = house_assumptions.discount_inputs("USD")
+
+KD_PRETAX = _IDR_POLICY["cost_of_debt_pretax"]  # policy parameter (screen)
 STATUTORY_TAX = 0.22      # Indonesian corporate income tax, fallback only
-GRID_DELTAS = (-0.01, -0.005, 0.0, 0.005, 0.01)
-GRID_GROWTH = (0.025, 0.035, 0.045)
+GRID_DELTAS = tuple(_IDR_POLICY["scenario_rate_sensitivity"])
+GRID_GROWTH = tuple(_IDR_POLICY["growth_sensitivity"])
 
 # --- Discount rate of a model built in US$ (spec §2, §4.2, §4.3) -----------
 # Rupiah model: Rf = INDOGB 10Y, which already prices Indonesia's country
 # risk, so no CRP is added. US$ model: Rf = UST 10Y at the Report Date
 # (app.rates) + the Indonesia country risk premium + beta x mature-market ERP.
 
-CRP_INDONESIA = 0.025
+CRP_INDONESIA = _USD_POLICY["country_risk_premium"]
 # Indonesia country risk premium, US$ models only: parameter kebijakan analis
 # like ERP 4% and g 3,5% (spec §4.3), not a figure taken from an outside
 # source. UST 10Y prices no Indonesian sovereign, transfer or convertibility
@@ -47,12 +50,12 @@ CRP_INDONESIA = 0.025
 # spreads; the sensitivity grid's WACC +/-1pp shows what a different premium
 # does. Never added to a rupiah model (INDOGB already carries it).
 
-TERMINAL_GROWTH_USD = 0.03
+TERMINAL_GROWTH_USD = _USD_POLICY["terminal_growth"]
 # Terminal growth of a US$ model: parameter kebijakan analis. Nominal US$
 # growth = the US central bank's 2% long-run inflation objective plus 1pp real
 # growth, 0,5pp below the rupiah policy 3,5% because US$ inflation is lower;
 # below UST 10Y, the template's cap (g <= risk-free rate).
-GRID_GROWTH_USD = (0.02, 0.03, 0.04)
+GRID_GROWTH_USD = tuple(_USD_POLICY["growth_sensitivity"])
 
 
 def _num(value):
@@ -158,8 +161,11 @@ def discount_rates(intake, rf, g):
     rate (spec §2: US$ cash flows are not discounted at a rupiah rate).
     """
     if model_currency(intake) != "USD":
-        return {"currency": "IDR", "rf": rf, "rf_label": "INDOGB 10Y", "crp": 0.0, "g": g,
-                "grid_growth": GRID_GROWTH, "kd_pretax": KD_PRETAX,
+        policy = house_assumptions.discount_inputs("IDR")
+        return {"currency": "IDR", "rf": policy["risk_free"], "rf_label": "IDR policy Rf",
+                "crp": policy["country_risk_premium"], "g": policy["terminal_growth"],
+                "erp": policy["equity_risk_premium"], "beta": policy["beta"],
+                "grid_growth": tuple(policy["growth_sensitivity"]), "kd_pretax": policy["cost_of_debt_pretax"],
                 "kd_basis": "parameter kebijakan analis"}, []
     ust = intake.get("ust_10y") or {}
     rate = _num(ust.get("rate"))
@@ -167,8 +173,11 @@ def discount_rates(intake, rf, g):
         return None, ["imbal hasil UST 10Y bertanggal tidak tersedia pada tanggal laporan; arus "
                       "kas US$ tidak didiskonto dengan tingkat rupiah"]
     kd, kd_basis, effective = usd_cost_of_debt(intake, rate)
+    policy = house_assumptions.discount_inputs("USD")
     return {"currency": "USD", "rf": rate, "rf_label": "UST 10Y", "rf_date": ust.get("date"),
-            "rf_source": ust.get("source"), "crp": CRP_INDONESIA, "g": TERMINAL_GROWTH_USD,
+            "rf_source": ust.get("source"), "crp": policy["country_risk_premium"],
+            "erp": policy["equity_risk_premium"], "beta": policy["beta"],
+            "g": policy["terminal_growth"],
             "grid_growth": GRID_GROWTH_USD, "kd_pretax": kd, "kd_basis": kd_basis,
             "kd_effective": effective}, []
 
@@ -569,7 +578,7 @@ def ddm(intake, fc, coe, g):
               "terminal_payout_basis": base["terminal_payout_basis"],
               "tv_share": base["pv_tv"] / base["per_share"] if base["per_share"] else None,
               "per_share": base["per_share"], "grid": grid,
-              "per_share_down": grid.get((0.01, 0.025)),
+              "per_share_down": grid.get((GRID_DELTAS[-1], GRID_GROWTH[0])),
               "bvps": bvps, "roe": roe, "year": rows[0]["year"],
               "dps_hist": list(intake.get("dps_hist") or []),
               "implied_coe": implied_rate(lambda r: value(r, g)["per_share"],
@@ -628,6 +637,8 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
                       "grid_growth": GRID_GROWTH, "kd_pretax": KD_PRETAX,
                       "kd_basis": "parameter kebijakan analis"}
     rf, crp, g = rates["rf"], rates.get("crp") or 0.0, rates["g"]
+    erp = _num(rates.get("erp")) if _num(rates.get("erp")) is not None else erp
+    beta = _num(rates.get("beta")) if _num(rates.get("beta")) is not None else beta
     kd_pretax = rates.get("kd_pretax", KD_PRETAX)
     growths = tuple(rates.get("grid_growth") or GRID_GROWTH)
     link = bridge_native(intake)

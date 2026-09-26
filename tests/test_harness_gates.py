@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app.harness import check_s1, check_s2, check_s3, run_all  # noqa: E402
+from app.harness import check_s1, check_s2, check_s3, run_all, runner  # noqa: E402
 
 
 def _intake_fcff():
@@ -61,6 +61,26 @@ def test_s1_blocks_without_actual():
     r = check_s1({"model_profile": "going_concern_fcff"})
     assert r["status"] == "gagal"
     assert any("S1.periode" in b for b in r["blockers"])
+
+
+def test_harness_register_blocker_survives_release_route_selection(monkeypatch):
+    passing = {"status": "lolos", "checks": [], "blockers": []}
+    monkeypatch.setattr(runner, "check_s1", lambda intake: passing)
+    monkeypatch.setattr(runner, "check_s2", lambda intake, forecast: passing)
+    monkeypatch.setattr(runner, "check_s3", lambda intake, forecast, valuation: passing)
+    monkeypatch.setattr(runner, "check_narrative", lambda doc: passing)
+    monkeypatch.setattr(runner, "check_output_schema", lambda doc: passing)
+    monkeypatch.setattr("app.release.assess_release", lambda *args: {
+        "status": "distributable", "blockers": []})
+    doc = {"meta": {"model_profile": "going_concern_fcff"},
+           "evidence_register": {"ticker": "TEST", "as_of": "2026-09-22",
+                                 "rows": [], "violations": []}}
+
+    result = runner.run_all({"model_profile": "going_concern_fcff"}, {}, {}, doc,
+                            template_checks=False)
+
+    assert result["status"] == "draft_non_distributable"
+    assert "release.evidence register contains no eligible source rows" in result["blockers"]
 
 
 def test_s2_screening_proxy_fails_s29():

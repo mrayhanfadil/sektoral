@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 import uuid
 
-from . import cache, gallery, outputs, progress, research
+from . import assumption_review, cache, gallery, outputs, progress, publication_archive, research
 
 LOG = logging.getLogger(__name__)
 TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
@@ -178,13 +178,30 @@ class ResearchJobs:
         """Copy a finished run into the reports folder so the gallery lists it."""
         try:
             self.reports.mkdir(parents=True, exist_ok=True)
+            # Preserve the currently approved publication before replacing the
+            # gallery's fixed ticker paths. Unapproved or stale runs are not
+            # archived and remain subject to the usual review gate.
+            review = assumption_review.status(self.reports, ticker)
+            if (review.get("state") == "approved" and
+                    all(kind in (review.get("artifact_hashes") or {})
+                        for kind in ("html", "pdf", "trace_html"))):
+                archived = publication_archive.archive_approved_bundle(self.reports, ticker)
+                if archived is None:
+                    raise OSError(f"refusing to replace approved {ticker}: publication archive failed")
             for name in (f"{ticker}.html", f"{ticker}.pdf", f"{ticker}-trace.html"):
                 source = job_outdir / name
                 if source.is_file():
                     shutil.copy2(source, self.reports / name)
+                elif name == f"{ticker}.pdf":
+                    # A run without PDF output must not inherit an older PDF.
+                    (self.reports / name).unlink(missing_ok=True)
             outputs.copy(job_outdir, ticker, self.reports)
         except OSError:
             LOG.exception("Could not publish %s to the reports folder", ticker)
+            # _run marks the job as errored on publication failure. Returning
+            # normally would mark it complete and could make the prior
+            # gallery report look like the output of this run.
+            raise
 
     def snapshot(self, job_id: str) -> dict | None:
         with self._lock:
@@ -197,10 +214,15 @@ class ResearchJobs:
             if job["state"] in ("completed", "error"):
                 result["quality"] = job.get("quality", "partial")
             if job["state"] == "completed":
-                result["report_url"] = f"/files/jobs/{job_id}/{ticker}.html"
-                result["trace_url"] = f"/jobs/{job_id}/jejak"
-                if gallery.artifact(self.reports, ticker, "pdf"):
-                    result["pdf_url"] = f"/files/reports/{ticker}.pdf"
+                # Completed output stays private until the gallery's current
+                # report bundle is analytically eligible and analyst-approved.
+                if gallery.is_publishable(self.reports, ticker):
+                    if gallery.public_artifact(self.reports, ticker, "html"):
+                        result["report_url"] = f"/files/reports/{ticker}.html"
+                    if gallery.public_artifact(self.reports, ticker, "trace"):
+                        result["trace_url"] = f"/laporan/{ticker}/jejak"
+                    if gallery.public_artifact(self.reports, ticker, "pdf"):
+                        result["pdf_url"] = f"/files/reports/{ticker}.pdf"
                 result["gallery_url"] = "/laporan"
                 if job.get("report_status"):
                     result["report_status"] = job["report_status"]
@@ -246,4 +268,3 @@ class ResearchJobs:
 
     def close(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
-
