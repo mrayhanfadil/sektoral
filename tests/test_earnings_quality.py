@@ -130,3 +130,29 @@ def test_filing_source_keys_resolve_to_register_rows_and_give_fy1_normalized_ear
     broken = Q.assess(pack, register, "2026-09-26", fiscal_year=2026)["normalization"]
     assert broken["status"] == "incomplete" and broken["fy1"] is None
     assert any("unresolved:missing" in b for b in broken["blockers"])
+
+
+def test_a_filing_published_after_the_report_date_is_not_in_the_register():
+    from app import evidence
+    pack = {"filing_sources": {"later": {"title": "t", "url": "https://idx.example/l",
+                                         "published_at": "2026-10-01", "period": "9M26"}},
+            "latest_actual": {}}
+    register = evidence.build("XXXX", "2026-09-26", {"official_evidence": pack})
+    assert register["rows"] == [] and register["violations"] == []
+
+
+def test_every_covered_issuer_ledger_reconciles_on_the_baseline_report_date():
+    import json
+    from pathlib import Path
+    from app import evidence, share_basis
+    for path in sorted(Path("data/issuer_evidence").glob("*.json")):
+        pack = json.loads(path.read_text())
+        record = share_basis.assess(pack, "2026-09-26", fiscal_year=2026)
+        assert record["status"] == "assessed", (path.name, record.get("blockers"))
+        assert all(row["reconciles"] for row in record["reconciliation"]), path.name
+        register = evidence.build(pack["ticker"], "2026-09-26", {"official_evidence": pack})
+        normalization = Q.assess(pack, register, "2026-09-26", fiscal_year=2026)["normalization"]
+        if pack["ticker"] == "INET":  # undisclosed composite line >= 5%: honestly incomplete
+            assert normalization["status"] == "incomplete"
+        else:
+            assert normalization["status"] == "assessed", (path.name, normalization["blockers"])

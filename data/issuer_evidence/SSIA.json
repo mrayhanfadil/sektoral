@@ -203,5 +203,209 @@
       "source_url": "https://suryainternusa.com/assets/source/files/corporate-persentation/2026.09.01---ssia_1h26_-ads_v2.pdf",
       "page": 49
     }
+  },
+  "filing_sources": {
+    "ssia-1h26-shares": {
+      "title": "PT Surya Semesta Internusa Tbk 1H26 Results – Resilience Translated into Results",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SSIA_Q2_2026.pdf",
+      "published_at": "2026-08-04",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf",
+      "page": "PDF 5 dan 153 (modal saham 4.705.249.440 saham; tanpa saham treasuri per 1 Januari 2026)"
+    },
+    "ssia-1h26-eps": {
+      "title": "PT Surya Semesta Internusa Tbk 1H26 Results – Resilience Translated into Results",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SSIA_Q2_2026.pdf",
+      "published_at": "2026-08-04",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf",
+      "page": "PDF 128 (laba per saham)"
+    },
+    "ssia-1h26-note47": {
+      "title": "PT Surya Semesta Internusa Tbk 1H26 Results – Resilience Translated into Results",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SSIA_Q2_2026.pdf",
+      "published_at": "2026-08-04",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf",
+      "page": "PDF 127 (Catatan 47, penghasilan lainnya)"
+    },
+    "ssia-1h26-note48": {
+      "title": "PT Surya Semesta Internusa Tbk 1H26 Results – Resilience Translated into Results",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SSIA_Q2_2026.pdf",
+      "published_at": "2026-08-04",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf",
+      "page": "PDF 127 (Catatan 48, beban lainnya)"
+    },
+    "ssia-1h26-pl": {
+      "title": "PT Surya Semesta Internusa Tbk 1H26 Results – Resilience Translated into Results",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SSIA_Q2_2026.pdf",
+      "published_at": "2026-08-04",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://suryainternusa.com/assets/source/files/press-release/2026.08.04_press-release-ssia-1h26_eng_v2_ebu.pdf",
+      "page": "PDF 6 (laporan laba rugi)"
+    }
+  },
+  "share_ledger": {
+    "reviewed_through": "2026-09-26",
+    "review_basis": "issuer 30 June 2026 interim statements (share capital, treasury and EPS notes) and the cited register counts",
+    "register_counts": [
+      {
+        "date": "2025-12-31",
+        "shares_outstanding": 4705249440,
+        "source_ref": "ssia-1h26-shares"
+      },
+      {
+        "date": "2026-06-30",
+        "shares_outstanding": 4705249440,
+        "source_ref": "ssia-1h26-shares"
+      }
+    ],
+    "actions": [],
+    "reported_weighted_average": [
+      {
+        "period": "1H26",
+        "start": "2026-01-01",
+        "end": "2026-06-30",
+        "shares": 4705249440,
+        "source_ref": "ssia-1h26-eps"
+      }
+    ]
+  },
+  "normalization_ledger": {
+    "policy": "One-off: gains or losses on disposal of investments, investment property or fixed assets, fixed-asset write-offs, fair-value gains or losses on investments, tax penalties, reversals of prior-period accruals, and net foreign-exchange gains or losses (the forecast does not project exchange movements). Recurring: operating other income (rent, penalties charged, insurance claims, scrap and by-product sales), inventory provisions and expected-credit-loss movements on operating receivables. Tax effect at the 22% statutory rate unless the item is non-deductible; the minority effect is the group's non-controlling share of profit where the entity bearing the item is not disclosed. An undisclosed composite line of 5% or more of period attributable earnings (release policy 1.2.0 materiality) blocks affirmative review.",
+    "periods_assessed": [
+      "1H26"
+    ],
+    "scope_note": "FY2025 and earlier are not assessed in this ledger; the forecast's first year uses the 1H26 actual plus a modelled second half, so the 1H26 bridge is the one that reaches FY1.",
+    "adjustments_assessed": true,
+    "reported_results": [
+      {
+        "vintage_id": "1h26-v1",
+        "period": "1H26",
+        "published_at": "2026-08-04",
+        "available_at": "2026-08-04",
+        "currency": "IDR",
+        "unit": "unit",
+        "reported_attributable_earnings": 262558750693,
+        "source_refs": [
+          "ssia-1h26-pl"
+        ]
+      }
+    ],
+    "adjustments": [
+      {
+        "vintage_id": "fair-value-gain-v1",
+        "adjustment_id": "fair-value-gain",
+        "period": "1H26",
+        "published_at": "2026-08-04",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Keuntungan penyesuaian nilai wajar investasi - neto",
+        "pretax_amount": -5435038949,
+        "tax_effect": -1195708568.78,
+        "minority_interest_effect": -1919845065.75,
+        "normalized_attributable_effect": -2319485314.47,
+        "source_refs": [
+          "ssia-1h26-note47"
+        ]
+      },
+      {
+        "vintage_id": "gain-sale-investment-property-v1",
+        "adjustment_id": "gain-sale-investment-property",
+        "period": "1H26",
+        "published_at": "2026-08-04",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Keuntungan penjualan properti investasi",
+        "pretax_amount": -515585586,
+        "tax_effect": -113428828.92,
+        "minority_interest_effect": -182122787.44,
+        "normalized_attributable_effect": -220033969.64,
+        "source_refs": [
+          "ssia-1h26-note47"
+        ]
+      },
+      {
+        "vintage_id": "gain-sale-fixed-assets-v1",
+        "adjustment_id": "gain-sale-fixed-assets",
+        "period": "1H26",
+        "published_at": "2026-08-04",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Keuntungan penjualan aset tetap",
+        "pretax_amount": -264154357,
+        "tax_effect": -58113958.54,
+        "minority_interest_effect": -93308519.71,
+        "normalized_attributable_effect": -112731878.75,
+        "source_refs": [
+          "ssia-1h26-note47"
+        ]
+      },
+      {
+        "vintage_id": "fx-gain-v1",
+        "adjustment_id": "fx-gain",
+        "period": "1H26",
+        "published_at": "2026-08-04",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Keuntungan kurs mata uang asing - neto",
+        "pretax_amount": -408218772,
+        "tax_effect": -89808129.84,
+        "minority_interest_effect": -144197089.02,
+        "normalized_attributable_effect": -174213553.14,
+        "source_refs": [
+          "ssia-1h26-note47"
+        ]
+      },
+      {
+        "vintage_id": "allowance-recoveries-v1",
+        "adjustment_id": "allowance-recoveries",
+        "period": "1H26",
+        "published_at": "2026-08-04",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "recurring",
+        "description": "Pemulihan pencadangan tagihan bruto dan piutang retensi (operasional)",
+        "pretax_amount": -13921615127,
+        "tax_effect": -3062755327.94,
+        "minority_interest_effect": -4917599369.5,
+        "normalized_attributable_effect": 0,
+        "source_refs": [
+          "ssia-1h26-note47"
+        ]
+      },
+      {
+        "vintage_id": "financial-asset-impairment-v1",
+        "adjustment_id": "financial-asset-impairment",
+        "period": "1H26",
+        "published_at": "2026-08-04",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "recurring",
+        "description": "Kerugian penurunan nilai aset keuangan (operasional)",
+        "pretax_amount": 7452551499,
+        "tax_effect": 1639561329.78,
+        "minority_interest_effect": 2632500770.8,
+        "normalized_attributable_effect": 0,
+        "source_refs": [
+          "ssia-1h26-note48"
+        ]
+      }
+    ]
   }
 }

@@ -254,7 +254,10 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
     actual = official_actual_row(evidence)
     if actual:
         rows.append(actual)
-    rows.extend(filing_rows(evidence))
+    # A filing published after the Report Date did not exist yet: leave it out
+    # rather than list it as a violation (point-in-time, like the pack loader).
+    rows.extend(row for row in filing_rows(evidence)
+                if cutoff is None or (_day(row.get("published_at")) or cutoff) <= cutoff)
     rows.extend(guidance_rows(evidence))
     rows.extend(news_rows(articles, news_full))
     rows.extend(assumption_rows(plan))

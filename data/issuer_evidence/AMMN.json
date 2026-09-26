@@ -1865,5 +1865,101 @@
     "source_url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
     "source_page": 12,
     "source_date": "2026-09-21"
+  },
+  "filing_sources": {
+    "ammn-1h26-note22": {
+      "title": "AMMAN H1 2026 Earnings Release",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/AMMN_Q2_2026.pdf",
+      "published_at": "2026-09-21",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 108-109 (Catatan 22, modal saham dan saham treasuri, 30 Juni 2026 dan 31 Desember 2025)"
+    },
+    "ammn-1h26-eps": {
+      "title": "AMMAN H1 2026 Earnings Release",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/AMMN_Q2_2026.pdf",
+      "published_at": "2026-09-21",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 116 (laba per saham)"
+    },
+    "ammn-1h26-pl": {
+      "title": "AMMAN H1 2026 Earnings Release",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/AMMN_Q2_2026.pdf",
+      "published_at": "2026-09-21",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 11 (laporan laba rugi)"
+    }
+  },
+  "share_ledger": {
+    "reviewed_through": "2026-09-26",
+    "review_basis": "issuer 30 June 2026 interim statements (share capital, treasury and EPS notes) and the cited register counts",
+    "register_counts": [
+      {
+        "date": "2025-12-31",
+        "shares_outstanding": 72412413856,
+        "source_ref": "ammn-1h26-note22"
+      },
+      {
+        "date": "2026-06-30",
+        "shares_outstanding": 72412413856,
+        "source_ref": "ammn-1h26-note22"
+      }
+    ],
+    "actions": [],
+    "reported_weighted_average": [
+      {
+        "period": "1H26",
+        "start": "2026-01-01",
+        "end": "2026-06-30",
+        "shares": 72412413856,
+        "source_ref": "ammn-1h26-eps"
+      }
+    ]
+  },
+  "normalization_ledger": {
+    "policy": "One-off: gains or losses on disposal of investments, investment property or fixed assets, fixed-asset write-offs, fair-value gains or losses on investments, tax penalties, reversals of prior-period accruals, and net foreign-exchange gains or losses (the forecast does not project exchange movements). Recurring: operating other income (rent, penalties charged, insurance claims, scrap and by-product sales), inventory provisions and expected-credit-loss movements on operating receivables. Tax effect at the 22% statutory rate unless the item is non-deductible; the minority effect is the group's non-controlling share of profit where the entity bearing the item is not disclosed. An undisclosed composite line of 5% or more of period attributable earnings (release policy 1.2.0 materiality) blocks affirmative review.",
+    "periods_assessed": [
+      "1H26"
+    ],
+    "scope_note": "FY2025 and earlier are not assessed in this ledger; the forecast's first year uses the 1H26 actual plus a modelled second half, so the 1H26 bridge is the one that reaches FY1.",
+    "adjustments_assessed": true,
+    "reported_results": [
+      {
+        "vintage_id": "1h26-v1",
+        "period": "1H26",
+        "published_at": "2026-09-21",
+        "available_at": "2026-09-21",
+        "currency": "USD",
+        "unit": "unit",
+        "reported_attributable_earnings": 497929000,
+        "source_refs": [
+          "ammn-1h26-pl"
+        ]
+      }
+    ],
+    "adjustments": [
+      {
+        "vintage_id": "other-income-net-v1",
+        "adjustment_id": "other-income-net",
+        "period": "1H26",
+        "published_at": "2026-09-21",
+        "currency": "USD",
+        "unit": "unit",
+        "classification": "recurring",
+        "description": "Pendapatan/(beban) lainnya, bersih US$24,621 ribu; laporan tidak memberi rincian. 4,9% dari laba induk 1H26, di bawah ambang materialitas 5%, sehingga dianggap berulang.",
+        "pretax_amount": -24621000,
+        "tax_effect": -5416620,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": 0,
+        "source_refs": [
+          "ammn-1h26-pl"
+        ]
+      }
+    ]
   }
 }

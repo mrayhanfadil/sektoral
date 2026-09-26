@@ -109,5 +109,132 @@
    },
    "note": "Halaman BCA: dari porsi publik per 31 Desember 2025, '49%' dimiliki pihak terafiliasi PT Dwimuria Investama Andalan (angka sebagaimana tertulis); pemilik akhir Dwimuria adalah Robert Budi Hartono dan Bambang Hartono."
   }
- }
+ },
+  "filing_sources": {
+    "bbca-1h26-note25": {
+      "title": "PT Bank Central Asia Tbk Laporan Keuangan Interim Konsolidasian 30 Juni 2026 (tidak diaudit)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+      "published_at": "2026-07-28",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202607/20260728163316-62836-0/FinancialStatement-2026-II-BBCA.xlsx",
+      "page": "PDF 103 (Catatan 25, modal saham dan modal saham diperoleh kembali)"
+    },
+    "bbca-1h26-note1b": {
+      "title": "PT Bank Central Asia Tbk Laporan Keuangan Interim Konsolidasian 30 Juni 2026 (tidak diaudit)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+      "published_at": "2026-07-28",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202607/20260728163316-62836-0/FinancialStatement-2026-II-BBCA.xlsx",
+      "page": "PDF 17 (Catatan 1b, program pembelian kembali saham 12 Maret 2026 - 11 Maret 2027)"
+    },
+    "bbca-1h26-equity": {
+      "title": "PT Bank Central Asia Tbk Laporan Keuangan Interim Konsolidasian 30 Juni 2026 (tidak diaudit)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+      "published_at": "2026-07-28",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202607/20260728163316-62836-0/FinancialStatement-2026-II-BBCA.xlsx",
+      "page": "PDF 10 dan 13 (perubahan ekuitas dan arus kas: saham yang diperoleh kembali Rp1.309.013 juta)"
+    },
+    "bbca-1h26-eps": {
+      "title": "PT Bank Central Asia Tbk Laporan Keuangan Interim Konsolidasian 30 Juni 2026 (tidak diaudit)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+      "published_at": "2026-07-28",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202607/20260728163316-62836-0/FinancialStatement-2026-II-BBCA.xlsx",
+      "page": "PDF 109 (Catatan 35, laba per saham)"
+    },
+    "bbca-1h26-pl": {
+      "title": "PT Bank Central Asia Tbk Laporan Keuangan Interim Konsolidasian 30 Juni 2026 (tidak diaudit)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+      "published_at": "2026-07-28",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202607/20260728163316-62836-0/FinancialStatement-2026-II-BBCA.xlsx",
+      "page": "PDF 9-10 (laporan laba rugi)"
+    },
+    "bbca-idx-profile": {
+      "title": "Daftar pemegang saham, profil emiten IDX (idx.co.id, diakses 2026-09-24)",
+      "url": "https://www.idx.co.id/en/listed-companies/company-profiles/BBCA",
+      "published_at": "2026-09-24"
+    }
+  },
+  "share_ledger": {
+    "reviewed_through": "2026-09-26",
+    "review_basis": "issuer 30 June 2026 interim statements (share capital, treasury and EPS notes) and the cited register counts",
+    "register_counts": [
+      {
+        "date": "2025-12-31",
+        "shares_outstanding": 123013033200,
+        "source_ref": "bbca-1h26-note25"
+      },
+      {
+        "date": "2026-06-30",
+        "shares_outstanding": 122841751300,
+        "source_ref": "bbca-1h26-note25"
+      },
+      {
+        "date": "2026-09-24",
+        "shares_outstanding": 122841751300,
+        "source_ref": "bbca-idx-profile"
+      }
+    ],
+    "actions": [
+      {
+        "action_id": "buyback-1h26",
+        "kind": "buyback",
+        "status": "completed",
+        "timing": "aggregate",
+        "shares": 171281900,
+        "cash_paid": 1309013000000,
+        "announced_at": "2025-10-22",
+        "effective_date": "2026-06-30",
+        "source_ref": "bbca-1h26-equity",
+        "description": "Net treasury shares acquired in 1H26 (262.016.800 -> 433.298.700) under the buyback programmes disclosed in Catatan 1b; the issuer gives no per-date split."
+      }
+    ],
+    "reported_weighted_average": [
+      {
+        "period": "1H26",
+        "start": "2026-01-01",
+        "end": "2026-06-30",
+        "shares": 122872754239,
+        "source_ref": "bbca-1h26-eps"
+      }
+    ],
+    "notes": [
+      "The 12 March 2026 - 11 March 2027 buyback programme is still open; the IDX profile count of 24 September 2026 shows no change after 30 June."
+    ]
+  },
+  "normalization_ledger": {
+    "policy": "One-off: gains or losses on disposal of investments, investment property or fixed assets, fixed-asset write-offs, fair-value gains or losses on investments, tax penalties, reversals of prior-period accruals, and net foreign-exchange gains or losses (the forecast does not project exchange movements). Recurring: operating other income (rent, penalties charged, insurance claims, scrap and by-product sales), inventory provisions and expected-credit-loss movements on operating receivables. Tax effect at the 22% statutory rate unless the item is non-deductible; the minority effect is the group's non-controlling share of profit where the entity bearing the item is not disclosed. An undisclosed composite line of 5% or more of period attributable earnings (release policy 1.2.0 materiality) blocks affirmative review.",
+    "periods_assessed": [
+      "1H26"
+    ],
+    "scope_note": "FY2025 and earlier are not assessed in this ledger; the forecast's first year uses the 1H26 actual plus a modelled second half, so the 1H26 bridge is the one that reaches FY1.",
+    "adjustments_assessed": true,
+    "reported_results": [
+      {
+        "vintage_id": "1h26-v1",
+        "period": "1H26",
+        "published_at": "2026-07-28",
+        "available_at": "2026-07-28",
+        "currency": "IDR",
+        "unit": "unit",
+        "reported_attributable_earnings": 29534446000000,
+        "source_refs": [
+          "bbca-1h26-pl"
+        ]
+      }
+    ],
+    "adjustments": []
+  }
 }
