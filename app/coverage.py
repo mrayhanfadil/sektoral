@@ -77,7 +77,7 @@ def next_actions(ticker, doc):
         elif "independent reference" in b or "terminal" in b:
             actions.append(b)
     method = (rel.get("method_chain") or {}).get("selected")
-    if method not in (None, "fcff_dcf", "ddm", "sotp_lom"):
+    if method not in (None, "fcff_dcf", "ddm", "sotp_lom", "holding_sotp"):
         actions.append(f"selected method {method} has no production path; a primary-method "
                        "production model is needed")
     if not actions and blockers:

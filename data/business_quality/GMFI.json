@@ -1,0 +1,42 @@
+{
+ "ticker": "GMFI",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "related_party": {
+   "assessment": "Pendapatan dari pihak berelasi 69,66% dari total pendapatan 1H26 (1H25: 67,58%; FY2025: 72,65%): Garuda US$108,3 juta dan Citilink US$73,7 juta dari total US$270,3 juta.",
+   "model_effect": "Pendapatan dan penagihan bergantung pada kondisi keuangan Grup Garuda; risiko ini tidak dimodelkan terpisah di luar skenario laba.",
+   "evidence": [
+    {
+     "title": "PT Garuda Maintenance Facility Aero Asia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+     "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+     "published_at": "2026-09-18",
+     "page": "PDF 102 (catatan pihak berelasi)"
+    }
+   ]
+  },
+  "concentration": {
+   "assessment": "Dua pelanggan grup (Garuda dan Citilink) menyumbang sekitar 67% pendapatan 1H26; pertumbuhan 1H26 didorong jasa time-and-material untuk reaktivasi pesawat Grup dan pekerjaan mesin dari lessor.",
+   "model_effect": "Konsentrasi pelanggan tinggi; perubahan armada atau jadwal perawatan Grup Garuda langsung mengubah pendapatan.",
+   "evidence": [
+    {
+     "title": "PT Garuda Maintenance Facility Aero Asia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+     "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+     "published_at": "2026-09-18",
+     "page": "PDF 102 (rincian pendapatan pihak berelasi)"
+    }
+   ]
+  },
+  "ownership_control": {
+   "assessment": "PT Angkasa Pura Indonesia (Persero) memegang 65,77% saham (Seri B) sesudah inbreng lahan pada PMHMETD II 29 Desember 2025; Garuda 27,43% (Seri A 20,15% dan Seri B 7,28%); publik sekitar 6,5%.",
+   "model_effect": "Pengendalian BUMN (grup Danantara) dan free float sangat kecil membatasi likuiditas; tidak ada diskon valuasi tambahan di luar driver.",
+   "evidence": [
+    {
+     "title": "PT Garuda Maintenance Facility Aero Asia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+     "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+     "published_at": "2026-09-18",
+     "page": "PDF 91-92 (Catatan 16, modal saham)"
+    }
+   ]
+  }
+ }
+}

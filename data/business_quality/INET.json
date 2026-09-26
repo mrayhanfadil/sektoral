@@ -1,0 +1,30 @@
+{
+ "ticker": "INET",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "ownership_control": {
+   "assessment": "PT Abadi Kreasi Unggul Nusantara memegang 59,77% dari 22.374.111.088 saham; publik 40,23%.",
+   "model_effect": "Pengendali tunggal; tidak ada diskon valuasi tambahan di luar driver.",
+   "evidence": [
+    {
+     "title": "PT Sinergi Inti Andalan Prima Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (diaudit)",
+     "url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+     "published_at": "2026-09-11",
+     "page": "PDF 76 (susunan pemegang saham)"
+    }
+   ]
+  },
+  "capital_allocation": {
+   "assessment": "PUT I dengan HMETD efektif 22 Desember 2025: 12,8 miliar saham baru pada Rp250 (Rp3,2 triliun) disertai 2,3 miliar Waran Seri II; Obligasi I dan Sukuk Ijarah I Tahun 2026 efektif 30 Januari 2026.",
+   "model_effect": "Dana rights issue masuk ke ekuitas dan jumlah saham ledger (21,98 miliar rata-rata tertimbang, keputusan D5); waran belum dilaksanakan tidak dihitung sebagai saham.",
+   "evidence": [
+    {
+     "title": "PT Sinergi Inti Andalan Prima Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (diaudit)",
+     "url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+     "published_at": "2026-09-11",
+     "page": "PDF 22 (Catatan 1b-1c, penawaran umum saham dan efek utang)"
+    }
+   ]
+  }
+ }
+}

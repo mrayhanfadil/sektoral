@@ -769,6 +769,34 @@ def assess_fcff_scenario(intake, forecast, valuation, assumption_status):
     }
 
 
+def _holding_production_blockers(intake, detail, components):
+    """What keeps a holding SOTP from Production-Ready (plan D7): each listed
+    stake at a dated close no older than the market-close window and its book
+    equity at the parent's balance date, a complete landbank RNAV when land is
+    held, the house policy in effect and this run's independent reference."""
+    out = []
+    report_day = _date((intake or {}).get("as_of"))
+    balance_day = detail.get("balance_period")
+    from . import release_policy
+    window = release_policy.policy_snapshot()["freshness"]["market_close"]["max_age_days"]
+    for c in components:
+        market_day = _date(c.get("market_date"))
+        if not market_day:
+            out.append(f"{c.get('ticker')} market value is not a dated close")
+        elif report_day and ((report_day - market_day).days > window or market_day > report_day):
+            out.append(f"{c.get('ticker')} close {c['market_date']} is outside the "
+                       f"{window}-day window of the Report Date")
+        if not c.get("book_date") or (balance_day and str(c["book_date"]) != str(balance_day)):
+            out.append(f"{c.get('ticker')} book equity is not dated at the parent balance date "
+                       f"({balance_day})")
+    if ((intake or {}).get("official_evidence") or {}).get("landbank") and not detail.get("landbank"):
+        out.append("landbank RNAV inputs are incomplete")
+    out.extend(house_assumptions.production_readiness_blockers(
+        (intake or {}).get("as_of"), detail.get("terminal_economics"),
+        detail.get("reference_validation")))
+    return out
+
+
 def assess_holding_sotp(intake, forecast, valuation, assumption_status):
     """Holding SOTP as the primary for a group with dissimilar lines (Method Gate 0).
 
@@ -794,8 +822,11 @@ def assess_holding_sotp(intake, forecast, valuation, assumption_status):
     for c in components:
         if not _text(c.get("stake_source")) or not _text(c.get("market_source")):
             blockers.append(f"holding SOTP component {c.get('ticker', '?')} lacks a source")
+    production = _holding_production_blockers(intake, detail, components)
     return {
-        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "status": ("draft_non_distributable" if blockers else
+                   "distributable_assumption_led" if production else "distributable"),
+        "production_blockers": production,
         "method": "Holding SOTP (listed stakes at market, rest at book)",
         "blockers": blockers,
         "limitations": [("tanah untuk pengembangan dinilai dengan RNAV landbank; porsi dapat "
@@ -805,7 +836,10 @@ def assess_holding_sotp(intake, forecast, valuation, assumption_status):
                         "segmen tanpa harga pasar dinilai pada nilai buku (lahan industri pada "
                         "biaya perolehan)",
                         "diskon holding 20-30% adalah asumsi analis untuk sensitivitas",
-                        "DCF konsolidasi atas skenario analis hanya referensi"],
+                        "DCF konsolidasi atas skenario analis hanya referensi",
+                        ("proyeksi laba FY26F-FY30F adalah skenario analis tanpa model "
+                         "operasional bersumber; nilai SOTP pada tanggal laporan tidak "
+                         "bergantung padanya")],
     }
 
 
