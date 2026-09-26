@@ -863,6 +863,10 @@ def approve(folder, ticker, reviewer, note="", edits=None, *, db=None, want_pdf=
     trace = dict(trace or {})
     trace["assumption_review"] = rec
     outputs.save(outputs.TRACE, folder, t, trace, db)
+    if _is_publishable(doc):
+        # Plan §8: prospective evaluation starts with the approved, frozen forecast.
+        from . import forecast_ledger
+        rec["forecast_frozen"] = forecast_ledger.freeze(folder, t, db)
     return rec
 
 
