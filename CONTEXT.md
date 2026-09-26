@@ -67,6 +67,10 @@ _Avoid_: defaults (unqualified), house view
 The per-run check that a perpetuity agrees with its own growth, reinvestment, returns on new capital (FCFF) or retention and ROE (bank), in the cash-flow currency.
 _Avoid_: terminal sanity check
 
+**Operating Model**:
+The sourced per-issuer driver file projected from segment volume and price through costs, capex, working capital and debt to FCFF and three reconciled statements; the only going-concern forecast that can be Production-Ready.
+_Avoid_: driver scenario (for the agent's H2 and out-year assumptions), full model
+
 **Core Earnings**:
 First-forecast-year parent earnings after the reviewed normalization bridge; P/E and P/B-ROE value them, while the income statement stays as reported.
 _Avoid_: adjusted profit, recurring profit (undefined)
