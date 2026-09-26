@@ -49,6 +49,13 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         # evidence snapshot. Add their rows without re-reading mutable sources.
         pre_agent_register = evidence_mod.add_plan(pre_agent_register, assumption_plan)
     doc_in["evidence_register"] = pre_agent_register
+    # Plan §4.4: the reviewed normalization bridge and share basis, before the
+    # forecast so FY1 normalized earnings can reach the forecast and valuation.
+    doc_in["earnings_quality"] = earnings_quality.assess(
+        doc_in.get("official_evidence"), pre_agent_register,
+        doc_in.get("as_of") or as_of, model_shares=doc_in.get("shares"),
+        price=doc_in.get("price"),
+        fiscal_year=(doc_in.get("annuals") or [{}])[-1].get("year", 0) + 1)
     fc = forecast.build(doc_in, assumption_plan=assumption_plan)
     # --method <key>: analis override; sistem tetap simpan proposed order.
     # "auto" berarti tanpa override. Nilai diteruskan ke valuation.
@@ -72,11 +79,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # Materiality bases (release policy 1.2.0): what the publication monitor
     # compares between a published report and its rebuilt replacement.
     doc["model_summary"] = publication_monitor.summarize_model(fc, va)
-    # Plan §4.4: the reviewed normalization bridge and corporate-action share
-    # basis, recorded for review; they do not change the forecast or release.
-    doc["earnings_quality"] = earnings_quality.assess(
-        doc_in.get("official_evidence"), pre_agent_register,
-        doc_in.get("as_of") or as_of, model_shares=doc_in.get("shares"))
+    doc["earnings_quality"] = doc_in["earnings_quality"]
     doc["evidence_register"] = pre_agent_register
     if doc["evidence_register"].get("error"):
         print(f"  evidence_register gagal: {doc['evidence_register']['error']}", flush=True)

@@ -150,7 +150,11 @@ def _earnings_candidate(intake, fc, assumption_status):
               "year": scenario.get("year"),
               "attributable_basis": scenario.get("attributable_basis")}
     eps = None
-    net = (scenario.get("full_year") or {}).get("net_profit_attributable")
+    full = scenario.get("full_year") or {}
+    # P/E applies to core earnings: the reviewed normalized FY1 when assessed.
+    net = full.get("normalized_net_profit_attributable", full.get("net_profit_attributable"))
+    detail["earnings_basis"] = ("normalized" if "normalized_net_profit_attributable" in full
+                                else "reported")
     if isinstance(net, (int, float)) and isinstance(shares, (int, float)) and shares > 0 \
             and isinstance(fx, (int, float)) and fx > 0:
         eps = net * fx / shares
@@ -194,11 +198,15 @@ def _pbv_roe_fy_candidate(intake, fc, assumption_status, coe, g):
         last = next((a for a in reversed(intake.get("annuals") or []) if a.get("equity")), None)
         if last:
             equity, equity_source = last["equity"], f"Sectors FY{last.get('year')}"
-    net = (scenario.get("full_year") or {}).get("net_profit_attributable")
+    full = scenario.get("full_year") or {}
+    # Sustainable ROE: the reviewed normalized FY1 parent earnings when assessed.
+    net = full.get("normalized_net_profit_attributable", full.get("net_profit_attributable"))
     net = net * fx if isinstance(net, (int, float)) and fx else None
     roe = net / equity if net is not None and equity else None
     detail = {"shares": shares, "equity": equity, "equity_source": equity_source,
               "coe": coe, "g": g, "roe": roe, "year": scenario.get("year"),
+              "earnings_basis": ("normalized" if "normalized_net_profit_attributable" in full
+                                 else "reported"),
               "bvps": equity / shares if equity and shares else None}
     ps = down = None
     if roe is not None and detail["bvps"] and coe > g and roe > g:

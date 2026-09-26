@@ -3,6 +3,7 @@ from . import bank_model
 from . import fmt
 from . import scrub
 from . import rnav
+from . import period_basis
 from . import scenario_value
 
 
@@ -162,6 +163,44 @@ def _bank_scenario(intake, plan):
                    "unit": actual.get("unit"), "source_url": scenario.get("source_url"),
                    "rows": rows, "status": "validated_bank_driver_scenario"}
     return earnings, forward, model
+
+
+def _normalization(intake, scenario):
+    """FY1 normalized parent earnings from the reviewed ledger (plan §4.4).
+
+    The first forecast year is the official 1H actual plus a modelled H2 that
+    carries no one-off items, so the 1H bridge effect is the FY1 effect. The
+    effect is taken only when the ledger is assessed, covers that fiscal year,
+    and is in the scenario's currency at full units; otherwise the reason is
+    recorded and reported earnings stand.
+    """
+    if not scenario:
+        return None
+    quality = (intake.get("earnings_quality") or {}).get("normalization") or {}
+    currency = (intake.get("official_evidence") or {}).get("reporting_currency")
+    fy1 = quality.get("fy1")
+    if quality.get("status") != "assessed" or not fy1:
+        return {"status": quality.get("status") or "not_assessed",
+                "reason": quality.get("reason") or quality.get("assessment_note") or
+                "; ".join(quality.get("blockers") or []) or "normalization not assessed",
+                "note": quality.get("assessment_note")}
+    if (period_basis.parse(fy1["period"]) or {}).get("fiscal_year") != scenario["year"] or \
+            str(fy1.get("currency")).upper() != str(currency).upper() or fy1.get("unit") != "unit":
+        return {"status": "incomplete",
+                "reason": f"normalized period {fy1['period']} ({fy1.get('currency')} "
+                          f"{fy1.get('unit')}) does not match FY{scenario['year']} "
+                          f"{currency} full units"}
+    full = scenario["full_year"]
+    reported = full.get("net_profit_attributable")
+    if not isinstance(reported, (int, float)):
+        return {"status": "incomplete", "reason": "FY1 parent earnings are not modelled"}
+    return {"status": "assessed", "period": fy1["period"], "effect": fy1["effect"],
+            "reported_attributable": reported,
+            "normalized_attributable": reported + fy1["effect"],
+            "adjustments": [{"adjustment_id": a["adjustment_id"],
+                             "description": a.get("description"),
+                             "effect": float(a["normalized_attributable_effect"])}
+                            for a in fy1.get("adjustments") or []]}
 
 
 def _outyear_scenario(interim, plan):
@@ -420,6 +459,12 @@ def build(intake, n_years=5, assumption_plan=None):
         earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
         outyear_scenario = _outyear_scenario(
             interim_scenario if is_mining else earnings_scenario, normalized_plan)
+    normalization = _normalization(intake, earnings_scenario)
+    if earnings_scenario and normalization:
+        earnings_scenario["normalization"] = normalization
+        if normalization["status"] == "assessed":
+            earnings_scenario["full_year"]["normalized_net_profit_attributable"] = \
+                normalization["normalized_attributable"]
     return {"rows": rows, "assumptions": assumptions, "s2": s2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
