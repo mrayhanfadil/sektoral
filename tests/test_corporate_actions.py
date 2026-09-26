@@ -139,3 +139,21 @@ def test_financing_effects_carry_cash_and_debt_with_the_dilution():
     assert effects["net_cash"] == 25 * 600 - 4_000
     assert effects["net_debt_change"] == -9_000
     assert {r["action_id"] for r in effects["rows"]} == {"rights-2026", "bb", "cb"}
+
+
+def test_an_aggregate_buyback_may_omit_its_undisclosed_cash():
+    aggregate = {"action_id": "bb-q3", "kind": "buyback", "shares": 13, "timing": "aggregate",
+                 "status": "completed", "announced_at": "2026-06-01",
+                 "effective_date": "2026-09-24", **SRC}
+    assert C.validate([aggregate]) == []
+    assert C.validate([{**aggregate, "timing": None}])  # a dated buyback needs its cash
+    assert C.shares_on(1000, "2026-06-30", [aggregate], "2026-09-26", "2026-09-26") == 987
+    effects = C.financing_effects([aggregate], "2026-01-01", "2026-12-31", "2026-09-26")
+    assert effects["rows"] == [] and effects["undisclosed_cash"] == ["bb-q3"]
+
+
+def test_a_rights_tail_after_the_ex_date_carries_no_bonus_restatement():
+    tail = _rights(bonus_restated=False, effective_date="2026-06-15")
+    result = C.weighted_average_shares(100, "2025-12-31", "2026-01-01", "2026-12-31",
+                                       [tail], "2027-03-31")
+    assert result["weighted_average_shares"] == pytest.approx((100 * 165 + 125 * 200) / 365)
