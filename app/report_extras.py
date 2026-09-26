@@ -35,7 +35,8 @@ COMMODITY_UNITS = {"Copper": ("Tembaga", "USD/ton"), "Gold": ("Emas", "USD/oz"),
 # Page order from spec §5.4, matched on page title prefixes.
 PAGE_ORDER = ("Tesis investasi", "Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
               "Skenario operasi", "Skenario laba", "Berita", "Sensitivitas", "Katalis",
-              "Konteks historis", "Target harga", "Cross-check", "Skenario nilai",
+              "Kualitas bisnis", "Konteks historis", "Target harga", "Driver dan skenario",
+              "Cross-check", "Skenario nilai",
               "Perbandingan peer", "Valuasi", "Data keuangan", "Lampiran valuasi")
 
 
@@ -3114,6 +3115,97 @@ def attach_risks(doc, intake, page):
         paragraphs[-1]["isi"] = paragraphs[-1]["isi"].rstrip() + f" Risiko utama: {joined}."
 
 
+def _rp(value):
+    return "n.m." if value is None else f"Rp{fmt._id(value, 0)}"
+
+
+def _signed_rp(value):
+    return "n.m." if value is None else ("+" if value >= 0 else "-") + f"Rp{fmt._id(abs(value), 0)}"
+
+
+def driver_value_page(doc, intake):
+    """Plan §6: each material driver's range and effect, and the same-model cases."""
+    dv = doc.get("driver_value") or {}
+    if not dv.get("rows"):
+        return None
+    price = intake.get("price")
+    # A model without an annual parent profit (the LoM) drops the profit columns
+    # rather than printing n.m. in every cell.
+    with_profit = any(r["fy1_profit_low"] is not None for r in dv["rows"])
+    rows = []
+    for r in dv["rows"]:
+        profit = ([f"{fmt._id(r['fy1_profit_low'] / 1e9, 1)} / {fmt._id(r['fy1_profit_high'] / 1e9, 1)}"]
+                  if with_profit else [])
+        rows.append([r["driver"], r["basis"], r["years"], r["base"], r["unit"], *profit,
+                     f"{_signed_rp(r['value_effect_low'])} / {_signed_rp(r['value_effect_high'])}"])
+    drivers = _exhibit("Driver material dan dampaknya ke nilai",
+                       ["Driver", "Dasar", "Tahun", "Nilai dasar", "Rentang uji"]
+                       + (["Δ laba induk FY1 (Rp miliar) turun / naik"] if with_profit else [])
+                       + ["Δ nilai per saham turun / naik"],
+                       rows, "Sumber: berkas driver bersumber dan model yang sama; " + dv["method"] + ".")
+    cases = dv["cases"]
+    case_rows = []
+    for key, label, text in (("downside", "Turun", "semua driver pada ujung merugikan rentang uji"),
+                             ("base", "Dasar", "driver dasar"),
+                             ("upside", "Naik", "semua driver pada ujung menguntungkan rentang uji")):
+        c = cases[key]
+        vs = f"{(c['per_share'] / price - 1) * 100:+.1f}%" if price else "-"
+        profit = [fmt._id(c["fy1_profit"] / 1e9, 1)] if with_profit else []
+        case_rows.append([label, _rp(c["per_share"]), vs, *profit, text])
+    scenario = _exhibit("Kasus dasar, turun dan naik dari model yang sama",
+                        ["Kasus", "Nilai per saham", "Terhadap harga"]
+                        + (["Laba induk FY1 (Rp miliar)"] if with_profit else [])
+                        + ["Perubahan driver"], case_rows,
+                        "Sumber: model yang sama dengan target; rentang uji bukan probabilitas.")
+    return _page("Driver dan skenario nilai",
+                 ["Setiap driver material digeser dalam rentang uji dan dinilai ulang dengan "
+                  "kalkulasi referensi independen; kasus turun dan naik menggeser semua driver "
+                  "bersamaan. Tidak ada probabilitas yang diberikan pada kasus."],
+                 [drivers, scenario])
+
+
+def investability_page(doc, intake):
+    """Plan §6.1: business quality and the liquidity limits of using this research."""
+    inv = doc.get("investability") or {}
+    if not inv:
+        return None
+    liq, ff = inv.get("liquidity") or {}, inv.get("free_float") or {}
+    rows = []
+    if liq.get("status") == "available":
+        rows.append(["Jendela observasi", f"{liq['sessions']} sesi, {liq['start']} s.d. {liq['end']} ({liq['source']})"])
+        rows.append(["Nilai transaksi harian median / rata-rata",
+                     f"Rp{fmt._id(liq['median_value'] / 1e9, 1)} miliar / Rp{fmt._id(liq['mean_value'] / 1e9, 1)} miliar"])
+        rows.append(["Sesi tanpa volume", str(liq["zero_volume_sessions"])])
+    else:
+        rows.append(["Likuiditas", f"tidak tersedia: {liq.get('reason')}"])
+    rows.append(["Free float", (f"{fmt._id(ff['pct'], 1)}% ({ff['source']})"
+                                + (f"; nilai Rp{fmt._id(ff['value'] / 1e9, 0)} miliar" if ff.get("value") else ""))
+                 if ff.get("status") == "available" else f"tidak tersedia: {ff.get('reason')}"])
+    rows.append(["Papan pencatatan", f"{inv.get('board')} ({inv.get('board_source')})" if inv.get("board")
+                 else "tidak tersedia"])
+    rows.append(["Status perdagangan", f"tidak tersedia: {inv['trading_status']['reason']}"])
+    for pos in liq.get("positions") or []:
+        rows.append([f"Ilustrasi posisi Rp{fmt._id(pos['position'] / 1e9, 0)} miliar",
+                     f"sekitar {fmt._id(pos['days'], 1)} hari bursa pada partisipasi "
+                     f"{fmt._id(pos['participation'] * 100, 0)}% nilai transaksi median"])
+    liquidity = _exhibit("Likuiditas dan investabilitas", ["Ukuran", "Nilai"], rows,
+                         "Ilustrasi posisi memakai ukuran posisi dan tingkat partisipasi yang "
+                         "dinyatakan; tidak berarti order dapat dieksekusi pada harga kutipan.")
+    bq_rows = []
+    for item in inv.get("business_quality") or []:
+        sources = "; ".join(f"{e['title']} ({e['published_at']}, {e.get('page') or '-'})"
+                            for e in item["evidence"]) or "-"
+        bq_rows.append([item["label"], item["assessment"], item.get("model_effect") or "-", sources])
+    quality = _exhibit("Kualitas bisnis", ["Dimensi", "Penilaian", "Dampak ke model", "Sumber"],
+                       bq_rows, "Setiap dimensi memakai bukti bertanggal; dimensi tanpa bukti "
+                       "tidak dijawab. Risiko yang sudah ada di arus kas tidak didiskon lagi.")
+    return _page("Kualitas bisnis dan investabilitas",
+                 ["Kualitas bisnis, batas likuiditas dan nilai model dipisahkan: yang pertama "
+                  "menjelaskan dasar driver, yang kedua membatasi penggunaan riset ini oleh "
+                  "investor institusi, dan tidak ada yang mengubah nilai di luar driver model."],
+                 [quality, liquidity])
+
+
 def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if not any(e.get("tipe") == "price_chart" for e in doc["exhibits"]):
         doc["exhibits"].insert(0, price_chart_exhibit(intake))
@@ -3140,7 +3232,8 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
 
     new_pages = [industry_page(intake), combo_charts_page(intake, fc, va, statements),
                  sensitivity_page(valuation_inputs),
-                 peer_page(intake, valuation_inputs)]
+                 peer_page(intake, valuation_inputs),
+                 driver_value_page(doc, intake), investability_page(doc, intake)]
     catalyst = next((e for p in pages for e in p["exhibit"]
                      if e["judul"] == "Katalis, risiko, dan indikator pemantauan"), None)
     owner_exhibits, owner_paragraphs = ownership_exhibits(intake)
