@@ -8,6 +8,8 @@ from . import model_profiles
 from . import rnav
 from . import scenario_value
 from . import share_basis
+from . import rate_benchmarks
+from . import terminal_economics
 from . import landbank as landbank_mod
 from . import lom as lom_mod
 from . import release
@@ -245,8 +247,17 @@ def _ddm_scenario_candidate(intake, fc, assumption_status, coe, g):
     if not fc.get("earnings_scenario"):
         return None
     detail, reasons = scenario_value.ddm(intake, fc, coe, g)
+    if detail:
+        detail["terminal_economics"] = terminal_economics.ddm(
+            detail, (fc.get("bank_model") or {}).get("rows"), rate_benchmarks.load(),
+            intake.get("as_of"), scenario_value.model_currency(intake),
+            scenario_value.model_currency(intake),
+            rf=house_assumptions.discount_inputs("IDR")["risk_free"])
     gate = (release.assess_ddm_scenario(intake, fc, {"detail": detail}, assumption_status)
             if detail else _NO_GATE)
+    if detail:
+        gate = {**gate, "limitations": list(gate.get("limitations") or [])
+                + _terminal_labels(detail["terminal_economics"])}
     if detail:
         reasons = reasons + method_chain.scale_reasons(
             detail["per_share"], detail["shares"], intake["price"] * detail["shares"])
@@ -257,6 +268,34 @@ def _ddm_scenario_candidate(intake, fc, assumption_status, coe, g):
         "+ terminal Gordon (CoE, bukan WACC)")
 
 
+def _invested_capital(intake, detail):
+    """Book equity + debt - cash in the DCF's model currency, or None.
+
+    Cash and debt are the DCF bridge's own; equity is the official balance
+    sheet's (total, else parent plus minorities), else Sectors for a rupiah
+    model. An approximation of opening invested capital for the explicit ROIC.
+    """
+    view = detail.get("native") or detail
+    cash, debt = view.get("cash"), view.get("debt")
+    balance = (intake.get("official_evidence") or {}).get("balance_sheet") or {}
+    equity = balance.get("total_equity")
+    if equity is None and balance.get("equity_attributable") is not None:
+        equity = balance["equity_attributable"] + (balance.get("non_controlling_interest") or 0)
+    if equity is None and detail.get("currency") != "USD":
+        equity = next((a.get("equity") for a in reversed(intake.get("annuals") or [])
+                       if a.get("equity") is not None), None)
+    if any(not isinstance(v, (int, float)) for v in (cash, debt, equity)):
+        return None
+    return equity + debt - cash
+
+
+def _terminal_labels(record):
+    if record.get("status") != "inconsistent":
+        return []
+    return [f"{b}; nilai terminal diberi label sampai konsistensinya ditinjau"
+            for b in record["blockers"]]
+
+
 def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wacc_bps):
     """Going-concern primary: FCFF DCF on the validated FY path, discounted in
     the model currency (a US$ reporter at a US$ rate, spec §2 and §4.2)."""
@@ -265,8 +304,15 @@ def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wa
     rates, gaps = scenario_value.discount_rates(intake, rf, g)
     detail, reasons = ((None, gaps) if gaps else
                        scenario_value.fcff(intake, fc, rf, erp, beta, g, wacc_bps, rates=rates))
+    if detail:
+        detail["terminal_economics"] = terminal_economics.fcff(
+            detail, _invested_capital(intake, detail), rate_benchmarks.load(),
+            intake.get("as_of"), scenario_value.model_currency(intake))
     gate = (release.assess_fcff_scenario(intake, fc, {"detail": detail}, assumption_status)
             if detail else _NO_GATE)
+    if detail:
+        gate = {**gate, "limitations": list(gate.get("limitations") or [])
+                + _terminal_labels(detail["terminal_economics"])}
     if detail:
         reasons = reasons + method_chain.scale_reasons(
             detail["per_share"], detail["shares"], intake["price"] * detail["shares"])
