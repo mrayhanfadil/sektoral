@@ -3,6 +3,7 @@ from . import bank_model
 from . import fmt
 from . import scrub
 from . import rnav
+from . import operating_model
 from . import period_basis
 from . import scenario_value
 
@@ -163,6 +164,58 @@ def _bank_scenario(intake, plan):
                    "unit": actual.get("unit"), "source_url": scenario.get("source_url"),
                    "rows": rows, "status": "validated_bank_driver_scenario"}
     return earnings, forward, model
+
+
+def _operating_scenarios(intake, model, agent=None):
+    """(earnings_scenario, outyear_scenario) shaped from the operating model.
+
+    The first year is the official 1H actual plus the model's H2; the model's
+    H1 must equal the official actual (revenue and net profit) or it is not used.
+    """
+    actual = intake.get("latest_official_actual") or {}
+    metrics = actual.get("metrics") or {}
+    rows = model["rows"]
+    first, h2 = rows[0], rows[0]["h2"]
+    h1_revenue, h1_net = first["revenue"] - h2["revenue"], first["net"] - h2["net"]
+    for key, value in (("revenue", h1_revenue), ("net_profit", h1_net)):
+        if not isinstance(metrics.get(key), (int, float)) or abs(metrics[key] - value) > 1.0:
+            return None, None, f"model 1H {key} does not equal the official {actual.get('period')} actual"
+    share = 1.0 - 0.0
+    full = {"revenue": first["revenue"], "net_profit": first["net"],
+            "net_profit_attributable": first["net_attr"], "ebitda": first["ebitda"],
+            "capex": first["capex"]}
+    earnings = {"year": first["year"], "unit": actual.get("unit"),
+                "source_url": actual.get("source_url"), "published_at": actual.get("published_at"),
+                "rationale": "model operasional: volume x harga per segmen, biaya per unit dan tetap, "
+                             "penyusutan, capex, modal kerja dan utang (data/operating_drivers)",
+                # The agent's qualitative fields (risks, catalysts, sources) stay; the
+                # numeric first-year assumptions are the model's own.
+                "assumptions": {**((agent or {}).get("assumptions") or {}),
+                                "h2_revenue_to_h1": h2["revenue"] / h1_revenue,
+                                "h2_net_margin_pct": h2["net"] / h2["revenue"] * 100,
+                                "fy_ebitda_margin_pct": first["ebitda"] / first["revenue"] * 100,
+                                "fy_capex_to_revenue_pct": first["capex"] / first["revenue"] * 100},
+                "basis": "operating_driver_model",
+                "h1": {"revenue": h1_revenue, "net_profit": h1_net},
+                "h2": {"revenue": h2["revenue"], "net_profit": h2["net"]},
+                "full_year": full,
+                "attributable_share": first["net_attr"] / first["net"] if first["net"] else share,
+                "attributable_basis": "model operasional"}
+    out, previous = [], first
+    for row in rows[1:]:
+        out.append({"year": row["year"], "label": row["label"], "revenue": row["revenue"],
+                    "ebitda": row["ebitda"], "net_profit": row["net"],
+                    "net_profit_attributable": row["net_attr"], "capex": row["capex"],
+                    "revenue_growth_pct": (row["revenue"] / previous["revenue"] - 1) * 100,
+                    "ebitda_margin_pct": row["ebitda"] / row["revenue"] * 100,
+                    "net_income_margin_pct": row["net"] / row["revenue"] * 100,
+                    "capex_to_revenue_pct": row["capex"] / row["revenue"] * 100,
+                    "rationale": "model operasional", "source_ids": ["data/operating_drivers"]})
+        previous = row
+    outyear = {"anchor_year": first["year"], "anchor": full, "unit": actual.get("unit"),
+               "source_url": actual.get("source_url"), "rows": out,
+               "status": "operating_driver_model"}
+    return earnings, outyear, None
 
 
 def _normalization(intake, scenario):
@@ -459,6 +512,18 @@ def build(intake, n_years=5, assumption_plan=None):
         earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
         outyear_scenario = _outyear_scenario(
             interim_scenario if is_mining else earnings_scenario, normalized_plan)
+    operating = None
+    drivers = (operating_model.load(intake.get("ticker"), intake.get("as_of"))
+               if intake.get("ticker") and not is_mining and not is_ddm else None)
+    if drivers is not None:
+        operating = operating_model.project(drivers)
+        if operating_model.ok(operating):
+            earnings, outyear, problem = _operating_scenarios(intake, operating,
+                                                              earnings_scenario)
+            if problem:
+                operating["errors"] = [problem]
+            else:
+                earnings_scenario, outyear_scenario = earnings, outyear
     normalization = _normalization(intake, earnings_scenario)
     if earnings_scenario and normalization:
         earnings_scenario["normalization"] = normalization
@@ -471,6 +536,7 @@ def build(intake, n_years=5, assumption_plan=None):
             "earnings_scenario": earnings_scenario,
             "outyear_scenario": outyear_scenario,
             "bank_model": bank_fc if bank_earnings else None,
+            "operating_model": operating,
             "operating_bridge": operating_bridge,
             "driver_evidence": driver_evidence,
             "forecast_basis": forecast_basis,

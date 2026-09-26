@@ -80,7 +80,9 @@ def fcff(detail, invested_capital, benchmarks, as_of, cash_currency):
         return {"profile": "going_concern_fcff", "status": "not_assessed",
                 "reason": "DCF skenario tidak tersedia", "checks": [], "blockers": []}
     last = lines[-1]
-    nopat = last["nopat"] * (1 + g)
+    # An operating model's terminal line (contracts that end dropped) is the base.
+    base = view.get("terminal_line") or last
+    nopat = base["nopat"] * (1 + g)
     terminal_fcff = view["terminal_fcff"]
     reinvestment = nopat - terminal_fcff
     rate = reinvestment / nopat if nopat > 0 else None

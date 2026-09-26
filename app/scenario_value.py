@@ -650,19 +650,31 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=
     if reasons:
         return None, reasons
 
-    da_ratio, da_basis = da_intensity(intake)
-    if da_ratio is None:
-        return None, [da_basis]
-    tax, tax_basis = tax_rate(intake)
-    nwc_ratio, nwc_basis = nwc_intensity(intake)
     anchor = fc["earnings_scenario"]
-    h2_share = (anchor["h2"]["revenue"] / anchor["full_year"]["revenue"]
-                if anchor["full_year"].get("revenue") else 0.5)
-    # The scenario is in the reporting currency, which is the model currency.
-    prior = prior_revenue(intake, rows[0]["year"] - 1)
-
-    lines, previous = [], prior
-    for row in rows:
+    model = operating_lines(fc)
+    if model:
+        # The operating model's own FCFF (plan §5.1): the DCF values these lines.
+        lines, tax, terminal_line, h2_share = model
+        da_ratio = sum(l["da"] for l in lines) / sum(l["revenue"] for l in lines)
+        da_basis = "model operasional (penyusutan atas aset tetap neto awal)"
+        tax_basis = "model operasional"
+        nwc_ratio, nwc_basis = None, "model operasional (hari piutang, persediaan, utang usaha)"
+        prior = prior_revenue(intake, rows[0]["year"] - 1)
+    else:
+        terminal_line = None
+    if not model:
+        da_ratio, da_basis = da_intensity(intake)
+        if da_ratio is None:
+            return None, [da_basis]
+        tax, tax_basis = tax_rate(intake)
+        nwc_ratio, nwc_basis = nwc_intensity(intake)
+        h2_share = (anchor["h2"]["revenue"] / anchor["full_year"]["revenue"]
+                    if anchor["full_year"].get("revenue") else 0.5)
+        # The scenario is in the reporting currency, which is the model currency.
+        prior = prior_revenue(intake, rows[0]["year"] - 1)
+        lines = []
+    previous = prior
+    for row in ([] if model else rows):
         revenue, ebitda, capex = row["revenue"], row["ebitda"], row["capex"]
         da = revenue * da_ratio
         ebit = ebitda - da
@@ -698,7 +710,8 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=
     end_last = _years(date(rows[-1]["year"], 12, 31), when)
     # In perpetuity the asset base must be replaced: terminal capex is at
     # least D&A, so a last-year capex below depreciation is not capitalised.
-    last = lines[-1]
+    # An operating model's terminal line drops contracts that end.
+    last = terminal_line or lines[-1]
     terminal_capex = max(last["capex"], last["da"])
     terminal_base = last["fcff"] + last["capex"] - terminal_capex
 
@@ -760,7 +773,8 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=
               "ev": base["ev"], "equity": base["equity"], "per_share": base["per_share"],
               "ev_exit": base.get("ev_exit"), "tv_exit": base.get("tv_exit"),
               "pv_tv_exit": base.get("pv_tv_exit"), "equity_exit": base.get("equity_exit"),
-              "per_share_exit": base.get("per_share_exit"), "prior_revenue": prior}
+              "per_share_exit": base.get("per_share_exit"), "prior_revenue": prior,
+              "terminal_line": terminal_line}
     mirror = lambda v: v * to_idr if _num(v) is not None else v  # noqa: E731
     detail = {"basis": "scenario", "currency": currency,
               "lines": [{k: (mirror(v) if k in _LINE_MONEY else v) for k, v in line.items()}
@@ -772,6 +786,9 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=
               "kd_basis": rates.get("kd_basis"), "kd_effective": rates.get("kd_effective"),
               "weight_debt": weight_debt, "wacc_bps": wacc_bps, "g": g,
               "terminal_ronic": terminal_ronic,
+              "terminal_line": ({k: (mirror(v) if k in _LINE_MONEY else v)
+                                 for k, v in terminal_line.items()} if terminal_line else None),
+              "operating_model": bool(model),
               "implied_wacc": implied_wacc, "implied_coe": implied_coe,
               "tax_rate": tax, "tax_basis": tax_basis, "da_ratio": da_ratio,
               "da_basis": da_basis, "nwc_ratio": nwc_ratio, "nwc_basis": nwc_basis,
@@ -799,6 +816,31 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=
               "native": native if currency == "USD" else None}
     detail.update({k: mirror(native[k]) for k in _DETAIL_MONEY})
     return detail, []
+
+
+def operating_lines(fc):
+    """(lines, tax rate, terminal line, H2 share) from a reconciled operating model, or None."""
+    model = (fc or {}).get("operating_model")
+    anchor = (fc or {}).get("earnings_scenario") or {}
+    if not isinstance(model, dict) or model.get("status") != "projected" or model.get("errors") \
+            or anchor.get("basis") != "operating_driver_model" or \
+            not all(c["ok"] for c in model.get("checks") or []):
+        return None
+    tax = model["tax_rate"]
+    lines = []
+    for r in model["rows"]:
+        lines.append({"label": r["label"], "revenue": r["revenue"], "ebitda": r["ebitda"],
+                      "da": r["da"], "ebit": r["ebit"], "tax": max(r["ebit"], 0.0) * tax,
+                      "nopat": r["nopat"], "capex": r["capex"], "dnwc": r["dnwc"],
+                      "fcff": r["fcff"], "net_attr": r["net_attr"]})
+    t = model["terminal"]
+    terminal = {"label": f"terminal (dasar {t['year']})", "revenue": t["revenue"],
+                "ebitda": t["ebitda"], "da": t["da"], "ebit": t["ebit"],
+                "tax": max(t["ebit"], 0.0) * tax, "nopat": t["nopat"], "capex": t["capex"],
+                "dnwc": t["dnwc"], "fcff": t["fcff"], "net_attr": None}
+    first = model["rows"][0]
+    h2_share = first["h2"]["fcff"] / first["fcff"] if first["fcff"] else 0.5
+    return lines, tax, terminal, h2_share
 
 
 def native_view(detail):
