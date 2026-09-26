@@ -10,7 +10,7 @@
    "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
    "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
    "published_at": "2026-07-31",
-   "page": "PDF 5-6 (posisi keuangan), 7 (laba rugi), 10 (arus kas), 61 (Senior Notes 2035), 68 (Catatan 25-26), 69 (PJBL PLN 150 MW s.d. 31 Mei 2031)"
+   "page": "PDF 5-6 (posisi keuangan), 7 (laba rugi), 10 (arus kas), 61 (Senior Notes 2035), 68 (Catatan 25-26), 69 (PJBL PLN 150 MW s.d. 31 Mei 2031), 78 (risiko harga komoditas: formula tarif listrik yang disetujui Pemerintah meneruskan komponen bahan bakar ke pelanggan)"
   },
   "powr-1h26-presentation": {
    "title": "PT Cikarang Listrindo Tbk 1H26 Investor Presentation",
@@ -90,7 +90,7 @@
      0
     ],
     "kind": "analyst_assumption",
-    "rationale": "Tarif rata-rata terealisasi US$140/MWh (1H26) dipertahankan; tarif industri mengikuti tarif acuan PLN dalam rupiah, kurs dianggap tetap pada kurs spot laporan.",
+    "rationale": "Tarif rata-rata terealisasi US$140/MWh (1H26) dipertahankan. Formula tarif listrik yang disetujui Pemerintah meneruskan komponen bahan bakar ke pelanggan (laporan 1H26, PDF 78), sehingga tarif dan biaya bahan bakar per MWh ditahan bersama; kurs dianggap tetap pada kurs spot laporan.",
     "basis_refs": [
      "powr-1h26-fs",
      "powr-1h26-presentation"
@@ -166,7 +166,7 @@
      0
     ],
     "kind": "analyst_assumption",
-    "rationale": "Biaya bahan bakar per MWh terjual 1H26 (US$66,8/MWh, sama dengan 1H25 US$65,4/MWh) dipertahankan; lonjakan solar FY2025 akibat gangguan gas tidak diasumsikan berulang.",
+    "rationale": "Biaya bahan bakar per MWh terjual 1H26 (US$66,8/MWh, sama dengan 1H25 US$65,4/MWh) dipertahankan; lonjakan solar FY2025 akibat gangguan gas tidak diasumsikan berulang. Perubahan harga bahan bakar diteruskan ke tarif melalui formula tarif (laporan 1H26, PDF 78), sehingga pergeseran biaya dan tarif sebagian saling mengimbangi.",
     "basis_refs": [
      "powr-1h26-fs",
      "powr-ar2025"
