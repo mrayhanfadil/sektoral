@@ -351,6 +351,55 @@ def _trace_detail(va, keys, need):
     return None
 
 
+def _native(value, currency):
+    return (f"US${fmt._id(value / 1e6, 2)} juta" if currency == "USD"
+            else f"Rp{fmt._id(value / 1e9, 1)} miliar")
+
+
+def _earnings_quality_notes(intake, fc):
+    """Sentences for the reviewed normalization and share ledger (plan §4.4)."""
+    out = []
+    currency = (intake.get("official_evidence") or {}).get("reporting_currency")
+    scenario = (fc or {}).get("earnings_scenario") or {}
+    norm = scenario.get("normalization") or {}
+    label = _label(scenario["year"]) if scenario.get("year") else "FY1"
+    if norm.get("status") == "assessed" and norm.get("adjustments"):
+        items = "; ".join(f"{a['description']} {_native(a['effect'], currency)}"
+                          for a in norm["adjustments"])
+        out.append(
+            f"Laba inti {label}: {_native(norm['normalized_attributable'], currency)} "
+            f"(dilaporkan {_native(norm['reported_attributable'], currency)}); penyesuaian "
+            f"satu kali {norm['period']} setelah pajak dan kepentingan nonpengendali: {items}. "
+            "PER dan ROE valuasi memakai laba inti; laporan laba rugi tetap angka dilaporkan.")
+    elif norm.get("status") == "assessed":
+        out.append(f"Normalisasi laba {norm.get('period')}: tidak ada pos satu kali; laba inti "
+                   f"{label} sama dengan laba dilaporkan.")
+    elif norm:
+        why = norm.get("note") or ("ledger normalisasi laba yang ditinjau belum tersedia"
+                                   if norm.get("status") == "not_assessed"
+                                   else "ledger normalisasi laba belum lolos pemeriksaan")
+        out.append(f"Normalisasi laba {label} belum lengkap: {why.rstrip('.')}; PER dan ROE "
+                   "memakai laba dilaporkan.")
+    record = intake.get("share_basis") or {}
+    weighted = record.get("fy_weighted_average") or {}
+    if record.get("status") == "assessed" and weighted.get("shares"):
+        basis = ("dari aksi korporasi bertanggal" if weighted.get("h1_basis") ==
+                 "derived_from_dated_actions" else "memakai angka tertimbang 1H emiten")
+        out.append(
+            f"Jumlah saham tertimbang FY{weighted['year'] % 100:02d} (PSAK 56) "
+            f"{fmt._id(weighted['shares'] / 1e9, 2)} miliar lembar, {basis}; dicatat untuk "
+            "rekonsiliasi EPS tahunan emiten, sedangkan EPS model memakai jumlah saham pada "
+            "tanggal laporan.")
+    if weighted.get("h1_basis") == "derived_from_dated_actions" and weighted.get("issuer_reported"):
+        out.append(
+            f"Catatan register saham: rata-rata tertimbang {weighted['period']} yang dilaporkan "
+            f"emiten ({fmt._id(weighted['issuer_reported'] / 1e9, 2)} miliar lembar) tidak "
+            f"rekonsiliasi dengan register dan aksi korporasi bertanggal "
+            f"({fmt._id(weighted['derived'] / 1e9, 2)} miliar lembar); angka turunan dipakai "
+            "dan angka emiten ditandai untuk ditinjau.")
+    return out
+
+
 def _bridge(intake):
     try:
         return scenario_value.bridge(intake)
@@ -628,6 +677,7 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             f"Asumsi valuasi: jumlah saham {fmt._id(shares / 1e9, 2)} miliar lembar, sumber "
             f"{_source(shares_basis)}, flat; EPS memakai laba induk dan BVPS ekuitas induk atas "
             "jumlah saham yang sama dengan valuasi dan PER.")
+    assumptions.extend(_earnings_quality_notes(intake, fc))
     payout = _num((ddm or {}).get("payout"))
     payout_basis = (ddm or {}).get("payout_basis")
     if payout is None:
@@ -1194,6 +1244,7 @@ def _bank_model_rows(intake, fc, model, horizon):
         "yang sama dipakai Key Financials dan DDM."] + list(model.get("assumptions") or [])
     for text in (model.get("checks") or {}).get("warnings") or []:
         assumptions.append(f"Catatan model: {text}.")
+    assumptions.extend(_earnings_quality_notes(intake, fc))
     return {"rows": rows, "notes": _notes(rows, universe, reasons, None),
             "assumptions": assumptions, "basis": "skenario analis (model driver bank)",
             "mode": MODE_BANK_DRIVER, "base_year": model.get("base_year")}
