@@ -86,3 +86,56 @@ def test_invalid_ledger_or_share_base_fails_closed():
         C.shares_on(100, "2025-12-31", [{"action_id": "x"}], "2026-06-30", "2026-09-26")
     with pytest.raises(ValueError, match="positive"):
         C.shares_on(0, "2025-12-31", [], "2026-06-30", "2026-09-26")
+
+
+def test_weighted_average_restates_a_split_for_the_whole_period():
+    # 100 shares all year, split 1:5 on 1 April: 500 weighted for the full year.
+    result = C.weighted_average_shares(100, "2025-12-31", "2026-01-01", "2026-12-31",
+                                       [_split()], "2027-03-31")
+    assert result["weighted_average_shares"] == pytest.approx(500.0)
+    assert result["closing_shares"] == 500
+
+
+def test_weighted_average_counts_a_placement_from_its_effective_date():
+    placement = {"action_id": "pp", "kind": "private_placement", "new_shares": 50, "price": 800,
+                 "status": "completed", "announced_at": "2026-06-01",
+                 "effective_date": "2026-07-02", **SRC}
+    # 100 shares for 182 days (1 Jan - 1 Jul), 150 for 183 days.
+    result = C.weighted_average_shares(100, "2025-12-31", "2026-01-01", "2026-12-31",
+                                       [placement], "2027-03-31")
+    assert result["weighted_average_shares"] == pytest.approx((100 * 182 + 150 * 183) / 365)
+
+
+def test_rights_issue_adds_its_bonus_element_before_and_new_shares_after():
+    rights = _rights()  # bonus factor 1,000 / 920; 25 new shares from 15 June
+    result = C.weighted_average_shares(100, "2025-12-31", "2026-01-01", "2026-12-31",
+                                       [rights], "2027-03-31")
+    before_days, after_days = 165, 200  # 1 Jan - 14 Jun, 15 Jun - 31 Dec
+    expected = (100 * 1000 / 920 * before_days + 125 * after_days) / 365
+    assert result["weighted_average_shares"] == pytest.approx(expected)
+
+
+def test_diluted_eps_excludes_anti_dilutive_instruments():
+    warrants_in = {"kind": "warrant", "shares": 20, "exercise_price": 500}
+    warrants_out = {"kind": "warrant", "shares": 20, "exercise_price": 1500}
+    cheap_cb = {"kind": "convertible", "shares": 10, "interest_after_tax": 50}   # 5 per share
+    costly_cb = {"kind": "convertible", "shares": 10, "interest_after_tax": 400}  # 40 per share
+    result = C.diluted_eps(1000, 100, [warrants_in, warrants_out, cheap_cb, costly_cb],
+                           average_price=1000)
+    assert result["basic_eps"] == 10
+    # Warrants add 10 incremental shares; the cheap convertible dilutes further.
+    assert result["diluted_eps"] == pytest.approx((1000 + 50) / (100 + 10 + 10))
+    assert result["included"] == ["warrant", "convertible"]
+    assert result["anti_dilutive_excluded"] == ["convertible"]
+
+
+def test_financing_effects_carry_cash_and_debt_with_the_dilution():
+    buyback = {"action_id": "bb", "kind": "buyback", "shares": 5, "cash_paid": 4_000,
+               "status": "completed", "announced_at": "2026-02-01", "effective_date": "2026-03-01", **SRC}
+    cb = {"action_id": "cb", "kind": "conversion", "new_shares": 10, "debt_converted": 9_000,
+          "status": "completed", "announced_at": "2026-02-01", "effective_date": "2026-03-01", **SRC}
+    effects = C.financing_effects([_rights(), buyback, cb, _split()], "2026-01-01", "2026-12-31",
+                                  "2027-03-31")
+    assert effects["net_cash"] == 25 * 600 - 4_000
+    assert effects["net_debt_change"] == -9_000
+    assert {r["action_id"] for r in effects["rows"]} == {"rights-2026", "bb", "cb"}
