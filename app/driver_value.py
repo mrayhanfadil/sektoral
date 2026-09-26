@@ -57,14 +57,15 @@ def _operating_cases(drivers):
         up["segments"][i]["volume_growth_pct"] = _shift(rec, 1.0)
         cases.append((f"{seg['name']}: pertumbuhan volume", rec["kind"],
                       rec.get("basis_refs") or rec.get("source_refs"), span,
-                      "/".join(f"{v:g}" for v in rec["values"]) + "%", down, up, "±1 pp per tahun"))
+                      "/".join(f"{v:g}" for v in rec["values"]) + "%", down, up, "±1 pp per tahun",
+                      ("turun", "naik")))
         rec = seg["price_growth_pct"]
         down, up = copy.deepcopy(drivers), copy.deepcopy(drivers)
         down["segments"][i]["price_growth_pct"] = _shift(rec, -2.0, first_only=True)
         up["segments"][i]["price_growth_pct"] = _shift(rec, 2.0, first_only=True)
         cases.append((f"{seg['name']}: harga terealisasi", rec["kind"],
                       rec.get("basis_refs") or rec.get("source_refs"), f"FY{first % 100:02d}F dst.",
-                      "level 1H", down, up, "±2% level harga"))
+                      "level 1H", down, up, "±2% level harga", ("turun", "naik")))
     for i, item in enumerate(drivers.get("variable_costs") or []):
         rec = item["unit_cost_growth_pct"]
         down, up = copy.deepcopy(drivers), copy.deepcopy(drivers)
@@ -76,13 +77,13 @@ def _operating_cases(drivers):
         cases.append((f"{item['name']}: biaya per unit", rec["kind"],
                       rec.get("basis_refs") or rec.get("source_refs"), f"FY{first % 100:02d}F dst.",
                       "level 1H", down, up,
-                      "±2% level biaya" + (", diteruskan ke tarif" if linked else "")))
+                      "±2% level biaya" + (", diteruskan ke tarif" if linked else ""), ("naik", "turun")))
     rec = drivers["capex"]["sustaining_outyears"]
     down, up = copy.deepcopy(drivers), copy.deepcopy(drivers)
     down["capex"]["sustaining_outyears"]["values"] = [v * 1.1 for v in rec["values"]]
     up["capex"]["sustaining_outyears"]["values"] = [v * 0.9 for v in rec["values"]]
     cases.append(("Capex pemeliharaan", rec["kind"], rec.get("basis_refs") or rec.get("source_refs"),
-                  span, "dasar", down, up, "±10%"))
+                  span, "dasar", down, up, "±10%", ("naik", "turun")))
     return cases
 
 
@@ -120,11 +121,11 @@ def operating(drivers, detail):
     profit = lambda d: operating_model.project(d)["rows"][0]["net_attr"] * fx  # noqa: E731
     base_v, base_p = value(drivers), profit(drivers)
     rows, adverse, favourable = [], copy.deepcopy(drivers), copy.deepcopy(drivers)
-    for name, kind, refs, years, base, down, up, unit in _operating_cases(drivers):
-        rows.append(_row(name, KIND_LABEL.get(kind, kind), refs, years, base, "turun", "naik",
+    for name, kind, refs, years, base, down, up, unit, words in _operating_cases(drivers):
+        rows.append(_row(name, KIND_LABEL.get(kind, kind), refs, years, base, words[0], words[1],
                          value(down), value(up), base_v, profit(down), profit(up), base_p, unit))
     # Combined cases: every driver at its adverse / favourable end.
-    for name, kind, refs, years, base, down, up, unit in _operating_cases(drivers):
+    for name, kind, refs, years, base, down, up, unit, words in _operating_cases(drivers):
         _merge(adverse, down, drivers)
         _merge(favourable, up, drivers)
     return _result(rows, base_v, value(adverse), value(favourable),
@@ -180,7 +181,8 @@ def bank(data, detail, model):
                          sorted({r for row in data["drivers"] for r in row[key].get("source_refs") or []}),
                          f"FY{data['drivers'][0]['year'] % 100:02d}F-FY{data['drivers'][-1]['year'] % 100:02d}F",
                          "/".join(f"{row[key]['value']:g}" for row in data["drivers"]) + "%",
-                         "merugikan", "menguntungkan", low["per_share"], high["per_share"], base_v,
+                         "turun" if bad_sign < 0 else "naik", "naik" if bad_sign < 0 else "turun",
+                         low["per_share"], high["per_share"], base_v,
                          low["rows"][0]["parent"], high["rows"][0]["parent"], base_p, unit))
         for row_a, row_f in zip(adverse["drivers"], favourable["drivers"]):
             row_a[key]["value"] += bad_sign * step
@@ -197,18 +199,19 @@ def mining(inp, bridge, fx):
     cu, au = inp["cu_price"], inp["au_price"]
     cases = [
         ("Harga tembaga", "asumsi analis (dek 12 bulan)", "LoM", f"US${cu:,.0f}/t",
-         dict(deck=(cu * 0.9, au)), dict(deck=(cu * 1.1, au)), "±10%"),
+         dict(deck=(cu * 0.9, au)), dict(deck=(cu * 1.1, au)), "±10%", ("turun", "naik")),
         ("Harga emas", "asumsi analis (dek 12 bulan)", "LoM", f"US${au:,.0f}/oz",
-         dict(deck=(cu, au * 0.9)), dict(deck=(cu, au * 1.1)), "±10%"),
+         dict(deck=(cu, au * 0.9)), dict(deck=(cu, au * 1.1)), "±10%", ("turun", "naik")),
         ("Tingkat diskonto US$", "kebijakan rumah", "LoM", f"{inp['discount'] * 100:.1f}%",
-         dict(rate=inp["discount"] + 0.01), dict(rate=inp["discount"] - 0.01), "±1 pp"),
+         dict(rate=inp["discount"] + 0.01), dict(rate=inp["discount"] - 0.01), "±1 pp",
+         ("naik", "turun")),
         ("Probabilitas pengembangan Elang", "asumsi analis", "LoM",
          f"{inp['elang_risk'] * 100:.0f}%", dict(risk=max(inp["elang_risk"] - 0.25, 0.0)),
-         dict(risk=min(inp["elang_risk"] + 0.25, 1.0)), "±25 pp"),
+         dict(risk=min(inp["elang_risk"] + 0.25, 1.0)), "±25 pp", ("turun", "naik")),
     ]
     rows = []
-    for name, basis, years, base, down, up, unit in cases:
-        rows.append(_row(name, basis, [], years, base, "turun", "naik",
+    for name, basis, years, base, down, up, unit, words in cases:
+        rows.append(_row(name, basis, [], years, base, words[0], words[1],
                          reference_lom.value(inp, bridge, fx, **down)["per_share"],
                          reference_lom.value(inp, bridge, fx, **up)["per_share"], base_v, unit=unit))
     adverse = reference_lom.value(inp, bridge, fx, deck=(cu * 0.9, au * 0.9),
@@ -231,8 +234,21 @@ def _result(rows, base_v, down_v, up_v, base_p=None, down_p=None, up_p=None):
                       "tanpa probabilitas"}
 
 
+def _link_register(result, register):
+    """Each row's Evidence Register row IDs for its source keys (plan §6 exit)."""
+    from . import evidence
+    ids = evidence.row_ids_by_name(register, "driver_source")
+    for row in (result or {}).get("rows") or []:
+        row["evidence_row_ids"] = [ids[k] for k in row.get("source_refs") or [] if k in ids]
+    return result
+
+
 def assess(intake, fc, va):
-    """Driver table for the selected Production-Ready model, or None."""
+    """Driver table for the selected Production-Ready model, or None (register-linked)."""
+    return _link_register(_assess(intake, fc, va), (intake or {}).get("evidence_register"))
+
+
+def _assess(intake, fc, va):
     chain = (va or {}).get("method_chain") or {}
     selected = chain.get("selected")
     detail = next((t.get("detail") for t in chain.get("trace") or [] if t.get("key") == selected),

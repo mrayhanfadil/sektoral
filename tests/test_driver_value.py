@@ -61,3 +61,17 @@ def test_business_quality_answers_only_dated_evidence(tmp_path):
     # Evidence published after the Report Date does not answer the dimension.
     later = INV.business_quality("XXXX", "2026-07-01", root=tmp_path)
     assert all(i["status"] == "unanswered" for i in later)
+
+
+def test_decision_summary_reads_the_price_and_the_rating_band_from_the_tested_range():
+    from app import decision_summary as S
+    row = {"driver": "Volume", "unit": "±1 pp per tahun", "low": "turun", "high": "naik",
+           "value_effect_low": -100.0, "value_effect_high": 100.0}
+    fraction, word = S._move_to(row, 700.0, 1000.0)
+    assert (fraction, word) == (3.0, "turun")
+    assert S._step_text(row, (fraction, word)) == "Volume turun 3,0 pp per tahun"
+    cost = {**row, "driver": "Biaya", "unit": "±2% level biaya", "low": "naik", "high": "turun"}
+    assert S._step_text(cost, S._move_to(cost, 800.0, 1000.0)) == "Biaya naik 4,0% level biaya"
+    # 9M26 is the next filing once 1H26 is out; its OJK deadline is a month after quarter end.
+    assert S.next_filing("2026-09-26", "2026-06-30") == {
+        "label": "9M26", "period_end": "2026-09-30", "deadline": "2026-10-31"}

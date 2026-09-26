@@ -168,6 +168,27 @@ def filing_rows(evidence):
     return out
 
 
+def driver_source_rows(ticker, as_of):
+    """Sources of the ticker's operating or bank driver file known by ``as_of``.
+
+    Each becomes a ``driver_source`` row named by its key, so every driver in
+    the driver-to-value table resolves to a register row.
+    """
+    from . import bank_drivers, operating_model
+    out = []
+    for loader in (operating_model.load, bank_drivers.load):
+        try:
+            data = loader(ticker, as_of) if ticker and as_of else None
+        except (OSError, ValueError):
+            data = None
+        for key, source in sorted(((data or {}).get("sources") or {}).items()):
+            out.append({"kind": "driver_source", "use": "source of a forward driver",
+                        "name": key, "published_at": source.get("published_at"),
+                        "source": source.get("url"), "source_title": source.get("title"),
+                        "page": source.get("page")})
+    return out
+
+
 def row_ids_by_name(register, kind="official_filing"):
     """``{name: row_id}`` for one row kind of a register with row IDs."""
     return {row["name"]: row["row_id"] for row in (register or {}).get("rows") or []
@@ -260,6 +281,7 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
     # rather than list it as a violation (point-in-time, like the pack loader).
     rows.extend(row for row in filing_rows(evidence)
                 if cutoff is None or (_day(row.get("published_at")) or cutoff) <= cutoff)
+    rows.extend(driver_source_rows(ticker, cutoff.isoformat() if cutoff else None))
     rows.extend(guidance_rows(evidence))
     rows.extend(news_rows(articles, news_full))
     rows.extend(assumption_rows(plan))
@@ -273,7 +295,8 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
     for row in rows:
         kind = row.get("kind")
         pub = row.get("published_at")
-        date_required = kind in {"official_actual", "official_filing", "company_guidance",
+        date_required = kind in {"official_actual", "official_filing", "driver_source",
+                                 "company_guidance",
                                  "sectors_article", "tavily_article"}
         if pub in (None, ""):
             if date_required:
@@ -286,7 +309,7 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
                 violations.append(
                     f"{kind}: {pub} after as-of {cutoff.isoformat()}")
 
-        if kind in {"official_actual", "official_filing", "company_guidance",
+        if kind in {"official_actual", "official_filing", "driver_source", "company_guidance",
                     "sectors_article", "tavily_article"}:
             source = row.get("source") or row.get("url")
             if not _has_http_source(source):

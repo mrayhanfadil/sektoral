@@ -3262,10 +3262,28 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     slim_mining(doc, intake)
+    attach_decision_summary(doc, intake, fc, va)
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2
     renumber(doc)
     return doc
+
+
+def attach_decision_summary(doc, intake, fc, va):
+    """Plan §6: the six decision questions at the top of the thesis page."""
+    if not va or not (doc.get("driver_value") or {}).get("rows"):
+        return
+    from . import decision_summary
+    rows = decision_summary.build(doc, intake, fc, va)
+    # The thesis page, else the first content page (the mining layout has none).
+    page = next((p for p in doc["bagian"] if p["judul"].startswith("Tesis investasi")),
+                (doc["bagian"] or [None])[0])
+    if not rows or page is None:
+        return
+    page["exhibit"].insert(0, _exhibit(
+        "Ringkasan keputusan", ["Pertanyaan", "Jawaban dari model"], rows,
+        "Sumber: model, rentang uji driver dan kalender pelaporan OJK (POJK 14/2022); "
+        "pembacaan harga dan ambang rating bersifat linear dari rentang uji, bukan probabilitas."))
 
 
 RATE_EXHIBITS = ("Komponen WACC", "Komponen Cost of Equity")
