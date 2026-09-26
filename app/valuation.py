@@ -985,6 +985,22 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # same schedule, not from a separate earnings scenario.
         lom_res = chain_candidate_detail(candidates, "sotp_lom").get("lom")
         interim = fc.get("interim_scenario") or {}
+        h2 = lom_mod.h2_row(intake, lom_res) if lom_res and interim.get("h1") else None
+        if h2:
+            # The interim year too: official 1H plus the LoM's 2H, so FY26F and
+            # the out-years come from the one schedule the target values.
+            full = {k: interim["h1"][k] + h2[k] for k in h2}
+            fc["interim_scenario"] = interim = {
+                **interim, "h2": h2, "full_year": full, "basis": "lom_schedule",
+                "agent_h2": interim.get("h2"), "agent_full_year": interim.get("full_year"),
+                "rationale": ("Aktual 1H resmi ditambah 2H dari jadwal LoM yang dinilai "
+                              "(umpan, katoda dan emas murni sesuai panduan FY2026 emiten, dek "
+                              "harga, biaya unit, royalti, beban umum, pajak dan PNBP 1H26).")}
+            anchor = dict(fc["outyear_scenario"].get("anchor") or {})
+            if anchor:
+                anchor.update(revenue=full["revenue"], ebitda=full["ebitda"],
+                              net_profit=full["net_profit"])
+                fc["outyear_scenario"] = {**fc["outyear_scenario"], "anchor": anchor}
         rows = lom_mod.forward_rows(intake, lom_res, fc["outyear_scenario"]["anchor_year"],
                                     interim.get("attributable_share") or 1.0) if lom_res else []
         if len(rows) == 4:
