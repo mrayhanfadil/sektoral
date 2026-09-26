@@ -80,5 +80,164 @@
     "lease_noncurrent": 268777,
     "total_debt": 344632794
   },
-  "operating_context": []
+  "operating_context": [],
+  "filing_sources": {
+    "powr-1h26-note1c": {
+      "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+      "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+      "published_at": "2026-07-31",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 12 (Catatan 1c, saham ditempatkan dan beredar 15.851.499.100)"
+    },
+    "powr-1h26-notes25-26": {
+      "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+      "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+      "published_at": "2026-07-31",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 68 (Catatan 25-26, pendapatan dan beban lain-lain)"
+    },
+    "powr-1h26-eps": {
+      "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+      "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+      "published_at": "2026-07-31",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 73 (Catatan 29, laba per saham)"
+    },
+    "powr-1h26-pl": {
+      "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+      "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+      "published_at": "2026-07-31",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 7 (laporan laba rugi)"
+    }
+  },
+  "share_ledger": {
+    "reviewed_through": "2026-09-26",
+    "review_basis": "issuer 30 June 2026 interim statements (share capital, treasury and EPS notes) and the cited register counts",
+    "register_counts": [
+      {
+        "date": "2025-12-31",
+        "shares_outstanding": 15851499100,
+        "source_ref": "powr-1h26-note1c"
+      },
+      {
+        "date": "2026-06-30",
+        "shares_outstanding": 15851499100,
+        "source_ref": "powr-1h26-note1c"
+      }
+    ],
+    "actions": [],
+    "reported_weighted_average": [
+      {
+        "period": "1H26",
+        "start": "2026-01-01",
+        "end": "2026-06-30",
+        "shares": 15851499100,
+        "source_ref": "powr-1h26-eps"
+      }
+    ],
+    "notes": [
+      "Treasury shares reissued as the December 2025 employee bonus are in the 31 December 2025 count; no movement in 1H26."
+    ]
+  },
+  "normalization_ledger": {
+    "policy": "One-off: gains or losses on disposal of investments, investment property or fixed assets, fixed-asset write-offs, fair-value gains or losses on investments, tax penalties, reversals of prior-period accruals, and net foreign-exchange gains or losses (the forecast does not project exchange movements). Recurring: operating other income (rent, penalties charged, insurance claims, scrap and by-product sales), inventory provisions and expected-credit-loss movements on operating receivables. Tax effect at the 22% statutory rate unless the item is non-deductible; the minority effect is the group's non-controlling share of profit where the entity bearing the item is not disclosed. An undisclosed composite line of 5% or more of period attributable earnings (release policy 1.2.0 materiality) blocks affirmative review.",
+    "periods_assessed": [
+      "1H26"
+    ],
+    "scope_note": "FY2025 and earlier are not assessed in this ledger; the forecast's first year uses the 1H26 actual plus a modelled second half, so the 1H26 bridge is the one that reaches FY1.",
+    "adjustments_assessed": true,
+    "reported_results": [
+      {
+        "vintage_id": "1h26-v1",
+        "period": "1H26",
+        "published_at": "2026-07-31",
+        "available_at": "2026-07-31",
+        "currency": "USD",
+        "unit": "unit",
+        "reported_attributable_earnings": 37140130,
+        "source_refs": [
+          "powr-1h26-pl"
+        ]
+      }
+    ],
+    "adjustments": [
+      {
+        "vintage_id": "fx-loss-v1",
+        "adjustment_id": "fx-loss",
+        "period": "1H26",
+        "published_at": "2026-07-31",
+        "currency": "USD",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Rugi selisih kurs, neto",
+        "pretax_amount": 2338533,
+        "tax_effect": 514477.26,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": 1824055.74,
+        "source_refs": [
+          "powr-1h26-notes25-26"
+        ]
+      },
+      {
+        "vintage_id": "loss-sale-investments-v1",
+        "adjustment_id": "loss-sale-investments",
+        "period": "1H26",
+        "published_at": "2026-07-31",
+        "currency": "USD",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Kerugian penjualan investasi",
+        "pretax_amount": 124398,
+        "tax_effect": 27367.56,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": 97030.44,
+        "source_refs": [
+          "powr-1h26-notes25-26"
+        ]
+      },
+      {
+        "vintage_id": "gain-sale-fixed-assets-v1",
+        "adjustment_id": "gain-sale-fixed-assets",
+        "period": "1H26",
+        "published_at": "2026-07-31",
+        "currency": "USD",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Keuntungan penjualan aset tetap",
+        "pretax_amount": -83870,
+        "tax_effect": -18451.4,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": -65418.6,
+        "source_refs": [
+          "powr-1h26-notes25-26"
+        ]
+      },
+      {
+        "vintage_id": "penalty-income-v1",
+        "adjustment_id": "penalty-income",
+        "period": "1H26",
+        "published_at": "2026-07-31",
+        "currency": "USD",
+        "unit": "unit",
+        "classification": "recurring",
+        "description": "Pendapatan denda",
+        "pretax_amount": -141299,
+        "tax_effect": -31085.78,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": 0,
+        "source_refs": [
+          "powr-1h26-notes25-26"
+        ]
+      }
+    ]
+  }
 }

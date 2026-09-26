@@ -4,6 +4,13 @@
 
 Verify details against the [official rules](https://hackathon.sectors.app/rules) and [AI Agents & Assistants track](https://hackathon.sectors.app/tracks/ai-agents-assistants) before submission.
 
+## Team decisions (2026-09-26)
+
+- **Ratings kept.** The reports keep Buy/Hold/Sell with a target price (commit 3fcf54a). The rules §12 risk is accepted by the team; each report carries the reader-responsibility statement, and public screens should still frame Sektoral as an information and analysis tool.
+- **Repository visibility.** Still private on 2026-09-26; Fadil will make it public before submitting.
+- **Onboarding.** Confirmed done by Fadil on 2026-09-26.
+- **Videos, problem statement and social post.** Planned for the week of 28 Sep 2026.
+
 ## Project and eligibility
 
 - [ ] Product is a working end-to-end prototype. The judged workflow is shown in the video and works in the submitted repository.

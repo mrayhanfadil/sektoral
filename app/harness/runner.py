@@ -47,7 +47,7 @@ def _earnings_gate_passes(intake, forecast, valuation, assumption_status,
         if assess is None:
             return False
     again = assess(intake, forecast, {"detail": trace.get("detail") or {}}, assumption_status)
-    return again["status"] == "distributable_assumption_led"
+    return again["status"] in ("distributable_assumption_led", "distributable")
 
 
 def _template_mods():
@@ -162,6 +162,16 @@ def run_all(intake: dict | None = None, forecast: dict | None = None,
         # The incomplete SOTP/screening assessment remains attached as audit context.
         engine_status = assumption_release["status"]
         engine_blockers = list(assumption_release.get("blockers") or [])
+
+    # Some assumption-led routes replace the underlying production release
+    # result. Re-apply the register gate after that route selection so source
+    # failures remain Release Gate blockers on every path.
+    if isinstance(doc, dict) and "evidence_register" in doc:
+        from app.evidence import release_blockers as _evidence_blockers
+        register_blockers = _evidence_blockers(doc.get("evidence_register"))
+        if register_blockers:
+            engine_status = "draft_non_distributable"
+            engine_blockers = list(dict.fromkeys(engine_blockers + register_blockers))
 
     blockers = ([f"S1.{b}" for b in r1["blockers"]] + [f"S2.{b}" for b in s2_blockers] +
                 [f"S3.{b}" for b in r3["blockers"]] + [f"N.{b}" for b in rn["blockers"]] +

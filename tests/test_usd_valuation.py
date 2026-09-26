@@ -167,7 +167,7 @@ def test_rupiah_reporter_dcf_is_unchanged(shares, pinned):
     assert gaps == [] and rates["currency"] == "IDR" and rates["crp"] == 0.0
     with_rates, _ = SV.fcff(intake, fc, 0.065, 0.04, 1.1, 0.035, rates=rates)
     plain, _ = SV.fcff(intake, fc, 0.065, 0.04, 1.1, 0.035)
-    assert with_rates["rf_label"] == "INDOGB 10Y" and with_rates["crp"] == 0.0
+    assert with_rates["rf_label"] == "IDR policy Rf" and with_rates["crp"] == 0.0
     for detail in (with_rates, plain):
         assert detail["native"] is None and detail["fx"] is None
         assert detail["coe"] == pytest.approx(0.065 + 1.1 * 0.04, rel=1e-15)
@@ -216,7 +216,7 @@ def test_rupiah_exhibits_keep_indogb_and_no_crp():
     fcff, bridge, wacc, grid = _exhibits(intake, d)
     assert fcff["data"]["cols"][0] == "Rp miliar" and wacc["judul"] == "Komponen WACC"
     labels = [r[0] for r in wacc["data"]["rows"]]
-    assert labels[0] == "Risk-free (INDOGB 10Y)"
+    assert labels[0] == "Risk-free IDR (house policy)"
     assert not any("risk premium Indonesia" in label for label in labels)
     assert not any(r[0].startswith("Kurs") for r in bridge["data"]["rows"])
     assert grid["data"]["cols"] == ["WACC", "g 2,5%", "g 3,5%", "g 4,5%"]

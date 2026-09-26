@@ -33,6 +33,20 @@ def test_identical_evidence_reuses_plan_even_on_another_day(monkeypatch, tmp_pat
     assert second["plan"] == first["plan"]
 
 
+def test_normalized_evidence_register_does_not_fingerprint_report_date_alone():
+    source = {"ticker": "TEST", "model_profile": "going_concern_fcff",
+              "evidence_register": {"as_of": "2026-09-24", "rows": [
+                  {"kind": "official_actual", "published_at": "2026-08-31",
+                   "value": {"revenue": 100}}], "violations": [],
+                  "critical_violations": []}}
+    later = copy.deepcopy(source)
+    later["evidence_register"]["as_of"] = "2026-09-30"
+    assert F.evidence_fingerprint(source, "spec") == F.evidence_fingerprint(later, "spec")
+
+    later["evidence_register"]["rows"][0]["value"]["revenue"] = 101
+    assert F.evidence_fingerprint(source, "spec") != F.evidence_fingerprint(later, "spec")
+
+
 def test_new_evidence_or_refresh_calls_the_agent_again(monkeypatch, tmp_path):
     fake, calls = _fake()
     monkeypatch.setattr(F, "run_live", fake)

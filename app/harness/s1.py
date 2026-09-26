@@ -9,6 +9,8 @@ import re
 from datetime import date
 from typing import Any
 
+from app import release_policy
+
 _PERIOD = re.compile(r"^(?:1Q|2Q|3Q|4Q|1H|2H|9M|FY)\d{2}$")
 
 
@@ -100,7 +102,8 @@ def check_s1(intake: dict | None) -> dict:
         if isinstance(a, dict) and all(a.get(k) is not None for k in ("ocf", "fcf", "capex_out")):
             legs += 1
             try:
-                if abs((a["ocf"] - a["capex_out"]) - a["fcf"]) > 0.01 * max(abs(a["fcf"]), 1):
+                if not release_policy.historical_cash_flow_reconciles(
+                        a["ocf"], a["capex_out"], a["fcf"]):
                     recon_ok = False
             except TypeError:
                 recon_ok = False

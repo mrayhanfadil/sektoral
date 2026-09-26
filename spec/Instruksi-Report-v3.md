@@ -34,6 +34,8 @@ Anda berjalan dalam **empat tahap berurutan**. Jangan mulai satu tahap sebelum t
 
 Jika satu gate gagal, perbaiki input atau asumsinya lebih dulu, lalu jalankan ulang. Kegagalan kritis yang diwajibkan `MODEL_PROFILE` memblokir production rating/TP; jangan mengubahnya menjadi caveat. Keterbatasan nonkritis boleh dijelaskan sekali di catatan metodologi dan dilanjutkan hanya bila metode profile mengizinkan asumsi pengganti yang dilabeli jelas.
 
+**Status analitis bukan status publikasi.** `Release Status` menentukan apakah laporan secara analitis merupakan `production_ready`, `distributable_assumption_led`, atau `draft_non_distributable`. Laporan yang lolos Release Gate hanya layak ditinjau; file dan API publik harus mengarah ke Publication Bundle yang hash-nya cocok dengan persetujuan analis. Build baru kembali ke review-pending dan tidak menggantikan bundle publik sampai disetujui; approval tidak dapat memperbaiki blocker Release Gate. Status ini tidak menyatakan bahwa laporan telah memenuhi persyaratan distribusi riset yang diatur regulator.
+
 ---
 
 ## 1. INPUT (disediakan pipeline)

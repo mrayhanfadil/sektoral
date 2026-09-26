@@ -75,5 +75,151 @@
       "source_url": "https://www.gmf-aeroasia.co.id/gmf-bukukan-pertumbuhan-pendapatan-51",
       "published_at": "2026-09-18"
     }
-  ]
+  ],
+  "filing_sources": {
+    "gmfi-1h26-note16": {
+      "title": "GMFI Interim Consolidated Financial Statements, 30 June 2026",
+      "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+      "published_at": "2026-09-18",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 90-94 (Catatan 16, modal saham dan PMHMETD II)"
+    },
+    "gmfi-1h26-note26": {
+      "title": "GMFI Interim Consolidated Financial Statements, 30 June 2026",
+      "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+      "published_at": "2026-09-18",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 98 (Catatan 26, (beban)/penghasilan lain-lain, bersih)"
+    },
+    "gmfi-1h26-eps": {
+      "title": "GMFI Interim Consolidated Financial Statements, 30 June 2026",
+      "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+      "published_at": "2026-09-18",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 99 (Catatan 27, laba per saham)"
+    },
+    "gmfi-1h26-pl": {
+      "title": "GMFI Interim Consolidated Financial Statements, 30 June 2026",
+      "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+      "published_at": "2026-09-18",
+      "period": "1H26",
+      "currency": "USD",
+      "unit": "unit",
+      "page": "PDF 16-18 (laporan laba rugi)"
+    },
+    "gmfi-idx-close": {
+      "title": "IDX ringkasan perdagangan harian GMFI (harga penutupan)",
+      "url": "https://www.idx.co.id/en/listed-companies/company-profiles/GMFI",
+      "published_at": "2025-12-19",
+      "page": "penutupan 19 Desember 2025 Rp135"
+    }
+  },
+  "share_ledger": {
+    "reviewed_through": "2026-09-26",
+    "review_basis": "issuer 30 June 2026 interim statements (share capital, treasury and EPS notes) and the cited register counts",
+    "register_counts": [
+      {
+        "date": "2025-12-31",
+        "shares_outstanding": 120022868424,
+        "source_ref": "gmfi-1h26-note16"
+      },
+      {
+        "date": "2026-06-30",
+        "shares_outstanding": 124835258434,
+        "source_ref": "gmfi-1h26-note16"
+      }
+    ],
+    "actions": [
+      {
+        "action_id": "pmhmetd-ii-jan-2026",
+        "kind": "rights_issue",
+        "status": "completed",
+        "new_shares": 4812390010,
+        "subscription_price": 69,
+        "cum_rights_price": 135,
+        "bonus_restated": false,
+        "announced_at": "2025-11-03",
+        "ex_date": "2025-12-22",
+        "effective_date": "2026-01-09",
+        "source_ref": "gmfi-1h26-note16",
+        "description": "Public Series B shares of PMHMETD II paid in January 2026; the issue went ex-rights on 22 December 2025, so its bonus element falls in FY2025. Dated at the end of the exercise window (9 January 2026)."
+      }
+    ],
+    "reported_weighted_average": [
+      {
+        "period": "1H26",
+        "start": "2026-01-01",
+        "end": "2026-06-30",
+        "shares": 124090800311,
+        "source_ref": "gmfi-1h26-eps"
+      }
+    ],
+    "notes": [
+      "No potentially dilutive instruments at 30 June 2026 (Catatan 27)."
+    ]
+  },
+  "normalization_ledger": {
+    "policy": "One-off: gains or losses on disposal of investments, investment property or fixed assets, fixed-asset write-offs, fair-value gains or losses on investments, tax penalties, reversals of prior-period accruals, and net foreign-exchange gains or losses (the forecast does not project exchange movements). Recurring: operating other income (rent, penalties charged, insurance claims, scrap and by-product sales), inventory provisions and expected-credit-loss movements on operating receivables. Tax effect at the 22% statutory rate unless the item is non-deductible; the minority effect is the group's non-controlling share of profit where the entity bearing the item is not disclosed. An undisclosed composite line of 5% or more of period attributable earnings (release policy 1.2.0 materiality) blocks affirmative review.",
+    "periods_assessed": [
+      "1H26"
+    ],
+    "scope_note": "FY2025 and earlier are not assessed in this ledger; the forecast's first year uses the 1H26 actual plus a modelled second half, so the 1H26 bridge is the one that reaches FY1.",
+    "adjustments_assessed": true,
+    "reported_results": [
+      {
+        "vintage_id": "1h26-v1",
+        "period": "1H26",
+        "published_at": "2026-09-18",
+        "available_at": "2026-09-18",
+        "currency": "USD",
+        "unit": "unit",
+        "reported_attributable_earnings": 10813974,
+        "source_refs": [
+          "gmfi-1h26-pl"
+        ]
+      }
+    ],
+    "adjustments": [
+      {
+        "vintage_id": "fx-loss-v1",
+        "adjustment_id": "fx-loss",
+        "period": "1H26",
+        "published_at": "2026-09-18",
+        "currency": "USD",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Kerugian selisih kurs, neto",
+        "pretax_amount": 8792931,
+        "tax_effect": 1934444.82,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": 6858486.18,
+        "source_refs": [
+          "gmfi-1h26-note26"
+        ]
+      },
+      {
+        "vintage_id": "other-net-v1",
+        "adjustment_id": "other-net",
+        "period": "1H26",
+        "published_at": "2026-09-18",
+        "currency": "USD",
+        "unit": "unit",
+        "classification": "recurring",
+        "description": "Lain-lain, neto",
+        "pretax_amount": -112397,
+        "tax_effect": -24727.34,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": 0,
+        "source_refs": [
+          "gmfi-1h26-note26"
+        ]
+      }
+    ]
+  }
 }

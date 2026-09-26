@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app import evidence as evidence_mod  # noqa: E402
+from app import intake  # noqa: E402
 from app import news_sources  # noqa: E402
 from app import run_manifest  # noqa: E402
 from app import tavily  # noqa: E402
@@ -127,8 +128,15 @@ def test_run_manifest_has_contract_fields():
         release={"status": "draft_non_distributable", "blockers": ["missing equity"]})
     for key in ("code_revision", "as_of", "market_close", "official_filing",
                 "tavily", "selected_news_urls", "assumption_plan_hash",
-                "profile", "release_status", "blockers"):
+                "profile", "release_status", "blockers", "source_tree_sha256",
+                "working_tree", "source_pack_sha256", "cache_snapshot_sha256",
+                "evidence_register_sha256", "release_policy"):
         assert key in manifest
+    assert manifest["release_policy"]["sha256"]
+    assert manifest["release_policy"]["policy"]["status"] == "mixed_enforcement_and_documentation"
+    assert manifest["house_assumptions"]["sha256"]
+    assert manifest["house_assumptions"]["policy"]["status"] == \
+        "approved_not_independently_validated"
     assert manifest["ticker"] == "BBRI"
     assert manifest["selected_news_urls"] == ["https://a.example/1"]
 
@@ -156,6 +164,56 @@ def test_evidence_register_counts_and_no_lookahead():
                   "source_title": "R", "page": 1, "unit": "IDR", "metrics": {"revenue": 1}}}}
     out2 = evidence_mod.build("BBRI", "2026-09-23", future, [], [], None)
     assert out2["violations"]
+
+
+def test_ammn_official_guidance_units_pass_material_evidence_validation():
+    issuer, _ = intake.load("AMMN", as_of="2026-09-24")
+
+    register = evidence_mod.build(
+        "AMMN", "2026-09-24", issuer, issuer.get("news") or [],
+        issuer.get("news_full") or [], None)
+
+    assert [row["unit"] for row in register["rows"]
+            if row.get("kind") == "company_guidance"] == ["dmt", "Mlbs", "koz", "kt", "koz"]
+    assert not any("company_guidance" in violation
+                   for violation in register["critical_violations"])
+
+
+def test_evidence_register_flags_malformed_material_publication_date():
+    intake = {"official_evidence": {"latest_actual": {
+        "period": "1H26", "period_end": "2026-06-30",
+        "published_at": "31-08-2026", "source_url": "https://i.example/r.pdf",
+        "source_title": "Release", "page": 1, "unit": "IDR",
+        "metrics": {"revenue": 1}}}}
+
+    result = evidence_mod.build("TEST", "2026-09-23", intake, [], [], None)
+
+    assert "official_actual: malformed published_at '31-08-2026'" in result[
+        "critical_violations"]
+    assert any("critical violation" in blocker
+               for blocker in evidence_mod.release_blockers(result))
+
+
+def test_evidence_register_allows_absent_optional_assumption_publication_date():
+    register = evidence_mod.build(
+        "TEST", "2026-09-23", {}, [], [],
+        {"news_effects": [{"driver": "none", "years": [], "change": 0,
+                           "rationale": "No issuer effect", "source_url": None}]})
+
+    assert register["critical_violations"] == []
+    assert not any("published_at" in blocker
+                   for blocker in evidence_mod.release_blockers(register))
+
+
+def test_empty_or_error_evidence_register_cannot_pass_release_checks():
+    empty = {"ticker": "TEST", "as_of": "2026-09-23", "rows": [],
+             "violations": [], "critical_violations": []}
+    failed = {**empty, "error": "source normalizer failed"}
+
+    assert evidence_mod.release_blockers(empty) == [
+        "evidence register contains no eligible source rows"]
+    assert "evidence register construction failed: source normalizer failed" in \
+        evidence_mod.release_blockers(failed)
 
 
 def _fcff_intake(driver_evidence):
@@ -224,27 +282,16 @@ def test_bank_source_metadata_does_not_promote_screening_rows():
 
 
 def test_release_ddm_does_not_require_fcff_capex():
-    intake = {"as_of": "2026-09-23", "model_profile": "financial_ddm",
-              "latest_official_actual": {
-                  "period": "1H26", "period_end": "2026-06-30",
-                  "published_at": "2026-08-20",
-                  "source_url": "https://issuer.example/1h.pdf",
-                  "metrics": {"revenue": 100, "net_profit": 8}}}
-    drv = {"net_profit": {"source": "https://issuer.example/g.pdf",
-                          "source_date": "2026-08-01", "page": 1,
-                          "note": "profit"},
-           "equity": {"source": "https://issuer.example/g.pdf",
-                      "source_date": "2026-08-01", "page": 2,
-                      "note": "equity"},
-           "payout": {"source": "https://issuer.example/g.pdf",
-                      "source_date": "2026-08-01", "page": 3,
-                      "note": "payout"}}
-    forecast = {"forecast_basis": "financial_driver_forecast",
-                "production_ready": True, "driver_evidence": drv}
+    intake = _fcff_intake(_sourced_driver(("net_profit", "equity", "payout")))
+    intake["model_profile"] = "financial_ddm"
+    forecast = forecast_mod.build(intake)
     ddm = {"status": "complete", "method": "ddm", "tp_gordon": 1000}
     result = release_mod.assess_release("financial_ddm", intake, forecast, ddm)
-    assert result["status"] == "distributable"
-    # Same DDM evidence without a DDM valuation stays draft for the right reason.
+    assert result["status"] == "draft_non_distributable"
+    assert not any("capex" in blocker.lower() or "fcff" in blocker.lower()
+                   for blocker in result["blockers"])
+    # The DDM-specific missing valuation remains visible independently of
+    # production-model blockers.
     result2 = release_mod.assess_release("financial_ddm", intake, forecast, None)
     assert result2["status"] == "draft_non_distributable"
     assert any("DDM" in b for b in result2["blockers"])
@@ -348,11 +395,34 @@ def test_manifest_snapshot_is_ticker_scoped():
     assert snapshot and all("/BBRI/" in endpoint for endpoint in snapshot)
 
 
+def test_finalized_manifest_binds_final_artifact_bytes(tmp_path):
+    from app import run_manifest
+
+    for name, content in (("TEST.html", b"html-v1"), ("TEST.pdf", b"pdf-v1"),
+                          ("TEST-trace.html", b"trace-v1")):
+        (tmp_path / name).write_bytes(content)
+    base = {"ticker": "TEST", "source_tree_sha256": "code",
+            "market_inputs": {"fx": {"date": "2026-09-24", "rate": 16000}}}
+
+    first = run_manifest.finalize_manifest(base, tmp_path, "TEST")
+    (tmp_path / "TEST.pdf").write_bytes(b"pdf-v2")
+    second = run_manifest.finalize_manifest(base, tmp_path, "TEST")
+
+    assert first["missing_artifacts"] == []
+    assert first["artifacts"]["pdf"]["sha256"] != second["artifacts"]["pdf"]["sha256"]
+    assert first["publication_id"] != second["publication_id"]
+    assert first["market_inputs_sha256"] == run_manifest.content_hash(base["market_inputs"])
+
+
 def test_build_manifest_records_forecast_status_and_final_release(tmp_path):
     from app import build
+    from app import outputs
     doc = build.build("BBRI", tmp_path, as_of="2026-09-24", spec_sha="abc")
     manifest = doc["run_manifest"]
     assert manifest["forecast_basis"] == "historical_screening_proxy"
     assert manifest["production_ready"] is False
     assert manifest["release_status"] == doc["meta"]["status"]
     assert manifest["spec_sha256"] == "abc"
+    published = outputs.load(outputs.MANIFEST, tmp_path, "BBRI")
+    assert published["artifacts"]["html"]["sha256"]
+    assert "trace_html" in published["missing_artifacts"]

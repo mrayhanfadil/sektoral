@@ -1,0 +1,66 @@
+{
+ "ticker": "BBRI",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "competitive_position": {
+   "assessment": "Kredit pihak ketiga 30 Juni 2026 didominasi segmen mikro Rp644,4 triliun (46%), ritel Rp524,3 triliun dan korporasi Rp223,8 triliun; rasio CASA 67,6% dan biaya dana 2,4% menurut manajemen.",
+   "model_effect": "NIM tinggi dan biaya dana rendah tercermin di driver NIM 7,5% (1H26) dan biaya dana 3,0% (definisi model); keunggulan di luar angka ini tidak diklaim.",
+   "evidence": [
+    {
+     "title": "PT Bank Rakyat Indonesia (Persero) Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBRI_Q2_2026.pdf",
+     "published_at": "2026-08-31",
+     "page": "PDF 195 (kredit per segmen)"
+    },
+    {
+     "title": "Earnings call transcript: Bank Rakyat Indonesia posts strong H1 2026 profit growth (Investing.com)",
+     "url": "https://www.investing.com/news/transcripts/earnings-call-transcript-bank-rakyat-indonesia-posts-strong-h1-2026-profit-growth-93CH-4883124",
+     "published_at": "2026-08-31",
+     "page": "hasil 1H26"
+    }
+   ]
+  },
+  "cyclicality": {
+   "assessment": "Kualitas aset: NPL konsolidasi 2,9% dan loan-at-risk 9,1% pada 1H26; biaya kredit bruto 3,1% (panduan).",
+   "model_effect": "Biaya kredit adalah driver paling sensitif terhadap nilai (±20 bp = ±Rp167/saham).",
+   "evidence": [
+    {
+     "title": "Earnings call transcript: Bank Rakyat Indonesia posts strong H1 2026 profit growth (Investing.com)",
+     "url": "https://www.investing.com/news/transcripts/earnings-call-transcript-bank-rakyat-indonesia-posts-strong-h1-2026-profit-growth-93CH-4883124",
+     "published_at": "2026-08-31",
+     "page": "hasil dan panduan 1H26"
+    }
+   ]
+  },
+  "capital_allocation": {
+   "assessment": "Payout sekitar 70% untuk laba 2026 dan 50-60% jangka menengah; target CAR minimal 20% jangka menengah; pembelian kembali saham berjalan sejak 2025.",
+   "model_effect": "Jalur payout 70% lalu 60% dan batas modal regulator 14% di model; target CAR 20% manajemen ditampilkan sebagai peringatan.",
+   "evidence": [
+    {
+     "title": "Earnings call transcript: Bank Rakyat Indonesia posts strong H1 2026 profit growth (Investing.com)",
+     "url": "https://www.investing.com/news/transcripts/earnings-call-transcript-bank-rakyat-indonesia-posts-strong-h1-2026-profit-growth-93CH-4883124",
+     "published_at": "2026-08-31",
+     "page": "panduan modal dan dividen"
+    },
+    {
+     "title": "PT Bank Rakyat Indonesia (Persero) Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBRI_Q2_2026.pdf",
+     "published_at": "2026-08-31",
+     "page": "PDF 39 (Catatan 1d, saham treasuri)"
+    }
+   ]
+  },
+  "ownership_control": {
+   "assessment": "PT Danantara Asset Management (Persero) memegang 52,66% saham Seri B dan Negara Republik Indonesia 1 saham Seri A Dwiwarna (0,53% bersama); publik 46,23%.",
+   "model_effect": "Pengendalian negara memengaruhi kebijakan dividen dan penyaluran kredit program; tidak ada diskon valuasi tambahan di luar driver.",
+   "evidence": [
+    {
+     "title": "PT Bank Rakyat Indonesia (Persero) Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBRI_Q2_2026.pdf",
+     "published_at": "2026-08-31",
+     "page": "PDF 289 (Catatan 31a, pemegang saham)"
+    }
+   ]
+  }
+ }
+}

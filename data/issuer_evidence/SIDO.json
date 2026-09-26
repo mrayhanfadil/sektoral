@@ -79,5 +79,139 @@
       "source_url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
       "published_at": "2026-07-31"
     }
-  ]
+  ],
+  "filing_sources": {
+    "sido-1h26-note1c": {
+      "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+      "published_at": "2026-08-03",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "page": "PDF 12 (Catatan 1c, saham ditempatkan dan beredar 29.520.300.000)"
+    },
+    "sido-1h26-equity": {
+      "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+      "published_at": "2026-08-03",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "page": "PDF 8 (perubahan ekuitas: saham treasuri Rp(299.615) juta, tanpa mutasi 1H26)"
+    },
+    "sido-1h26-eps": {
+      "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+      "published_at": "2026-08-03",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "page": "PDF 73 (Catatan 21, laba per saham)"
+    },
+    "sido-1h26-note28": {
+      "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+      "published_at": "2026-08-03",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "page": "PDF 75 (Catatan 28, pendapatan lain-lain)"
+    },
+    "sido-1h26-pl": {
+      "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+      "published_at": "2026-08-03",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "page": "PDF 6 (laporan laba rugi)"
+    }
+  },
+  "share_ledger": {
+    "reviewed_through": "2026-09-26",
+    "review_basis": "issuer 30 June 2026 interim statements (share capital, treasury and EPS notes) and the cited register counts",
+    "register_counts": [
+      {
+        "date": "2025-12-31",
+        "shares_outstanding": 29520300000,
+        "source_ref": "sido-1h26-note1c"
+      },
+      {
+        "date": "2026-06-30",
+        "shares_outstanding": 29520300000,
+        "source_ref": "sido-1h26-note1c"
+      }
+    ],
+    "actions": [],
+    "reported_weighted_average": [
+      {
+        "period": "1H26",
+        "start": "2026-01-01",
+        "end": "2026-06-30",
+        "shares": 29430685529,
+        "source_ref": "sido-1h26-eps"
+      }
+    ],
+    "notes": [
+      "The issuer's figures conflict: Catatan 1c states 29.520.300.000 shares outstanding after acquiring 564.800.000 treasury shares from 30.000.000.000 (which gives 29.435.200.000), and Catatan 21 weights 29.430.685.529 with no 1H26 movement. The spread is 0,3%; the stated register total is used and the conflict is open for review against the IDX register."
+    ]
+  },
+  "normalization_ledger": {
+    "policy": "One-off: gains or losses on disposal of investments, investment property or fixed assets, fixed-asset write-offs, fair-value gains or losses on investments, tax penalties, reversals of prior-period accruals, and net foreign-exchange gains or losses (the forecast does not project exchange movements). Recurring: operating other income (rent, penalties charged, insurance claims, scrap and by-product sales), inventory provisions and expected-credit-loss movements on operating receivables. Tax effect at the 22% statutory rate unless the item is non-deductible; the minority effect is the group's non-controlling share of profit where the entity bearing the item is not disclosed. An undisclosed composite line of 5% or more of period attributable earnings (release policy 1.2.0 materiality) blocks affirmative review.",
+    "periods_assessed": [
+      "1H26"
+    ],
+    "scope_note": "FY2025 and earlier are not assessed in this ledger; the forecast's first year uses the 1H26 actual plus a modelled second half, so the 1H26 bridge is the one that reaches FY1.",
+    "adjustments_assessed": true,
+    "reported_results": [
+      {
+        "vintage_id": "1h26-v1",
+        "period": "1H26",
+        "published_at": "2026-08-03",
+        "available_at": "2026-08-03",
+        "currency": "IDR",
+        "unit": "unit",
+        "reported_attributable_earnings": 333653000000,
+        "source_refs": [
+          "sido-1h26-pl"
+        ]
+      }
+    ],
+    "adjustments": [
+      {
+        "vintage_id": "fx-gain-v1",
+        "adjustment_id": "fx-gain",
+        "period": "1H26",
+        "published_at": "2026-08-03",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Laba selisih kurs",
+        "pretax_amount": -19806000000,
+        "tax_effect": -4357320000,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": -15448680000,
+        "source_refs": [
+          "sido-1h26-note28"
+        ]
+      },
+      {
+        "vintage_id": "rental-income-v1",
+        "adjustment_id": "rental-income",
+        "period": "1H26",
+        "published_at": "2026-08-03",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "recurring",
+        "description": "Penghasilan sewa",
+        "pretax_amount": -2558000000,
+        "tax_effect": -562760000,
+        "minority_interest_effect": 0,
+        "normalized_attributable_effect": 0,
+        "source_refs": [
+          "sido-1h26-note28"
+        ]
+      }
+    ]
+  }
 }

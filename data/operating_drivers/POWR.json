@@ -1,0 +1,443 @@
+{
+ "schema_version": 1,
+ "ticker": "POWR",
+ "currency": "USD",
+ "unit": "unit",
+ "model_profile": "going_concern_fcff",
+ "reviewed_at": "2026-09-26",
+ "sources": {
+  "powr-1h26-fs": {
+   "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+   "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+   "published_at": "2026-07-31",
+   "page": "PDF 5-6 (posisi keuangan), 7 (laba rugi), 10 (arus kas), 61 (Senior Notes 2035), 68 (Catatan 25-26), 69 (PJBL PLN 150 MW s.d. 31 Mei 2031), 78 (risiko harga komoditas: formula tarif listrik yang disetujui Pemerintah meneruskan komponen bahan bakar ke pelanggan)"
+  },
+  "powr-1h26-presentation": {
+   "title": "PT Cikarang Listrindo Tbk 1H26 Investor Presentation",
+   "url": "https://www.listrindo.com/uploads/investor_presentation/file_1785474973_1785475559__6b90b304343937d72102dfca459e76ab.pdf",
+   "published_at": "2026-07-31",
+   "page": "hlm. 10 (proyek gas engine US$44,0 juta, capex terpakai US$36,6 juta), 12 (volume GWh per pelanggan 2022-1H26, heat rate, capacity factor), 16 (laba rugi per segmen), 17 (payout dividen 2020-2025), 19 (pusat data 12% konsumsi industri)"
+  },
+  "powr-ar2025": {
+   "title": "PT Cikarang Listrindo Tbk Laporan Tahunan 2025",
+   "url": "https://www.listrindo.com/uploads/annual_report/POWR_Annual_Report_2025.pdf",
+   "published_at": "2026-04-01",
+   "page": "PDF 176 (penjualan neto per pelanggan FY2025/FY2024, beban usaha FY2025), arus kas FY2025 (perolehan aset tetap US$56,1 juta)"
+  }
+ },
+ "anchor": {
+  "period": "1H26",
+  "year": 2026,
+  "source_refs": [
+   "powr-1h26-fs"
+  ],
+  "h1": {
+   "revenue": 274783475,
+   "variable_costs": 138175748,
+   "fixed_costs": 40280956,
+   "ebitda": 96326771,
+   "depreciation": 32558403,
+   "other_non_operating_net": -3274534,
+   "interest_expense": 10313490,
+   "interest_income": 6512045,
+   "tax": 19552259,
+   "net_profit": 37140130,
+   "capex": 26941769,
+   "dividends": 45218312
+  },
+  "definitions": "EBITDA inti = pendapatan - bahan bakar - pegawai - perbaikan dan pemeliharaan - beban usaha lain; pendapatan/beban lain-lain (pos satu kali, ledger normalisasi) di bawah EBITDA. Pajak 1H = PPh 18.442.090 + PPh final bunga 1.110.169."
+ },
+ "segments": [
+  {
+   "id": "industrial",
+   "name": "Pelanggan industri",
+   "volume_unit": "GWh",
+   "h1_volume": 1785,
+   "h1_revenue": 250419960,
+   "source_refs": [
+    "powr-1h26-fs",
+    "powr-1h26-presentation"
+   ],
+   "h2_volume_to_h1": {
+    "values": [
+     1.0826
+    ],
+    "kind": "sourced",
+    "rationale": "Pola musiman FY2025: volume H2 (3.455 - 1.659 = 1.796 GWh) terhadap H1 1.659 GWh.",
+    "source_refs": [
+     "powr-1h26-presentation"
+    ]
+   },
+   "volume_growth_pct": {
+    "values": [
+     5.0,
+     4.5,
+     4.0,
+     3.5
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "Volume 1H26 naik 7,6% yoy didorong pusat data (12% konsumsi industri, kapasitas kontrak 274 MVA per Juni 2026) sementara FY2022-FY2025 datar; pertumbuhan diturunkan bertahap menuju tren. Kapasitas terpasang 1.194 MW dengan faktor kapasitas neto 55% menampung volume tanpa pembangkit baru.",
+    "basis_refs": [
+     "powr-1h26-presentation"
+    ]
+   },
+   "price_growth_pct": {
+    "values": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "Tarif rata-rata terealisasi US$140/MWh (1H26) dipertahankan. Formula tarif listrik yang disetujui Pemerintah meneruskan komponen bahan bakar ke pelanggan (laporan 1H26, PDF 78), sehingga tarif dan biaya bahan bakar per MWh ditahan bersama; kurs dianggap tetap pada kurs spot laporan.",
+    "basis_refs": [
+     "powr-1h26-fs",
+     "powr-1h26-presentation"
+    ]
+   }
+  },
+  {
+   "id": "pln",
+   "name": "PLN (PJBL 150 MW)",
+   "volume_unit": "GWh",
+   "h1_volume": 285,
+   "h1_revenue": 24363515,
+   "contract_end": "2031-05-31",
+   "source_refs": [
+    "powr-1h26-fs",
+    "powr-1h26-presentation"
+   ],
+   "h2_volume_to_h1": {
+    "values": [
+     1.0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "H2 sama dengan H1; rasio FY2025 (0,60) terdistorsi gangguan pasokan gas 2025 yang tidak diasumsikan berulang.",
+    "basis_refs": [
+     "powr-ar2025"
+    ]
+   },
+   "volume_growth_pct": {
+    "values": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "Kapasitas kontrak tetap 150 MW sampai 31 Mei 2031.",
+    "basis_refs": [
+     "powr-1h26-fs"
+    ]
+   },
+   "price_growth_pct": {
+    "values": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "Tarif PLN terealisasi 1H26 US$85/MWh dipertahankan; tarif mengikuti harga gas PLN.",
+    "basis_refs": [
+     "powr-1h26-fs",
+     "powr-1h26-presentation"
+    ]
+   }
+  }
+ ],
+ "variable_costs": [
+  {
+   "id": "fuel",
+   "name": "Beban bahan bakar",
+   "h1_amount": 138175748,
+   "per": "total volume GWh",
+   "source_refs": [
+    "powr-1h26-fs"
+   ],
+   "unit_cost_growth_pct": {
+    "values": [
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "Biaya bahan bakar per MWh terjual 1H26 (US$66,8/MWh, sama dengan 1H25 US$65,4/MWh) dipertahankan; lonjakan solar FY2025 akibat gangguan gas tidak diasumsikan berulang. Perubahan harga bahan bakar diteruskan ke tarif melalui formula tarif (laporan 1H26, PDF 78), sehingga pergeseran biaya dan tarif sebagian saling mengimbangi.",
+    "basis_refs": [
+     "powr-1h26-fs",
+     "powr-ar2025"
+    ]
+   }
+  }
+ ],
+ "fixed_costs": [
+  {
+   "id": "employee",
+   "name": "Beban pegawai",
+   "h1_amount": 26499052,
+   "source_refs": [
+    "powr-1h26-fs"
+   ],
+   "h2_to_h1": {
+    "values": [
+     1.0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "H2 sama dengan H1."
+   },
+   "growth_pct": {
+    "values": [
+     3.0,
+     3.0,
+     3.0,
+     3.0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "Inflasi upah rupiah sekitar inflasi IMF 2,5% ditambah 0,5 poin, kurs tetap."
+   }
+  },
+  {
+   "id": "repair",
+   "name": "Beban perbaikan dan pemeliharaan",
+   "h1_amount": 6126949,
+   "source_refs": [
+    "powr-1h26-fs",
+    "powr-ar2025"
+   ],
+   "h2_to_h1": {
+    "values": [
+     1.173
+    ],
+    "kind": "sourced",
+    "rationale": "Pola FY2025: H2 (15.211 - 7.000 ribu) terhadap H1 7.000 ribu US$; pemeliharaan terkonsentrasi di H2.",
+    "source_refs": [
+     "powr-ar2025"
+    ]
+   },
+   "growth_pct": {
+    "values": [
+     3.0,
+     3.0,
+     3.0,
+     3.0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "Inflasi biaya."
+   }
+  },
+  {
+   "id": "other_opex",
+   "name": "Beban usaha lain-lain",
+   "h1_amount": 7654955,
+   "source_refs": [
+    "powr-1h26-fs",
+    "powr-ar2025"
+   ],
+   "h2_to_h1": {
+    "values": [
+     1.154
+    ],
+    "kind": "sourced",
+    "rationale": "Pola FY2025: H2 (20.424 - 9.484 ribu) terhadap H1 9.484 ribu US$.",
+    "source_refs": [
+     "powr-ar2025"
+    ]
+   },
+   "growth_pct": {
+    "values": [
+     3.0,
+     3.0,
+     3.0,
+     3.0
+    ],
+    "kind": "analyst_assumption",
+    "rationale": "Inflasi biaya."
+   }
+  }
+ ],
+ "depreciation": {
+  "h2_to_h1": {
+   "values": [
+    1.0
+   ],
+   "kind": "analyst_assumption",
+   "rationale": "Penyusutan H2 sama dengan H1."
+  },
+  "rate_on_opening_net_ppe": {
+   "values": [
+    0.09
+   ],
+   "kind": "sourced",
+   "rationale": "Penyusutan 1H26 disetahunkan (65,1 juta) terhadap aset tetap neto 31 Desember 2025 (723,4 juta US$).",
+   "source_refs": [
+    "powr-1h26-fs"
+   ]
+  }
+ },
+ "capex": {
+  "h2_items": [
+   {
+    "id": "gas-engine-remaining",
+    "amount": 7400000,
+    "source_refs": [
+     "powr-1h26-presentation"
+    ],
+    "note": "Sisa anggaran proyek gas engine 4x12,5 MW (US$44,0 juta, terpakai US$36,6 juta per Juni 2026)."
+   },
+   {
+    "id": "sustaining-h2",
+    "amount": 29083000,
+    "source_refs": [
+     "powr-ar2025",
+     "powr-1h26-fs"
+    ],
+    "note": "Pola FY2025: perolehan aset tetap FY2025 US$56,1 juta dikurangi 1H25 US$27,0 juta."
+   }
+  ],
+  "sustaining_outyears": {
+   "values": [
+    59500000,
+    61300000,
+    63100000,
+    65000000
+   ],
+   "kind": "analyst_assumption",
+   "rationale": "Perolehan aset tetap FY2025 (US$56,1 juta, termasuk surya dan pemeliharaan rutin) tumbuh 3% per tahun; kapasitas cadangan (faktor kapasitas 55%) menampung pertumbuhan volume tanpa pembangkit baru.",
+   "basis_refs": [
+    "powr-ar2025",
+    "powr-1h26-presentation"
+   ]
+  }
+ },
+ "working_capital": {
+  "receivable_days_on_revenue": {
+   "values": [
+    38.4
+   ],
+   "kind": "sourced",
+   "rationale": "Piutang usaha 30 Juni 2026 (57,9 juta) terhadap pendapatan 1H26 disetahunkan.",
+   "source_refs": [
+    "powr-1h26-fs"
+   ]
+  },
+  "inventory_days_on_variable_cost": {
+   "values": [
+    87.6
+   ],
+   "kind": "sourced",
+   "rationale": "Persediaan 30 Juni 2026 (66,3 juta) terhadap beban bahan bakar 1H26 disetahunkan.",
+   "source_refs": [
+    "powr-1h26-fs"
+   ]
+  },
+  "payable_days_on_variable_cost": {
+   "values": [
+    47.5
+   ],
+   "kind": "sourced",
+   "rationale": "Utang usaha 30 Juni 2026 (35,9 juta) terhadap beban bahan bakar 1H26 disetahunkan.",
+   "source_refs": [
+    "powr-1h26-fs"
+   ]
+  }
+ },
+ "debt": [
+  {
+   "id": "senior-notes-2035",
+   "principal": 350000000,
+   "coupon": 0.0565,
+   "maturity": "2035-03-12",
+   "other_annual": 693676,
+   "source_refs": [
+    "powr-1h26-fs"
+   ],
+   "note": "Bunga tetap 5,65% dibayar semesteran; other_annual = amortisasi biaya penerbitan dan beban pendanaan lain 1H26 disetahunkan."
+  }
+ ],
+ "liquidity": {
+  "yield": {
+   "values": [
+    0.0429
+   ],
+   "kind": "analyst_assumption",
+   "rationale": "Pendapatan bunga 1H26 disetahunkan terhadap rata-rata kas dan investasi 31 Desember 2025 - 30 Juni 2026.",
+   "basis_refs": [
+    "powr-1h26-fs"
+   ]
+  }
+ },
+ "tax": {
+  "rate": {
+   "values": [
+    0.25
+   ],
+   "kind": "analyst_assumption",
+   "rationale": "Rata-rata tarif efektif FY2024-FY2025 (27,5% dan 22,8%) atas laba sebelum pajak di luar pendapatan bunga berpajak final; tarif badan 22% ditambah beban tidak dapat dikurangkan dan pajak tangguhan.",
+   "basis_refs": [
+    "powr-ar2025"
+   ]
+  },
+  "interest_income_final_tax": {
+   "values": [
+    0.1705
+   ],
+   "kind": "sourced",
+   "rationale": "PPh final atas pendapatan bunga 1H26 terhadap pendapatan bunga.",
+   "source_refs": [
+    "powr-1h26-fs"
+   ]
+  }
+ },
+ "distribution": {
+  "payout_of_prior_year_profit": {
+   "values": [
+    0.95
+   ],
+   "kind": "sourced",
+   "rationale": "Payout 95-96% FY2022-FY2025, dibayar sebagai dividen interim akhir tahun dan final tengah tahun berikutnya.",
+   "source_refs": [
+    "powr-1h26-presentation"
+   ]
+  }
+ },
+ "opening": {
+  "source_refs": [
+   "powr-1h26-fs"
+  ],
+  "fy0_profit": 72056309,
+  "fy0_close": {
+   "receivables": 46859709,
+   "inventories": 63477578,
+   "payables": 33579773
+  },
+  "h1_close": {
+   "liquidity": 298196394,
+   "receivables": 57870260,
+   "inventories": 66349478,
+   "payables": 35938503,
+   "ppe": 716589089,
+   "other_assets": 52781786,
+   "debt": 344632794,
+   "other_liabilities": 105682622,
+   "equity": 705533088
+  },
+  "note": "Likuiditas = kas 123.951.821 + investasi 174.244.573; aset/liabilitas lain = selisih total terhadap pos yang dimodelkan, dijaga tetap."
+ },
+ "pass_through": [
+  {
+   "cost": "fuel",
+   "segments": [
+    "industrial"
+   ],
+   "share": 1.0,
+   "source_refs": [
+    "powr-1h26-fs"
+   ],
+   "rationale": "Formula tarif listrik yang disetujui Pemerintah meneruskan komponen bahan bakar ke pelanggan (laporan 1H26, PDF 78); PJBL PLN tidak termasuk."
+  }
+ ]
+}

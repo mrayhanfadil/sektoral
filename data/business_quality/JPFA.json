@@ -1,0 +1,54 @@
+{
+ "ticker": "JPFA",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "competitive_position": {
+   "assessment": "Produsen pakan unggas dan DOC terbesar kedua di Indonesia dengan 15 pabrik pakan, 79 peternakan pembibitan dan 30 penetasan; penjualan bruto FY2025 Rp92,9 triliun: pakan unggas 39%, peternakan komersial 31%, pengolahan dan produk konsumen 11%, pembibitan 9%, budidaya perairan 5%, perdagangan dan lain-lain 5%.",
+   "model_effect": "Tanpa volume segmen yang diungkapkan, skala ini tidak dimodelkan per segmen; laporan tetap Assumption-Led.",
+   "evidence": [
+    {
+     "title": "PT Japfa Comfeed Indonesia Tbk 1H2026 Investor Presentation",
+     "url": "https://d1be5sn7lppxuh.cloudfront.net/assets/files/files/investor_presentation/2026/1h2026-tbk-investor-presentation.pdf",
+     "published_at": "2026-08-20",
+     "page": "slide 4-6 (skala dan kontribusi segmen)"
+    }
+   ]
+  },
+  "pricing_power": {
+   "assessment": "Harga pakan memakai model cost-plus: manajemen menyatakan sebagian besar pergerakan harga bahan baku dan kurs dapat diteruskan ke harga jual pakan; margin pakan 1H26 membaik dari harga jual yang lebih tinggi.",
+   "model_effect": "Daya teruskan biaya pakan menopang margin, tetapi tidak diuji per segmen karena volume dan harga tidak diungkapkan.",
+   "evidence": [
+    {
+     "title": "PT Japfa Comfeed Indonesia Tbk 1H2026 Investor Presentation",
+     "url": "https://d1be5sn7lppxuh.cloudfront.net/assets/files/files/investor_presentation/2026/1h2026-tbk-investor-presentation.pdf",
+     "published_at": "2026-08-20",
+     "page": "slide 6 (cost plus pricing model), slide 13 (penerusan harga bahan baku), slide 18 (hasil 1H26)"
+    }
+   ]
+  },
+  "cyclicality": {
+   "assessment": "Harga DOC dan broiler berfluktuasi mengikuti keseimbangan permintaan dan pasokan; laba bersih 1H26 Rp2.684 miliar (+97% yoy) dengan 1Q26 luar biasa diikuti 2Q26 yang lebih lemah akibat ketidakpastian konflik Timur Tengah dan melemahnya daya beli.",
+   "model_effect": "Laba 1H26 berada di puncak siklus; memakai 1H26 sebagai run-rate berisiko melebihkan laba normal.",
+   "evidence": [
+    {
+     "title": "PT Japfa Comfeed Indonesia Tbk 1H2026 Investor Presentation",
+     "url": "https://d1be5sn7lppxuh.cloudfront.net/assets/files/files/investor_presentation/2026/1h2026-tbk-investor-presentation.pdf",
+     "published_at": "2026-08-20",
+     "page": "slide 18 (1H26 vs 1H25) dan slide 19 (managing cyclicality)"
+    }
+   ]
+  },
+  "ownership_control": {
+   "assessment": "Japfa Pte. Ltd. (Singapura, entitas induk utama) memegang 56,34% saham 30 Juni 2026 (31 Desember 2025: 55,43%); publik masing-masing di bawah 5% 43,46%; saham treasuri 0,19%.",
+   "model_effect": "Pengendalian induk asing; tidak ada diskon valuasi tambahan di luar driver.",
+   "evidence": [
+    {
+     "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+     "published_at": "2026-08-20",
+     "page": "PDF 124 (Catatan 28, susunan pemegang saham)"
+    }
+   ]
+  }
+ }
+}

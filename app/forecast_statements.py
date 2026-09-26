@@ -66,7 +66,7 @@ from __future__ import annotations
 
 import re
 
-from . import cache, fmt, scenario_value
+from . import cache, fmt, release_policy, scenario_value, share_basis
 
 MODE_FULL = "laporan lengkap"
 # Full statements opened from the official interim balance sheet (spec §4.1a):
@@ -239,7 +239,10 @@ def scenario_path(intake, fc):
     conversion as ``report_extras.chart_forecast_rows`` but never truncated.
     """
     fc = fc or {}
-    if fc.get("production_ready") is True:
+    if fc.get("production_ready") is True and \
+            fc.get("forecast_basis") != "physical_driver_forecast" and \
+            (fc.get("earnings_scenario") or {}).get("basis") not in (
+                "operating_driver_model", "bank_driver_scenario"):
         rows = [{"year": r.get("year"), "label": r.get("label") or _label(r["year"]),
                  "revenue": _num(r.get("revenue")), "ebitda": _num(r.get("ebitda")),
                  "net_cons": _num(r.get("net")),
@@ -273,7 +276,9 @@ def scenario_path(intake, fc):
                      "net_cons": idr(r.get("net_profit")),
                      "earnings": idr(r.get("net_profit_attributable")),
                      "capex": idr(r.get("capex"))})
-    return "skenario analis", rows, anchor, fx, None
+    basis = ("model operasional" if anchor.get("basis") == "operating_driver_model"
+             else "skenario analis")
+    return basis, rows, anchor, fx, None
 
 
 def parent_share(intake, anchor):
@@ -351,6 +356,55 @@ def _trace_detail(va, keys, need):
     return None
 
 
+def _native(value, currency):
+    return (f"US${fmt._id(value / 1e6, 2)} juta" if currency == "USD"
+            else f"Rp{fmt._id(value / 1e9, 1)} miliar")
+
+
+def _earnings_quality_notes(intake, fc):
+    """Sentences for the reviewed normalization and share ledger (plan §4.4)."""
+    out = []
+    currency = (intake.get("official_evidence") or {}).get("reporting_currency")
+    scenario = (fc or {}).get("earnings_scenario") or {}
+    norm = scenario.get("normalization") or {}
+    label = _label(scenario["year"]) if scenario.get("year") else "FY1"
+    if norm.get("status") == "assessed" and norm.get("adjustments"):
+        items = "; ".join(f"{a['description']} {_native(a['effect'], currency)}"
+                          for a in norm["adjustments"])
+        out.append(
+            f"Laba inti {label}: {_native(norm['normalized_attributable'], currency)} "
+            f"(dilaporkan {_native(norm['reported_attributable'], currency)}); penyesuaian "
+            f"satu kali {norm['period']} setelah pajak dan kepentingan nonpengendali: {items}. "
+            "PER dan ROE valuasi memakai laba inti; laporan laba rugi tetap angka dilaporkan.")
+    elif norm.get("status") == "assessed":
+        out.append(f"Normalisasi laba {norm.get('period')}: tidak ada pos satu kali; laba inti "
+                   f"{label} sama dengan laba dilaporkan.")
+    elif norm:
+        why = norm.get("note") or ("ledger normalisasi laba yang ditinjau belum tersedia"
+                                   if norm.get("status") == "not_assessed"
+                                   else "ledger normalisasi laba belum lolos pemeriksaan")
+        out.append(f"Normalisasi laba {label} belum lengkap: {why.rstrip('.')}; PER dan ROE "
+                   "memakai laba dilaporkan.")
+    record = intake.get("share_basis") or {}
+    weighted = record.get("fy_weighted_average") or {}
+    if record.get("status") == "assessed" and weighted.get("shares"):
+        basis = ("dari aksi korporasi bertanggal" if weighted.get("h1_basis") ==
+                 "derived_from_dated_actions" else "memakai angka tertimbang 1H emiten")
+        out.append(
+            f"Jumlah saham tertimbang FY{weighted['year'] % 100:02d} (PSAK 56) "
+            f"{fmt._id(weighted['shares'] / 1e9, 2)} miliar lembar, {basis}; dicatat untuk "
+            "rekonsiliasi EPS tahunan emiten, sedangkan EPS model memakai jumlah saham pada "
+            "tanggal laporan.")
+    if weighted.get("h1_basis") == "derived_from_dated_actions" and weighted.get("issuer_reported"):
+        out.append(
+            f"Catatan register saham: rata-rata tertimbang {weighted['period']} yang dilaporkan "
+            f"emiten ({fmt._id(weighted['issuer_reported'] / 1e9, 2)} miliar lembar) tidak "
+            f"rekonsiliasi dengan register dan aksi korporasi bertanggal "
+            f"({fmt._id(weighted['derived'] / 1e9, 2)} miliar lembar); angka turunan dipakai "
+            "dan angka emiten ditandai untuk ditinjau.")
+    return out
+
+
 def _bridge(intake):
     try:
         return scenario_value.bridge(intake)
@@ -362,7 +416,7 @@ def _share_move(intake):
     """(moved, official shares, year-end shares): the valuation bridge's rule for a
     capital change since the fiscal year-end (rights issue, merger)."""
     balance = (intake.get("official_evidence") or {}).get("balance_sheet") or {}
-    official = _num(balance.get("shares_outstanding")) or _num(balance.get("shares_issued"))
+    official = share_basis.report_date_shares(intake)[0] if balance else None
     annual = next((a for a in reversed(intake.get("annuals") or [])
                    if _num(a.get("total_debt")) is not None and _num(a.get("cash")) is not None),
                   None)
@@ -382,19 +436,24 @@ def _lom_schedule(va, fc, fx, path):
     inputs, base = lom.get("inputs") or {}, lom.get("base") or {}
     if not inputs or not base.get("flows") or not _num(inputs.get("da_usd")):
         return None
-    by_year = {}
+    by_year, wc_year = {}, {}
     for flow in base["flows"]:
         by_year[flow["year"]] = by_year.get(flow["year"], 0.0) + (flow.get("da") or 0.0)
+        # Working capital and the customer advance settled in product (lom._working_capital).
+        wc_year[flow["year"]] = (wc_year.get(flow["year"], 0.0) + (flow.get("dnwc") or 0.0)
+                                 + (flow.get("advance_settled") or 0.0))
     da = []
     for i, row in enumerate(path):
         value = by_year.get(row["year"])
         if value is None:
             return None
         da.append((value + (inputs["da_usd"] / 2 if i == 0 else 0.0)) * fx)
+    dnwc = ([wc_year.get(row["year"], 0.0) * fx for row in path]
+            if inputs.get("wc") else None)
     tax, ntgr = _num(inputs.get("tax_rate")), _num(inputs.get("ntgr_rate"))
     if tax is None or ntgr is None:
         return None
-    return {"da": da, "tax": tax, "ntgr": ntgr, "inputs": inputs}
+    return {"da": da, "tax": tax, "ntgr": ntgr, "inputs": inputs, "dnwc": dnwc}
 
 
 def _lom_interest(intake, fx):
@@ -471,11 +530,13 @@ def _interim_opening(intake, anchor, fx):
     b = {k: _num(v) for k, v in balance.items() if _num(v) is not None}
     f = {k: _num(v) for k, v in flows.items() if _num(v) is not None}
     scale = max(abs(b["total_assets"]), 1.0)
-    tolerance = max(scale * 1e-9, 1.0)
-    if (abs(b["total_assets"] - b["total_liabilities"] - b["total_equity"]) > tolerance
-            or abs(f["cash_begin"] + f["net_cash_flow"] - b["cash"]) > tolerance
-            or abs(f["operating_cash_flow"] + f["investing_cash_flow"]
-                   + f["financing_cash_flow"] - f["net_cash_flow"]) > tolerance):
+    if (not release_policy.forecast_statement_identity_matches(
+            b["total_assets"], b["total_liabilities"] + b["total_equity"], scale)
+            or not release_policy.forecast_statement_identity_matches(
+                f["cash_begin"] + f["net_cash_flow"], b["cash"], scale)
+            or not release_policy.forecast_statement_identity_matches(
+                f["operating_cash_flow"] + f["investing_cash_flow"]
+                + f["financing_cash_flow"], f["net_cash_flow"], scale)):
         return None
     inv = b.get("inventories", 0.0)
     receivables = b.get("trade_receivables", 0.0)
@@ -491,7 +552,7 @@ def _interim_opening(intake, anchor, fx):
         other_non_current_liabilities=(b["total_liabilities"] - b["current_liabilities"]
                                        - b["long_term_debt"]) * fx,
         period_end=period_end, period=actual.get("period"),
-        shares=_num(balance.get("shares_outstanding")) or _num(balance.get("shares_issued")),
+        shares=share_basis.report_date_shares(intake)[0],
         source=balance.get("source_title") or actual.get("source_title"),
         has_receivables="trade_receivables" in b, has_payables="trade_payables" in b,
         has_inventories="inventories" in b,
@@ -626,6 +687,7 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             f"Asumsi valuasi: jumlah saham {fmt._id(shares / 1e9, 2)} miliar lembar, sumber "
             f"{_source(shares_basis)}, flat; EPS memakai laba induk dan BVPS ekuitas induk atas "
             "jumlah saham yang sama dengan valuasi dan PER.")
+    assumptions.extend(_earnings_quality_notes(intake, fc))
     payout = _num((ddm or {}).get("payout"))
     payout_basis = (ddm or {}).get("payout_basis")
     if payout is None:
@@ -665,6 +727,11 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         elif basis == "forecast produksi" and all(r.get("da") is not None for r in path):
             da_list = [r["da"] for r in path]
             assumptions.append("Forecast produksi: D&A per tahun dari forecast yang sama.")
+        elif (dcf or {}).get("operating_model") and len((dcf or {}).get("lines") or []) == len(path):
+            # The operating model's own D&A, the lines the DCF values.
+            da_list = [line["da"] for line in dcf["lines"]]
+            assumptions.append("Model operasional: D&A per tahun = tarif penyusutan x aset tetap "
+                               "neto awal, sama dengan DCF.")
         else:
             da_ratio = _num((dcf or {}).get("da_ratio"))
             da_basis = (dcf or {}).get("da_basis")
@@ -689,17 +756,31 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             if tax is None:
                 tax, tax_basis = scenario_value.tax_rate(intake)
         assumptions.append(
-            ("Jadwal LoM" if lom else "Asumsi screening") +
+            ("Jadwal LoM" if lom else "Model operasional" if (dcf or {}).get("operating_model")
+             else "Asumsi screening") +
             f": tarif pajak efektif {fmt.pct(tax)}, sumber {_source(tax_basis)}; sama dengan "
             "valuasi. Laba sebelum pajak = laba bersih konsolidasi skenario / (1 - tarif); "
             "pajak = selisihnya.")
-        if mining:
-            # The LoM (and the mining last step) do not model working capital.
+        if lom and lom.get("dnwc"):
+            # The LoM's working capital; the first year holds the H2 change only
+            # (the 1H change is in the official interim cash flow).
+            dnwc_list = lom["dnwc"]
+            nwc_sentence = (
+                "Jadwal LoM: perubahan modal kerja dari hari piutang, persediaan produk dan utang "
+                "operasi 30 Jun 2026 atas pendapatan tahunan, ditambah penyelesaian uang muka "
+                "pelanggan dengan produk, sama dengan valuasi; tahun pertama memuat perubahan H2.")
+        elif mining:
+            # The mining last step without a LoM schedule does not model working capital.
             dnwc_list = [0.0] * len(path)
             nwc_sentence = (
                 "Asumsi valuasi: jadwal LoM dan metode tambang tidak memodelkan perubahan modal "
                 "kerja (persediaan dinilai terpisah di SOTP); modal kerja non-kas dijaga pada "
                 f"saldo FY{base_year or first['year'] - 1}.")
+        elif (dcf or {}).get("operating_model") and len((dcf or {}).get("lines") or []) == len(path):
+            dnwc_list = [line["dnwc"] for line in dcf["lines"]]
+            nwc_sentence = ("Model operasional: kenaikan modal kerja dari hari piutang atas "
+                            "pendapatan serta hari persediaan dan utang usaha atas biaya variabel, "
+                            "sama dengan DCF.")
         else:
             nwc_ratio = _num((dcf or {}).get("nwc_ratio"))
             nwc_basis = (dcf or {}).get("nwc_basis")
@@ -756,7 +837,8 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         interim["da_h2"] = da_list[0] - interim["da_1h"]
         interim["capex_1h"] = abs(interim["flows"]["capital_expenditure"])
         interim["capex_h2"] = first["capex"] - interim["capex_1h"]
-        interim["dnwc_h2"] = dnwc_list[0] * interim["h2_share"]
+        interim["dnwc_h2"] = (dnwc_list[0] if lom and lom.get("dnwc")
+                              else dnwc_list[0] * interim["h2_share"])
         short = [name for name, key in (("D&A", "da_h2"), ("capex", "capex_h2"))
                  if interim[key] < 0]
         if short:
@@ -1192,6 +1274,7 @@ def _bank_model_rows(intake, fc, model, horizon):
         "yang sama dipakai Key Financials dan DDM."] + list(model.get("assumptions") or [])
     for text in (model.get("checks") or {}).get("warnings") or []:
         assumptions.append(f"Catatan model: {text}.")
+    assumptions.extend(_earnings_quality_notes(intake, fc))
     return {"rows": rows, "notes": _notes(rows, universe, reasons, None),
             "assumptions": assumptions, "basis": "skenario analis (model driver bank)",
             "mode": MODE_BANK_DRIVER, "base_year": model.get("base_year")}
