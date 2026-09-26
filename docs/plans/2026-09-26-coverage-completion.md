@@ -83,7 +83,7 @@ Each checkpoint ends with: the full test suite passing, `git diff --check` clean
 
 | Checkpoint | State | Date | Notes |
 |---|---|---|---|
-| 1 | waiting on D1, D2, D3, D10 | | |
+| 1 | waiting on D1 (attestation), D2, D3, D10 | 2026-09-26 | POWR forward assumptions accepted by the Sektoral Team (industrial volume +5,0/+4,5/+4,0/+3,5% FY27-FY30, flat US$ tariff and fuel cost per MWh, 25% tax); POWR still needs the authenticated attestation on its frozen bundle |
 | 2 | ready to start | | |
 | 3 | waiting on D4-D7 | | |
 | 4 | waiting on D8, D9 | | |
