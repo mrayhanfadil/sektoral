@@ -139,6 +139,40 @@ def official_actual_row(evidence):
     }
 
 
+def filing_rows(evidence):
+    """Official filing pages the pack's ledgers cite (``filing_sources``).
+
+    Each key becomes one row whose ``name`` is that key, so a ledger record can
+    cite a filing by key and resolve it to the row's canonical ``row_id``.
+    """
+    sources = (evidence or {}).get("filing_sources")
+    out = []
+    for key, source in sorted((sources or {}).items()) if isinstance(sources, dict) else ():
+        if not isinstance(source, dict):
+            continue
+        out.append({
+            "kind": "official_filing",
+            "use": "source of a reviewed normalization or share-ledger record",
+            "name": key,
+            "period": source.get("period"),
+            "published_at": source.get("published_at"),
+            "available_at": source.get("available_at"),
+            "currency": source.get("currency"),
+            "unit": source.get("unit"),
+            "source": source.get("url"),
+            "source_title": source.get("title"),
+            "page": source.get("page"),
+        })
+    return out
+
+
+def row_ids_by_name(register, kind="official_filing"):
+    """``{name: row_id}`` for one row kind of a register with row IDs."""
+    return {row["name"]: row["row_id"] for row in (register or {}).get("rows") or []
+            if isinstance(row, dict) and row.get("kind") == kind
+            and row.get("name") and row.get("row_id")}
+
+
 def guidance_rows(evidence):
     """Forward operating constraints from company guidance/contracts."""
     out = []
@@ -220,6 +254,7 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
     actual = official_actual_row(evidence)
     if actual:
         rows.append(actual)
+    rows.extend(filing_rows(evidence))
     rows.extend(guidance_rows(evidence))
     rows.extend(news_rows(articles, news_full))
     rows.extend(assumption_rows(plan))
@@ -232,7 +267,7 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
     for row in rows:
         kind = row.get("kind")
         pub = row.get("published_at")
-        date_required = kind in {"official_actual", "company_guidance",
+        date_required = kind in {"official_actual", "official_filing", "company_guidance",
                                  "sectors_article", "tavily_article"}
         if pub in (None, ""):
             if date_required:
@@ -245,7 +280,7 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
                 violations.append(
                     f"{kind}: {pub} after as-of {cutoff.isoformat()}")
 
-        if kind in {"official_actual", "company_guidance",
+        if kind in {"official_actual", "official_filing", "company_guidance",
                     "sectors_article", "tavily_article"}:
             source = row.get("source") or row.get("url")
             if not _has_http_source(source):
@@ -267,6 +302,6 @@ def build(ticker, as_of, intake=None, register=None, news_full=(), plan=None):
             "rows": rows, "violations": violations,
             "critical_violations": list(dict.fromkeys(critical_violations)),
             "counts": {kind: sum(1 for r in rows if r.get("kind") == kind)
-                       for kind in ("official_actual", "company_guidance",
-                                    "sectors_article", "tavily_article",
-                                    "analyst_assumption")}})
+                       for kind in ("official_actual", "official_filing",
+                                    "company_guidance", "sectors_article",
+                                    "tavily_article", "analyst_assumption")}})
