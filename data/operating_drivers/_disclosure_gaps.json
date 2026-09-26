@@ -1,0 +1,65 @@
+{
+ "schema_version": 1,
+ "note": "Tickers whose filings do not disclose what an operating driver file needs; checked sources and the missing disclosure (plan T2). A ticker listed here stays Assumption-Led until the disclosure exists.",
+ "JPFA": {
+  "checked_at": "2026-09-26",
+  "missing": "segment sales volumes and realized prices (feed tonnes, DOC and broiler volumes); the operating model needs volume x price per segment",
+  "checked": [
+   {
+    "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026 (tidak diaudit)",
+    "url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+    "finding": "Catatan 42 (PDF 145-148): pendapatan dan hasil per segmen (pakan, pembibitan, peternakan komersial, pengolahan dan produk konsumen, budidaya perairan, perdagangan dan lain-lain); tanpa volume atau harga"
+   },
+   {
+    "title": "PT Japfa Comfeed Indonesia Tbk 1H2026 Investor Presentation",
+    "url": "https://d1be5sn7lppxuh.cloudfront.net/assets/files/files/investor_presentation/2026/1h2026-tbk-investor-presentation.pdf",
+    "published_at": "2026-08-20",
+    "finding": "pendapatan naik 29% yoy 'mainly driven by higher sales volumes and ASPs', tanpa angka volume atau ASP"
+   }
+  ]
+ },
+ "SIDO": {
+  "checked_at": "2026-09-26",
+  "missing": "sales volumes and realized prices by segment (herbal and supplement, food and beverage, pharmacy); the operating model needs volume x price per segment",
+  "checked": [
+   {
+    "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Consolidated Financial Statements as of June 30, 2026 (unaudited)",
+    "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+    "finding": "informasi segmen memuat penjualan dan laba per segmen; tanpa volume atau harga"
+   },
+   {
+    "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Company Update 6M26",
+    "url": "https://investor.sidomuncul.co.id/misc/slides/2026/Company-Update-6M26.pdf",
+    "published_at": "2026-08-07",
+    "finding": "pertumbuhan per segmen dan margin dijelaskan kualitatif ('temporary volume', 'boost Herbal volume'); panduan FY26 penjualan sekitar -10%, capex Rp120-150 miliar, payout sekitar 90%; tanpa angka volume atau harga"
+   }
+  ]
+ },
+ "GMFI": {
+  "checked_at": "2026-09-26",
+  "missing": "operating volumes and prices by segment (airframe checks or hangar-slot use, engine shop visits, component units, line-maintenance stations and rates); the operating model needs volume x price per segment",
+  "checked": [
+   {
+    "title": "GMFI Interim Consolidated Financial Statements, 30 June 2026",
+    "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/laporan-keuangan/2026/doc-20260915-wa0002.pdf",
+    "finding": "informasi segmen memuat pendapatan dan hasil per segmen; tanpa volume atau harga"
+   },
+   {
+    "title": "GMF AeroAsia Company Update 2Q2025 (terbaru yang tersedia di situs emiten)",
+    "url": "https://www.gmf-aeroasia.co.id/cfind/source/files/investor-relations/business-update/2025/company%20update%202q2025.pdf",
+    "finding": "kapasitas (4 hangar, 30 slot) dan profil layanan; tanpa volume periode atau harga"
+   }
+  ]
+ },
+ "INET": {
+  "checked_at": "2026-09-26",
+  "missing": "network and subscriber volumes and prices (homes passed, ports, subscribers, ARPU or lease rates per segment); the operating model needs volume x price per segment, so the peer EV/EBITDA method stays primary (Sektoral Team decision D6)",
+  "checked": [
+   {
+    "title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",
+    "url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202609/7cc0570c87_86a3531070.pdf",
+    "finding": "pendapatan dan beban per segmen; tanpa volume jaringan, pelanggan atau harga"
+   }
+  ]
+ }
+}

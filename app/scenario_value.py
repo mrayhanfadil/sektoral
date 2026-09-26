@@ -25,19 +25,22 @@ import re
 from datetime import date
 from statistics import median
 
-from . import bank_model, fmt
+from . import bank_model, fmt, house_assumptions, period_basis, share_basis
 
-KD_PRETAX = 0.09          # market cost of debt, policy parameter (as the screen)
+_IDR_POLICY = house_assumptions.discount_inputs("IDR")
+_USD_POLICY = house_assumptions.discount_inputs("USD")
+
+KD_PRETAX = _IDR_POLICY["cost_of_debt_pretax"]  # policy parameter (screen)
 STATUTORY_TAX = 0.22      # Indonesian corporate income tax, fallback only
-GRID_DELTAS = (-0.01, -0.005, 0.0, 0.005, 0.01)
-GRID_GROWTH = (0.025, 0.035, 0.045)
+GRID_DELTAS = tuple(_IDR_POLICY["scenario_rate_sensitivity"])
+GRID_GROWTH = tuple(_IDR_POLICY["growth_sensitivity"])
 
 # --- Discount rate of a model built in US$ (spec §2, §4.2, §4.3) -----------
 # Rupiah model: Rf = INDOGB 10Y, which already prices Indonesia's country
 # risk, so no CRP is added. US$ model: Rf = UST 10Y at the Report Date
 # (app.rates) + the Indonesia country risk premium + beta x mature-market ERP.
 
-CRP_INDONESIA = 0.025
+CRP_INDONESIA = _USD_POLICY["country_risk_premium"]
 # Indonesia country risk premium, US$ models only: parameter kebijakan analis
 # like ERP 4% and g 3,5% (spec §4.3), not a figure taken from an outside
 # source. UST 10Y prices no Indonesian sovereign, transfer or convertibility
@@ -47,12 +50,12 @@ CRP_INDONESIA = 0.025
 # spreads; the sensitivity grid's WACC +/-1pp shows what a different premium
 # does. Never added to a rupiah model (INDOGB already carries it).
 
-TERMINAL_GROWTH_USD = 0.03
+TERMINAL_GROWTH_USD = _USD_POLICY["terminal_growth"]
 # Terminal growth of a US$ model: parameter kebijakan analis. Nominal US$
 # growth = the US central bank's 2% long-run inflation objective plus 1pp real
 # growth, 0,5pp below the rupiah policy 3,5% because US$ inflation is lower;
 # below UST 10Y, the template's cap (g <= risk-free rate).
-GRID_GROWTH_USD = (0.02, 0.03, 0.04)
+GRID_GROWTH_USD = tuple(_USD_POLICY["growth_sensitivity"])
 
 
 def _num(value):
@@ -86,13 +89,10 @@ def model_currency(intake):
 
 
 def _period_months(period):
-    """Months an interim period covers: 1H26 -> 6, 9M26 -> 9, Q1/3M -> 3, FY -> 12."""
-    text = str(period or "").upper()
-    for pattern, months in ((r"^(1H|H1|6M)", 6), (r"^9M", 9), (r"^(3M|1Q|Q1)", 3),
-                            (r"^(FY|12M)", 12)):
-        if re.match(pattern, text):
-            return months
-    return None
+    """Months an interim period covers: 1H26 -> 6, 9M26 -> 9, Q1/3M -> 3, FY -> 12.
+
+    A standalone later quarter (Q2, 3Q26) returns None; see ``app.period_basis``."""
+    return period_basis.cumulative_months(period)
 
 
 def _official_debt(balance):
@@ -158,8 +158,11 @@ def discount_rates(intake, rf, g):
     rate (spec §2: US$ cash flows are not discounted at a rupiah rate).
     """
     if model_currency(intake) != "USD":
-        return {"currency": "IDR", "rf": rf, "rf_label": "INDOGB 10Y", "crp": 0.0, "g": g,
-                "grid_growth": GRID_GROWTH, "kd_pretax": KD_PRETAX,
+        policy = house_assumptions.discount_inputs("IDR")
+        return {"currency": "IDR", "rf": policy["risk_free"], "rf_label": "IDR policy Rf",
+                "crp": policy["country_risk_premium"], "g": policy["terminal_growth"],
+                "erp": policy["equity_risk_premium"], "beta": policy["beta"],
+                "grid_growth": tuple(policy["growth_sensitivity"]), "kd_pretax": policy["cost_of_debt_pretax"],
                 "kd_basis": "parameter kebijakan analis"}, []
     ust = intake.get("ust_10y") or {}
     rate = _num(ust.get("rate"))
@@ -167,8 +170,11 @@ def discount_rates(intake, rf, g):
         return None, ["imbal hasil UST 10Y bertanggal tidak tersedia pada tanggal laporan; arus "
                       "kas US$ tidak didiskonto dengan tingkat rupiah"]
     kd, kd_basis, effective = usd_cost_of_debt(intake, rate)
+    policy = house_assumptions.discount_inputs("USD")
     return {"currency": "USD", "rf": rate, "rf_label": "UST 10Y", "rf_date": ust.get("date"),
-            "rf_source": ust.get("source"), "crp": CRP_INDONESIA, "g": TERMINAL_GROWTH_USD,
+            "rf_source": ust.get("source"), "crp": policy["country_risk_premium"],
+            "erp": policy["equity_risk_premium"], "beta": policy["beta"],
+            "g": policy["terminal_growth"],
             "grid_growth": GRID_GROWTH_USD, "kd_pretax": kd, "kd_basis": kd_basis,
             "kd_effective": effective}, []
 
@@ -240,11 +246,9 @@ def bridge(intake):
     period = balance.get("period_end")
     official = lambda value: value * fx if _num(value) is not None and fx else None
     out = {"fx": fx, "official_date": _day(period)}
-    shares = _num(balance.get("shares_outstanding")) or _num(balance.get("shares_issued"))
+    shares, shares_basis = share_basis.report_date_shares(intake)
     if shares:
-        out.update(shares=shares, shares_basis=f"neraca interim resmi {period}")
-    elif _num(intake.get("shares")):
-        out.update(shares=intake["shares"], shares_basis="data Sectors")
+        out.update(shares=shares, shares_basis=shares_basis)
     annual = next((a for a in reversed(intake.get("annuals") or [])
                    if _num(a.get("total_debt")) is not None and _num(a.get("cash")) is not None),
                   None)
@@ -569,7 +573,7 @@ def ddm(intake, fc, coe, g):
               "terminal_payout_basis": base["terminal_payout_basis"],
               "tv_share": base["pv_tv"] / base["per_share"] if base["per_share"] else None,
               "per_share": base["per_share"], "grid": grid,
-              "per_share_down": grid.get((0.01, 0.025)),
+              "per_share_down": grid.get((GRID_DELTAS[-1], GRID_GROWTH[0])),
               "bvps": bvps, "roe": roe, "year": rows[0]["year"],
               "dps_hist": list(intake.get("dps_hist") or []),
               "implied_coe": implied_rate(lambda r: value(r, g)["per_share"],
@@ -598,7 +602,7 @@ _DETAIL_MONEY = ("cash", "debt", "nci", "distributions", "equity_market", "termi
                  "ev_exit", "tv_exit", "pv_tv_exit", "equity_exit", "prior_revenue")
 
 
-def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
+def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=None):
     """FCFF DCF on the scenario path (Opsi A), in the model currency.
 
     FCFF = EBIT x (1 - effective tax) + D&A - capex - ΔNWC. Revenue, EBITDA
@@ -613,6 +617,10 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
     flows, balance sheet (``bridge_native``), EV and equity; the value per
     share alone converts to rupiah at the dated spot rate. The detail's usual
     money keys hold rupiah mirrors (US$ x that one rate), ``native`` the US$.
+
+    ``terminal_ronic`` restates the terminal on the value-driver identity
+    FCFF = NOPAT x (1 - g / RONIC) at that return on new capital (house policy:
+    a terminal failing the reinvestment or return check, ``app.terminal_economics``).
     """
     rows = path(fc)
     if not rows:
@@ -628,6 +636,8 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
                       "grid_growth": GRID_GROWTH, "kd_pretax": KD_PRETAX,
                       "kd_basis": "parameter kebijakan analis"}
     rf, crp, g = rates["rf"], rates.get("crp") or 0.0, rates["g"]
+    erp = _num(rates.get("erp")) if _num(rates.get("erp")) is not None else erp
+    beta = _num(rates.get("beta")) if _num(rates.get("beta")) is not None else beta
     kd_pretax = rates.get("kd_pretax", KD_PRETAX)
     growths = tuple(rates.get("grid_growth") or GRID_GROWTH)
     link = bridge_native(intake)
@@ -640,19 +650,31 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
     if reasons:
         return None, reasons
 
-    da_ratio, da_basis = da_intensity(intake)
-    if da_ratio is None:
-        return None, [da_basis]
-    tax, tax_basis = tax_rate(intake)
-    nwc_ratio, nwc_basis = nwc_intensity(intake)
     anchor = fc["earnings_scenario"]
-    h2_share = (anchor["h2"]["revenue"] / anchor["full_year"]["revenue"]
-                if anchor["full_year"].get("revenue") else 0.5)
-    # The scenario is in the reporting currency, which is the model currency.
-    prior = prior_revenue(intake, rows[0]["year"] - 1)
-
-    lines, previous = [], prior
-    for row in rows:
+    model = operating_lines(fc)
+    if model:
+        # The operating model's own FCFF (plan §5.1): the DCF values these lines.
+        lines, tax, terminal_line, h2_share = model
+        da_ratio = sum(l["da"] for l in lines) / sum(l["revenue"] for l in lines)
+        da_basis = "model operasional (penyusutan atas aset tetap neto awal)"
+        tax_basis = "model operasional"
+        nwc_ratio, nwc_basis = None, "model operasional (hari piutang, persediaan, utang usaha)"
+        prior = prior_revenue(intake, rows[0]["year"] - 1)
+    else:
+        terminal_line = None
+    if not model:
+        da_ratio, da_basis = da_intensity(intake)
+        if da_ratio is None:
+            return None, [da_basis]
+        tax, tax_basis = tax_rate(intake)
+        nwc_ratio, nwc_basis = nwc_intensity(intake)
+        h2_share = (anchor["h2"]["revenue"] / anchor["full_year"]["revenue"]
+                    if anchor["full_year"].get("revenue") else 0.5)
+        # The scenario is in the reporting currency, which is the model currency.
+        prior = prior_revenue(intake, rows[0]["year"] - 1)
+        lines = []
+    previous = prior
+    for row in ([] if model else rows):
         revenue, ebitda, capex = row["revenue"], row["ebitda"], row["capex"]
         da = revenue * da_ratio
         ebit = ebitda - da
@@ -688,7 +710,8 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
     end_last = _years(date(rows[-1]["year"], 12, 31), when)
     # In perpetuity the asset base must be replaced: terminal capex is at
     # least D&A, so a last-year capex below depreciation is not capitalised.
-    last = lines[-1]
+    # An operating model's terminal line drops contracts that end.
+    last = terminal_line or lines[-1]
     terminal_capex = max(last["capex"], last["da"])
     terminal_base = last["fcff"] + last["capex"] - terminal_capex
 
@@ -700,7 +723,10 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
             pv += line["fcff"] * share * factor
             out.append({"share": share, "t": t, "factor": factor,
                         "pv": line["fcff"] * share * factor})
-        terminal = terminal_base * (1 + growth)
+        if terminal_ronic:
+            terminal = last["nopat"] * (1 + growth) * (1 - growth / terminal_ronic)
+        else:
+            terminal = terminal_base * (1 + growth)
         tv = terminal / (rate - growth)
         factor_tv = 1 / (1 + rate) ** end_last
         ev = pv + tv * factor_tv
@@ -747,7 +773,8 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
               "ev": base["ev"], "equity": base["equity"], "per_share": base["per_share"],
               "ev_exit": base.get("ev_exit"), "tv_exit": base.get("tv_exit"),
               "pv_tv_exit": base.get("pv_tv_exit"), "equity_exit": base.get("equity_exit"),
-              "per_share_exit": base.get("per_share_exit"), "prior_revenue": prior}
+              "per_share_exit": base.get("per_share_exit"), "prior_revenue": prior,
+              "terminal_line": terminal_line}
     mirror = lambda v: v * to_idr if _num(v) is not None else v  # noqa: E731
     detail = {"basis": "scenario", "currency": currency,
               "lines": [{k: (mirror(v) if k in _LINE_MONEY else v) for k, v in line.items()}
@@ -758,6 +785,10 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
               "erp": erp, "beta": beta, "kd_pretax": kd_pretax, "kd_after": kd_after,
               "kd_basis": rates.get("kd_basis"), "kd_effective": rates.get("kd_effective"),
               "weight_debt": weight_debt, "wacc_bps": wacc_bps, "g": g,
+              "terminal_ronic": terminal_ronic,
+              "terminal_line": ({k: (mirror(v) if k in _LINE_MONEY else v)
+                                 for k, v in terminal_line.items()} if terminal_line else None),
+              "operating_model": bool(model),
               "implied_wacc": implied_wacc, "implied_coe": implied_coe,
               "tax_rate": tax, "tax_basis": tax_basis, "da_ratio": da_ratio,
               "da_basis": da_basis, "nwc_ratio": nwc_ratio, "nwc_basis": nwc_basis,
@@ -785,6 +816,31 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None):
               "native": native if currency == "USD" else None}
     detail.update({k: mirror(native[k]) for k in _DETAIL_MONEY})
     return detail, []
+
+
+def operating_lines(fc):
+    """(lines, tax rate, terminal line, H2 share) from a reconciled operating model, or None."""
+    model = (fc or {}).get("operating_model")
+    anchor = (fc or {}).get("earnings_scenario") or {}
+    if not isinstance(model, dict) or model.get("status") != "projected" or model.get("errors") \
+            or anchor.get("basis") != "operating_driver_model" or \
+            not all(c["ok"] for c in model.get("checks") or []):
+        return None
+    tax = model["tax_rate"]
+    lines = []
+    for r in model["rows"]:
+        lines.append({"label": r["label"], "revenue": r["revenue"], "ebitda": r["ebitda"],
+                      "da": r["da"], "ebit": r["ebit"], "tax": max(r["ebit"], 0.0) * tax,
+                      "nopat": r["nopat"], "capex": r["capex"], "dnwc": r["dnwc"],
+                      "fcff": r["fcff"], "net_attr": r["net_attr"]})
+    t = model["terminal"]
+    terminal = {"label": f"terminal (dasar {t['year']})", "revenue": t["revenue"],
+                "ebitda": t["ebitda"], "da": t["da"], "ebit": t["ebit"],
+                "tax": max(t["ebit"], 0.0) * tax, "nopat": t["nopat"], "capex": t["capex"],
+                "dnwc": t["dnwc"], "fcff": t["fcff"], "net_attr": None}
+    first = model["rows"][0]
+    h2_share = first["h2"]["fcff"] / first["fcff"] if first["fcff"] else 0.5
+    return lines, tax, terminal, h2_share
 
 
 def native_view(detail):

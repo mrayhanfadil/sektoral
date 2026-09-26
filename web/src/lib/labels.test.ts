@@ -4,7 +4,8 @@ import { pct, rp } from "./format";
 import type { ReportItem } from "./api";
 
 const item = (over: Partial<ReportItem>): ReportItem => ({
-  ticker: "AAAA", name: "PT A", date: "2026-09-24", price: 100, published: true, rating: "Hold", tp: 110,
+  ticker: "AAAA", name: "PT A", date: "2026-09-24", release_status: "distributable",
+  analytically_eligible: true, publication_state: "published", price: 100, published: true, rating: "Hold", tp: 110,
   upside: 10, method: "m", profile: "Korporasi", headline: "h", blockers: 0, held_reason: "",
   files: { pdf: true, html: true, trace: true, trace_json: true },
   chain: [{ step: "DCF", decision: "Terpilih", value: "Rp110" }], ...over,

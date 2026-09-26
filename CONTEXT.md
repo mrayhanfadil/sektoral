@@ -43,6 +43,38 @@ _Avoid_: manual input, source pack
 The issuer's most recent official period result (for example 1H26) published by the Report Date, treated as actual rather than context.
 _Avoid_: latest quarter, recent results
 
+**Period Basis**:
+Whether a period figure is cumulative year to date (Q1, 1H, 9M, FY) or a standalone later quarter or second half derived from them; growth compares only the same length, basis and consolidated or parent scope.
+_Avoid_: quarter (unqualified), YTD mixed with quarterly
+
+**Earnings Normalization Ledger**:
+Reviewed, dated bridge from reported to recurring attributable earnings: each one-off item with its tax and minority effect, restatements kept as new vintages; without it earnings are used as reported.
+_Avoid_: adjusted earnings, core profit (unsourced)
+
+**Corporate-Action Ledger**:
+Dated, sourced splits, rights issues, placements, buybacks and conversions that set the share count and per-share history known at a Report Date; pending actions stay conditional scenarios.
+_Avoid_: share changes, dilution (unqualified)
+
+**Share Ledger**:
+The issuer's dated official register counts (outstanding, net of treasury shares), the Corporate-Action Ledger between them, the reported weighted averages and potentially dilutive instruments; consecutive counts must reconcile through the actions. Its Report Date count is the one share count every per-share figure uses.
+_Avoid_: share count (unsourced), issued shares as the denominator
+
+**House Assumption Set**:
+The versioned discount-rate and terminal-growth parameters every run uses, each with currency, tenor, basis, kind, review range, dated benchmark and rationale; issuer-specific deviations are not supported.
+_Avoid_: defaults (unqualified), house view
+
+**Terminal Economics**:
+The per-run check that a perpetuity agrees with its own growth, reinvestment, returns on new capital (FCFF) or retention and ROE (bank), in the cash-flow currency.
+_Avoid_: terminal sanity check
+
+**Operating Model**:
+The sourced per-issuer driver file projected from segment volume and price through costs, capex, working capital and debt to FCFF and three reconciled statements; the only going-concern forecast that can be Production-Ready.
+_Avoid_: driver scenario (for the agent's H2 and out-year assumptions), full model
+
+**Core Earnings**:
+First-forecast-year parent earnings after the reviewed normalization bridge; P/E and P/B-ROE value them, while the income statement stays as reported.
+_Avoid_: adjusted profit, recurring profit (undefined)
+
 **Market Quote Override**:
 A dated closing price newer than the one in the Sectors Snapshot.
 
@@ -180,6 +212,17 @@ _Avoid_: recommendation, call
 **Review Required**:
 The rating when upside exceeds +100% or downside is worse than -50%; it needs a sourced fundamental thesis and a stated model limitation.
 
+### Publication
+
+**Publication Bundle**:
+The frozen Company Update, Audit Trace, manifest, rendered files, and analyst attestation identified by one publication ID.
+
+**Publication State**:
+Whether a Publication Bundle is built, analytically eligible, awaiting review, approved, published, superseded, or withdrawn; it is separate from Release Status.
+
+**Archived Company Update**:
+A previously approved Publication Bundle retained with its original identity after a newer bundle replaces it.
+
 ## Relationships
 
 - A **Model Profile** and a **Stage Classification** feed the **Method Gates**, whose verdicts fix the **Method Chain**.
@@ -190,4 +233,3 @@ The rating when upside exceeds +100% or downside is worse than -50%; it needs a 
 - An **Analyst Scenario** is anchored to **Latest Interim Actuals**; a **Screening Forecast** is not.
 - A **Bank Driver Scenario** is an **Analyst Scenario**: the DDM values the parent profit and dividends the bank model derives from it, so it stays **Assumption-Led**.
 - A **Run Replay** shows the same steps and **Method Gates** verdicts as the live run it replays; it never adds a step the **Audit Trace** does not hold.
-

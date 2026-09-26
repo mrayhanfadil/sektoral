@@ -1,0 +1,60 @@
+{
+ "ticker": "SIDO",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "competitive_position": {
+   "assessment": "Penjualan 1H26 Rp1.466,7 miliar (-19,8% yoy): jamu herbal dan suplemen Rp638,9 miliar (-40,8%; margin kotor 60,5%), makanan dan minuman Rp760,4 miliar (+10,8%; margin kotor 43,3%), farmasi Rp67,4 miliar (+7,2%).",
+   "model_effect": "Pergeseran bauran ke makanan dan minuman menurunkan margin kotor gabungan; tanpa volume per segmen, efeknya tidak dipisah menjadi volume dan harga.",
+   "evidence": [
+    {
+     "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+     "published_at": "2026-08-03",
+     "page": "PDF 84-85 (informasi segmen)"
+    }
+   ]
+  },
+  "cyclicality": {
+   "assessment": "Manajemen menurunkan panduan penjualan FY26 menjadi sekitar -10% dengan pemulihan bertahap yang digerakkan permintaan; penurunan 1H26 dikaitkan dengan volume herbal yang melemah sementara dan pembersihan stok saluran distribusi.",
+   "model_effect": "Skenario laba FY26F memakai aktual 1H26; panduan -10% menjadi pembanding, bukan input model operasional.",
+   "evidence": [
+    {
+     "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Company Update 6M26",
+     "url": "https://investor.sidomuncul.co.id/misc/slides/2026/Company-Update-6M26.pdf",
+     "published_at": "2026-08-07",
+     "page": "ringkasan 6M26 dan outlook FY26"
+    }
+   ]
+  },
+  "capital_allocation": {
+   "assessment": "Rata-rata payout di atas 92% sejak IPO; dividen FY25 Rp1,11 triliun (sekitar 90%, Rp37 per saham) ditambah program pembelian kembali saham yang telah selesai; saham treasuri 564,8 juta lembar (1,89%) per 30 Juni 2026; capex 2026 Rp120-150 miliar untuk pemeliharaan.",
+   "model_effect": "Payout tinggi dan capex kecil konsisten dengan asumsi distribusi di skenario; buyback mengurangi jumlah saham beredar di ledger saham.",
+   "evidence": [
+    {
+     "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Company Update 6M26",
+     "url": "https://investor.sidomuncul.co.id/misc/slides/2026/Company-Update-6M26.pdf",
+     "published_at": "2026-08-07",
+     "page": "capex dan kebijakan dividen"
+    },
+    {
+     "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+     "published_at": "2026-08-03",
+     "page": "PDF 68-69 (modal saham dan saham treasuri)"
+    }
+   ]
+  },
+  "ownership_control": {
+   "assessment": "PT Hotel Candi Baru memegang 77,59% saham 30 Juni 2026; keluarga Hidayat menjabat direksi dan komisaris; publik 20,46%.",
+   "model_effect": "Free float sekitar 20%; pengendalian keluarga terkonsentrasi; tidak ada diskon valuasi tambahan di luar driver.",
+   "evidence": [
+    {
+     "title": "PT Industri Jamu dan Farmasi Sido Muncul Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SIDO_Q2_2026.pdf",
+     "published_at": "2026-08-03",
+     "page": "PDF 68-69 (susunan pemegang saham)"
+    }
+   ]
+  }
+ }
+}

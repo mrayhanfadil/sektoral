@@ -1,0 +1,30 @@
+{
+ "ticker": "SSIA",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "ownership_control": {
+   "assessment": "Tidak ada pengendali tunggal: PT Henan Putihrai Asset Management 12,87%, PT Dwimuria Investama Andalan 10,24%, PT Arman Investments Utama 8,52%, Intrepid Investments Limited 8,20%, PT Persada Capital Investama 7,85%; publik 51,79% per 30 Juni 2026.",
+   "model_effect": "Kepemilikan tersebar; tidak ada diskon valuasi tambahan di luar komponen SOTP.",
+   "evidence": [
+    {
+     "title": "PT Surya Semesta Internusa Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/SSIA_Q2_2026.pdf",
+     "published_at": "2026-08-04",
+     "page": "PDF 117-118 (susunan pemegang saham)"
+    }
+   ]
+  },
+  "competitive_position": {
+   "assessment": "Pemilik kawasan industri Suryacipta City of Industry (Karawang) dan Subang Smartpolitan melalui PT Suryacipta Swadaya (63,5%), dengan 1.683 ha bruto tanah untuk pengembangan pada biaya perolehan Rp4,25 triliun; kontraktor PT Nusa Raya Cipta Tbk (63,9%) tercatat di BEI.",
+   "model_effect": "Landbank dinilai RNAV di SOTP holding dan NRCA pada harga pasar bertanggal; porsi dapat dijual 65% adalah asumsi analis berlabel.",
+   "evidence": [
+    {
+     "title": "PT Surya Semesta Internusa Tbk Laporan Tahunan 2025 (laporan keuangan konsolidasian diaudit)",
+     "url": "https://suryainternusa.com/assets/source/files/annual-report/ar-surya-2025---spread_compressed-low_22.05.2026.pdf",
+     "published_at": "2026-05-22",
+     "page": "PDF 56 (entitas anak) dan 187 (Catatan 15, tanah untuk pengembangan)"
+    }
+   ]
+  }
+ }
+}

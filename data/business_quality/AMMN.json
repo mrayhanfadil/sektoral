@@ -1,0 +1,72 @@
+{
+ "ticker": "AMMN",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "competitive_position": {
+   "assessment": "Cadangan JORC 30 Juni 2026: Batu Hijau 777 juta ton (0,34% Cu, 0,24 g/t Au) dan Elang 2.581 juta ton; pabrik konsentrator 85 Mtpa serta smelter dan PMR terintegrasi yang lulus uji jaminan kinerja.",
+   "model_effect": "Umur tambang dan kapasitas di model LoM berasal dari angka ini; Elang dinilai dengan probabilitas pengembangan 65% (dua gerbang: izin 0,80 x FID 0,80).",
+   "evidence": [
+    {
+     "title": "AMMAN H1 2026 Earnings Release",
+     "url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+     "published_at": "2026-09-21",
+     "page": "hlm. 6 (cadangan)"
+    },
+    {
+     "title": "AMMAN H1 2026 Earnings Presentation",
+     "url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline",
+     "published_at": "2026-09-21",
+     "page": "hlm. 10 dan 12 (pabrik, smelter)"
+    }
+   ]
+  },
+  "pricing_power": {
+   "assessment": "Penerima harga: penjualan katoda, emas dan konsentrat mengikuti harga acuan logam; tidak ada daya penetapan harga.",
+   "model_effect": "Harga tembaga dan emas adalah driver nilai terbesar (±10% = ±Rp350 dan ±Rp248/saham).",
+   "evidence": [
+    {
+     "title": "AMMAN H1 2026 Earnings Release",
+     "url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NywicHVyIjoiYmxvYl9pZCJ9--9965cff4df82d6a4081c2abff28b7944ed8895f2/H1%202026%20EARNINGS%20RELEASE.pdf?disposition=inline",
+     "published_at": "2026-09-21",
+     "page": "hlm. 3-4 (pendapatan per produk)"
+    }
+   ]
+  },
+  "concentration": {
+   "assessment": "Kontrak pengiriman katoda dengan Glencore sampai 31 Desember 2027 dengan uang muka pelanggan US$388 juta per 30 Juni 2026; penjualan konsentrat bergantung pada izin ekspor yang berakhir 30 April 2026.",
+   "model_effect": "Kasus dasar tanpa izin ekspor membatasi umpan pabrik pada kapasitas smelter; kasus ekspor ditampilkan sebagai sensitivitas.",
+   "evidence": [
+    {
+     "title": "AMMAN H1 2026 Financial Statements",
+     "url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+     "published_at": "2026-09-21",
+     "page": "hlm. 123 (izin ekspor) dan catatan uang muka pelanggan"
+    }
+   ]
+  },
+  "capital_allocation": {
+   "assessment": "Pinjaman jangka panjang bruto US$5,79 miliar per 30 Juni 2026 dengan pelunasan US$581 juta di 1H26 (termasuk percepatan US$340 juta); pembelian kembali saham 2025.",
+   "model_effect": "Utang neto 30 Juni menjadi jembatan ekuitas; jadwal pelunasan tidak dimodelkan terpisah.",
+   "evidence": [
+    {
+     "title": "AMMAN H1 2026 Financial Statements",
+     "url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+     "published_at": "2026-09-21",
+     "page": "hlm. 82 dan 89 (pinjaman)"
+    }
+   ]
+  },
+  "ownership_control": {
+   "assessment": "PT Sumber Gemilang Persada 32,17%, PT Medco Energi Internasional Tbk 20,92%, PT AP Investment 15,45%, SAJIR 9 LLC 5,11%; publik 25,27%.",
+   "model_effect": "Tidak mengubah arus kas; free float sekitar seperempat saham membatasi likuiditas relatif terhadap kapitalisasi.",
+   "evidence": [
+    {
+     "title": "AMMAN H1 2026 Financial Statements",
+     "url": "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NSwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--2724448c92eb5bf87ae5b6b608b4f67980755d3b/H1%202026%20FINANCIAL%20STATEMENTS.pdf?disposition=inline",
+     "published_at": "2026-09-21",
+     "page": "PDF 108 (Catatan 22, pemegang saham)"
+    }
+   ]
+  }
+ }
+}

@@ -1,8 +1,12 @@
 """TAHAP 2: FORECAST ENGINE (STAGE CHECK S2). Generik, berbasis driver, lima tahun (FY+1 s.d. FY+5)."""
+from . import bank_drivers
 from . import bank_model
 from . import fmt
 from . import scrub
 from . import rnav
+from . import lom
+from . import operating_model
+from . import period_basis
 from . import scenario_value
 
 
@@ -104,12 +108,20 @@ def _bank_scenario(intake, plan):
     actual = intake.get("latest_official_actual") or {}
     evidence = intake.get("official_evidence") or {}
     outyears = (plan or {}).get("bank_outyear_scenario")
+    sourced = bank_drivers.load(intake.get("ticker"), intake.get("as_of")) \
+        if intake.get("ticker") else None
+    if sourced is not None and bank_drivers.validate(sourced):
+        sourced = None  # an invalid file never feeds the model; the agent scenario stays
     drivers = [scenario["bank_drivers"]]
     if (isinstance(outyears, list) and len(outyears) == 4 and
             [r.get("year") for r in outyears if isinstance(r, dict)] ==
             list(range(scenario["bank_drivers"].get("year", 0) + 1,
                        scenario["bank_drivers"].get("year", 0) + 5))):
         drivers += outyears
+    if sourced is not None:
+        # The sourced driver file replaces the agent's drivers (plan §5.2).
+        drivers = bank_drivers.model_drivers(sourced)
+        outyears = drivers[1:]
     try:
         link = scenario_value.bridge(intake)
     except (KeyError, TypeError, ValueError, AttributeError):
@@ -119,9 +131,12 @@ def _bank_scenario(intake, plan):
         payout=intake.get("payout"), payout_basis=intake.get("payout_basis"),
         shares=link.get("shares") or intake.get("shares"),
         shares_basis=link.get("shares_basis") or "data Sectors",
-        nci=link.get("nci"), nci_basis=link.get("nci_basis"))
+        nci=link.get("nci"), nci_basis=link.get("nci_basis"), official_inputs=sourced)
     if not model:
         return None, None, model
+    if sourced is not None:
+        model["sourced_drivers"] = {"summary": bank_drivers.summary(sourced),
+                                    "sources": sourced.get("sources")}
     first, anchor, h2 = model["rows"][0], model["anchor"], model["h2"]
     earnings = {
         "year": first["year"], "unit": actual.get("unit"),
@@ -162,6 +177,136 @@ def _bank_scenario(intake, plan):
                    "unit": actual.get("unit"), "source_url": scenario.get("source_url"),
                    "rows": rows, "status": "validated_bank_driver_scenario"}
     return earnings, forward, model
+
+
+def _operating_scenarios(intake, model, agent=None):
+    """(earnings_scenario, outyear_scenario) shaped from the operating model.
+
+    The first year is the official 1H actual plus the model's H2; the model's
+    H1 must equal the official actual (revenue and net profit) or it is not used.
+    """
+    actual = intake.get("latest_official_actual") or {}
+    metrics = actual.get("metrics") or {}
+    rows = model["rows"]
+    first, h2 = rows[0], rows[0]["h2"]
+    h1_revenue, h1_net = first["revenue"] - h2["revenue"], first["net"] - h2["net"]
+    for key, value in (("revenue", h1_revenue), ("net_profit", h1_net)):
+        if not isinstance(metrics.get(key), (int, float)) or abs(metrics[key] - value) > 1.0:
+            return None, None, f"model 1H {key} does not equal the official {actual.get('period')} actual"
+    share = 1.0 - 0.0
+    full = {"revenue": first["revenue"], "net_profit": first["net"],
+            "net_profit_attributable": first["net_attr"], "ebitda": first["ebitda"],
+            "capex": first["capex"]}
+    earnings = {"year": first["year"], "unit": actual.get("unit"),
+                "source_url": actual.get("source_url"), "published_at": actual.get("published_at"),
+                "rationale": "model operasional: volume x harga per segmen, biaya per unit dan tetap, "
+                             "penyusutan, capex, modal kerja dan utang (data/operating_drivers)",
+                # The agent's qualitative fields (risks, catalysts, sources) stay; the
+                # numeric first-year assumptions are the model's own.
+                "assumptions": {**((agent or {}).get("assumptions") or {}),
+                                "h2_revenue_to_h1": h2["revenue"] / h1_revenue,
+                                "h2_net_margin_pct": h2["net"] / h2["revenue"] * 100,
+                                "fy_ebitda_margin_pct": first["ebitda"] / first["revenue"] * 100,
+                                "fy_capex_to_revenue_pct": first["capex"] / first["revenue"] * 100},
+                "basis": "operating_driver_model",
+                "h1": {"revenue": h1_revenue, "net_profit": h1_net},
+                "h2": {"revenue": h2["revenue"], "net_profit": h2["net"]},
+                "full_year": full,
+                "attributable_share": first["net_attr"] / first["net"] if first["net"] else share,
+                "attributable_basis": "model operasional"}
+    out, previous = [], first
+    for row in rows[1:]:
+        out.append({"year": row["year"], "label": row["label"], "revenue": row["revenue"],
+                    "ebitda": row["ebitda"], "net_profit": row["net"],
+                    "net_profit_attributable": row["net_attr"], "capex": row["capex"],
+                    "revenue_growth_pct": (row["revenue"] / previous["revenue"] - 1) * 100,
+                    "ebitda_margin_pct": row["ebitda"] / row["revenue"] * 100,
+                    "net_income_margin_pct": row["net"] / row["revenue"] * 100,
+                    "capex_to_revenue_pct": row["capex"] / row["revenue"] * 100,
+                    "rationale": "model operasional", "source_ids": ["data/operating_drivers"]})
+        previous = row
+    outyear = {"anchor_year": first["year"], "anchor": full, "unit": actual.get("unit"),
+               "source_url": actual.get("source_url"), "rows": out,
+               "status": "operating_driver_model"}
+    return earnings, outyear, None
+
+
+def _operating_rows(intake, model):
+    """The operating model as the forecast's own rows, in rupiah like Sectors rows.
+
+    A US$ model converts at the dated spot rate the scenario DCF uses; EPS is
+    parent profit over the Report Date share count.
+    """
+    fx = scenario_value.fx_rate(intake) if model.get("currency") == "USD" else 1.0
+    if not fx:
+        return None
+    shares = intake.get("shares") or 1.0
+    out = []
+    for r in model["rows"]:
+        m = {k: r[k] * fx for k in ("revenue", "ebitda", "da", "ebit", "tax", "net", "net_attr",
+                                     "capex", "dnwc", "fcff", "dividends", "liquidity", "debt",
+                                     "equity", "assets", "interest_expense", "interest_income",
+                                     "nopat")}
+        out.append({"year": r["year"], "label": r["label"], "revenue": m["revenue"],
+                    "ebitda": m["ebitda"], "margin": r["ebitda"] / r["revenue"], "da": m["da"],
+                    "ebit": m["ebit"], "interest": m["interest_expense"] - m["interest_income"],
+                    "tax": m["tax"], "net": m["net"], "net_attr": m["net_attr"],
+                    "ocf": m["net"] + m["da"] - m["dnwc"], "capex": m["capex"],
+                    "fcf": m["fcff"], "div": m["dividends"], "cash": m["liquidity"],
+                    "debt": m["debt"], "equity": m["equity"], "assets": m["assets"],
+                    "eps": m["net_attr"] / shares, "basis": "model operasional"})
+    return out
+
+
+def _operating_evidence(drivers, model):
+    """Driver evidence rows for the release gate, from the driver file's sources."""
+    sources = drivers.get("sources") or {}
+    latest = max(sources.values(), key=lambda s: s.get("published_at") or "")
+    source = " ; ".join(f"{s['title']} — {s['url']}" for s in sources.values())
+    note = ("model operasional: " + "; ".join(
+        f"{d['driver']} ({'asumsi analis' if d['kind'] == 'analyst_assumption' else 'bersumber'})"
+        for d in model["drivers"][:6]))
+    return {series: {"source": source, "source_date": latest["published_at"], "page": None,
+                     "note": note, "basis": "data/operating_drivers"}
+            for series in ("revenue", "ebitda", "net_profit", "capex")}
+
+
+def _normalization(intake, scenario):
+    """FY1 normalized parent earnings from the reviewed ledger (plan §4.4).
+
+    The first forecast year is the official 1H actual plus a modelled H2 that
+    carries no one-off items, so the 1H bridge effect is the FY1 effect. The
+    effect is taken only when the ledger is assessed, covers that fiscal year,
+    and is in the scenario's currency at full units; otherwise the reason is
+    recorded and reported earnings stand.
+    """
+    if not scenario:
+        return None
+    quality = (intake.get("earnings_quality") or {}).get("normalization") or {}
+    currency = (intake.get("official_evidence") or {}).get("reporting_currency")
+    fy1 = quality.get("fy1")
+    if quality.get("status") != "assessed" or not fy1:
+        return {"status": quality.get("status") or "not_assessed",
+                "reason": quality.get("reason") or quality.get("assessment_note") or
+                "; ".join(quality.get("blockers") or []) or "normalization not assessed",
+                "note": quality.get("assessment_note")}
+    if (period_basis.parse(fy1["period"]) or {}).get("fiscal_year") != scenario["year"] or \
+            str(fy1.get("currency")).upper() != str(currency).upper() or fy1.get("unit") != "unit":
+        return {"status": "incomplete",
+                "reason": f"normalized period {fy1['period']} ({fy1.get('currency')} "
+                          f"{fy1.get('unit')}) does not match FY{scenario['year']} "
+                          f"{currency} full units"}
+    full = scenario["full_year"]
+    reported = full.get("net_profit_attributable")
+    if not isinstance(reported, (int, float)):
+        return {"status": "incomplete", "reason": "FY1 parent earnings are not modelled"}
+    return {"status": "assessed", "period": fy1["period"], "effect": fy1["effect"],
+            "reported_attributable": reported,
+            "normalized_attributable": reported + fy1["effect"],
+            "adjustments": [{"adjustment_id": a["adjustment_id"],
+                             "description": a.get("description"),
+                             "effect": float(a["normalized_attributable_effect"])}
+                            for a in fy1.get("adjustments") or []]}
 
 
 def _outyear_scenario(interim, plan):
@@ -420,12 +565,76 @@ def build(intake, n_years=5, assumption_plan=None):
         earnings_scenario = None if is_mining else _earnings_scenario(intake, normalized_plan)
         outyear_scenario = _outyear_scenario(
             interim_scenario if is_mining else earnings_scenario, normalized_plan)
+    if is_mining:
+        # The physical LoM is the mining forecast (plan §5.3) when every input
+        # it needs is sourced or a labelled analyst assumption.
+        mine, mine_gaps = lom.build(intake, {"interim_scenario": interim_scenario})
+        if mine and not mine_gaps:
+            operating_bridge = lom.operating_bridge(intake, mine)
+            forecast_basis, production_ready = "physical_driver_forecast", True
+            production_blockers = []
+            s2["S2.9_operating_bridge"] = "lolos"
+            s2["catatan"] = [c for c in s2["catatan"] if not c.startswith("S2.9")] + [
+                "S2.9: model fisik LoM (cadangan, kapasitas pabrik dan smelter, recovery, dek "
+                "harga, biaya unit, royalti, pajak, capex) dihitung per aset dan tahun; jembatan "
+                "operasional bersumber di setiap tahap."]
+    if is_ddm and bank_fc and bank_fc.get("sourced_drivers") and bank_fc["checks"]["ok"]:
+        # A bank model on a sourced driver file (plan §5.2): official 1H lines and
+        # balances, the disclosed capital requirement, labelled drivers.
+        forecast_basis, production_ready = "financial_driver_forecast", True
+        production_blockers = []
+        s2["S2.9_driver_forecast"] = "lolos"
+        s2["catatan"] = [c for c in s2["catatan"] if not c.startswith("S2.9")] + [
+            "S2.9: model bank bersumber (baris 1H resmi, neraca 31 Desember dan 30 Juni resmi, "
+            "CAR minimum regulator) direkonsiliasi: neraca seimbang, roll-forward ekuitas dan "
+            "dividen konsisten, FY = 1H + H2."]
+        sources = bank_fc["sourced_drivers"]["sources"] or {}
+        latest = max(s.get("published_at") or "" for s in sources.values())
+        text = " ; ".join(f"{s['title']} — {s['url']}" for s in sources.values())
+        driver_evidence = {series: {"source": text, "source_date": latest, "page": None,
+                                    "note": "model bank bersumber (data/bank_drivers)",
+                                    "basis": "data/bank_drivers"}
+                           for series in ("net_profit", "equity", "payout")}
+    operating = None
+    drivers = (operating_model.load(intake.get("ticker"), intake.get("as_of"))
+               if intake.get("ticker") and not is_mining and not is_ddm else None)
+    if drivers is not None:
+        operating = operating_model.project(drivers)
+        if operating_model.ok(operating):
+            earnings, outyear, problem = _operating_scenarios(intake, operating,
+                                                              earnings_scenario)
+            screen_rows = None if problem else _operating_rows(intake, operating)
+            if problem or screen_rows is None:
+                operating["errors"] = [problem or "dated USD/IDR spot rate is not available"]
+            else:
+                earnings_scenario, outyear_scenario = earnings, outyear
+                # The reconciled model is the forecast (plan §5.1): its rows,
+                # checks and sourced driver evidence replace the screening.
+                rows = screen_rows
+                forecast_basis, production_ready = "driver_forecast", True
+                production_blockers = []
+                driver_evidence = _operating_evidence(drivers, operating)
+                s2["S2.9_driver_forecast"] = "lolos"
+                s2["S2.5_neraca"] = "lolos"
+                s2["S2.2_margin"] = "lolos" if all(mmin - 1e-9 <= r["margin"] <= mmax + 1e-9
+                                                   for r in rows) else "gagal-dilabeli"
+                s2["catatan"] = [c for c in s2["catatan"] if not c.startswith("S2.9")] + [
+                    "S2.9: model operasional (volume x harga, biaya, capex, modal kerja, utang) "
+                    "direkonsiliasi: FCFF = NOPAT + D&A - capex - kenaikan modal kerja dan neraca "
+                    "seimbang setiap tahun; 1H sama dengan aktual resmi."]
+    normalization = _normalization(intake, earnings_scenario)
+    if earnings_scenario and normalization:
+        earnings_scenario["normalization"] = normalization
+        if normalization["status"] == "assessed":
+            earnings_scenario["full_year"]["normalized_net_profit_attributable"] = \
+                normalization["normalized_attributable"]
     return {"rows": rows, "assumptions": assumptions, "s2": s2, "bridge": bridge,
             "news_assumptions": effects,
             "interim_scenario": interim_scenario,
             "earnings_scenario": earnings_scenario,
             "outyear_scenario": outyear_scenario,
             "bank_model": bank_fc if bank_earnings else None,
+            "operating_model": operating,
             "operating_bridge": operating_bridge,
             "driver_evidence": driver_evidence,
             "forecast_basis": forecast_basis,

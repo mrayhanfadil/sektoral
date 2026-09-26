@@ -24,12 +24,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
+import hashlib
+import json
 from math import isfinite
 from numbers import Real
 import re
 from urllib.parse import urlsplit
 
-from . import method_chain
+from . import evidence as evidence_mod, house_assumptions, method_chain
 
 
 OPERATING_BRIDGE_STAGES = (
@@ -140,6 +142,33 @@ def _page(value: object) -> bool:
     return _text(value)
 
 
+_REBUILT_FORECAST_FIELDS = (
+    "rows", "s2", "bank_model", "operating_bridge", "driver_evidence",
+    "forecast_basis", "production_ready", "production_blockers",
+    "assumption_plan", "interim_scenario", "earnings_scenario",
+    "news_assumptions", "base",
+)
+
+
+def _deterministic_forecast_blockers(forecast: object, intake: object) -> list[str]:
+    """Verify calculation-bearing forecast output by rebuilding its input plan."""
+    if not isinstance(forecast, Mapping) or not isinstance(intake, Mapping):
+        return ["forecast calculation could not be independently rebuilt: intake/output missing"]
+    try:
+        from . import forecast as forecast_mod
+        rebuilt = forecast_mod.build(intake, assumption_plan=forecast.get("assumption_plan"))
+    except Exception as error:
+        return [f"forecast calculation could not be independently rebuilt: {error}"]
+    original = {key: forecast.get(key) for key in _REBUILT_FORECAST_FIELDS}
+    expected = {key: rebuilt.get(key) for key in _REBUILT_FORECAST_FIELDS}
+    digest = lambda value: hashlib.sha256(json.dumps(
+        value, sort_keys=True, ensure_ascii=False, default=str,
+        separators=(",", ":")).encode()).hexdigest()
+    if digest(original) != digest(expected):
+        return ["forecast output differs from deterministic rebuild of its dated inputs and plan"]
+    return []
+
+
 def _evidence_row(row: object) -> list[str]:
     """Return missing/invalid evidence fields for a bridge stage row."""
     errors = []
@@ -239,7 +268,7 @@ def _check_operating_bridge(forecast: object) -> list[str]:
 
 
 def _check_driver_forecast(forecast: object, intake: object,
-                           profile: object = None) -> list[str]:
+                           profile: object = None, valuation_detail=None) -> list[str]:
     if not isinstance(forecast, Mapping):
         return ["sourced operating and cash-flow forecast is incomplete"]
     blockers = []
@@ -247,6 +276,8 @@ def _check_driver_forecast(forecast: object, intake: object,
     if not normalized and isinstance(intake, Mapping):
         normalized = str(intake.get("model_profile") or "").strip().lower()
     is_ddm = normalized == "financial_ddm"
+    blockers.extend(_deterministic_forecast_blockers(forecast, intake))
+
     required_series = _REQUIRED_DRIVER_SERIES_DDM if is_ddm else _REQUIRED_DRIVER_SERIES
     expected_basis = "driver_forecast"
     if forecast.get("forecast_basis") != expected_basis:
@@ -256,6 +287,11 @@ def _check_driver_forecast(forecast: object, intake: object,
             blockers.append("sourced operating and cash-flow forecast is incomplete")
     if forecast.get("production_ready") is not True:
         blockers.append("forecast is not verified as production-ready")
+    else:
+        report_date = intake.get("as_of") if isinstance(intake, Mapping) else None
+        detail = valuation_detail if isinstance(valuation_detail, Mapping) else {}
+        blockers.extend(house_assumptions.production_readiness_blockers(
+            report_date, detail.get("terminal_economics"), detail.get("reference_validation")))
     for reason in forecast.get("production_blockers") or []:
         if isinstance(reason, str) and reason.strip():
             blockers.append(f"forecast: {reason}")
@@ -389,31 +425,54 @@ def _check_sotp(result: object, intake: object) -> list[str]:
     return blockers
 
 
-def common_blockers(profile, intake, forecast):
+def _stale_deck_blockers(intake):
+    """Release policy 1.3.0: a price deck still stale after the dated fallback."""
+    mineops = (intake or {}).get("mineops") if isinstance(intake, Mapping) else None
+    out = []
+    for key, name in (("cu_price", "copper"), ("au_price", "gold")):
+        deck = (mineops or {}).get(key) if isinstance(mineops, Mapping) else None
+        if isinstance(deck, Mapping) and deck.get("stale"):
+            out.append(f"{name} price deck is {deck.get('age_days')} days old at the Report Date "
+                       f"after the dated fallback (last {deck.get('date')}); release policy "
+                       "1.3.0 blocks production use")
+    return out
+
+
+def common_blockers(profile, intake, forecast, valuation_detail=None):
     """Data/forecast blockers shared by every valuation method of a profile.
 
     Method-specific completeness (SOTP bridge, DDM result) is checked
     separately so the method chain can fall back without losing these.
     """
     blockers = []
+    if isinstance(intake, Mapping) and "evidence_register" in intake:
+        blockers.extend(evidence_mod.release_blockers(intake.get("evidence_register")))
     normalized_profile = profile.strip().lower() if isinstance(profile, str) else ""
     supported_profiles = {"finite_life_mining", "going_concern_fcff", "financial_ddm"}
     if normalized_profile not in supported_profiles:
         blockers.append(f"unsupported model profile: {profile or 'missing'}")
     if normalized_profile == "finite_life_mining":
+        blockers.extend(_deterministic_forecast_blockers(forecast, intake))
         blockers.extend(_check_latest_interim_actuals(intake))
         blockers.extend(_check_operating_bridge(forecast))
+        blockers.extend(_stale_deck_blockers(intake))
         if (not isinstance(forecast, Mapping) or
                 forecast.get("forecast_basis") != "physical_driver_forecast" or
                 forecast.get("production_ready") is not True):
             blockers.append(
                 "mining forecast is not a verified physical-driver production forecast")
+        elif isinstance(forecast, Mapping):
+            report_date = intake.get("as_of") if isinstance(intake, Mapping) else None
+            detail = valuation_detail if isinstance(valuation_detail, Mapping) else {}
+            blockers.extend(house_assumptions.production_readiness_blockers(
+                report_date, detail.get("terminal_economics"), detail.get("reference_validation")))
         s2 = (forecast or {}).get("s2") if isinstance(forecast, Mapping) else None
         if isinstance(s2, Mapping) and s2.get("S2.9_operating_bridge") == "gagal":
             blockers.append("forecast gate failed: S2.9 physical-to-financial operating bridge is not reconciled")
     elif normalized_profile in {"going_concern_fcff", "financial_ddm"}:
         blockers.extend(_official_actual_blockers(intake))
-        blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile))
+        blockers.extend(_check_driver_forecast(forecast, intake, normalized_profile,
+                                               valuation_detail))
     return blockers
 
 
@@ -634,6 +693,21 @@ def assess_ddm_scenario(intake, forecast, valuation, assumption_status):
                        "terekonsiliasi",
                        "payout historis data Sectors dianggap berlanjut; CoE CAPM dan "
                        "pertumbuhan jangka panjang adalah parameter kebijakan analis"]
+    if isinstance(model, Mapping) and model.get("sourced_drivers") and not blockers:
+        # A bank model on a sourced driver file is a production candidate
+        # (plan §5.2): every shared blocker, this run's terminal economics and
+        # its independent reference must clear.
+        production = common_blockers(intake.get("model_profile"), intake, forecast, detail)
+        return {
+            "status": "distributable" if not production else "distributable_assumption_led",
+            "method": "DDM (model bank bersumber, Cost of Equity)",
+            "blockers": [], "production_blockers": production,
+            "limitations": (["driver ke depan (pertumbuhan kredit, NIM, pendapatan non-bunga, CIR, "
+                             "biaya kredit) adalah panduan manajemen untuk tahun pertama dan asumsi "
+                             "analis berlabel sesudahnya"]
+                            + ([f"belum Production-Ready: {b}" for b in production]
+                               if production else [])),
+        }
     return {
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "DDM (dividend scenario, Cost of Equity)",
@@ -667,6 +741,20 @@ def assess_fcff_scenario(intake, forecast, valuation, assumption_status):
             blockers.append(f"enterprise-to-equity bridge is missing {key}")
     if not _number(detail.get("equity")) or detail["equity"] <= 0:
         blockers.append("equity value is not positive")
+    if detail.get("operating_model") and not blockers:
+        # A reconciled operating model is a production candidate (plan §5.1):
+        # every shared production blocker, including this run's terminal
+        # economics and independent reference, must clear.
+        production = common_blockers(intake.get("model_profile"), intake, forecast, detail)
+        return {
+            "status": "distributable" if not production else "distributable_assumption_led",
+            "method": "FCFF DCF (model operasional, terminal Gordon)",
+            "blockers": [], "production_blockers": production,
+            "limitations": (["driver ke depan (volume, harga, biaya per unit, capex) adalah "
+                             "asumsi analis berlabel dengan dasar bersumber; lihat daftar driver"]
+                            + ([f"belum Production-Ready: {b}" for b in production]
+                               if production else [])),
+        }
     return {
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "FCFF DCF (earnings scenario, Gordon terminal)",
@@ -679,6 +767,34 @@ def assess_fcff_scenario(intake, forecast, valuation, assumption_status):
                         "exit EV/EBITDA historis hanya cross-check; selisihnya diungkapkan, "
                         "tidak dirata-rata"],
     }
+
+
+def _holding_production_blockers(intake, detail, components):
+    """What keeps a holding SOTP from Production-Ready (plan D7): each listed
+    stake at a dated close no older than the market-close window and its book
+    equity at the parent's balance date, a complete landbank RNAV when land is
+    held, the house policy in effect and this run's independent reference."""
+    out = []
+    report_day = _date((intake or {}).get("as_of"))
+    balance_day = detail.get("balance_period")
+    from . import release_policy
+    window = release_policy.policy_snapshot()["freshness"]["market_close"]["max_age_days"]
+    for c in components:
+        market_day = _date(c.get("market_date"))
+        if not market_day:
+            out.append(f"{c.get('ticker')} market value is not a dated close")
+        elif report_day and ((report_day - market_day).days > window or market_day > report_day):
+            out.append(f"{c.get('ticker')} close {c['market_date']} is outside the "
+                       f"{window}-day window of the Report Date")
+        if not c.get("book_date") or (balance_day and str(c["book_date"]) != str(balance_day)):
+            out.append(f"{c.get('ticker')} book equity is not dated at the parent balance date "
+                       f"({balance_day})")
+    if ((intake or {}).get("official_evidence") or {}).get("landbank") and not detail.get("landbank"):
+        out.append("landbank RNAV inputs are incomplete")
+    out.extend(house_assumptions.production_readiness_blockers(
+        (intake or {}).get("as_of"), detail.get("terminal_economics"),
+        detail.get("reference_validation")))
+    return out
 
 
 def assess_holding_sotp(intake, forecast, valuation, assumption_status):
@@ -706,8 +822,11 @@ def assess_holding_sotp(intake, forecast, valuation, assumption_status):
     for c in components:
         if not _text(c.get("stake_source")) or not _text(c.get("market_source")):
             blockers.append(f"holding SOTP component {c.get('ticker', '?')} lacks a source")
+    production = _holding_production_blockers(intake, detail, components)
     return {
-        "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
+        "status": ("draft_non_distributable" if blockers else
+                   "distributable_assumption_led" if production else "distributable"),
+        "production_blockers": production,
         "method": "Holding SOTP (listed stakes at market, rest at book)",
         "blockers": blockers,
         "limitations": [("tanah untuk pengembangan dinilai dengan RNAV landbank; porsi dapat "
@@ -717,7 +836,10 @@ def assess_holding_sotp(intake, forecast, valuation, assumption_status):
                         "segmen tanpa harga pasar dinilai pada nilai buku (lahan industri pada "
                         "biaya perolehan)",
                         "diskon holding 20-30% adalah asumsi analis untuk sensitivitas",
-                        "DCF konsolidasi atas skenario analis hanya referensi"],
+                        "DCF konsolidasi atas skenario analis hanya referensi",
+                        ("proyeksi laba FY26F-FY30F adalah skenario analis tanpa model "
+                         "operasional bersumber; nilai SOTP pada tanggal laporan tidak "
+                         "bergantung padanya")],
     }
 
 
@@ -762,20 +884,43 @@ def assess_sotp_lom_scenario(intake, forecast, valuation, assumption_status):
         blockers.append("LoM analyst assumption source is dated after the report")
     if detail.get("gaps"):
         blockers.append("LoM inputs missing: " + ", ".join(detail["gaps"]))
+    factor = lom.get("elang_risk_factor")
+    risk = f"{factor * 100:.0f}%" if _number(factor) else "tanpa angka"
+    escalation = ((detail.get("lom") or {}).get("inputs") or {}).get("escalation")
+    deck = (f"dieskalasi {escalation * 100:.1f}% per tahun (inflasi AS), biaya dan capex ikut "
+            "dieskalasi".replace(".", ",") if _number(escalation) and escalation > 0
+            else "dianggap datar")
+    unvalued = ("cadangan Elang sesudah batas izin"
+                if (((detail.get("lom") or {}).get("inputs") or {}).get("wc")) else
+                "modal kerja dan cadangan Elang sesudah batas izin")
+    if not blockers and (forecast or {}).get("forecast_basis") == "physical_driver_forecast":
+        # The LoM is the forecast (plan §5.3): every shared production blocker,
+        # this run's independent reference and the house policy must clear.
+        production = common_blockers(intake.get("model_profile"), intake, forecast, detail)
+        return {
+            "status": "distributable" if not production else "distributable_assumption_led",
+            "method": "SOTP/LoM (model fisik, asset NAV, tanpa terminal perpetual)",
+            "blockers": [], "production_blockers": production,
+            "limitations": ([f"capex dan jadwal Elang dari riset broker serta probabilitas "
+                             f"pengembangan {risk} adalah asumsi analis berlabel; dek harga "
+                             f"rata-rata 12 bulan {deck}; {unvalued} tidak dinilai"]
+                            + ([f"belum Production-Ready: {b}" for b in production]
+                               if production else [])),
+        }
     return {
         "status": "draft_non_distributable" if blockers else "distributable_assumption_led",
         "method": "SOTP/LoM (asset NAV, no perpetual terminal)",
         "blockers": blockers,
         "limitations": [
-            "dek harga rata-rata 12 bulan kalender terakhir dianggap datar sepanjang umur tambang; "
+            f"dek harga rata-rata 12 bulan kalender terakhir {deck} sepanjang umur tambang; "
             "harga cadangan JORC emiten ditampilkan sebagai sensitivitas",
             "capex dan jadwal Elang tidak diungkapkan emiten; capex dari riset broker dan "
-            "probabilitas pengembangan 50% adalah asumsi analis",
+            f"probabilitas pengembangan {risk} adalah asumsi analis",
             "tanpa izin ekspor, umpan pabrik dibatasi kapasitas smelter sehingga jadwal pit, "
             "stockpile dan Elang lebih lambat dari jadwal emiten; kasus ekspor diperpanjang "
             "ditampilkan sebagai sensitivitas",
-            "cadangan Elang sesudah 2050 dan modal kerja tidak dinilai (penambangan sampai "
-            "cadangan habis ditampilkan sebagai sensitivitas)"],
+            f"{unvalued} tidak dinilai (penambangan sampai cadangan habis ditampilkan "
+            "sebagai sensitivitas)"],
     }
 
 

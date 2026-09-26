@@ -1,0 +1,77 @@
+{
+ "ticker": "BBCA",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "competitive_position": {
+   "assessment": "Pendanaan berbiaya rendah: giro dan tabungan Rp1.075,9 triliun atau 84,8% simpanan nasabah 30 Juni 2026; kredit bruto Rp1.012,7 triliun terdiri dari modal kerja Rp452,9 triliun, investasi Rp382,6 triliun, konsumsi Rp154,7 triliun dan kartu kredit Rp19,4 triliun.",
+   "model_effect": "Biaya dana 1,1% (definisi model) dan NIM 5,4% di driver berasal dari struktur pendanaan ini; keunggulan di luar angka ini tidak diklaim.",
+   "evidence": [
+    {
+     "title": "PT Bank Central Asia Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+     "published_at": "2026-07-28",
+     "page": "PDF 84 (Catatan 19a, simpanan nasabah per jenis)"
+    },
+    {
+     "title": "PT Bank Central Asia Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+     "published_at": "2026-07-28",
+     "page": "PDF 67 (Catatan 12, kredit per jenis)"
+    }
+   ]
+  },
+  "cyclicality": {
+   "assessment": "Kredit Stage 3 Rp18,6 triliun atau 1,8% kredit bruto 30 Juni 2026 (31 Desember 2025: Rp16,2 triliun, 1,7%); cadangan kerugian Rp30,7 triliun atau 1,7x kredit Stage 3; biaya kredit 1H26 0,39% disetahunkan.",
+   "model_effect": "Biaya kredit ±20 bp mengubah nilai ±Rp165/saham; pertumbuhan kredit ±1 pp mengubah nilai sekitar ±Rp175/saham.",
+   "evidence": [
+    {
+     "title": "PT Bank Central Asia Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+     "published_at": "2026-07-28",
+     "page": "PDF 69 (Catatan 12, mutasi kredit per stage)"
+    },
+    {
+     "title": "PT Bank Central Asia Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+     "published_at": "2026-07-28",
+     "page": "PDF 2 (posisi keuangan, cadangan kerugian kredit)"
+    }
+   ]
+  },
+  "capital_allocation": {
+   "assessment": "Dividen tahun buku 2025 Rp336 per saham atau 72% laba bersih (RUPST 12 Maret 2026); saham treasuri naik dari 262,0 juta menjadi 433,3 juta lembar pada 1H26; KPMM entitas induk 26,8% terhadap persyaratan 14,99%.",
+   "model_effect": "Payout 72% dipertahankan di model dan persyaratan modal 14,99% sebagai batas; kelebihan modal tidak dikembalikan di luar jalur payout.",
+   "evidence": [
+    {
+     "title": "ANTARA: RUPS BCA tetapkan rasio dividen tahun buku 2025 sebesar 72 persen",
+     "url": "https://www.antaranews.com/berita/5470831/rups-bca-tetapkan-rasio-dividen-tahun-buku-2025-sebesar-72-persen",
+     "published_at": "2026-03-12"
+    },
+    {
+     "title": "PT Bank Central Asia Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+     "published_at": "2026-07-28",
+     "page": "PDF 102 (Catatan 25, saham treasuri)"
+    },
+    {
+     "title": "PT Bank Central Asia Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+     "published_at": "2026-07-28",
+     "page": "PDF 164-165 (Catatan 49f, KPMM dan buffer)"
+    }
+   ]
+  },
+  "ownership_control": {
+   "assessment": "PT Dwimuria Investama Andalan memegang 54,94% saham; pemegang saham pengendali terakhir Bapak Robert Budi Hartono; publik 44,66% (2,49% dimiliki pihak terafiliasi Dwimuria); saham treasuri 0,35%.",
+   "model_effect": "Pengendalian terkonsentrasi; tidak ada diskon valuasi tambahan di luar driver.",
+   "evidence": [
+    {
+     "title": "PT Bank Central Asia Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+     "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+     "published_at": "2026-07-28",
+     "page": "PDF 102 (Catatan 25, komposisi pemegang saham)"
+    }
+   ]
+  }
+ }
+}

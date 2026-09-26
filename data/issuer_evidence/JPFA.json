@@ -64,5 +64,280 @@
     "shares_issued": 11726575201,
     "shares_outstanding": 11704870701
   },
-  "operating_context": []
+  "operating_context": [],
+  "filing_sources": {
+    "jpfa-1h26-bs": {
+      "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/JPFA_Q2_2026.pdf",
+      "published_at": "2026-08-20",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+      "page": "PDF 8 (posisi keuangan: saham treasuri 21.704.500 saham; 2025: 98.905.300 saham)"
+    },
+    "jpfa-1h26-note28": {
+      "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/JPFA_Q2_2026.pdf",
+      "published_at": "2026-08-20",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+      "page": "PDF 127-128 (Catatan 28, saham treasuri)"
+    },
+    "jpfa-1h26-note34": {
+      "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/JPFA_Q2_2026.pdf",
+      "published_at": "2026-08-20",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+      "page": "PDF 135 (Catatan 34, pendapatan lainnya)"
+    },
+    "jpfa-1h26-note35": {
+      "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/JPFA_Q2_2026.pdf",
+      "published_at": "2026-08-20",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+      "page": "PDF 136 (Catatan 35, beban lainnya)"
+    },
+    "jpfa-1h26-eps": {
+      "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/JPFA_Q2_2026.pdf",
+      "published_at": "2026-08-20",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+      "page": "PDF 145 (laba per saham)"
+    },
+    "jpfa-1h26-pl": {
+      "title": "PT Japfa Comfeed Indonesia Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+      "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/JPFA_Q2_2026.pdf",
+      "published_at": "2026-08-20",
+      "period": "1H26",
+      "currency": "IDR",
+      "unit": "unit",
+      "official_filing_url": "https://www.idx.co.id/Portals/0/StaticData/ListedCompanies/Corporate_Actions/New_Info_JSX/Jenis_Informasi/01_Laporan_Keuangan/02_Soft_Copy_Laporan_Keuangan//Laporan%20Keuangan%20Tahun%202026/TW2/JPFA/PT%20Japfa%20Tbk%20CFS%2030%20June%202026%20Unaudited.pdf",
+      "page": "PDF 10 (laporan laba rugi)"
+    }
+  },
+  "share_ledger": {
+    "reviewed_through": "2026-09-26",
+    "review_basis": "issuer 30 June 2026 interim statements (share capital, treasury and EPS notes) and the cited register counts",
+    "register_counts": [
+      {
+        "date": "2025-12-31",
+        "shares_outstanding": 11627669901,
+        "source_ref": "jpfa-1h26-bs"
+      },
+      {
+        "date": "2026-06-30",
+        "shares_outstanding": 11704870701,
+        "source_ref": "jpfa-1h26-bs"
+      }
+    ],
+    "actions": [
+      {
+        "action_id": "treasury-sale-2026",
+        "kind": "treasury_resale",
+        "status": "completed",
+        "shares": 98905300,
+        "proceeds": 259284000000,
+        "announced_at": "2026-05-11",
+        "effective_date": "2026-05-26",
+        "source_ref": "jpfa-1h26-note28",
+        "description": "98.905.300 treasury shares sold to Japfa Pte. Ltd, completed 26 May 2026; proceeds per the 1H26 cash flow."
+      },
+      {
+        "action_id": "buyback-2026",
+        "kind": "buyback",
+        "status": "completed",
+        "timing": "aggregate",
+        "shares": 21704500,
+        "cash_paid": 41152000000,
+        "announced_at": "2026-04-29",
+        "effective_date": "2026-06-30",
+        "source_ref": "jpfa-1h26-note28",
+        "description": "21.704.500 shares repurchased under the 29 April 2026 approval; dates not disclosed."
+      }
+    ],
+    "reported_weighted_average": [
+      {
+        "period": "1H26",
+        "start": "2026-01-01",
+        "end": "2026-06-30",
+        "shares": 11704870701,
+        "source_ref": "jpfa-1h26-eps"
+      }
+    ],
+    "notes": [
+      "The issuer's 1H26 weighted average equals the closing count although the treasury sale completed on 26 May 2026; a dated derivation is not possible because the buyback is undated."
+    ]
+  },
+  "normalization_ledger": {
+    "policy": "One-off: gains or losses on disposal of investments, investment property or fixed assets, fixed-asset write-offs, fair-value gains or losses on investments, tax penalties, reversals of prior-period accruals, and net foreign-exchange gains or losses (the forecast does not project exchange movements). Recurring: operating other income (rent, penalties charged, insurance claims, scrap and by-product sales), inventory provisions and expected-credit-loss movements on operating receivables. Tax effect at the 22% statutory rate unless the item is non-deductible; the minority effect is the group's non-controlling share of profit where the entity bearing the item is not disclosed. An undisclosed composite line of 5% or more of period attributable earnings (release policy 1.2.0 materiality) blocks affirmative review.",
+    "periods_assessed": [
+      "1H26"
+    ],
+    "scope_note": "FY2025 and earlier are not assessed in this ledger; the forecast's first year uses the 1H26 actual plus a modelled second half, so the 1H26 bridge is the one that reaches FY1.",
+    "adjustments_assessed": true,
+    "reported_results": [
+      {
+        "vintage_id": "1h26-v1",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "available_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "reported_attributable_earnings": 2475417000000,
+        "source_refs": [
+          "jpfa-1h26-pl"
+        ]
+      }
+    ],
+    "adjustments": [
+      {
+        "vintage_id": "fx-gain-v1",
+        "adjustment_id": "fx-gain",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Laba neto selisih kurs atas aktivitas operasi",
+        "pretax_amount": -120870000000,
+        "tax_effect": -26591400000,
+        "minority_interest_effect": -7337861713.03,
+        "normalized_attributable_effect": -86940738286.97,
+        "source_refs": [
+          "jpfa-1h26-note34"
+        ]
+      },
+      {
+        "vintage_id": "gain-sale-shares-v1",
+        "adjustment_id": "gain-sale-shares",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Laba atas penjualan investasi saham",
+        "pretax_amount": -20520000000,
+        "tax_effect": -4514400000,
+        "minority_interest_effect": -1245742718.22,
+        "normalized_attributable_effect": -14759857281.78,
+        "source_refs": [
+          "jpfa-1h26-note34"
+        ]
+      },
+      {
+        "vintage_id": "gain-sale-fixed-assets-v1",
+        "adjustment_id": "gain-sale-fixed-assets",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Laba atas penjualan aset tetap",
+        "pretax_amount": -615000000,
+        "tax_effect": -135300000,
+        "minority_interest_effect": -37335856.32,
+        "normalized_attributable_effect": -442364143.68,
+        "source_refs": [
+          "jpfa-1h26-note34"
+        ]
+      },
+      {
+        "vintage_id": "fixed-asset-write-off-v1",
+        "adjustment_id": "fixed-asset-write-off",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Rugi penghapusan aset tetap",
+        "pretax_amount": 17493000000,
+        "tax_effect": 3848460000,
+        "minority_interest_effect": 1061977454.67,
+        "normalized_attributable_effect": 12582562545.33,
+        "source_refs": [
+          "jpfa-1h26-note35"
+        ]
+      },
+      {
+        "vintage_id": "fair-value-loss-v1",
+        "adjustment_id": "fair-value-loss",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Kerugian selisih harga transaksi dan nilai wajar aset keuangan",
+        "pretax_amount": 4668000000,
+        "tax_effect": 1026960000,
+        "minority_interest_effect": 283388255.78,
+        "normalized_attributable_effect": 3357651744.22,
+        "source_refs": [
+          "jpfa-1h26-note35"
+        ]
+      },
+      {
+        "vintage_id": "tax-penalties-v1",
+        "adjustment_id": "tax-penalties",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "one_off",
+        "description": "Denda pajak (tidak dapat dikurangkan)",
+        "pretax_amount": 1608000000,
+        "tax_effect": 0,
+        "minority_interest_effect": 125153339.51,
+        "normalized_attributable_effect": 1482846660.49,
+        "source_refs": [
+          "jpfa-1h26-note35"
+        ]
+      },
+      {
+        "vintage_id": "inventory-provision-v1",
+        "adjustment_id": "inventory-provision",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "recurring",
+        "description": "Penyisihan persediaan (operasional)",
+        "pretax_amount": 141629000000,
+        "tax_effect": 31158380000,
+        "minority_interest_effect": 8598113812.81,
+        "normalized_attributable_effect": 0,
+        "source_refs": [
+          "jpfa-1h26-note35"
+        ]
+      },
+      {
+        "vintage_id": "receivable-impairment-v1",
+        "adjustment_id": "receivable-impairment",
+        "period": "1H26",
+        "published_at": "2026-08-20",
+        "currency": "IDR",
+        "unit": "unit",
+        "classification": "recurring",
+        "description": "Penyisihan penurunan nilai piutang usaha",
+        "pretax_amount": 24680000000,
+        "tax_effect": 5429600000,
+        "minority_interest_effect": 1498290949.6,
+        "normalized_attributable_effect": 0,
+        "source_refs": [
+          "jpfa-1h26-note35"
+        ]
+      }
+    ]
+  }
 }

@@ -18,7 +18,7 @@ from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
-               mineops, rate_benchmarks, scenario_value)
+               mineops, rate_benchmarks, scenario_value, share_basis)
 from . import consensus, peer_groups
 from . import lom as lom_mod
 
@@ -35,7 +35,8 @@ COMMODITY_UNITS = {"Copper": ("Tembaga", "USD/ton"), "Gold": ("Emas", "USD/oz"),
 # Page order from spec §5.4, matched on page title prefixes.
 PAGE_ORDER = ("Tesis investasi", "Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
               "Skenario operasi", "Skenario laba", "Berita", "Sensitivitas", "Katalis",
-              "Konteks historis", "Target harga", "Cross-check", "Skenario nilai",
+              "Kualitas bisnis", "Konteks historis", "Target harga", "Driver dan skenario",
+              "Cross-check", "Skenario nilai",
               "Perbandingan peer", "Valuasi", "Data keuangan", "Lampiran valuasi")
 
 
@@ -2378,9 +2379,8 @@ def shape_key_financials(doc, intake, fc=None, va=None, statements=None):
     per_row = build("PER (x)", find("PER"), per, keep_actual=False)
     pbv_row = build("PBV (x)", find("PBV"), pbv, keep_actual=False)
     shares_pf = next((r["earnings"] / r["eps"] for r in model.values()
-                      if _num(r.get("earnings")) and _num(r.get("eps"))), None) or _num(
-        ((intake.get("official_evidence") or {}).get("balance_sheet") or {}).get(
-            "shares_outstanding")) or _num(intake.get("shares"))
+                      if _num(r.get("earnings")) and _num(r.get("eps"))), None) or \
+        share_basis.report_date_shares(intake)[0]
 
     def eps(i):
         """EPS for a table whose narrative did not write one (Sectors basis, Rp)."""
@@ -2502,7 +2502,10 @@ def chart_forecast_rows(intake, fc):
     Financials.
     """
     fc = fc or {}
-    if fc.get("production_ready") is True:
+    if fc.get("production_ready") is True and \
+            fc.get("forecast_basis") != "physical_driver_forecast" and \
+            (fc.get("earnings_scenario") or {}).get("basis") not in (
+                "operating_driver_model", "bank_driver_scenario"):
         return [{"year": r.get("year"), "label": r.get("label"), "revenue": r.get("revenue"),
                  "ebitda": r.get("ebitda"), "net": r.get("net"),
                  "net_attr": r.get("net_attr", r.get("net")),
@@ -3112,6 +3115,177 @@ def attach_risks(doc, intake, page):
         paragraphs[-1]["isi"] = paragraphs[-1]["isi"].rstrip() + f" Risiko utama: {joined}."
 
 
+def _rp(value):
+    return "n.m." if value is None else f"Rp{fmt._id(value, 0)}"
+
+
+def _signed_rp(value):
+    return "n.m." if value is None else ("+" if value >= 0 else "-") + f"Rp{fmt._id(abs(value), 0)}"
+
+
+def driver_value_page(doc, intake):
+    """Plan §6: each material driver's range and effect, and the same-model cases."""
+    dv = doc.get("driver_value") or {}
+    if not dv.get("rows"):
+        return None
+    price = intake.get("price")
+    # A model without an annual parent profit (the LoM) drops the profit columns
+    # rather than printing n.m. in every cell.
+    with_profit = any(r["fy1_profit_low"] is not None for r in dv["rows"])
+    rows = []
+    for r in dv["rows"]:
+        profit = ([f"{fmt._id(r['fy1_profit_low'] / 1e9, 1)} / {fmt._id(r['fy1_profit_high'] / 1e9, 1)}"]
+                  if with_profit else [])
+        rows.append([r["driver"], r["basis"], r["years"], r["base"], r["unit"], *profit,
+                     f"{_signed_rp(r['value_effect_low'])} / {_signed_rp(r['value_effect_high'])}"])
+    drivers = _exhibit("Driver material dan dampaknya ke nilai",
+                       ["Driver", "Dasar", "Tahun", "Nilai dasar", "Rentang uji"]
+                       + (["Δ laba induk FY1 (Rp miliar) turun / naik"] if with_profit else [])
+                       + ["Δ nilai per saham turun / naik"],
+                       rows, "Sumber: berkas driver bersumber dan model yang sama; " + dv["method"] + ".")
+    cases = dv["cases"]
+    case_rows = []
+    for key, label, text in (("downside", "Turun", "semua driver pada ujung merugikan rentang uji"),
+                             ("base", "Dasar", "driver dasar"),
+                             ("upside", "Naik", "semua driver pada ujung menguntungkan rentang uji")):
+        c = cases[key]
+        vs = f"{(c['per_share'] / price - 1) * 100:+.1f}%" if price else "-"
+        profit = [fmt._id(c["fy1_profit"] / 1e9, 1)] if with_profit else []
+        case_rows.append([label, _rp(c["per_share"]), vs, *profit, text])
+    scenario = _exhibit("Kasus dasar, turun dan naik dari model yang sama",
+                        ["Kasus", "Nilai per saham", "Terhadap harga"]
+                        + (["Laba induk FY1 (Rp miliar)"] if with_profit else [])
+                        + ["Perubahan driver"], case_rows,
+                        "Sumber: model yang sama dengan target; rentang uji bukan probabilitas.")
+    return _page("Driver dan skenario nilai",
+                 ["Setiap driver material digeser dalam rentang uji dan dinilai ulang dengan "
+                  "kalkulasi referensi independen; kasus turun dan naik menggeser semua driver "
+                  "bersamaan. Tidak ada probabilitas yang diberikan pada kasus."],
+                 [drivers, scenario])
+
+
+def investability_page(doc, intake):
+    """Plan §6.1: business quality and the liquidity limits of using this research."""
+    inv = doc.get("investability") or {}
+    if not inv:
+        return None
+    liq, ff = inv.get("liquidity") or {}, inv.get("free_float") or {}
+    rows = []
+    if liq.get("status") == "available":
+        rows.append(["Jendela observasi", f"{liq['sessions']} sesi, {liq['start']} s.d. {liq['end']} ({liq['source']})"])
+        rows.append(["Nilai transaksi harian median / rata-rata",
+                     f"Rp{fmt._id(liq['median_value'] / 1e9, 1)} miliar / Rp{fmt._id(liq['mean_value'] / 1e9, 1)} miliar"])
+        rows.append(["Sesi tanpa volume", str(liq["zero_volume_sessions"])])
+    else:
+        rows.append(["Likuiditas", f"tidak tersedia: {liq.get('reason')}"])
+    rows.append(["Free float", (f"{fmt._id(ff['pct'], 1)}% ({ff['source']})"
+                                + (f"; nilai Rp{fmt._id(ff['value'] / 1e9, 0)} miliar" if ff.get("value") else ""))
+                 if ff.get("status") == "available" else f"tidak tersedia: {ff.get('reason')}"])
+    rows.append(["Papan pencatatan", f"{inv.get('board')} ({inv.get('board_source')})" if inv.get("board")
+                 else "tidak tersedia"])
+    rows.append(["Status perdagangan", f"tidak tersedia: {inv['trading_status']['reason']}"])
+    for pos in liq.get("positions") or []:
+        rows.append([f"Ilustrasi posisi Rp{fmt._id(pos['position'] / 1e9, 0)} miliar",
+                     f"sekitar {fmt._id(pos['days'], 1)} hari bursa pada partisipasi "
+                     f"{fmt._id(pos['participation'] * 100, 0)}% nilai transaksi median"])
+    liquidity = _exhibit("Likuiditas dan investabilitas", ["Ukuran", "Nilai"], rows,
+                         "Ilustrasi posisi memakai ukuran posisi dan tingkat partisipasi yang "
+                         "dinyatakan; tidak berarti order dapat dieksekusi pada harga kutipan.")
+    bq_rows = []
+    for item in inv.get("business_quality") or []:
+        sources = "; ".join(f"{e['title']} ({e['published_at']}, {e.get('page') or '-'})"
+                            for e in item["evidence"]) or "-"
+        bq_rows.append([item["label"], item["assessment"], item.get("model_effect") or "-", sources])
+    quality = _exhibit("Kualitas bisnis", ["Dimensi", "Penilaian", "Dampak ke model", "Sumber"],
+                       bq_rows, "Setiap dimensi memakai bukti bertanggal; dimensi tanpa bukti "
+                       "tidak dijawab. Risiko yang sudah ada di arus kas tidak didiskon lagi.")
+    return _page("Kualitas bisnis dan investabilitas",
+                 ["Kualitas bisnis, batas likuiditas dan nilai model dipisahkan: yang pertama "
+                  "menjelaskan dasar driver, yang kedua membatasi penggunaan riset ini oleh "
+                  "investor institusi, dan tidak ada yang mengubah nilai di luar driver model."],
+                 [quality, liquidity])
+
+
+VALUATION_ANCHORS = ("Nilai terminal", "Proyeksi FCFF", "Proyeksi dividen", "Dasar tiap tahun")
+
+
+def valuation_by_year(doc, intake, statements):
+    """Multiples on every forecast year of the five-year model (spec §3: the
+    valuation tables show all five years; Key Financials keeps 2A+3F).
+
+    Forward multiples use the quoted price and, for PER and PBV, also the
+    target; EV/EBITDA uses the valuation's dated cash, debt and minority
+    bridge, as Key Financials does, so a year in both tables reads the same.
+    A released report only: a draft withholds its values.
+    """
+    meta = doc.get("meta") or {}
+    rows = (statements or {}).get("rows") or []
+    price, tp = _num(intake.get("price")), _num(meta.get("tp"))
+    if not rows or not price or not (tp and meta.get("rating")):
+        return None
+    bank = intake.get("model_profile") == "financial_ddm"
+
+    def cell(value, show):
+        return show(value) if value is not None else "n.m."
+
+    def ratio(num, den, cap=True):
+        if num is None or not den or den <= 0 or num <= 0:
+            return None
+        value = num / den
+        return None if cap and value > fmt.MULT_CAP else value
+
+    x = lambda v: fmt.mult(v, 1)  # noqa: E731
+    bn = lambda v: fmt._id(v / 1e9, 1)  # noqa: E731
+    rp = lambda v: fmt.rp(round(v))  # noqa: E731
+    pct = lambda v: fmt.pct(v)  # noqa: E731
+    get = lambda r, k: _num(r.get(k))  # noqa: E731
+    table = [["Laba pemilik induk (Rp miliar)"] + [cell(get(r, "earnings"), bn) for r in rows],
+             ["EPS (Rp)"] + [cell(get(r, "eps"), rp) for r in rows]]
+    if bank:
+        table += [["BVPS (Rp)"] + [cell(get(r, "bvps"), rp) for r in rows]]
+    table += [["DPS (Rp)"] + [cell(get(r, "dps"), rp) for r in rows],
+              ["ROE (%)"] + [cell(get(r, "roe"), pct) for r in rows],
+              ["PER pada harga (x)"] + [cell(ratio(price, get(r, "eps")), x) for r in rows],
+              ["PER pada target (x)"] + [cell(ratio(tp, get(r, "eps")), x) for r in rows],
+              ["PBV pada harga (x)"] + [cell(ratio(price, get(r, "bvps")), x) for r in rows]]
+    if bank:
+        table += [["PBV pada target (x)"] + [cell(ratio(tp, get(r, "bvps")), x) for r in rows]]
+    else:
+        link = scenario_value.bridge(intake)
+        parts = [_num(link.get(k)) for k in ("shares", "cash", "debt")]
+        ev = None
+        if None not in parts:
+            shares, cash_now, debt = parts
+            ev = (price * shares + debt - (cash_now - (_num(link.get("distributions")) or 0))
+                  + (_num(link.get("nci")) or 0))
+        table += [["EV/EBITDA pada harga (x)"]
+                  + [cell(ratio(ev, get(r, "ebitda")), x) for r in rows]]
+    table += [["Dividend yield pada harga (%)"]
+              + [cell(get(r, "dps") / price if get(r, "dps") is not None else None, pct)
+                 for r in rows]]
+    note = (f"Sumber: model lima tahun yang sama dengan Key Financials dan tabel valuasi; harga "
+            f"Rp{fmt.rp(price)} ({intake.get('price_date') or '-'}), target Rp{fmt.rp(tp)}. "
+            + ("" if bank else "EV/EBITDA memakai EV pada harga dengan jembatan kas, utang dan "
+               "minoritas bertanggal valuasi. ")
+            + "PER dan PBV di atas 100x atau dengan basis tidak positif ditulis n.m."
+            + (" DPS dan dividend yield n.m.: model ini tidak memproyeksikan dividen."
+               if all(get(r, "dps") is None for r in rows) else ""))
+    return _exhibit(f"Valuasi per tahun ({rows[0]['label']}-{rows[-1]['label']})",
+                    ["Rp"] + [r["label"] for r in rows], table, note)
+
+
+def attach_valuation_by_year(doc, intake, statements):
+    exhibit = valuation_by_year(doc, intake, statements)
+    if exhibit is None:
+        return
+    for page in doc["bagian"]:
+        anchors = [i for i, e in enumerate(page.get("exhibit") or [])
+                   if str(e.get("judul") or "").startswith(VALUATION_ANCHORS)]
+        if anchors:
+            page["exhibit"].insert(anchors[-1] + 1, exhibit)
+            return
+
+
 def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if not any(e.get("tipe") == "price_chart" for e in doc["exhibits"]):
         doc["exhibits"].insert(0, price_chart_exhibit(intake))
@@ -3138,7 +3312,8 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
 
     new_pages = [industry_page(intake), combo_charts_page(intake, fc, va, statements),
                  sensitivity_page(valuation_inputs),
-                 peer_page(intake, valuation_inputs)]
+                 peer_page(intake, valuation_inputs),
+                 driver_value_page(doc, intake), investability_page(doc, intake)]
     catalyst = next((e for p in pages for e in p["exhibit"]
                      if e["judul"] == "Katalis, risiko, dan indikator pemantauan"), None)
     owner_exhibits, owner_paragraphs = ownership_exhibits(intake)
@@ -3164,13 +3339,121 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
         meta = doc.get("meta") or {}
         released = meta.get("tp") if meta.get("rating") else None
         attach_consensus(pages, intake, va, released_value=released)
+    attach_valuation_by_year(doc, intake, statements)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     slim_mining(doc, intake)
+    link_catalysts(doc, intake)
+    attach_decision_summary(doc, intake, fc, va)
     for index, page in enumerate(doc["bagian"]):
         page["halaman"] = index + 2
     renumber(doc)
     return doc
+
+
+CATALYST_TITLE = "Katalis, risiko, dan indikator pemantauan"
+# Words that tie a catalyst row to a model driver (lower case, matched in the row text).
+_DRIVER_WORDS = {
+    "harga tembaga": ("tembaga", "copper"), "harga emas": ("emas", "gold"),
+    "elang": ("elang",), "diskonto": ("suku bunga", "diskonto", "bunga acuan"),
+    "biaya kredit": ("biaya kredit", "provisi", "npl", "kualitas kredit", "cost of credit"),
+    "pertumbuhan kredit": ("pertumbuhan kredit", "ekspansi kredit", "penyaluran kredit",
+                           "kredit korporasi", "dpk", "deposit"),
+    "nim": ("nim", "bi rate", "biaya dana", "yield", "margin bunga"),
+    "non-bunga": ("non-bunga", "fee", "komisi", "buyback", "dividen"),
+    "biaya / pendapatan": ("cir", "efisiensi", "biaya operasional"),
+    "harga terealisasi": ("tarif", "harga jual", "harga listrik"),
+    "pertumbuhan volume": ("volume", "kapasitas", "utilisasi", "ekspansi", "mw", "data center",
+                           "commisioning", "commissioning", "penjualan ke pln"),
+    "bahan bakar": ("gas", "bahan bakar", "fuel"), "capex": ("capex",),
+    "anak usaha tercatat": ("nrca", "konstruksi", "kontrak"),
+    "laju penjualan lahan": ("penjualan lahan", "marketing sales", "tenant", "pipeline", "backlog",
+                             "permintaan lahan"),
+    "harga lahan": ("harga lahan", "asp"),
+    "utilisasi smelter": ("utilisasi", "smelter", "ramp-up", "pemrosesan", "katoda", "volume",
+                          "panduan"),
+}
+
+
+def _driver_for(row, drivers):
+    """The driver-table row a catalyst acts on, read from the catalyst's name
+    (counted twice) and its impact path, not its evidence column (source titles
+    name unrelated things); ties go to the more value-sensitive driver."""
+    name_text = str(row[0]).lower()
+    path_text = str(row[2]).lower() if len(row) > 2 else ""
+    best, score = None, 0
+    for d in drivers:
+        name = d["driver"].lower()
+        words = {w for key, ws in _DRIVER_WORDS.items() if key in name for w in ws}
+        words |= set(re.findall(r"[a-z]{5,}", name))
+        if "pln" in name:
+            words.add("pln")
+        hits = sum(2 for w in words if w in name_text) + sum(1 for w in words if w in path_text)
+        if hits > score:
+            best, score = d, hits
+    return best
+
+
+def link_catalysts(doc, intake):
+    """T6: each catalyst row names the model driver it moves and the move in that
+    driver that changes the rating (linear reading of the tested range, as in the
+    decision summary); rows that touch no model driver say so, with the value per
+    share at which the rating would change."""
+    from . import decision_summary as D
+    meta = doc.get("meta") or {}
+    price, rating = _num(intake.get("price")), meta.get("rating")
+    drivers = (doc.get("driver_value") or {}).get("rows") or []
+    base = (((doc.get("driver_value") or {}).get("cases") or {}).get("base") or {}).get(
+        "per_share") or _num(meta.get("tp"))
+    if not price or rating not in ("Buy", "Hold", "Sell") or not base:
+        return
+    bounds = {"Buy": [price * (1 + D.BUY)], "Sell": [price * (1 + D.SELL)],
+              "Hold": [price * (1 + D.BUY), price * (1 + D.SELL)]}[rating]
+    band_text = "; ".join(
+        f"nilai {'di atas' if b > base else 'di bawah'} Rp{fmt._id(b, 0)} menjadi "
+        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}" for b in bounds)
+    for page in doc.get("bagian") or []:
+        for exhibit in page.get("exhibit") or []:
+            if exhibit.get("judul") != CATALYST_TITLE:
+                continue
+            data = exhibit.get("data") or {}
+            if "Driver model" in (data.get("cols") or []):
+                continue
+            data["cols"] = list(data.get("cols") or []) + ["Driver model", "Ambang perubahan tesis"]
+            for row in data.get("rows") or []:
+                driver = _driver_for(row, drivers) if drivers else None
+                if driver:
+                    moves = [m for m in (D._move_to(driver, b, base) for b in bounds) if m]
+                    threshold = ("; atau ".join(
+                        f"{D._step_text(driver, m)} (rating menjadi "
+                        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))})"
+                        for m, b in zip(moves, bounds)) if moves else
+                        f"driver ini sendiri tidak mengubah rating dalam rentang uji; {band_text}")
+                    row += [f"{driver['driver']} ({driver['base']})", threshold]
+                else:
+                    row += [("tidak terhubung ke driver di tabel driver-ke-nilai" if drivers else
+                             "laporan tanpa tabel driver-ke-nilai (Assumption-Led)"),
+                            f"Rating {rating} berubah bila {band_text}"]
+            exhibit["catatan_sumber"] = (str(exhibit.get("catatan_sumber") or "").rstrip(". ")
+                                         + ". Ambang dibaca linear dari rentang uji tabel "
+                                         "driver-ke-nilai; bukan probabilitas.")
+
+
+def attach_decision_summary(doc, intake, fc, va):
+    """Plan §6: the six decision questions at the top of the thesis page."""
+    if not va or not (doc.get("driver_value") or {}).get("rows"):
+        return
+    from . import decision_summary
+    rows = decision_summary.build(doc, intake, fc, va)
+    # The thesis page, else the first content page (the mining layout has none).
+    page = next((p for p in doc["bagian"] if p["judul"].startswith("Tesis investasi")),
+                (doc["bagian"] or [None])[0])
+    if not rows or page is None:
+        return
+    page["exhibit"].insert(0, _exhibit(
+        "Ringkasan keputusan", ["Pertanyaan", "Jawaban dari model"], rows,
+        "Sumber: model, rentang uji driver dan kalender pelaporan OJK (POJK 14/2022); "
+        "pembacaan harga dan ambang rating bersifat linear dari rentang uji, bukan probabilitas."))
 
 
 RATE_EXHIBITS = ("Komponen WACC", "Komponen Cost of Equity")
@@ -3274,7 +3557,7 @@ def valuation_inputs(intake, fc, va):
     scenario = fc.get("interim_scenario") or {}
     fx_rate = ((intake.get("fx_spot") or {}).get("rate") or
                (target.get("fx") or {}).get("rate"))
-    shares = balance.get("shares_outstanding") or balance.get("shares_issued") or intake.get("shares")
+    shares = share_basis.report_date_shares(intake)[0]
     inputs = {"label": f"FY{scenario['year'] % 100:02d}F" if scenario.get("year") else "FY",
               "tp": va.get("tp") if va.get("rating") else None,
               "method_label": va.get("method") or "-",

@@ -72,7 +72,7 @@ def test_rupiah_model_uses_the_local_currency_build(history):
     e = R.exhibit("UJI", "2026-09-24", _va(), DATA)
     rows = {r[0]: r for r in e["data"]["rows"]}
     assert e["data"]["cols"] == ["Parameter", "Kebijakan", "Pembanding", "Sumber, tanggal"]
-    assert "5,38% bebas risiko rupiah" in rows["Risk-free (INDOGB 10Y)"][2]
+    assert "5,38% bebas risiko rupiah" in rows["Risk-free IDR (house policy)"][2]
     assert "6,69% ERP total Indonesia" in rows["Equity risk premium (tanpa CRP terpisah)"][2]
     assert "7,8% PDB nominal Indonesia 2031" in rows["Pertumbuhan terminal g (Rp)"][2]
     coe = (0.07 - 0.0162) + (0.67 * 0.8 + 0.33) * (0.0423 + 0.0246)

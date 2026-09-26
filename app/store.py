@@ -82,6 +82,20 @@ def put(collection: str, key: str, document, db=None) -> None:
                      "updated_at=excluded.updated_at", (collection, key, body, stamp))
 
 
+def insert_if_absent(collection: str, key: str, document, db=None) -> bool:
+    """Insert a document once without replacing an existing value.
+
+    Append-only records use this primitive so retries or concurrent writers
+    cannot silently rewrite an earlier event.
+    """
+    body = json.dumps(document, ensure_ascii=False)
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with closing(_connect(db)) as conn, conn:
+        cursor = conn.execute("INSERT OR IGNORE INTO documents(collection, key, body, updated_at) "
+                              "VALUES (?,?,?,?)", (collection, key, body, stamp))
+    return cursor.rowcount == 1
+
+
 def delete(collection: str, key: str, db=None) -> None:
     with closing(_connect(db)) as conn, conn:
         conn.execute("DELETE FROM documents WHERE collection=? AND key=?", (collection, key))

@@ -1,0 +1,267 @@
+{
+ "schema_version": 1,
+ "ticker": "BBRI",
+ "currency": "IDR",
+ "unit": "unit",
+ "reviewed_at": "2026-09-26",
+ "sources": {
+  "bbri-1h26-fs": {
+   "title": "PT Bank Rakyat Indonesia (Persero) Tbk Laporan Keuangan Konsolidasian Interim 30 Juni 2026",
+   "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBRI_Q2_2026.pdf",
+   "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202608/20260831171524-64205-0/FinancialStatement-2026-II-BBRI.pdf",
+   "published_at": "2026-08-31",
+   "page": "PDF 16-18 (posisi keuangan), 19-20 (laba rugi), 388-389 (Catatan 49a, CAR dan CAR minimum)"
+  },
+  "bbri-1h26-call": {
+   "title": "Earnings call transcript: Bank Rakyat Indonesia posts strong H1 2026 profit growth (Investing.com)",
+   "url": "https://www.investing.com/news/transcripts/earnings-call-transcript-bank-rakyat-indonesia-posts-strong-h1-2026-profit-growth-93CH-4883124",
+   "published_at": "2026-08-31",
+   "page": "panduan FY2026: pertumbuhan kredit 8-10%, NIM 7,4-7,8%, biaya kredit 3,1%, CIR 41-43%, payout sekitar 70% untuk 2026 dan 50-60% jangka menengah, CAR minimal 20% jangka menengah"
+  }
+ },
+ "fy0_close": {
+  "gross_loan": 1517079700000000,
+  "allowance_for_loans": 82893734000000,
+  "non_loan_earning_assets": 2037926593000000,
+  "total_assets": 2135371105000000,
+  "total_deposit": 1466843839000000,
+  "current_account": 448203670000000,
+  "savings_account": 587585862000000,
+  "time_deposit": 431054307000000,
+  "other_interest_bearing_liabilities": 216108816000000,
+  "parent_equity": 324033858000000,
+  "non_controlling_interest": 6907576000000,
+  "total_equity": 330941434000000,
+  "total_capital": 260024920000000,
+  "total_risk_weighted_asset": 1234271906000000,
+  "non_interest_bearing_liabilities": 121477016000000,
+  "source_refs": [
+   "bbri-1h26-fs"
+  ],
+  "date": "2025-12-31",
+  "definition": "kredit bruto = kredit + pembiayaan syariah; aset produktif = giro BI dan bank lain, penempatan, efek, wesel ekspor, reverse repo, kredit, pembiayaan syariah, sewa pembiayaan (bruto); liabilitas berbunga lain = simpanan lembaga keuangan, repo, surat berharga, pinjaman, subordinasi; modal dan ATMR entitas induk"
+ },
+ "h1_close": {
+  "gross_loan": 1641631372000000,
+  "allowance_for_loans": 85756765000000,
+  "non_loan_earning_assets": 2258076828000000,
+  "total_assets": 2352380589000000,
+  "total_deposit": 1580681886000000,
+  "current_account": 449565770000000,
+  "savings_account": 619099972000000,
+  "time_deposit": 512016144000000,
+  "other_interest_bearing_liabilities": 336964248000000,
+  "parent_equity": 321923187000000,
+  "non_controlling_interest": 6751691000000,
+  "total_equity": 328674878000000,
+  "total_capital": 254904380000000,
+  "total_risk_weighted_asset": 1316984461000000,
+  "non_interest_bearing_liabilities": 106059577000000,
+  "source_refs": [
+   "bbri-1h26-fs"
+  ],
+  "date": "2026-06-30"
+ },
+ "h1": {
+  "net_interest_income": 80530442000000,
+  "operating_expense": 42386513000000,
+  "provision": 25531537000000,
+  "earnings_before_tax": 40001209000000,
+  "tax": 8818623000000,
+  "net_profit": 31182586000000,
+  "net_profit_attributable": 30865402000000,
+  "other_income": 27388817000000,
+  "source_refs": [
+   "bbri-1h26-fs"
+  ],
+  "period": "1H26",
+  "definition": "pendapatan lain = laba sebelum pajak - NII + beban operasional + cadangan (asuransi, emas, provisi dan komisi, efek, kurs dan lain-lain); cadangan = penurunan nilai aset keuangan + estimasi kerugian komitmen + aset non-keuangan"
+ },
+ "capital_requirement": {
+  "value": 0.14,
+  "source_refs": [
+   "bbri-1h26-fs"
+  ],
+  "basis": "CAR minimum profil risiko 9% + capital conservation buffer 2,5% + countercyclical buffer 0% + capital surcharge D-SIB 2,5% (Catatan 49a)",
+  "management_target": 0.2,
+  "management_target_source": "bbri-1h26-call"
+ },
+ "cost_of_funds": {
+  "value": 0.0304,
+  "source_refs": [
+   "bbri-1h26-fs"
+  ],
+  "rationale": "Beban bunga dan syariah 1H26 disetahunkan terhadap rata-rata DPK + liabilitas berbunga lain 31 Desember 2025 dan 30 Juni 2026."
+ },
+ "payout_path": {
+  "values": [
+   0.7,
+   0.6,
+   0.6,
+   0.6,
+   0.6
+  ],
+  "source_refs": [
+   "bbri-1h26-call"
+  ],
+  "rationale": "Payout sekitar 70% untuk laba 2026 dan 50-60% jangka menengah (batas atas) menurut panduan manajemen; dividen atas laba FY2025 sudah diumumkan."
+ },
+ "drivers": [
+  {
+   "year": 2026,
+   "loan_growth_pct": {
+    "value": 9.0,
+    "kind": "company_guidance",
+    "rationale": "Titik tengah panduan 8-10%; kredit bruto 30 Juni 2026 sudah +8,2% ytd.",
+    "source_refs": [
+     "bbri-1h26-call"
+    ]
+   },
+   "nim_pct": {
+    "value": 7.5,
+    "kind": "sourced",
+    "rationale": "NIM 1H26 pada definisi aset produktif berkas driver (NII x 2 / rata-rata aset produktif), di dalam panduan 7,4-7,8%.",
+    "source_refs": [
+     "bbri-1h26-fs",
+     "bbri-1h26-call"
+    ]
+   },
+   "non_ii_to_nii_pct": {
+    "value": 34.0,
+    "kind": "sourced",
+    "rationale": "Pendapatan lain terhadap NII 1H26 resmi.",
+    "source_refs": [
+     "bbri-1h26-fs"
+    ]
+   },
+   "cost_to_income_pct": {
+    "value": 42.0,
+    "kind": "company_guidance",
+    "rationale": "Titik tengah panduan CIR 41-43%; realisasi 1H26 39,3% pada definisi model.",
+    "source_refs": [
+     "bbri-1h26-call"
+    ]
+   },
+   "cost_of_credit_pct": {
+    "value": 3.1,
+    "kind": "company_guidance",
+    "rationale": "Panduan biaya kredit 3,1%; 1H26 3,2% pada cadangan / rata-rata kredit bruto.",
+    "source_refs": [
+     "bbri-1h26-call"
+    ]
+   }
+  },
+  {
+   "year": 2027,
+   "loan_growth_pct": {
+    "value": 9.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sejalan dengan panduan 2026 dan pertumbuhan PDB nominal jangka panjang sekitar 7,8% ditambah pendalaman kredit."
+   },
+   "nim_pct": {
+    "value": 7.4,
+    "kind": "analyst_assumption",
+    "rationale": "Batas bawah panduan NIM seiring normalisasi biaya dana."
+   },
+   "non_ii_to_nii_pct": {
+    "value": 34.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26."
+   },
+   "cost_to_income_pct": {
+    "value": 42.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada titik tengah panduan."
+   },
+   "cost_of_credit_pct": {
+    "value": 3.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sedikit di bawah panduan 2026 seiring perbaikan kualitas aset (biaya kredit neto 1H26 1,89%)."
+   }
+  },
+  {
+   "year": 2028,
+   "loan_growth_pct": {
+    "value": 8.5,
+    "kind": "analyst_assumption",
+    "rationale": "Menurun bertahap menuju pertumbuhan nominal."
+   },
+   "nim_pct": {
+    "value": 7.4,
+    "kind": "analyst_assumption",
+    "rationale": "Batas bawah panduan."
+   },
+   "non_ii_to_nii_pct": {
+    "value": 34.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   },
+   "cost_to_income_pct": {
+    "value": 42.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   },
+   "cost_of_credit_pct": {
+    "value": 2.9,
+    "kind": "analyst_assumption",
+    "rationale": "Normalisasi bertahap."
+   }
+  },
+  {
+   "year": 2029,
+   "loan_growth_pct": {
+    "value": 8.0,
+    "kind": "analyst_assumption",
+    "rationale": "Menuju pertumbuhan nominal."
+   },
+   "nim_pct": {
+    "value": 7.3,
+    "kind": "analyst_assumption",
+    "rationale": "Kompresi marjin bertahap."
+   },
+   "non_ii_to_nii_pct": {
+    "value": 34.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   },
+   "cost_to_income_pct": {
+    "value": 42.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   },
+   "cost_of_credit_pct": {
+    "value": 2.9,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   }
+  },
+  {
+   "year": 2030,
+   "loan_growth_pct": {
+    "value": 8.0,
+    "kind": "analyst_assumption",
+    "rationale": "Pertumbuhan nominal."
+   },
+   "nim_pct": {
+    "value": 7.3,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   },
+   "non_ii_to_nii_pct": {
+    "value": 34.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   },
+   "cost_to_income_pct": {
+    "value": 42.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   },
+   "cost_of_credit_pct": {
+    "value": 2.9,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap."
+   }
+  }
+ ]
+}

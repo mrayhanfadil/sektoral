@@ -7,8 +7,13 @@ export type ReportItem = {
   ticker: string;
   name: string;
   date: string;
+  release_status: "production_ready" | "distributable_assumption_led" | "draft_non_distributable" | string;
+  analytically_eligible: boolean;
+  publication_state: "built" | "review_pending" | "auto_published" | "published" | "superseded" | "withdrawn";
   price: number | null;
   published: boolean;
+  /** Policy 1.3.0: published on the automatic gates, or also approved by an analyst. */
+  publication_basis?: "automatic" | "analyst_reviewed" | null;
   rating: string | null;
   tp: number | null;
   upside: number | null;
@@ -18,10 +23,23 @@ export type ReportItem = {
   rating_status?: string | null;
   risks?: string[];
   chain: ChainStep[];
-  blockers: number;
+  blockers: number | null;
   held_reason: string;
+  /** Release policy freshness: a stale view stays visible with its reason. */
+  freshness?: { state: "current" | "stale" | "withdrawal_due"; reason?: string | null; triggers?: string[] } | null;
   files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean };
   review?: { state: ReviewState; reviewer: string | null; reviewed_at: string | null; decision: string | null; edits: number };
+};
+
+export type ArchivedPublication = {
+  state: "archived";
+  publication_state: "superseded";
+  ticker: string;
+  publication_id: string;
+  archived_at: string | null;
+  review_sha: string | null;
+  artifact_hashes: { html: string | null; pdf: string | null; trace_html: string | null };
+  files: { html: string | null; pdf: string | null; trace: string | null };
 };
 
 export type ReviewState = "approved" | "pending" | "no_plan";
@@ -44,20 +62,85 @@ export type ReviewEdit = {
 
 export type ReviewHistory = { reviewer: string | null; reviewed_at: string | null; decision: string | null; edits: number; note: string | null };
 
+export type ReviewAttestation = {
+  schema_version: string;
+  disposition: "approved";
+  reviewer?: string;
+  reviewer_id?: string;
+  reviewer_role?: string;
+  identity_source?: string;
+  reviewed_at?: string;
+  policy_version?: string;
+  publication_fingerprint?: string;
+  reviewed_source_ids: string[];
+  checklist: Record<string, {
+    status: string;
+    note: string;
+    source_ids: string[];
+    period?: string;
+    items?: { assumption_id: string; description: string; value_sensitivity: string; source_ids: string[] }[];
+  }>;
+  objections: { objection: string; response: string; disposition: "resolved" | "accepted"; source_ids: string[] }[];
+  required_edits: { description: string; status: "completed" | "not_required" }[];
+  disclosures: Record<string, string | { status: "none" | "disclosed" | "unknown"; details: string }>;
+  overrides: { description: string; justification: string; policy_version: string }[];
+};
+
+export type ReviewSchemaNode = {
+  type?: string;
+  title?: string;
+  const?: string;
+  enum?: string[];
+  required?: string[];
+  properties?: Record<string, ReviewSchemaNode>;
+  items?: ReviewSchemaNode;
+  minLength?: number;
+  minItems?: number;
+};
+
+export type ReviewAttestationSchema = {
+  $schema: string;
+  type: "object";
+  required: string[];
+  properties: Record<string, ReviewSchemaNode>;
+  "x-system-recorded": string[];
+};
+
 export type ReviewView = {
   state: ReviewState;
-  plan_sha: string | null;
-  reviewer: string | null;
-  reviewed_at: string | null;
-  decision: "approved" | "approved_with_edits" | null;
-  note: string | null;
+  plan_sha?: string | null;
+  reviewer?: string | null;
+  reviewer_id?: string | null;
+  reviewer_role?: string | null;
+  identity_source?: string | null;
+  current_reviewer?: { id: string; name: string; role: string } | null;
+  reviewed_at?: string | null;
+  decision?: "approved" | "approved_with_edits" | null;
+  note?: string | null;
   /** Every change behind the approved plan, including those from earlier approvals of it. */
   edits: ReviewEdit[];
   /** Earlier approvals, newest first. */
   history?: ReviewHistory[];
-  stale: boolean;
+  stale?: boolean;
   enabled: boolean;
-  fields: ReviewField[];
+  fields?: ReviewField[];
+  missing_artifacts?: string[];
+  manifest_errors?: string[];
+  publication_id?: string | null;
+  attestation?: ReviewAttestation | null;
+  attestation_schema?: ReviewAttestationSchema | null;
+  available_source_ids?: { id: string; kind: string | null; label: string;
+    period: string | number | number[] | null; source: string | null }[];
+  evidence_register_errors?: string[];
+  /** A starting point written from the report's own evidence; the reviewer edits it. */
+  attestation_draft?: AttestationDraft | null;
+};
+
+export type AttestationDraft = {
+  checklist: Record<string, { status: string; note: string; source_ids: string[]; period?: string;
+    items?: { assumption_id: string; description: string; value_sensitivity: string; source_ids: string[] }[] }>;
+  disclosures: Record<string, string>;
+  note: string;
 };
 
 export type HistoryItem = {
@@ -151,6 +234,38 @@ export type Job = {
 
 export type TraceView = {
   ticker: string;
+  run_manifest?: {
+    publication_id: string | null;
+    code_revision: string | null;
+    source_tree_sha256: string | null;
+    working_tree: { dirty: boolean | null; sha256: string | null };
+    as_of: string | null;
+    profile: string | null;
+    forecast_basis: string | null;
+    production_ready: boolean | null;
+    model: { forecast_agent: string | null; agent_effort: string | null; schema_version: number | null };
+    spec_sha256: string | null;
+    evidence_register_sha256: string | null;
+    release_policy: { version: string | null; effective_date: string | null; status: string | null;
+      sha256: string | null; ambiguities: string[] } | null;
+    house_assumptions: { version: string | null; documented_as_of: string | null;
+      effective_from: string | null; status: string | null; sha256: string | null;
+      idr: { risk_free: number | null; risk_free_basis: string | null;
+        country_risk_premium: number | null; beta: number | null;
+        equity_risk_premium: number | null; cost_of_debt_pretax: number | null;
+        cost_of_debt_basis: string | null; terminal_growth: number | null;
+        growth_sensitivity: number[] | null; rate_sensitivity: number[] | null };
+      usd: { risk_free: number | null; risk_free_basis: string | null;
+        country_risk_premium: number | null; beta: number | null;
+        equity_risk_premium: number | null; cost_of_debt_pretax: number | null;
+        cost_of_debt_basis: string | null; terminal_growth: number | null;
+        growth_sensitivity: number[] | null; rate_sensitivity: number[] | null };
+      unresolved: string[] } | null;
+    source_pack_sha256: Record<string, string | null>;
+    cache_snapshot_sha256: Record<string, { cache_key: string | null; content_sha256: string | null }>;
+    artifacts: Record<string, { file: string | null; sha256: string | null }>;
+    missing_artifacts: string[];
+  } | null;
   /** Gallery reports only: whether an analyst approved the Forecast Plan. */
   review_state?: ReviewState;
   /** Gallery reports only: sections kept out of the printed report (mining audit detail). */
@@ -217,14 +332,43 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function requestBlob(path: string, token: string): Promise<Blob> {
+  const response = await fetch(path, {
+    cache: "no-store", headers: { "X-Review-Token": token },
+  });
+  if (!response.ok) {
+    let detail = `Permintaan gagal (${response.status}).`;
+    try {
+      const body = await response.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new ApiError(response.status, detail);
+  }
+  return response.blob();
+}
+
 export const api = {
   tickers: () => request<{ tickers: string[] }>("/api/tickers").then((r) => r.tickers),
   history: () => request<{ items: HistoryItem[] }>("/api/history").then((r) => r.items),
   reports: () => request<{ items: ReportItem[] }>("/api/reports").then((r) => r.items),
+  reportArchives: (ticker: string) => request<{ items: ArchivedPublication[] }>(
+    `/api/reports/${encodeURIComponent(ticker)}/archives`,
+  ).then((r) => r.items),
   reportRun: (ticker: string) => request<RunReplay>(`/api/reports/${encodeURIComponent(ticker)}/run`),
   reportTrace: (ticker: string) => request<TraceView>(`/api/reports/${encodeURIComponent(ticker)}/trace`),
-  review: (ticker: string) => request<ReviewView>(`/api/reports/${encodeURIComponent(ticker)}/review`),
-  approve: (ticker: string, token: string, body: { reviewer: string; note: string; edits: { path: string; value: number; reason: string }[] }) =>
+  reportTracePreview: (ticker: string, token: string) =>
+    request<TraceView>(`/api/reports/${encodeURIComponent(ticker)}/trace/preview`, {
+      headers: { "X-Review-Token": token },
+    }),
+  reviewArtifact: (ticker: string, token: string, kind: "pdf" | "html" | "trace") =>
+    requestBlob(`/api/reports/${encodeURIComponent(ticker)}/artifact-preview/${kind}`, token),
+  review: (ticker: string, token?: string) => request<ReviewView>(
+    `/api/reports/${encodeURIComponent(ticker)}/review`,
+    token ? { headers: { "X-Review-Token": token } } : undefined,
+  ),
+  approve: (ticker: string, token: string, body: { note: string; edits: { path: string; value: number; reason: string }[]; attestation: ReviewAttestation }) =>
     request<ReviewView>(`/api/reports/${encodeURIComponent(ticker)}/review`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Review-Token": token },

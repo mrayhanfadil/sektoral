@@ -11,7 +11,8 @@ departs from the market, without inventing a number:
   daily series in ``data/idx_history`` (raw and Blume-adjusted), computed on
   closes before the Report Date.
 
-A benchmark dated after the Report Date is left out (no look-ahead).
+A benchmark dated after the Report Date, or older than its maximum age under
+release policy 1.3.0, is left out.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from datetime import date
 from pathlib import Path
 from statistics import covariance, variance
 
-from . import fmt, idx_history
+from . import fmt, idx_history, release_policy
 
 PATH = Path(__file__).resolve().parent.parent / "data" / "rate_benchmarks.json"
 TITLE = "Parameter tingkat diskonto: kebijakan vs pembanding"
@@ -34,15 +35,17 @@ def load(path=PATH) -> dict:
         return {}
 
 
-def _dated(entry, as_of):
-    """The entry when it is dated on or before ``as_of``."""
+def _dated(entry, as_of, kind=None):
+    """The entry when it is dated on or before ``as_of`` and, for a ``kind`` with a
+    policy maximum age (release policy 1.3.0), no older than that."""
     if not isinstance(entry, dict) or not entry.get("as_of"):
         return None
     try:
-        return entry if date.fromisoformat(entry["as_of"]) <= date.fromisoformat(str(as_of)[:10]) \
-            else None
+        age = (date.fromisoformat(str(as_of)[:10]) - date.fromisoformat(entry["as_of"])).days
     except ValueError:
         return None
+    limit = release_policy.BENCHMARK_MAX_AGE_DAYS.get(kind)
+    return entry if age >= 0 and (limit is None or age <= limit) else None
 
 
 def _weekly(points):
@@ -120,16 +123,16 @@ def exhibit(ticker, as_of, va, data=None):
     pct = fmt.pct
     rows, sources = [], []
 
-    rf = None if usd else _dated(data.get("rf_idr"), as_of)
-    crp = _dated(data.get("crp"), as_of)
-    erp = _dated(data.get("erp"), as_of)
+    rf = None if usd else _dated(data.get("rf_idr"), as_of, "rf_idr")
+    crp = _dated(data.get("crp"), as_of, "crp")
+    erp = _dated(data.get("erp"), as_of, "erp")
     b = beta(ticker, as_of)
     # Rupiah model, Damodaran's local-currency build: the INDOGB yield less the
     # sovereign default spread is the risk-free rate, and the equity premium is
     # Indonesia's total (mature market + country risk premium).
     local_rf = rf["value"] - crp["default_spread"] if rf and crp else None
     if not usd:
-        rows.append(["Risk-free (INDOGB 10Y)", pct(rates["rf"]),
+        rows.append(["Risk-free IDR (house policy)", pct(rates["rf"]),
                      (f"{pct(rf['value'], 2)} ({rf['label']})"
                       + (f"; dikurangi default spread {pct(crp['default_spread'], 2)} = "
                          f"{pct(local_rf, 2)} bebas risiko rupiah" if local_rf is not None else ""))
@@ -168,7 +171,7 @@ def exhibit(ticker, as_of, va, data=None):
                      " + ".join(x["short_source"] for x in (erp, crp) if x) or "-"])
     if erp:
         sources.append(f"ERP: {erp['source_title']}")
-    growth = data.get("growth") if _dated(data.get("growth"), as_of) else None
+    growth = data.get("growth") if _dated(data.get("growth"), as_of, "growth") else None
     series = (growth or {}).get("USD" if usd else "IDR")
     nominal = ((1 + series["real"]) * (1 + series["inflation"]) - 1) if series else None
     if rates.get("terminal"):

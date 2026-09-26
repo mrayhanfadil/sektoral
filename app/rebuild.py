@@ -84,7 +84,9 @@ from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app import build, commodity, fx, intake, outputs, peer_fundamentals, progress, rates, render, rnav, run_manifest  # noqa: E402
+from app import (assumption_review, build, commodity, fx, intake, outputs,
+                 peer_fundamentals, progress, publication_archive, rates, render,
+                 rnav, run_manifest)  # noqa: E402
 
 KEY_FINANCIALS = "Key Financials"
 REVENUE_CHART = "Pendapatan"  # Slide 3 revenue combo chart
@@ -282,6 +284,9 @@ def rebuilt_trace(stored: dict, doc: dict) -> dict:
         trace["run_manifest"] = doc["run_manifest"]
     if doc.get("evidence_register") is not None:
         trace["evidence_register"] = doc["evidence_register"]
+    for key in ("earnings_quality", "terminal_economics"):
+        if doc.get(key) is not None:
+            trace[key] = doc[key]
     if "product_sales_scenario" in trace:
         trace["product_sales_scenario"] = (doc.get("forecast_assumptions") or {}).get(
             "product_sales_scenario")
@@ -427,7 +432,8 @@ def _build_once(t, out, kwargs, pins):
 def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
                 analyst_target: bool = False, live_inputs: bool = False,
                 refresh_assumptions: bool = False, db=None, log=None,
-                plan_override: dict | None = None, trace_extra: dict | None = None) -> dict:
+                plan_override: dict | None = None, trace_extra: dict | None = None,
+                as_of: str | None = None) -> dict:
     """Rebuild one ticker from ``source`` into ``out``; returns the comparison.
 
     ``refresh_assumptions`` re-runs the Forecast Assumption Agent on the stored
@@ -447,6 +453,14 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     source_manifest = outputs.load(outputs.MANIFEST, source, t, db) or \
         stored_trace.get("run_manifest") or {}
     kwargs = build_inputs(stored_trace, source_doc, analyst_target=analyst_target)
+    if as_of:
+        # A later Report Date on the same stored evidence: the evidence cutoff,
+        # price and policy vintages are re-checked against it; nothing newer
+        # than the pinned snapshot is fetched.
+        if str(as_of)[:10] < str(kwargs.get("as_of") or "")[:10]:
+            raise ValueError(f"{t}: --as-of {as_of} precedes the source Report Date "
+                             f"{kwargs.get('as_of')}")
+        kwargs["as_of"] = str(as_of)[:10]
     fresh_plan = None
     if refresh_assumptions:
         fresh_plan = refreshed_assumptions(dict(stored_trace, ticker=t), kwargs["as_of"])
@@ -464,6 +478,20 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     pins = None if live_inputs else copy.deepcopy(recorded)
     pinned = [] if pins is None else ["snapshot pasar dari manifest sumber"]
     out.mkdir(parents=True, exist_ok=True)
+    # Rebuild may target an existing reports folder. Archive the old approved
+    # bundle before its report, HTML, trace or manifest can be replaced.
+    review = assumption_review.status(out, t, db)
+    if (review.get("state") == "approved" and
+            all(kind in (review.get("artifact_hashes") or {})
+                for kind in ("html", "pdf", "trace_html"))):
+        archived = publication_archive.archive_approved_bundle(out, t, db=db)
+        if archived is None:
+            raise OSError(f"refusing to rebuild approved {t}: publication archive failed")
+    # The rebuild writes a fresh trace and only writes a PDF when requested.
+    # Clear old rendered files now so a failed/HTML-only rebuild cannot leave
+    # artifacts from the previous publication attached to the new manifest.
+    (out / f"{t}.pdf").unlink(missing_ok=True)
+    (out / f"{t}-trace.html").unlink(missing_ok=True)
     doc, events, text, used, seen = _build_once(t, out, kwargs, pins)
     last_built = doc
     if log:
@@ -492,6 +520,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         "pinned": pinned, "live_inputs": live_inputs,
         "analyst_target": kwargs["analyst_target"], "method_override": kwargs["method_override"],
         "refreshed_assumptions": bool(refresh_assumptions),
+        "as_of_override": as_of,
     }
     doc["run_manifest"] = manifest
     outputs.save(outputs.REPORT, out, t, doc, db)
@@ -515,7 +544,6 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         trace["forecast_assumptions"] = fa
     trace.update(copy.deepcopy(trace_extra or {}))
     outputs.save(outputs.TRACE, out, t, trace, db)
-    outputs.save(outputs.MANIFEST, out, t, manifest, db)
     stored_events = outputs.load(outputs.EVENTS, source, t, db)
     if isinstance(stored_events, list) and stored_events:
         outputs.save(outputs.EVENTS, out, t, merged_events(stored_events, events), db)
@@ -524,12 +552,19 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         t, trace.get("research") or {}, f"{t}.html", trace.get("forecast_assumptions"),
         trace.get("news_deepdive"), analyst=trace.get("analyst"),
         news_sources=trace.get("news_sources"), report=trace.get("report")), encoding="utf-8")
-    result = {"ticker": t, **compare(source_doc, doc), "pinned": pinned,
-              "intake_peer_basis": seen.get("peer_basis"), "pdf": None}
+    pdf_path = None
     if want_pdf:
         if build.pdf_mod is None:
             raise RuntimeError("PDF requested but Playwright is not available")
-        result["pdf"] = str(build.pdf_mod.to_pdf(t, out))
+        pdf_path = str(build.pdf_mod.to_pdf(t, out))
+    publication_manifest = run_manifest.finalize_manifest(manifest, out, t)
+    trace["run_manifest"] = publication_manifest
+    outputs.save(outputs.TRACE, out, t, trace, db)
+    outputs.save(outputs.MANIFEST, out, t, publication_manifest, db)
+    from . import forecast_ledger
+    forecast_ledger.freeze_if_auto_published(out, t, db)
+    result = {"ticker": t, **compare(source_doc, doc), "pinned": pinned,
+              "intake_peer_basis": seen.get("peer_basis"), "pdf": pdf_path}
     return result
 
 
@@ -588,6 +623,8 @@ def main(argv=None) -> int:
     parser.add_argument("--refresh-assumptions", action="store_true",
                         help="re-run the forecast assumption agent (paid LLM) on the stored "
                              "evidence of the named tickers before rebuilding")
+    parser.add_argument("--as-of", dest="as_of",
+                        help="a later Report Date for the rebuild (same stored evidence)")
     parser.add_argument("tickers", nargs="*", help="default: every report in --from")
     args = parser.parse_args(argv)
     source, out = Path(args.source), Path(args.out)
@@ -606,6 +643,7 @@ def main(argv=None) -> int:
                                  analyst_target=args.analyst_target,
                                  live_inputs=args.live_inputs,
                                  refresh_assumptions=args.refresh_assumptions,
+                                 as_of=args.as_of,
                                  log=(lambda text: print(text, end="")) if args.verbose else None)
         except Exception as error:  # report every ticker, then fail the command
             failed += 1

@@ -2,10 +2,21 @@ from . import cache
 from . import ddm
 from . import fmt
 from . import gate_thresholds
+from . import house_assumptions
 from . import method_chain
 from . import model_profiles
 from . import rnav
 from . import scenario_value
+from . import share_basis
+from . import rate_benchmarks
+from . import terminal_economics
+from . import operating_model
+from . import reference_fcff
+from . import reference_ddm
+from . import reference_lom
+from . import reference_holding
+from . import market_quote
+from . import bank_drivers
 from . import landbank as landbank_mod
 from . import lom as lom_mod
 from . import release
@@ -32,8 +43,9 @@ def _core(fc, shares, wacc, g, exit_mult, net_debt):
 def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
     """Grid TP 3x3 (WACC±1pp × g ∈ {2,5; 3,5; 4,5}%), rerata Gordon + exit."""
     out = {}
-    for dw in (-0.01, 0.0, 0.01):
-        for gg in (0.025, 0.035, 0.045):
+    policy = house_assumptions.discount_inputs("IDR")
+    for dw in policy["rate_sensitivity"]:
+        for gg in policy["growth_sensitivity"]:
             c = _core(fc, intake["shares"], wacc + dw, gg, exit_mult, net_debt)
             out[(round(dw, 3), gg)] = fmt.tick((c["ps_g"] + c["ps_x"]) / 2)
     return out
@@ -42,10 +54,11 @@ def tp_grid(intake, fc, wacc, g, exit_mult, net_debt):
 def gordon_screen_grid(intake, fc, wacc, g, exit_mult, net_debt):
     """Unblended historical-model sensitivity for an explicitly labeled draft."""
     rows = []
-    for delta_wacc in (-0.01, 0.0, 0.01):
+    policy = house_assumptions.discount_inputs("IDR")
+    for delta_wacc in policy["screen_rate_sensitivity"]:
         rate = wacc + delta_wacc
         values = []
-        for delta_growth in (-0.01, 0.0, 0.01):
+        for delta_growth in policy["screen_growth_sensitivity"]:
             growth = g + delta_growth
             values.append(_core(fc, intake["shares"], rate, growth,
                                 exit_mult, net_debt)["ps_g"]
@@ -64,7 +77,7 @@ def scenario_ev_ebitda_crosscheck(intake, fc, multiples=(6.0, 8.0, 10.0)):
         return None
     ebitda = (scenario.get("full_year") or {}).get("ebitda")
     cash, debt, shares, rate = (balance.get("cash"), balance.get("total_debt"),
-                                 balance.get("shares_outstanding") or balance.get("shares_issued"),
+                                 share_basis.report_date_shares(intake)[0],
                                  fx_quote.get("rate"))
     minority_interest = balance.get("non_controlling_interest")
     if not all(isinstance(value, (int, float)) and value > 0
@@ -91,8 +104,9 @@ def _ddm_grid(nets, payout_used, dps_hist, shares, re, g, roae, bvps):
     """CoE±1pp x g {2.5,3.5,4.5}% sensitivity on the DDM Gordon TP."""
     from . import ddm as _ddm
     out = {}
-    for dw in (-0.01, 0.0, 0.01):
-        for gg in (0.025, 0.035, 0.045):
+    policy = house_assumptions.discount_inputs("IDR")
+    for dw in policy["rate_sensitivity"]:
+        for gg in policy["growth_sensitivity"]:
             try:
                 coe = re + dw
                 if coe <= gg:
@@ -137,7 +151,7 @@ def _earnings_candidate(intake, fc, assumption_status):
     scenario = fc.get("earnings_scenario") or {}
     evidence = intake.get("official_evidence") or {}
     balance = evidence.get("balance_sheet") or {}
-    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    shares = share_basis.report_date_shares(intake)[0]
     usd = evidence.get("reporting_currency") == "USD"
     fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
     pes = method_chain.peer_pes(intake.get("peers"))
@@ -145,7 +159,11 @@ def _earnings_candidate(intake, fc, assumption_status):
               "year": scenario.get("year"),
               "attributable_basis": scenario.get("attributable_basis")}
     eps = None
-    net = (scenario.get("full_year") or {}).get("net_profit_attributable")
+    full = scenario.get("full_year") or {}
+    # P/E applies to core earnings: the reviewed normalized FY1 when assessed.
+    net = full.get("normalized_net_profit_attributable", full.get("net_profit_attributable"))
+    detail["earnings_basis"] = ("normalized" if "normalized_net_profit_attributable" in full
+                                else "reported")
     if isinstance(net, (int, float)) and isinstance(shares, (int, float)) and shares > 0 \
             and isinstance(fx, (int, float)) and fx > 0:
         eps = net * fx / shares
@@ -179,7 +197,7 @@ def _pbv_roe_fy_candidate(intake, fc, assumption_status, coe, g):
     balance = evidence.get("balance_sheet") or {}
     usd = evidence.get("reporting_currency") == "USD"
     fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
-    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    shares = share_basis.report_date_shares(intake)[0]
     equity, equity_source = balance.get("equity_attributable"), "neraca interim resmi"
     if equity is None and balance.get("total_equity") is not None:
         equity = balance["total_equity"] - (balance.get("non_controlling_interest") or 0)
@@ -189,11 +207,15 @@ def _pbv_roe_fy_candidate(intake, fc, assumption_status, coe, g):
         last = next((a for a in reversed(intake.get("annuals") or []) if a.get("equity")), None)
         if last:
             equity, equity_source = last["equity"], f"Sectors FY{last.get('year')}"
-    net = (scenario.get("full_year") or {}).get("net_profit_attributable")
+    full = scenario.get("full_year") or {}
+    # Sustainable ROE: the reviewed normalized FY1 parent earnings when assessed.
+    net = full.get("normalized_net_profit_attributable", full.get("net_profit_attributable"))
     net = net * fx if isinstance(net, (int, float)) and fx else None
     roe = net / equity if net is not None and equity else None
     detail = {"shares": shares, "equity": equity, "equity_source": equity_source,
               "coe": coe, "g": g, "roe": roe, "year": scenario.get("year"),
+              "earnings_basis": ("normalized" if "normalized_net_profit_attributable" in full
+                                 else "reported"),
               "bvps": equity / shares if equity and shares else None}
     ps = down = None
     if roe is not None and detail["bvps"] and coe > g and roe > g:
@@ -232,8 +254,24 @@ def _ddm_scenario_candidate(intake, fc, assumption_status, coe, g):
     if not fc.get("earnings_scenario"):
         return None
     detail, reasons = scenario_value.ddm(intake, fc, coe, g)
+    if detail:
+        detail["terminal_economics"] = terminal_economics.ddm(
+            detail, (fc.get("bank_model") or {}).get("rows"), rate_benchmarks.load(),
+            intake.get("as_of"), scenario_value.model_currency(intake),
+            scenario_value.model_currency(intake),
+            rf=house_assumptions.discount_inputs("IDR")["risk_free"])
+        model = fc.get("bank_model") or {}
+        if model.get("sourced_drivers"):
+            # Plan §5.6: an independent closed-form rebuild from the driver file.
+            sourced = bank_drivers.load(intake.get("ticker"), intake.get("as_of"))
+            detail["reference_validation"] = (
+                reference_ddm.compare(sourced, detail, model, model["prior_parent_profit"],
+                                      model["first_payout"]) if sourced else {"status": "missing"})
     gate = (release.assess_ddm_scenario(intake, fc, {"detail": detail}, assumption_status)
             if detail else _NO_GATE)
+    if detail:
+        gate = {**gate, "limitations": list(gate.get("limitations") or [])
+                + _terminal_labels(detail["terminal_economics"])}
     if detail:
         reasons = reasons + method_chain.scale_reasons(
             detail["per_share"], detail["shares"], intake["price"] * detail["shares"])
@@ -244,6 +282,61 @@ def _ddm_scenario_candidate(intake, fc, assumption_status, coe, g):
         "+ terminal Gordon (CoE, bukan WACC)")
 
 
+def _invested_capital(intake, detail):
+    """Book equity + debt - cash in the DCF's model currency, or None.
+
+    Cash and debt are the DCF bridge's own; equity is the official balance
+    sheet's (total, else parent plus minorities), else Sectors for a rupiah
+    model. An approximation of opening invested capital for the explicit ROIC.
+    """
+    view = detail.get("native") or detail
+    cash, debt = view.get("cash"), view.get("debt")
+    balance = (intake.get("official_evidence") or {}).get("balance_sheet") or {}
+    equity = balance.get("total_equity")
+    if equity is None and balance.get("equity_attributable") is not None:
+        equity = balance["equity_attributable"] + (balance.get("non_controlling_interest") or 0)
+    if equity is None and detail.get("currency") != "USD":
+        equity = next((a.get("equity") for a in reversed(intake.get("annuals") or [])
+                       if a.get("equity") is not None), None)
+    if any(not isinstance(v, (int, float)) for v in (cash, debt, equity)):
+        return None
+    return equity + debt - cash
+
+
+def _terminal_labels(record):
+    if record.get("status") != "inconsistent":
+        return []
+    return [f"{b}; nilai terminal diberi label sampai konsistensinya ditinjau"
+            for b in record["blockers"]]
+
+
+def _terminal_note(record):
+    m = record.get("measures") or {}
+    pct = lambda v: fmt.pct(v) if isinstance(v, (int, float)) else "-"  # noqa: E731
+    verdict = "konsisten" if record["status"] == "consistent" else "belum konsisten"
+    if record["profile"] == "financial_ddm":
+        return (f"Ekonomi terminal ({verdict}): g {pct(m.get('g'))}, ROE terminal "
+                f"{pct(m.get('terminal_roe'))}, payout terminal {pct(m.get('terminal_payout'))}; "
+                f"pertumbuhan dari laba ditahan {pct(m.get('sustainable_growth'))}.")
+    effect = m.get("per_share_effect_idr")
+    restated = record.get("restatement")
+    if restated:
+        return (f"Ekonomi terminal disesuaikan: FCFF terminal = NOPAT x (1 - g / RONIC) dengan "
+                f"g {pct(m.get('g'))} dan imbal hasil modal baru {pct(restated['ronic'])} "
+                + ("(ROIC periode eksplisit)" if m.get("explicit_roic") is not None
+                   else "(dua kali WACC)")
+                + f"; nilai per saham Rp{fmt._id(restated['per_share_before'], 0)} menjadi "
+                  f"Rp{fmt._id(restated['per_share_after'], 0)}.")
+    return (f"Ekonomi terminal ({verdict}): g {pct(m.get('g'))}, reinvestasi neto "
+            f"{pct(m.get('reinvestment_rate'))} dari NOPAT, imbal hasil modal baru implisit "
+            f"{pct(m.get('implied_ronic'))} vs batas {pct(m.get('ronic_ceiling'))} "
+            + ("(ROIC periode eksplisit)" if m.get("explicit_roic") is not None
+               else "(dua kali WACC)")
+            + (f"; terminal dengan reinvestasi pada batas itu mengubah nilai sekitar "
+               f"Rp{fmt._id(effect, 0)} per saham." if isinstance(effect, (int, float))
+               and record["status"] == "inconsistent" else "."))
+
+
 def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wacc_bps):
     """Going-concern primary: FCFF DCF on the validated FY path, discounted in
     the model currency (a US$ reporter at a US$ rate, spec §2 and §4.2)."""
@@ -252,15 +345,42 @@ def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wa
     rates, gaps = scenario_value.discount_rates(intake, rf, g)
     detail, reasons = ((None, gaps) if gaps else
                        scenario_value.fcff(intake, fc, rf, erp, beta, g, wacc_bps, rates=rates))
+    if detail:
+        capital, bench = _invested_capital(intake, detail), rate_benchmarks.load()
+        cash_currency = scenario_value.model_currency(intake)
+        record = terminal_economics.fcff(detail, capital, bench, intake.get("as_of"),
+                                         cash_currency)
+        restate = terminal_economics.restatement_ronic(record)
+        if restate:
+            # House policy: restate at the ceiling return, then re-check.
+            restated, _ = scenario_value.fcff(intake, fc, rf, erp, beta, g, wacc_bps,
+                                              rates=rates, terminal_ronic=restate)
+            if restated:
+                before = detail["per_share"]
+                detail = restated
+                record = terminal_economics.fcff(detail, capital, bench, intake.get("as_of"),
+                                                 cash_currency)
+                record["restatement"] = {"ronic": restate, "per_share_before": before,
+                                         "per_share_after": detail["per_share"]}
+        detail["terminal_economics"] = record
+        if detail.get("operating_model"):
+            # Plan §5.6: an independent implementation from the same driver file.
+            drivers = operating_model.load(intake.get("ticker"), intake.get("as_of"))
+            detail["reference_validation"] = (reference_fcff.compare(drivers, detail) if drivers
+                                              else {"status": "missing"})
     gate = (release.assess_fcff_scenario(intake, fc, {"detail": detail}, assumption_status)
             if detail else _NO_GATE)
+    if detail:
+        gate = {**gate, "limitations": list(gate.get("limitations") or [])
+                + _terminal_labels(detail["terminal_economics"])}
     if detail:
         reasons = reasons + method_chain.scale_reasons(
             detail["per_share"], detail["shares"], intake["price"] * detail["shares"])
     year = fc["earnings_scenario"]["year"]
+    basis = "model operasional" if (detail or {}).get("operating_model") else "skenario"
     return _scenario_candidate(
         "fcff_dcf", detail, reasons, gate,
-        f"DCF FCFF skenario FY{year % 100:02d}F-FY{(year + 4) % 100:02d}F + terminal Gordon; "
+        f"DCF FCFF {basis} FY{year % 100:02d}F-FY{(year + 4) % 100:02d}F + terminal Gordon; "
         "exit EV/EBITDA historis sebagai cross-check")
 
 
@@ -287,7 +407,7 @@ def _pbv_book_candidate(intake, fc, assumption_status):
     balance = evidence.get("balance_sheet") or {}
     usd = evidence.get("reporting_currency") == "USD"
     fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
-    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    shares = share_basis.report_date_shares(intake)[0]
     equity = balance.get("equity_attributable")
     if equity is None and balance.get("total_equity") is not None:
         equity = balance["total_equity"] - (balance.get("non_controlling_interest") or 0)
@@ -340,20 +460,44 @@ def _holding_sotp_candidate(intake, coe=None):
             history = ((own.get("financials") or {}).get("historical_financials") or [])
             book = (history[-1] if history else {}).get("total_equity")
         held, total = sub.get("shares_held"), sub.get("shares_total")
+        market_source = (f"tabel peer Sectors {intake['ticker']}" if row
+                         else f"Sectors company/report {ticker}")
+        market_date = book_date = book_source = None
+        # A dated close on or before the parent's own price date and the
+        # subsidiary's book equity at the parent's balance date, when sourced.
+        quote = market_quote.close_on_or_before(
+            ticker, intake.get("price_date") or intake.get("as_of"))
+        if quote and total:
+            market_cap = quote["price"] * total
+            market_date = quote["date"]
+            market_source = (f"{quote['source_title']} {quote['date']} (Rp{quote['price']:,.0f} x "
+                             f"{total:,.0f} saham)").replace(",", ".")
+        if isinstance(sub.get("book_equity_idr"), (int, float)):
+            book, book_date = sub["book_equity_idr"], sub.get("book_equity_date")
+            book_source = (f"{sub.get('book_equity_source_title')}, "
+                           f"{sub.get('book_equity_page') or '-'}")
         listed.append({"ticker": ticker, "name": sub.get("name") or ticker,
                        "segment": sub.get("segment") or "-",
                        "stake": held / total if held and total else None,
                        "market_cap": market_cap, "book_equity": book,
-                       "book_year": row.get("year"), "stake_source": sub.get("source"),
-                       "market_source": (f"tabel peer Sectors {intake['ticker']}" if row
-                                         else f"Sectors company/report {ticker}")})
+                       "book_year": (book_date or row.get("year")), "book_date": book_date,
+                       "book_source": book_source, "market_date": market_date,
+                       "stake_source": sub.get("source"), "market_source": market_source})
     equity = balance.get("equity_attributable")
-    shares = (balance.get("shares_outstanding") or balance.get("shares_issued")
-              or intake.get("shares"))
+    shares = share_basis.report_date_shares(intake)[0]
     land, _ = landbank_mod.value(intake, coe) if coe else (None, [])
     candidate = method_chain.holding_sotp(listed, equity * fx if equity and fx else None, shares,
                                           landbank=land)
     candidate["detail"]["balance_period"] = balance.get("period_end")
+    if candidate.get("per_share") is not None:
+        # Plan §5.6: an independent recomputation of the holding value.
+        candidate["detail"]["reference_validation"] = reference_holding.compare(
+            listed, equity * fx if equity and fx else None, shares, land,
+            candidate["per_share"])
+        candidate["detail"]["terminal_economics"] = {
+            "profile": "holding_sotp", "status": "not_applicable", "checks": [],
+            "measures": {}, "blockers": [],
+            "notes": ["nilai aset pada tanggal laporan; tanpa nilai terminal"]}
     return candidate
 
 
@@ -380,7 +524,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     notes.append("model dibangun di mata uang pelaporan (Rp); FX = 1.")
 
     # --- WACC IDR: INDOGB 10Y sudah memuat risiko negara, tanpa CRP ganda
-    rf, erp, beta = 0.065, 0.04, 1.1
+    idr_policy = house_assumptions.discount_inputs("IDR")
+    rf, erp, beta = (idr_policy["risk_free"], idr_policy["equity_risk_premium"],
+                     idr_policy["beta"])
     re = rf + beta * erp
     news_coe_bps = sum(
         event["change"] for event in (fc.get("news_assumptions") or [])
@@ -392,7 +538,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         notes.append(f"CoE screen adjusted {news_coe_bps:+g} bp by cited news scenario judgments.")
     teff = fc["rows"][0]["tax"] / max(fc["rows"][0]["ebit"] - fc["rows"][0]["interest"], 1)
     teff = max(0.0, min(0.35, teff))
-    rd = 0.09 * (1 - teff)
+    rd = idr_policy["cost_of_debt_pretax"] * (1 - teff)
     D = fc["base"]["debt"] + fc["base"]["other_liab"]
     E = intake["market_cap"]
     wacc = (re * E + rd * D) / max(E + D, 1)
@@ -404,8 +550,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     wacc += news_wacc_bps / 10000
     if news_wacc_bps:
         notes.append(f"WACC screen adjusted {news_wacc_bps:+g} bp by cited news scenario judgments.")
-    g = 0.035  # terminal growth FIX analis, wajib < rf
-    exit_mult = 8.0
+    g = idr_policy["terminal_growth"]
+    exit_mult = house_assumptions.policy_snapshot()["screening"]["exit_ev_ebitda_multiple"]
     exit_basis = "asumsi analis 8,0x (tanpa EV/EBITDA peer di data Sectors)"
     if intake.get("peer_median_pe"):
         exit_basis += f"; silang cek median PER peer {intake['peer_median_pe']:.1f}x"
@@ -424,7 +570,7 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
 
     # --- downside + grid: basis SAMA dengan TP (rerata Gordon + exit)
     grid = tp_grid(intake, fc, wacc, g, exit_mult, net_debt)
-    tp_down = grid[(0.01, 0.025)]
+    tp_down = grid[(idr_policy["rate_sensitivity"][-1], idr_policy["growth_sensitivity"][0])]
 
     eq_dcf = ev_g - net_debt
     ratio = eq_dcf / intake["market_cap"]
@@ -687,7 +833,12 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             sotp_result = lom_mod.sotp_result(intake, lom_result)
             detail = {"basis": "scenario", "sotp": sotp_result,
                       "operating_bridge": lom_mod.operating_bridge(intake, lom_result),
-                      "lom": lom_result, "grid": lom_result["grid"], "gaps": []}
+                      "lom": lom_result, "grid": lom_result["grid"], "gaps": [],
+                      "terminal_economics": terminal_economics.finite_life(),
+                      # Plan §5.6: an independent physical-to-NAV implementation.
+                      "reference_validation": reference_lom.compare(
+                          lom_result["inputs"], lom_result["bridge_idr"], lom_result["fx"],
+                          lom_result["per_share"])}
             gate = release.assess_sotp_lom_scenario(intake, fc, {"detail": detail},
                                                     assumption_status)
             per_share = sotp_result.get("target_price_idr")
@@ -742,7 +893,9 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             try:
                 ddm_grid = _ddm_grid(nets, ddm_result.get("payout_used"),
                                      intake.get("dps_hist") or [], shares, re, g, roae, bvps)
-                ddm_down = ddm_grid.get((0.01, 0.025))
+                policy = house_assumptions.discount_inputs("IDR")
+                ddm_down = ddm_grid.get((policy["rate_sensitivity"][-1],
+                                         policy["growth_sensitivity"][0]))
             except Exception:
                 ddm_grid = {}
         candidates["ddm"] = method_chain.candidate(
@@ -859,6 +1012,22 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         # same schedule, not from a separate earnings scenario.
         lom_res = chain_candidate_detail(candidates, "sotp_lom").get("lom")
         interim = fc.get("interim_scenario") or {}
+        h2 = lom_mod.h2_row(intake, lom_res) if lom_res and interim.get("h1") else None
+        if h2:
+            # The interim year too: official 1H plus the LoM's 2H, so FY26F and
+            # the out-years come from the one schedule the target values.
+            full = {k: interim["h1"][k] + h2[k] for k in h2}
+            fc["interim_scenario"] = interim = {
+                **interim, "h2": h2, "full_year": full, "basis": "lom_schedule",
+                "agent_h2": interim.get("h2"), "agent_full_year": interim.get("full_year"),
+                "rationale": ("Aktual 1H resmi ditambah 2H dari jadwal LoM yang dinilai "
+                              "(umpan, katoda dan emas murni sesuai panduan FY2026 emiten, dek "
+                              "harga, biaya unit, royalti, beban umum, pajak dan PNBP 1H26).")}
+            anchor = dict(fc["outyear_scenario"].get("anchor") or {})
+            if anchor:
+                anchor.update(revenue=full["revenue"], ebitda=full["ebitda"],
+                              net_profit=full["net_profit"])
+                fc["outyear_scenario"] = {**fc["outyear_scenario"], "anchor": anchor}
         rows = lom_mod.forward_rows(intake, lom_res, fc["outyear_scenario"]["anchor_year"],
                                     interim.get("attributable_share") or 1.0) if lom_res else []
         if len(rows) == 4:
@@ -967,7 +1136,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
                                   blockers=release_result["blockers"] + [extreme_blocker])
     elif sel is not None and sel.get("gate"):
         release_result = dict(sel["gate"])
-        release_result["underlying_primary"] = release.common_blockers(profile, intake, fc)
+        release_result["underlying_primary"] = release.common_blockers(
+            profile, intake, fc, (sel or {}).get("detail"))
         release_result["route"], release_result["method_key"] = chain["route"], selected
         extreme_blocker = method_chain.summary_blocker(chain)
         if extreme_blocker:
@@ -1031,8 +1201,24 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
         grid, tp_down = dcf_grid, dcf_down
     elif selected == "ddm":
         grid = ddm_grid
+    dilution = None
     if sel and not is_draft:
-        tp = fmt.tick(sel["per_share"])
+        # Potentially dilutive instruments from the reviewed share ledger: a
+        # warrant dilutes the value per share only when that value exceeds
+        # its exercise price, with its exercise proceeds added.
+        instruments = (intake.get("share_basis") or {}).get("instruments") or []
+        per_share = sel["per_share"]
+        if instruments:
+            dilution = share_basis.dilute_at_value(per_share, intake["shares"], instruments)
+            per_share = dilution["per_share"]
+            notes.append(
+                "Waran yang berpotensi dilutif: " + (
+                    f"{', '.join(dilution['included'])} masuk karena nilai per saham di atas "
+                    "harga pelaksanaan; hasil pelaksanaan ditambahkan ke ekuitas."
+                    if dilution["included"] else
+                    f"{', '.join(dilution['excluded'])} tidak dilutif pada nilai per saham ini "
+                    "(di bawah harga pelaksanaan)."))
+        tp = fmt.tick(per_share)
         upside = tp / price - 1
         if tp_down is None and sel["per_share_down"] is not None:
             tp_down = fmt.tick(sel["per_share_down"])
@@ -1140,7 +1326,13 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
     elif stage_info.get("source") == "override":
         notes.append("klasifikasi tahap operasi dari override analis.")
 
-    out = {"method": method, "model_profile": profile,
+    terminal = (terminal_economics.finite_life() if is_miner else
+                (sel or {}).get("detail", {}).get("terminal_economics") if scenario_sel else None)
+    if terminal is None and sel:
+        terminal = terminal_economics.not_applicable(method)
+    if terminal and terminal.get("status") in ("consistent", "inconsistent"):
+        notes.append(_terminal_note(terminal))
+    out = {"method": method, "model_profile": profile, "terminal_economics": terminal,
             "release": release_result, "sotp": sotp_result,
             # The FY EV/EBITDA value stays attached as the mining cross-check.
             "scenario_target": (scenario_target if analyst_target or
@@ -1155,7 +1347,8 @@ def build(intake, fc, analyst_target=False, assumption_status=None,
             "news_coe_bps": news_coe_bps},
             "pv_explicit": pv_exp, "pv_terminal": pv_tv, "tv_share": pv_tv / ev_g,
             "ev_gordon": ev_g, "net_debt": net_debt, "ps_gordon": ps_g,
-            "ps_exit": ps_x, "dcf_blend": fmt.tick((ps_g + ps_x) / 2), "tp": tp, "tp_down": tp_down, "tp_grid": grid,
+            "ps_exit": ps_x, "dcf_blend": fmt.tick((ps_g + ps_x) / 2), "dilution": dilution,
+            "tp": tp, "tp_down": tp_down, "tp_grid": grid,
             "upside": upside, "rating": rating,
             "implied": impl, "lom": lom, "s3": s3, "notes": notes,
             "method_chain": chain}
