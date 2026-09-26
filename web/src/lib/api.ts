@@ -9,9 +9,11 @@ export type ReportItem = {
   date: string;
   release_status: "production_ready" | "distributable_assumption_led" | "draft_non_distributable" | string;
   analytically_eligible: boolean;
-  publication_state: "built" | "review_pending" | "published" | "superseded" | "withdrawn";
+  publication_state: "built" | "review_pending" | "auto_published" | "published" | "superseded" | "withdrawn";
   price: number | null;
   published: boolean;
+  /** Policy 1.3.0: published on the automatic gates, or also approved by an analyst. */
+  publication_basis?: "automatic" | "analyst_reviewed" | null;
   rating: string | null;
   tp: number | null;
   upside: number | null;
@@ -130,6 +132,15 @@ export type ReviewView = {
   available_source_ids?: { id: string; kind: string | null; label: string;
     period: string | number | number[] | null; source: string | null }[];
   evidence_register_errors?: string[];
+  /** A starting point written from the report's own evidence; the reviewer edits it. */
+  attestation_draft?: AttestationDraft | null;
+};
+
+export type AttestationDraft = {
+  checklist: Record<string, { status: string; note: string; source_ids: string[]; period?: string;
+    items?: { assumption_id: string; description: string; value_sensitivity: string; source_ids: string[] }[] }>;
+  disclosures: Record<string, string>;
+  note: string;
 };
 
 export type HistoryItem = {

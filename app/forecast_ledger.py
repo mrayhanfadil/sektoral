@@ -86,6 +86,15 @@ def freeze(folder, ticker, db=None):
     return key if stored else None
 
 
+def freeze_if_auto_published(folder, ticker, db=None):
+    """Freeze the forecast of a build that publishes automatically (policy 1.3.0)."""
+    doc = outputs.load(outputs.REPORT, folder, str(ticker).upper(), db) or {}
+    status = (doc.get("meta") or {}).get("status")
+    if not (release_policy.auto_publish_enabled() and status in release_policy.AUTO_PUBLISH_STATUSES):
+        return None
+    return freeze(folder, ticker, db)
+
+
 def _error(forecast, actual):
     if forecast is None or actual in (None, 0):
         return None

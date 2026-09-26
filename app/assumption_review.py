@@ -902,6 +902,154 @@ def _verdict(doc) -> dict:
     return {"status": meta.get("status"), "rating": meta.get("rating"), "tp": meta.get("tp")}
 
 
+def _rp(value):
+    return "Rp" + f"{value:,.0f}".replace(",", ".") if isinstance(value, (int, float)) else "-"
+
+
+def attestation_draft(folder, ticker, db=None) -> dict | None:
+    """A reviewer's starting point, written from the report's own evidence and checks.
+
+    Every note states what the automatic gates recorded for this bundle and the
+    register rows it rests on. It is a draft: the reviewer reads, corrects and
+    submits it, and declares their own issuer relationship and conflicts, which
+    are left blank. Nothing here approves anything.
+    """
+    t = str(ticker).upper()
+    doc = outputs.load(outputs.REPORT, folder, t, db)
+    if not isinstance(doc, dict):
+        return None
+    meta = doc.get("meta") or {}
+    rows = [r for r in (doc.get("evidence_register") or {}).get("rows") or [] if r.get("row_id")]
+    by_kind = {}
+    for r in rows:
+        by_kind.setdefault(r.get("kind"), []).append(r)
+    ids = lambda kinds: [r["row_id"] for k in kinds for r in by_kind.get(k, [])]  # noqa: E731
+    actual = (by_kind.get("official_actual") or [{}])[-1]
+    actual_ids = [actual["row_id"]] if actual.get("row_id") else []
+    filings = ids(("official_filing",)) or actual_ids
+    drivers = ids(("driver_source",)) or actual_ids
+    events = ids(("tavily_article", "news", "catalyst")) or actual_ids
+    release = (doc.get("log_gate") or {}).get("release") or {}
+    production = release.get("production_blockers") or []
+    limitations = release.get("limitations") or []
+    quality = doc.get("earnings_quality") or {}
+    shares = quality.get("share_basis") or {}
+    te = doc.get("terminal_economics") or {}
+    dv = doc.get("driver_value") or {}
+    cases = dv.get("cases") or {}
+    investability = doc.get("investability") or {}
+    liquidity = investability.get("liquidity") or {}
+    status = meta.get("status")
+    checks = {}
+
+    def check(key, note, source_ids, state="reviewed", **extra):
+        checks[key] = {"status": state, "note": note, "source_ids": list(dict.fromkeys(source_ids)),
+                       **extra}
+
+    check("latest_official_actual_and_period",
+          f"Aktual resmi {actual.get('period') or '-'} (periode berakhir "
+          f"{actual.get('period_end') or '-'}, terbit {actual.get('published_at') or '-'}): "
+          f"{actual.get('source_title') or actual.get('source') or '-'}, hal. "
+          f"{actual.get('page') or '-'}; dipakai untuk {actual.get('use') or 'level periode dasar'}.",
+          actual_ids, period=str(actual.get("period") or ""))
+    violations = ((doc.get("evidence_register") or {}).get("violations") or []) + \
+        ((doc.get("evidence_register") or {}).get("critical_violations") or [])
+    check("material_source_claims_and_conflicts",
+          f"Register bukti memuat {len(rows)} baris: {len(by_kind.get('official_filing', []))} "
+          f"dokumen resmi, {len(by_kind.get('driver_source', []))} sumber driver; "
+          + ("tanpa pelanggaran register." if not violations
+             else f"{len(violations)} pelanggaran register: " + "; ".join(map(str, violations[:3])) + "."),
+          actual_ids + filings)
+    items = []
+    for i, r in enumerate((dv.get("rows") or [])[:3]):
+        items.append({
+            "assumption_id": f"driver-{i + 1}",
+            "description": f"{r.get('driver')}: {r.get('base')} ({r.get('basis')}), {r.get('years') or 'FY26F dst.'}",
+            "value_sensitivity": (f"{r.get('unit')}: nilai per saham {_rp(r.get('value_low'))} "
+                                  f"({r.get('low')}) sampai {_rp(r.get('value_high'))} ({r.get('high')}) "
+                                  f"terhadap dasar {_rp(r.get('value_base'))}"),
+            "source_ids": drivers[:3]})
+    check("top_three_value_sensitive_assumptions",
+          "Tiga driver teratas menurut dampak nilai pada tabel driver-ke-nilai laporan ini.",
+          drivers[:3], items=items)
+    harness = doc.get("harness") or {}
+    blockers = harness.get("blockers") or []
+    check("interim_statement_reconciliation",
+          f"Model berlabuh pada aktual {actual.get('period') or '-'}; pemeriksaan harness "
+          + ("lolos tanpa blocker." if not blockers else f"mencatat {len(blockers)} blocker: "
+             + "; ".join(map(str, blockers[:3])) + "."),
+          actual_ids)
+    check("model_profile_and_method_chain",
+          f"Model Profile {meta.get('model_profile') or '-'}; metode {doc.get('method') or '-'}.",
+          actual_ids)
+    if cases:
+        check("scenario_consistency",
+              f"Nilai per saham downside {_rp((cases.get('downside') or {}).get('per_share'))}, base "
+              f"{_rp((cases.get('base') or {}).get('per_share'))}, upside "
+              f"{_rp((cases.get('upside') or {}).get('per_share'))}; urutannya konsisten."
+              if ((cases.get("downside") or {}).get("per_share") or 0)
+              <= ((cases.get("base") or {}).get("per_share") or 0)
+              <= ((cases.get("upside") or {}).get("per_share") or 0)
+              else "Urutan downside, base dan upside tidak konsisten; periksa sebelum menyetujui.",
+              drivers[:3])
+    else:
+        check("scenario_consistency", "Laporan tidak memuat kasus downside/base/upside.",
+              actual_ids, state="not_available")
+    check("catalyst_and_thesis_change_tests",
+          "Katalis dari tabel katalis laporan; ambang perubahan tesis dari ringkasan keputusan "
+          "(pergerakan driver yang mengubah rating, dibaca linear dari rentang uji).",
+          events[:5])
+    check("consensus_comparison",
+          "Konsensus independen tidak tersedia di data laporan ini.", [], state="not_available")
+    check("limitations_conflicts",
+          "Batasan tercatat: " + ("; ".join(map(str, limitations)) if limitations else "tidak ada")
+          + (". Belum Production-Ready: " + "; ".join(map(str, production)) if production else "") + ".",
+          actual_ids)
+    check("earnings_normalization",
+          f"Ledger normalisasi berstatus {(quality.get('normalization') or {}).get('status') or quality.get('status') or '-'}.",
+          filings)
+    check("restatements_corporate_actions",
+          f"Ledger saham berstatus {shares.get('status') or '-'}; saham pada tanggal laporan "
+          f"{shares.get('shares_on_report_date') or '-'} dari {(shares.get('basis') or {}).get('source_title') or '-'}.",
+          filings)
+    te_checks = te.get("checks") or []
+    check("house_assumptions_terminal_economics",
+          f"Ekonomi terminal berstatus {te.get('status') or '-'}"
+          + (f"; {sum(1 for c in te_checks if c.get('ok'))} dari {len(te_checks)} uji lolos." if te_checks else "."),
+          actual_ids)
+    reference = [b for b in production if "independent reference" in str(b)]
+    check("independent_validation",
+          ("Status Production-Ready: validasi model referensi independen per run lolos "
+           "(kegagalan memblokir status ini)." if status == "distributable" else
+           "Validasi referensi: " + ("; ".join(map(str, reference)) if reference else
+                                     "tidak ada jalur referensi untuk metode ini") + "."),
+          actual_ids)
+    from . import investability as investability_mod
+    bq = investability_mod.business_quality(t, (doc.get("run_manifest") or {}).get("as_of")) or []
+    answered = sum(1 for i in bq if i.get("status") == "answered")
+    check("business_quality",
+          f"{answered} dari {len(bq)} dimensi kualitas bisnis terjawab dengan sumber bertanggal.",
+          filings)
+    check("liquidity_limitations",
+          f"Likuiditas {liquidity.get('sessions') or '-'} sesi ({liquidity.get('start') or '-'} sampai "
+          f"{liquidity.get('end') or '-'}), median nilai harian "
+          f"{_rp(liquidity.get('median_value'))}; {liquidity.get('source') or 'data Sectors'}.",
+          actual_ids)
+    return {
+        "checklist": checks,
+        "disclosures": {
+            "author_role": "Pipeline model Sektoral (build otomatis), bukan analis manusia",
+            "scope_limitations": (f"Review atas bundle publikasi {meta.get('tanggal') or '-'}: register "
+                                  "bukti, ledger saham dan normalisasi, uji otomatis dan batasan "
+                                  "yang tercatat; bukan audit laporan keuangan."),
+            "rating_or_scenario_policy": ("Rating dari selisih nilai model terhadap harga: Buy di atas "
+                                          "+15%, Sell di bawah -10%, selain itu Hold (app.rating)."),
+        },
+        "note": ("Draf otomatis dari data laporan. Baca dan koreksi setiap isian, lalu nyatakan "
+                 "sendiri hubungan dengan emiten dan konflik kepentingan."),
+    }
+
+
 def public(folder, ticker, db=None) -> dict:
     """The review state and the editable plan, for the web app."""
     st = status(folder, ticker, db)

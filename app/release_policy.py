@@ -50,6 +50,20 @@ def role_may(role, action) -> bool:
     return action in ROLE_PERMISSIONS.get(role, frozenset())
 
 
+# Policy 1.3.0: a report that clears every automatic Release Gate
+# (Production-Ready or Assumption-Led) is published at once, labelled as not
+# reviewed by an analyst; an analyst approval adds the "Direview analis" badge
+# and an archived, hash-verified bundle. A draft is never published.
+# SECTORAL_AUTO_PUBLISH=0 restores review-gated publication.
+AUTO_PUBLISH_STATUSES = frozenset({"production_ready", "distributable",
+                                   "distributable_assumption_led"})
+
+
+def auto_publish_enabled() -> bool:
+    import os
+    return (os.environ.get("SECTORAL_AUTO_PUBLISH") or "1").strip().lower() not in {"0", "false", "no"}
+
+
 def report_value_tieout_tolerance(left, right, display_rounding_tolerance=0.0):
     """Relative 0.1% with the existing display-rounding tolerance floor."""
     return max(REPORT_VALUE_RELATIVE_TOLERANCE * max(abs(left), abs(right)),
@@ -744,6 +758,17 @@ _POLICY["review_roles"] = {
                     "authenticated reviewer or compliance identity"),
     "enforcement_status": "enforced_by_server_and_assumption_review",
 }
+_POLICY["publication_tiers"] = {
+    "automatic": ("a report that clears every automatic Release Gate is published at once, "
+                  "labelled 'dihasilkan model, belum direview analis'; its forecast is frozen "
+                  "at build"),
+    "analyst_reviewed": ("an authenticated reviewer approval adds the 'Direview analis' badge "
+                         "and archives the hash-verified bundle"),
+    "statuses": sorted(AUTO_PUBLISH_STATUSES),
+    "never": "draft_non_distributable",
+    "switch": "SECTORAL_AUTO_PUBLISH=0 restores review-gated publication",
+    "enforcement_status": "enforced_by_gallery",
+}
 _RESOLVED = {"quantitative_materiality_cutoffs", "issuer_actual_calendar",
              "public_staleness_and_withdrawal", "display_tieout_tolerance",
              "commodity_fallback_status", "indogb_benchmark_freshness",
@@ -767,6 +792,9 @@ _POLICY["decisions"] = [
     {"id": "indogb_benchmark_freshness", "decided": "2026-09-26", "owner": _DECISION_OWNER,
      "decision": "INDOGB 10Y benchmark at most 7 days old; Damodaran ERP/CRP and IMF growth at "
                  "most 400 days; an older benchmark is not shown."},
+    {"id": "publication_tiers", "decided": "2026-09-26", "owner": _DECISION_OWNER,
+     "decision": "Reports that clear the automatic gates publish at once, labelled as not "
+                 "analyst-reviewed; analyst approval is an optional badge on top."},
     {"id": "review_role_authorization", "decided": "2026-09-26", "owner": _DECISION_OWNER,
      "decision": "Analyst views; reviewer and compliance approve and withdraw; every approval "
                  "and withdrawal needs an authenticated registry identity."},

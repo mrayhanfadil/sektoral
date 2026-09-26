@@ -347,7 +347,8 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
 
       {view.attestation_schema ? (
         <ReviewAttestationForm schema={view.attestation_schema} identity={view.current_reviewer}
-          availableSourceIds={view.available_source_ids ?? []} onChange={setAttestation} />
+          availableSourceIds={view.available_source_ids ?? []} draft={view.attestation_draft}
+          onChange={setAttestation} />
       ) : (
         <p className="rounded-md border border-warn-rule/50 bg-warn-bg/50 px-4 py-2.5 text-[14px] text-warn-ink">
           Checklist attestation belum tersedia. Autentikasikan reviewer yang terdaftar, lalu muat ulang halaman.

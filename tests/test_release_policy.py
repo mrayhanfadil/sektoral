@@ -132,6 +132,7 @@ def test_established_tolerance_fields_and_policy_ambiguities_are_explicit():
         "issuer_actual_calendar", "quantitative_materiality_cutoffs",
         "public_staleness_and_withdrawal", "display_tieout_tolerance",
         "commodity_fallback_status", "indogb_benchmark_freshness", "review_role_authorization",
+        "publication_tiers",
     }
 
 

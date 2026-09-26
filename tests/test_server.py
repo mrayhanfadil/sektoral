@@ -191,6 +191,7 @@ def test_history_lists_remembered_runs(make_client):
 
 
 def test_reports_api_and_files_are_confined(make_client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SECTORAL_AUTO_PUBLISH", "0")  # review-gated publication
     reports = tmp_path / "reports"
     reports.mkdir()
     _report(reports, "AAAA")
@@ -238,6 +239,7 @@ def test_reports_api_and_files_are_confined(make_client, tmp_path, monkeypatch):
 
 
 def test_report_trace_view_returns_only_public_fields(make_client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SECTORAL_AUTO_PUBLISH", "0")  # review-gated publication
     reports = tmp_path / "reports"
     reports.mkdir()
     _report(reports, "AAAA")
