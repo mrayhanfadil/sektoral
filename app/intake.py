@@ -9,7 +9,7 @@ from . import fx
 from . import mineops
 from . import market_quote
 from . import model_profiles
-from . import issuer_evidence
+from . import issuer_evidence, share_basis
 from . import analyst_scenario
 from . import bank_model
 from . import news as news_context
@@ -474,7 +474,20 @@ def load(ticker, as_of=None):
                      f"data saham tahun dasar {base['year']} tidak ada di data Sectors.")
     official_balance = (official_evidence or {}).get("balance_sheet") or {}
     official_shares = official_balance.get("shares_outstanding")
-    if isinstance(official_shares, (int, float)) and official_shares > 0:
+    # Reviewed share ledger first (plan §4.4): the register count on or before
+    # the Report Date moved by known actions; then the official outstanding
+    # count; then Sectors. Treasury shares never enter the denominator.
+    share_record = share_basis.assess(official_evidence or {}, report_date, price=price,
+                                      fiscal_year=base["year"] + 1)
+    ledger_shares = share_basis.model_shares(share_record)
+    if ledger_shares:
+        shares = ledger_shares
+        ledger_base = share_record["basis"]
+        notes.append(f"jumlah saham beredar memakai register saham resmi "
+                     f"{ledger_base['date']} ({ledger_base.get('source_title')}), disesuaikan "
+                     f"aksi korporasi yang diketahui hingga {report_date}; saham treasuri tidak "
+                     "masuk denominator.")
+    elif isinstance(official_shares, (int, float)) and official_shares > 0:
         shares = official_shares
         notes.append(f"jumlah saham beredar memakai "
                      f"{official_balance.get('shares_source') or 'laporan interim resmi'}; "
@@ -643,6 +656,7 @@ def load(ticker, as_of=None):
         "quarterly_actuals": quarterly_rows,
         "latest_quarterly_actual": latest_quarter,
         "official_evidence": official_evidence,
+        "share_basis": share_record,
         "analyst_scenario": analyst_scenario_inputs,
         "latest_official_actual": ((official_evidence or {}).get("latest_actual")),
         # Report inputs intentionally come only from sectors_cache. These
