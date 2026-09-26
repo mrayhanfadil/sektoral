@@ -23,7 +23,7 @@ A Company Update whose evidence could not support every section; the missing evi
 _Avoid_: failed run, degraded report
 
 **Report Gallery**:
-The collection of finished Company Updates with their rating, target, method and status.
+The collection of finished Company Updates with their model scenario, per-share model value, method and status.
 
 **Run Replay**:
 A finished run played back step by step: each agent step, tool call, Method Gate verdict and Method Chain decision in the order it happened. A run stored before its steps were recorded is rebuilt from its Audit Trace, and its timing is labelled as estimated.
@@ -103,7 +103,7 @@ A forecast extrapolated from history (CAGR, three-year averages, capex equal to 
 _Avoid_: base case, forecast (unqualified)
 
 **Analyst Scenario**:
-A full-year path built from the Latest Interim Actuals plus agent-chosen second-half and out-year assumptions; it can support an assumption-led target but is never a production forecast.
+A full-year path built from the Latest Interim Actuals plus agent-chosen second-half and out-year assumptions; it can support an assumption-led model value but is never a production forecast.
 _Avoid_: forecast, LoM forecast, projection
 
 **Bank Driver Scenario**:
@@ -139,7 +139,7 @@ A method's state when a required input is missing or a structural check fails; o
 _Avoid_: rejected, failed, unreasonable
 
 **Selected Method**:
-The first sufficient method in the Method Chain, which alone sets the target price; other sufficient methods are only cross-checks and are never averaged in.
+The first sufficient method in the Method Chain, which alone sets the Model Value; other sufficient methods are only cross-checks and are never averaged in.
 
 **Last Step**:
 The final, assumption-led method in a Method Chain (for example FY EV/EBITDA for miners, FY PER for banks), with its own evidence requirements.
@@ -148,7 +148,7 @@ The final, assumption-led method in a Method Chain (for example FY EV/EBITDA for
 An analyst's recorded choice of method that replaces the system's proposal, shown in the Company Update alongside the system's proposal.
 
 **Release Gate**:
-The check that decides whether a Company Update may carry a target price and rating. The only term that uses the bare word "gate".
+The check that decides whether a Company Update may carry a Model Value and Model Scenario Label. The only term that uses the bare word "gate".
 _Avoid_: approval, sign-off
 
 **Release Status**:
@@ -162,32 +162,31 @@ Released on an Analyst Scenario or a Last Step, with every assumption labelled; 
 _Avoid_: production, provisional
 
 **Draft**:
-Not distributable; the target price and rating are withheld, and each blocker is named.
+Not distributable; the Model Value and Model Scenario Label are withheld, and each blocker is named.
 _Avoid_: preview, internal
 
 **Blocker**:
 A named, critical gap that forces a Draft; it is never turned into a caveat.
 _Avoid_: warning, caveat
 
-**Target Price**:
+**Model Value**:
 The per-share value from the Selected Method, shown only when the Release Gate passes.
-_Avoid_: fair value, intrinsic value
+_Avoid_: target price, fair value, intrinsic value
 
-**Rating**:
-Buy, Hold or Sell from the upside to the Target Price, or Review Required when that upside is extreme.
-_Avoid_: recommendation, call
+**Model Scenario Label**:
+An informational description of whether the Model Value is above, below or equal to the dated market close; it does not tell the reader what action to take.
+_Avoid_: rating, Buy/Hold/Sell, recommendation
 
-**Review Required**:
-The rating when upside exceeds +100% or downside is worse than -50%; it needs a sourced fundamental thesis and a stated model limitation.
+**Perlu Ditinjau**:
+The review status for a model-value difference above +100% or a downside worse than -50%; it needs a sourced fundamental thesis and a stated model limitation.
 
 ## Relationships
 
 - A **Model Profile** and a **Stage Classification** feed the **Method Gates**, whose verdicts fix the **Method Chain**.
 - **Stage Checks** failing on a critical input make every driver-based method **Insufficient**, so the chain can reach its **Last Step**.
 - The **Method Chain** yields one **Selected Method**; the **Release Gate** then decides the **Release Status**.
-- Only a **Production-Ready** or **Assumption-Led** **Release Status** allows a **Target Price** and **Rating**.
+- Only a **Production-Ready** or **Assumption-Led** **Release Status** allows a **Model Value** and **Model Scenario Label**.
 - A **Hypothesis Verdict** cites **Signals**; **Web News** may accompany it but cannot stand alone.
 - An **Analyst Scenario** is anchored to **Latest Interim Actuals**; a **Screening Forecast** is not.
 - A **Bank Driver Scenario** is an **Analyst Scenario**: the DDM values the parent profit and dividends the bank model derives from it, so it stays **Assumption-Led**.
 - A **Run Replay** shows the same steps and **Method Gates** verdicts as the live run it replays; it never adds a step the **Audit Trace** does not hold.
-

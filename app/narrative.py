@@ -2885,7 +2885,7 @@ def _lom_exhibits(intake, va, detail):
         f"{fmt.pct(inp['discount'] + 0.02)} Rp{fmt.rp(fmt.tick(down))}. Capex Elang belum "
         "diungkapkan emiten; angka dari riset broker adalah asumsi analis.")
     notes = [
-        "Rating dan target harga memakai SOTP/LoM, metode utama tambang: NAV per aset dari "
+        "Nilai model per saham berasal dari SOTP/LoM, metode utama tambang: NAV per aset dari "
         "rantai fisik (cadangan, umpan, recovery, smelter, harga, biaya, royalti, pajak, capex) "
         "tanpa nilai terminal perpetual.",
         "Input fisik dan biaya dari rilis resmi 1H26, laporan keuangan dan regulasi; recovery "
@@ -4094,7 +4094,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
     last = forward[-1]["label"] if forward else label
     if ev_s:
         return [
-            "Rating dan target harga memakai EV/EBITDA peer forward, metode untuk aset yang masih "
+            "Nilai model per saham berasal dari EV/EBITDA peer forward, metode untuk aset yang masih "
             "ramping atau riwayat singkat (Method Gate 3, §4.1a): EV = median EV/EBITDA "
             f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} x EBITDA {label} "
             "skenario analis (aktual 1H resmi + margin EBITDA asumsi agen).",
@@ -4108,7 +4108,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
             f"{ev_s.get('shares_basis') or '-'}; tanggal valuasi {ev_s['valuation_date']}. "
             "Kuartil bawah dan atas peer menjadi sensitivitas.",
             "PER FY skenario menjadi langkah berikutnya di rantai metode, tidak dirata-rata "
-            "dengan target. DCF menunggu tiga tahun kondisi stabil.",
+            "dengan nilai model. DCF menunggu tiga tahun kondisi stabil.",
             "Skenario bukan forecast driver terekonsiliasi (S2.9); statusnya berbasis asumsi.",
             "Tanda '-' berarti angka tidak tersedia, bukan nol.",
         ]
@@ -4130,15 +4130,15 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
             f"analis); g {fmt.pct(ddm_s['g'])}. Tanggal valuasi {ddm_s['valuation_date']}; "
             "dividen diterima satu kuartal sesudah tahun buku."
             + (f" Pada harga Rp{fmt.rp(intake_price)}, jalur dividen yang sama menyiratkan CoE "
-               f"{fmt.pct(ddm_s['implied_coe'])}; target mengandaikan pasar menerima CoE "
+               f"{fmt.pct(ddm_s['implied_coe'])}; nilai model mengandaikan pasar menerima CoE "
                f"kebijakan {fmt.pct(ddm_s['coe'])}."
                if ddm_s.get("implied_coe") and intake_price else ""),
             "P/BV-ROE FY dan PER FY skenario menjadi cross-check di rantai metode, tidak "
-            "dirata-rata dengan target.",
+            "dirata-rata dengan nilai model.",
             "Tanda '-' berarti angka tidak tersedia, bukan nol.",
         ]
     return [
-        "Rating dan target harga memakai DCF FCFF, metode utama going concern, atas skenario "
+        "Nilai model per saham berasal dari DCF FCFF, metode utama going concern, atas skenario "
         f"analis {label}-{last}: pendapatan, margin EBITDA dan capex dari agen, terminal Gordon.",
         f"FCFF = EBIT x (1 - pajak efektif) + D&A - capex - kenaikan modal kerja; D&A "
         f"{dcf_s['da_basis']}; pajak {dcf_s['tax_basis']}; {dcf_s['nwc_basis']}.",
@@ -4960,7 +4960,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
 
     if sotp_h:
         doc["catatan_metodologi"] = [
-            "Rating dan target harga memakai SOTP holding, metode utama untuk grup dengan lini "
+            "Nilai model per saham berasal dari SOTP holding, metode utama untuk grup dengan lini "
             "usaha berbeda (Method Gate 0 framework): anak usaha tercatat pada kapitalisasi pasar dikali "
             "kepemilikan, sisa ekuitas pemilik induk pada nilai buku.",
             ("Tanah untuk pengembangan dinilai dengan RNAV landbank (laju penjualan historis, "
@@ -4979,13 +4979,13 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                                                            intake.get("price"))
         return doc
     doc["catatan_metodologi"] = [
-        (f"Rating dan target harga memakai P/BV wajar dari ROE {label} (excess return untuk "
+        (f"Nilai model per saham berasal dari P/BV wajar dari ROE {label} (excess return untuk "
          "bank); ROE memakai laba skenario analis dari aktual 1H resmi dan asumsi H2, dan PER "
          "peer menjadi cross-check." if pbv else
-         "Rating dan target harga memakai P/B median peer atas nilai buku terlapor (emiten "
+         "Nilai model per saham berasal dari P/B median peer atas nilai buku terlapor (emiten "
          "aset berat, PER peer valid kurang dari tiga); skenario laba FY menjadi konteks tesis."
          if book else
-         f"Rating dan target harga memakai PER median peer atas EPS {label}; EPS adalah "
+         f"Nilai model per saham berasal dari PER median peer atas EPS {label}; EPS adalah "
          "skenario analis dari aktual 1H resmi dan asumsi H2, bukan forecast driver."),
         f"Rantai metode: {', '.join(skipped) or '-'} dilewati karena forecast driver belum "
         "direkonsiliasi" + ("." if pbv else "; P/BV buku adalah langkah terakhir rantai."
@@ -5956,16 +5956,16 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
 
 
 def _client_prose(text):
-    """Clean authored report prose without touching evidence or machine data."""
+    """Clean reader-facing prose while preserving figures and trace structure."""
     if not isinstance(text, str):
         return text
     text = re.sub(r"\(news:\s*\d+(?:\s*,\s*news:\s*\d+)*\)",
                   "(berita bertanggal)", text, flags=re.I)
     text = re.sub(r"\(sectors_annuals\)", "(data tahunan Sectors)", text, flags=re.I)
     text = re.sub(r"\(pola BBTN\)", "(pola rentang CoE)", text, flags=re.I)
-    text = re.sub(r"Method Gates?\s*\d+(?:\s*[-–]\s*\d+)?", "pemeriksaan metode",
+    text = re.sub(r"Method Gates?\s*\d+(?:\s*[-–/]\s*\d+)?", "pemeriksaan metode",
                   text, flags=re.I)
-    text = re.sub(r"\bS\d+(?:\.\d+)+\b", "pemeriksaan model", text)
+    text = re.sub(r"\(?\bS\d+(?:\.\d+)+\)?", "pemeriksaan model", text)
     text = re.sub(r"§\s*\d+(?:\.\d+[a-z]?)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?",
                   "panduan metodologi", text, flags=re.I)
     text = re.sub(r"\bRating\s+dan\s+target\s+harga\b", "Nilai model", text, flags=re.I)
@@ -5981,13 +5981,7 @@ def _client_prose(text):
 
 def _client_title(title):
     """Use public value language only for generated report headings."""
-    if not isinstance(title, str):
-        return title
-    title = re.sub(r"\bSensitivitas\s+target\s+harga\b",
-                   "Sensitivitas nilai model", title, flags=re.I)
-    return re.sub(r"\btarget\s+harga\b",
-                  lambda match: "Nilai model" if match.group(0)[0].isupper()
-                  else "nilai model", title, flags=re.I)
+    return _client_prose(title)
 
 
 def _copy_report_paragraph(paragraph):
@@ -6003,8 +5997,47 @@ def _copy_report_paragraph(paragraph):
     return paragraph
 
 
+def _copy_table_text(value):
+    """Sanitize visible table labels and cells while preserving numeric values."""
+    if isinstance(value, str):
+        return _client_prose(value)
+    if isinstance(value, list):
+        return [_copy_table_text(item) for item in value]
+    if isinstance(value, dict):
+        return {key: (item if str(key).lower() in {"url", "source_url", "href"}
+                      else _copy_table_text(item))
+                for key, item in value.items()}
+    return value
+
+
+def _copy_exhibit(exhibit):
+    if not isinstance(exhibit, dict):
+        return exhibit
+    exhibit["judul"] = _client_title(exhibit.get("judul"))
+    for key in ("catatan_sumber", "catatan"):
+        if key in exhibit:
+            exhibit[key] = _client_prose(exhibit[key])
+    data = exhibit.get("data")
+    if isinstance(data, dict):
+        for key in ("cols", "rows"):
+            if key in data:
+                data[key] = _copy_table_text(data[key])
+    return exhibit
+
+
+def _copy_risk(risk):
+    if isinstance(risk, str):
+        return _client_prose(risk)
+    if not isinstance(risk, dict):
+        return risk
+    for key in ("judul", "isi", "text", "sumber"):
+        if key in risk:
+            risk[key] = _copy_table_text(risk[key])
+    return risk
+
+
 def client_copy(doc):
-    """Copy display prose and generated headings, preserving trace and sources."""
+    """Copy reader-facing prose, footnotes and cells; preserve traces and source URLs."""
     if not isinstance(doc, dict):
         return doc
     copied = copy.deepcopy(doc)
@@ -6013,22 +6046,29 @@ def client_copy(doc):
         cover["headline"] = _client_prose(cover.get("headline"))
         cover["bullets"] = [_client_prose(text) for text in cover.get("bullets") or []]
         cover["paragraf"] = [_copy_report_paragraph(p) for p in cover.get("paragraf") or []]
+    methodology = copied.get("catatan_metodologi")
+    if isinstance(methodology, list):
+        copied["catatan_metodologi"] = [_client_prose(note) for note in methodology]
+    elif isinstance(methodology, str):
+        copied["catatan_metodologi"] = _client_prose(methodology)
+    if isinstance(copied.get("risks"), list):
+        copied["risks"] = [_copy_risk(risk) for risk in copied["risks"]]
     for page in copied.get("bagian") or []:
         if not isinstance(page, dict):
             continue
         page["judul"] = _client_title(page.get("judul"))
         page["paragraf"] = [_copy_report_paragraph(p) for p in page.get("paragraf") or []]
+        if isinstance(page.get("risks"), list):
+            page["risks"] = [_copy_risk(risk) for risk in page["risks"]]
         for card in page.get("cards") or []:
             if isinstance(card, dict):
-                for key in ("title", "text"):
+                for key in ("title", "text", "metric_label"):
                     if key in card:
                         card[key] = _client_prose(card[key])
         for exhibit in page.get("exhibit") or []:
-            if isinstance(exhibit, dict):
-                exhibit["judul"] = _client_title(exhibit.get("judul"))
+            _copy_exhibit(exhibit)
     for exhibit in copied.get("exhibits") or []:
-        if isinstance(exhibit, dict):
-            exhibit["judul"] = _client_title(exhibit.get("judul"))
+        _copy_exhibit(exhibit)
     return copied
 
 
