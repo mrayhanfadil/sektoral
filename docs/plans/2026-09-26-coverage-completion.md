@@ -83,7 +83,7 @@ Each checkpoint ends with: the full test suite passing, `git diff --check` clean
 
 | Checkpoint | State | Date | Notes |
 |---|---|---|---|
-| 1 | waiting on D1 (attestation), D2, D3, D10 | 2026-09-26 | POWR forward assumptions accepted by the Sektoral Team (industrial volume +5,0/+4,5/+4,0/+3,5% FY27-FY30, flat US$ tariff and fuel cost per MWh, 25% tax); POWR still needs the authenticated attestation on its frozen bundle |
+| 1 | waiting on D1 (attestations), D3, D10 | 2026-09-26 | Accepted by the Sektoral Team: POWR forward assumptions (industrial volume +5,0/+4,5/+4,0/+3,5% FY27-FY30, flat US$ tariff and fuel cost per MWh, 25% tax); D2 resolved: BBRI 2026 guidance from the Investing.com call transcript, FY27-FY30 analyst drivers and the guided 70%/60% payout (TP Rp4.570 to Rp3.960) accepted. POWR and BBRI still need authenticated attestations on their frozen bundles |
 | 2 | ready to start | | |
 | 3 | waiting on D4-D7 | | |
 | 4 | waiting on D8, D9 | | |
