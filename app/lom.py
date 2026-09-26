@@ -727,6 +727,30 @@ def reconciliation(inp, bridge, fx, base):
     return rows
 
 
+def h2_row(intake, res):
+    """The interim year's second half from the valued LoM schedule (plan §5.3).
+
+    Revenue, EBITDA (after half a year of corporate G&A), D&A and capex are the
+    schedule's 2H totals; interest is the 1H finance cost; tax and non-tax
+    government revenue at the 1H effective rates, as in ``forward_rows``.
+    """
+    inp, base = res["inputs"], res["base"]
+    actual = ((intake.get("official_evidence") or {}).get("latest_actual") or {})
+    income = ((actual.get("financial_statements_usd_thousand") or {})
+              .get("income_statement") or {})
+    interest = -(_num(income.get("finance_costs")) or 0.0) * 1000
+    flows = [f for f in base["flows"] if f["year"] == 2026]
+    if not flows:
+        return None
+    revenue = sum(f["revenue"] for f in flows)
+    ebitda = sum(f["ebitda"] for f in flows) - (inp["ga_usd"] or 0.0) / 2
+    pre_tax = ebitda - sum(f["da"] for f in flows) - interest
+    tax = max(pre_tax, 0.0) * inp["tax_rate"]
+    ntgr = max(pre_tax - tax, 0.0) * inp["ntgr_rate"]
+    return {"revenue": revenue, "ebitda": ebitda, "net_profit": pre_tax - tax - ntgr,
+            "capital_expenditure": sum(f["capex"] for f in flows)}
+
+
 def forward_rows(intake, res, anchor_year, attributable_share=1.0, years=4):
     """FY rows after the interim year from the same LoM schedule as the value.
 

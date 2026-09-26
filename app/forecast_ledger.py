@@ -44,6 +44,17 @@ def record(intake, fc):
                       "net_profit_attributable": r.get("net_profit_attributable", r.get("net_profit"))})
     if not years:
         return None
+    # A scenario without its own parent split (the mining interim anchor) takes
+    # the official prior-year parent share, as Key Financials and the statements do.
+    from . import forecast_statements
+    parent = forecast_statements.parent_share(intake, scenario) if scenario else None
+    if parent:
+        share = parent[0]
+        consolidated = [full.get("net_profit")] + [
+            r.get("net_profit") for r in ((fc or {}).get("outyear_scenario") or {}).get("rows") or []]
+        for item, net in zip(years, consolidated):
+            if net is not None:
+                item["net_profit_attributable"] = net * share
     metrics = actual.get("metrics") or {}
     h1_net = metrics.get("net_profit_attributable", metrics.get("net_profit"))
     annual = [a for a in evidence.get("annual_actuals") or [] if isinstance(a, dict)]
