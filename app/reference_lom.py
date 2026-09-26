@@ -46,7 +46,8 @@ def _sources(inp):
 def _year_draws(inp, pools, year, export, carry):
     first = year == inp.get("first_year", 2026)
     share = 0.5 if first else 1.0
-    cap_cu = inp["smelter_t"] * inp["utilization"] * share
+    cap_cu = (inp["h2_cathode_t"] if first and inp.get("h2_cathode_t")
+              else inp["smelter_t"] * inp["utilization"] * share)
     draws = []
     if not export and not first and carry[0] > 0:
         draws.append((None, 0.0, carry[0] / inp["recovery_cu"], carry[1] / inp["recovery_au"]))
@@ -107,9 +108,11 @@ def flows(inp, deck_cu, deck_au, export=True):
         au_rec = sum(d[3] for d in draws) * inp["recovery_au"]
         cathode = min(cu_rec, cap_cu)
         smelted = cathode / cu_rec if cu_rec else 0.0
-        refined = min(au_rec * smelted, inp["pmr_oz"] * share)
+        cap_au = (inp.get("h2_refined_oz") or inp["pmr_oz"] * share
+                  if year == y0 and inp.get("h2_cathode_t") else inp["pmr_oz"] * share)
+        refined = min(au_rec * smelted, cap_au)
         if not export and year == y0:
-            carry = (cu_rec - cathode, au_rec * (1 - smelted))
+            carry = (cu_rec - cathode, au_rec - refined)
         total_cu = sum(d[2] for d in draws)
         for pool, mt, cu, au in draws:
             asset = pool["asset"] if pool else "bh"

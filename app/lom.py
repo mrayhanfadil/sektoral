@@ -164,6 +164,11 @@ def inputs(intake, fc):
                    if throughput and au_grade and au_conc else None)
     guide_cu = _num(_metric(guidance, "Tembaga dalam konsentrat (Mlbs)").get("value"))
     guide_au = _num(_metric(guidance, "Emas dalam konsentrat (koz)").get("value"))
+    # FY downstream guidance less the 1H actual: 2H26 cathode and refined gold.
+    guide_cathode = _num(_metric(guidance, "Katoda tembaga (kt)").get("value"))
+    guide_refined = _num(_metric(guidance, "Emas murni (koz)").get("value"))
+    h1_cathode = _num(_metric(om, "Katoda tembaga (ton)").get("current"))
+    h1_refined = _num(_metric(om, "Emas murni (oz)").get("current"))
     ebitda = _num((actual.get("metrics") or {}).get("ebitda"))
     operating = _num(income.get("operating_profit"))
     pbt, tax = _num(income.get("profit_before_tax")), _num(income.get("income_tax"))
@@ -198,6 +203,10 @@ def inputs(intake, fc):
         "fy_guidance_cu_t": guide_cu * 1e6 / LB_PER_T if guide_cu else None,
         "fy_guidance_au_oz": guide_au * 1000 if guide_au else None,
         "h1_cu_t": cu_conc * 1e6 / LB_PER_T if cu_conc else None,
+        "h2_cathode_t": (guide_cathode * 1000 - h1_cathode
+                         if guide_cathode and h1_cathode is not None else None),
+        "h2_refined_oz": (guide_refined * 1000 - h1_refined
+                          if guide_refined and h1_refined is not None else None),
         "h1_au_oz": au_conc,
         "smelter_t": _num((capacity.get("cathode_copper") or {}).get("annual_design_capacity")),
         "pmr_oz": _num((capacity.get("refined_gold") or {}).get("annual_design_capacity")),
@@ -391,6 +400,12 @@ def schedule(inp, prices, export=True):
         roy_cathode, roy_gold, roy_conc_cu, roy_conc_au = bands(cu_price, au_price)
         draws = []
         smelter_cap = inp["smelter_t"] * inp["utilization"] * share
+        refinery_cap = inp["pmr_oz"] * share
+        if year == 2026 and inp.get("h2_cathode_t"):
+            # 2H26 downstream output is the FY guidance less the 1H actual: the
+            # smelter blends high-grade feed while it ramps (issuer, 1H26).
+            smelter_cap = inp["h2_cathode_t"]
+            refinery_cap = inp.get("h2_refined_oz") or refinery_cap
         if not export and carry["cu"] > 0 and year > 2026:
             draws.append({"pool": concentrate, "mt": 0.0, "cu": carry["cu"] / inp["recovery_cu"],
                           "au": carry["au"] / inp["recovery_au"]})
@@ -430,9 +445,10 @@ def schedule(inp, prices, export=True):
         au_rec_total = sum(d["au"] for d in draws) * inp["recovery_au"]
         cathode = min(cu_rec_total, smelter_cap)
         smelted = cathode / cu_rec_total if cu_rec_total else 0.0
-        refined = min(au_rec_total * smelted, inp["pmr_oz"] * share)
+        refined = min(au_rec_total * smelted, refinery_cap)
         if not export and year == 2026:
-            carry = {"cu": cu_rec_total - cathode, "au": au_rec_total * (1 - smelted)}
+            # Metal the smelter and refinery could not take in 2H26 is processed first in 2027.
+            carry = {"cu": cu_rec_total - cathode, "au": au_rec_total - refined}
         for d in draws:
             pool = d["pool"]
             part = d["cu"] / sum(x["cu"] for x in draws)
