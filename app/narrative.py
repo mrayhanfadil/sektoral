@@ -10,6 +10,7 @@ from . import cache as cache_mod
 from . import consensus
 from . import ddm
 from . import fmt
+from . import share_basis
 from . import method_chain
 from . import methodnote
 from . import rnav
@@ -392,9 +393,9 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
     actual = evidence.get("latest_actual") or {}
     annuals = evidence.get("annual_actuals") or []
     balance = evidence.get("balance_sheet") or {}
-    # Use the report's valuation denominator when the interim statement only
-    # reports issued shares; issued shares can include treasury stock.
-    shares_outstanding = balance.get("shares_outstanding") or intake.get("shares")
+    # The report's valuation denominator: the reviewed share ledger, else the
+    # official outstanding count (issued shares can include treasury stock).
+    shares_outstanding, shares_basis_text = share_basis.report_date_shares(intake)
     release = va.get("release") or {}
     blockers = release.get("blockers") or ["Bukti model belum lengkap"]
     currency = evidence.get("reporting_currency") or "Rp"
@@ -1229,7 +1230,7 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             f"Sumber: {balance.get('source_title') or actual['source_title']}, "
             "hlm. " + ", ".join(str(p) for p in balance.get("source_pages", [])) +
             f"; {balance.get('source_url') or actual['source_url']}; saham beredar "
-            f"dari {'neraca interim resmi' if balance.get('shares_outstanding') else 'data Sectors'}.")
+            f"dari {shares_basis_text or 'data Sectors'}.")
 
     illustrative_pages = []
     if illustrative_scenarios and mining:

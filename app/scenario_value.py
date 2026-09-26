@@ -25,7 +25,7 @@ import re
 from datetime import date
 from statistics import median
 
-from . import bank_model, fmt, house_assumptions, period_basis
+from . import bank_model, fmt, house_assumptions, period_basis, share_basis
 
 _IDR_POLICY = house_assumptions.discount_inputs("IDR")
 _USD_POLICY = house_assumptions.discount_inputs("USD")
@@ -246,11 +246,9 @@ def bridge(intake):
     period = balance.get("period_end")
     official = lambda value: value * fx if _num(value) is not None and fx else None
     out = {"fx": fx, "official_date": _day(period)}
-    shares = _num(balance.get("shares_outstanding")) or _num(balance.get("shares_issued"))
+    shares, shares_basis = share_basis.report_date_shares(intake)
     if shares:
-        out.update(shares=shares, shares_basis=f"neraca interim resmi {period}")
-    elif _num(intake.get("shares")):
-        out.update(shares=intake["shares"], shares_basis="data Sectors")
+        out.update(shares=shares, shares_basis=shares_basis)
     annual = next((a for a in reversed(intake.get("annuals") or [])
                    if _num(a.get("total_debt")) is not None and _num(a.get("cash")) is not None),
                   None)

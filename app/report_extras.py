@@ -18,7 +18,7 @@ from agents.analyst import tools as peer_tools
 from agents.estimator import tools as local_data
 
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
-               mineops, rate_benchmarks, scenario_value)
+               mineops, rate_benchmarks, scenario_value, share_basis)
 from . import consensus, peer_groups
 from . import lom as lom_mod
 
@@ -2378,9 +2378,8 @@ def shape_key_financials(doc, intake, fc=None, va=None, statements=None):
     per_row = build("PER (x)", find("PER"), per, keep_actual=False)
     pbv_row = build("PBV (x)", find("PBV"), pbv, keep_actual=False)
     shares_pf = next((r["earnings"] / r["eps"] for r in model.values()
-                      if _num(r.get("earnings")) and _num(r.get("eps"))), None) or _num(
-        ((intake.get("official_evidence") or {}).get("balance_sheet") or {}).get(
-            "shares_outstanding")) or _num(intake.get("shares"))
+                      if _num(r.get("earnings")) and _num(r.get("eps"))), None) or \
+        share_basis.report_date_shares(intake)[0]
 
     def eps(i):
         """EPS for a table whose narrative did not write one (Sectors basis, Rp)."""
@@ -3274,7 +3273,7 @@ def valuation_inputs(intake, fc, va):
     scenario = fc.get("interim_scenario") or {}
     fx_rate = ((intake.get("fx_spot") or {}).get("rate") or
                (target.get("fx") or {}).get("rate"))
-    shares = balance.get("shares_outstanding") or balance.get("shares_issued") or intake.get("shares")
+    shares = share_basis.report_date_shares(intake)[0]
     inputs = {"label": f"FY{scenario['year'] % 100:02d}F" if scenario.get("year") else "FY",
               "tp": va.get("tp") if va.get("rating") else None,
               "method_label": va.get("method") or "-",

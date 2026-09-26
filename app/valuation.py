@@ -7,6 +7,7 @@ from . import method_chain
 from . import model_profiles
 from . import rnav
 from . import scenario_value
+from . import share_basis
 from . import landbank as landbank_mod
 from . import lom as lom_mod
 from . import release
@@ -67,7 +68,7 @@ def scenario_ev_ebitda_crosscheck(intake, fc, multiples=(6.0, 8.0, 10.0)):
         return None
     ebitda = (scenario.get("full_year") or {}).get("ebitda")
     cash, debt, shares, rate = (balance.get("cash"), balance.get("total_debt"),
-                                 balance.get("shares_outstanding") or balance.get("shares_issued"),
+                                 share_basis.report_date_shares(intake)[0],
                                  fx_quote.get("rate"))
     minority_interest = balance.get("non_controlling_interest")
     if not all(isinstance(value, (int, float)) and value > 0
@@ -141,7 +142,7 @@ def _earnings_candidate(intake, fc, assumption_status):
     scenario = fc.get("earnings_scenario") or {}
     evidence = intake.get("official_evidence") or {}
     balance = evidence.get("balance_sheet") or {}
-    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    shares = share_basis.report_date_shares(intake)[0]
     usd = evidence.get("reporting_currency") == "USD"
     fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
     pes = method_chain.peer_pes(intake.get("peers"))
@@ -183,7 +184,7 @@ def _pbv_roe_fy_candidate(intake, fc, assumption_status, coe, g):
     balance = evidence.get("balance_sheet") or {}
     usd = evidence.get("reporting_currency") == "USD"
     fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
-    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    shares = share_basis.report_date_shares(intake)[0]
     equity, equity_source = balance.get("equity_attributable"), "neraca interim resmi"
     if equity is None and balance.get("total_equity") is not None:
         equity = balance["total_equity"] - (balance.get("non_controlling_interest") or 0)
@@ -291,7 +292,7 @@ def _pbv_book_candidate(intake, fc, assumption_status):
     balance = evidence.get("balance_sheet") or {}
     usd = evidence.get("reporting_currency") == "USD"
     fx = (intake.get("fx_spot") or {}).get("rate") if usd else 1.0
-    shares = balance.get("shares_outstanding") or balance.get("shares_issued")
+    shares = share_basis.report_date_shares(intake)[0]
     equity = balance.get("equity_attributable")
     if equity is None and balance.get("total_equity") is not None:
         equity = balance["total_equity"] - (balance.get("non_controlling_interest") or 0)
@@ -352,8 +353,7 @@ def _holding_sotp_candidate(intake, coe=None):
                        "market_source": (f"tabel peer Sectors {intake['ticker']}" if row
                                          else f"Sectors company/report {ticker}")})
     equity = balance.get("equity_attributable")
-    shares = (balance.get("shares_outstanding") or balance.get("shares_issued")
-              or intake.get("shares"))
+    shares = share_basis.report_date_shares(intake)[0]
     land, _ = landbank_mod.value(intake, coe) if coe else (None, [])
     candidate = method_chain.holding_sotp(listed, equity * fx if equity and fx else None, shares,
                                           landbank=land)

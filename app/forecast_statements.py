@@ -66,7 +66,7 @@ from __future__ import annotations
 
 import re
 
-from . import cache, fmt, release_policy, scenario_value
+from . import cache, fmt, release_policy, scenario_value, share_basis
 
 MODE_FULL = "laporan lengkap"
 # Full statements opened from the official interim balance sheet (spec §4.1a):
@@ -362,7 +362,7 @@ def _share_move(intake):
     """(moved, official shares, year-end shares): the valuation bridge's rule for a
     capital change since the fiscal year-end (rights issue, merger)."""
     balance = (intake.get("official_evidence") or {}).get("balance_sheet") or {}
-    official = _num(balance.get("shares_outstanding")) or _num(balance.get("shares_issued"))
+    official = share_basis.report_date_shares(intake)[0] if balance else None
     annual = next((a for a in reversed(intake.get("annuals") or [])
                    if _num(a.get("total_debt")) is not None and _num(a.get("cash")) is not None),
                   None)
@@ -493,7 +493,7 @@ def _interim_opening(intake, anchor, fx):
         other_non_current_liabilities=(b["total_liabilities"] - b["current_liabilities"]
                                        - b["long_term_debt"]) * fx,
         period_end=period_end, period=actual.get("period"),
-        shares=_num(balance.get("shares_outstanding")) or _num(balance.get("shares_issued")),
+        shares=share_basis.report_date_shares(intake)[0],
         source=balance.get("source_title") or actual.get("source_title"),
         has_receivables="trade_receivables" in b, has_payables="trade_payables" in b,
         has_inventories="inventories" in b,
