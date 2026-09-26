@@ -4,7 +4,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import (assumption_review, earnings_quality, evidence as evidence_mod, forecast, intake,
+from . import (assumption_review, driver_value, earnings_quality, investability, evidence as evidence_mod, forecast, intake,
                narrative, outputs, publication_archive, publication_monitor, render,
                report_contract, report_extras, run_manifest, scrub, valuation)
 
@@ -66,6 +66,9 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
                          assumption_plan=assumption_plan or fc.get("assumption_plan"))
     doc = narrative.build(doc_in, fc, va, s1, method=method,
                           illustrative_scenarios=illustrative_scenarios or analyst_target)
+    # Plan §6: driver effects on value and investability, before the exhibits.
+    doc["driver_value"] = driver_value.assess(doc_in, fc, va)
+    doc["investability"] = investability.assess(doc_in)
     report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va, fc=fc)
     doc = narrative.client_copy(doc)
     scrub.normalize_doc_prose(doc)

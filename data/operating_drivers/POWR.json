@@ -426,5 +426,18 @@
    "equity": 705533088
   },
   "note": "Likuiditas = kas 123.951.821 + investasi 174.244.573; aset/liabilitas lain = selisih total terhadap pos yang dimodelkan, dijaga tetap."
- }
+ },
+ "pass_through": [
+  {
+   "cost": "fuel",
+   "segments": [
+    "industrial"
+   ],
+   "share": 1.0,
+   "source_refs": [
+    "powr-1h26-fs"
+   ],
+   "rationale": "Formula tarif listrik yang disetujui Pemerintah meneruskan komponen bahan bakar ke pelanggan (laporan 1H26, PDF 78); PJBL PLN tidak termasuk."
+  }
+ ]
 }

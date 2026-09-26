@@ -1,0 +1,96 @@
+{
+ "ticker": "POWR",
+ "reviewed_at": "2026-09-26",
+ "dimensions": {
+  "competitive_position": {
+   "assessment": "Produsen listrik swasta tertua (sejak 1993) dengan izin IUPTLU terintegrasi yang memberi eksklusivitas memasok pelanggan industri di wilayah usahanya; lebih dari 2.500 pelanggan, 73% di antaranya lebih dari 10 tahun, churn 0,1-0,4% per tahun 2022-1H26.",
+   "model_effect": "Menopang volume industri yang stabil di model; pertumbuhan volume di atas tren (pusat data) tetap asumsi analis yang diuji ±1 pp.",
+   "evidence": [
+    {
+     "title": "PT Cikarang Listrindo Tbk 1H26 Investor Presentation",
+     "url": "https://www.listrindo.com/uploads/investor_presentation/file_1785474973_1785475559__6b90b304343937d72102dfca459e76ab.pdf",
+     "published_at": "2026-07-31",
+     "page": "hlm. 5 (ikhtisar perusahaan) dan 12 (churn)"
+    }
+   ]
+  },
+  "concentration": {
+   "assessment": "Pelanggan industri 91% pendapatan 1H26 dan PLN 9% melalui PJBL 150 MW yang berakhir 31 Mei 2031; pusat data 12% konsumsi industri. Pemasok gas terkonsentrasi: PGN 17% dan Pertamina EP 13% dari penjualan neto 1H26; tidak ada pemasok pihak berelasi.",
+   "model_effect": "PLN dikeluarkan dari nilai terminal; gangguan pasokan gas (seperti 2025) adalah risiko volume dan biaya yang tidak dimodelkan berulang.",
+   "evidence": [
+    {
+     "title": "PT Cikarang Listrindo Tbk 1H26 Investor Presentation",
+     "url": "https://www.listrindo.com/uploads/investor_presentation/file_1785474973_1785475559__6b90b304343937d72102dfca459e76ab.pdf",
+     "published_at": "2026-07-31",
+     "page": "hlm. 5 dan 19"
+    },
+    {
+     "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+     "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+     "published_at": "2026-07-31",
+     "page": "PDF 67 (Catatan 21, pemasok) dan 69 (PJBL PLN)"
+    }
+   ]
+  },
+  "pricing_power": {
+   "assessment": "Formula tarif listrik yang disetujui Pemerintah meneruskan komponen bahan bakar ke pelanggan; tarif PLN mengikuti harga gas PLN.",
+   "model_effect": "Sensitivitas biaya bahan bakar diteruskan ke tarif industri, sehingga dampak neto ke nilai kecil; tarif terealisasi di luar komponen bahan bakar tetap asumsi analis.",
+   "evidence": [
+    {
+     "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+     "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+     "published_at": "2026-07-31",
+     "page": "PDF 78 (risiko harga komoditas)"
+    },
+    {
+     "title": "PT Cikarang Listrindo Tbk Laporan Tahunan 2025",
+     "url": "https://www.listrindo.com/uploads/annual_report/POWR_Annual_Report_2025.pdf",
+     "published_at": "2026-04-01",
+     "page": "PDF 176 (penjualan PLN)"
+    }
+   ]
+  },
+  "cyclicality": {
+   "assessment": "Konsumsi pelanggan industri datar 2022-2025 (3.454, 3.309, 3.365, 3.455 GWh) dan naik 7,6% yoy di 1H26; basis manufaktur (otomotif, elektronik, plastik, makanan) mengikuti siklus industri.",
+   "model_effect": "Pertumbuhan volume diturunkan bertahap dan diuji ±1 pp per tahun.",
+   "evidence": [
+    {
+     "title": "PT Cikarang Listrindo Tbk 1H26 Investor Presentation",
+     "url": "https://www.listrindo.com/uploads/investor_presentation/file_1785474973_1785475559__6b90b304343937d72102dfca459e76ab.pdf",
+     "published_at": "2026-07-31",
+     "page": "hlm. 12"
+    }
+   ]
+  },
+  "capital_allocation": {
+   "assessment": "Payout dividen 95-96% laba 2022-2025; Senior Notes US$500 juta dilunasi dan US$350 juta Notes 2035 (5,65%) diterbitkan pada 2025; proyek gas engine US$44 juta didanai penuh.",
+   "model_effect": "Payout 95% dan jadwal utang flat sampai 2035 di model; kas bertambah terbatas.",
+   "evidence": [
+    {
+     "title": "PT Cikarang Listrindo Tbk 1H26 Investor Presentation",
+     "url": "https://www.listrindo.com/uploads/investor_presentation/file_1785474973_1785475559__6b90b304343937d72102dfca459e76ab.pdf",
+     "published_at": "2026-07-31",
+     "page": "hlm. 10 dan 16"
+    },
+    {
+     "title": "PT Cikarang Listrindo Tbk Interim Consolidated Financial Statements 30 June 2026",
+     "url": "https://www.listrindo.com/uploads/idx/1fb0306b5c1f30d0319115d5eb5abacb.pdf",
+     "published_at": "2026-07-31",
+     "page": "PDF 10 (arus kas) dan 61 (Notes 2035)"
+    }
+   ]
+  },
+  "ownership_control": {
+   "assessment": "PT Udinda Wahanatama pemegang saham terbesar 30,48%; publik masing-masing di bawah 5% 26,64%; saham treasuri 1,47%.",
+   "model_effect": "Tidak mengubah arus kas; memengaruhi free float dan likuiditas saham.",
+   "evidence": [
+    {
+     "title": "PT Cikarang Listrindo Tbk Laporan Tahunan 2025",
+     "url": "https://www.listrindo.com/uploads/annual_report/POWR_Annual_Report_2025.pdf",
+     "published_at": "2026-04-01",
+     "page": "hlm. 74 (komposisi kepemilikan)"
+    }
+   ]
+  }
+ }
+}
