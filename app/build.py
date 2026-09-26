@@ -4,8 +4,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import (assumption_review, evidence as evidence_mod, forecast, intake, narrative,
-               outputs, publication_archive, render, report_contract, report_extras,
+from . import (assumption_review, evidence as evidence_mod, forecast, intake, narrative, outputs,
+               publication_archive, publication_monitor, render, report_contract, report_extras,
                run_manifest, scrub, valuation)
 
 PDF_OK = True
@@ -69,6 +69,9 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         "outyear_scenario": fc.get("outyear_scenario"),
         "product_sales_scenario": doc_in.get("analyst_scenario"),
     }
+    # Materiality bases (release policy 1.2.0): what the publication monitor
+    # compares between a published report and its rebuilt replacement.
+    doc["model_summary"] = publication_monitor.summarize_model(fc, va)
     doc["evidence_register"] = pre_agent_register
     if doc["evidence_register"].get("error"):
         print(f"  evidence_register gagal: {doc['evidence_register']['error']}", flush=True)

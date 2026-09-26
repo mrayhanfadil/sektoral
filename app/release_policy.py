@@ -1,8 +1,11 @@
 """Versioned baseline policy for Company Update release controls.
 
-This registry records current product rules and the gaps that still need a
-policy owner. Runs snapshot its version and hash in the Audit Trace; it is not
-yet enforced by the Release Gate. Numeric values are copied from existing
+This registry records current product rules, the decisions a policy owner has
+approved, and the gaps that still need one. Runs snapshot its version and hash
+in the Audit Trace. Tolerances are enforced at their check sites; materiality,
+the filing calendar and public staleness are enforced by
+``app.publication_monitor``; the remaining documented rules are not automatic
+Release Gate checks. Numeric values are copied from existing
 constants/checks and tested against those sources so the baseline cannot drift.
 """
 from __future__ import annotations
@@ -12,7 +15,7 @@ import hashlib
 import json
 
 
-POLICY_VERSION = "1.1.0"
+POLICY_VERSION = "1.2.0"
 EFFECTIVE_DATE = "2026-09-26"
 
 # These constants are the numeric tolerance inputs used by the existing
@@ -98,6 +101,183 @@ def historical_cash_flow_reconciles(ocf, capex_out, fcf):
 def segment_share_sum_is_valid(total_share):
     """Existing report-contract check: segment shares total 100% +/- 0.5pp."""
     return abs(total_share - 100.0) <= SEGMENT_SHARE_ABSOLUTE_TOLERANCE_PP
+
+
+# --- Materiality (policy 1.2.0, approved 2026-09-26) -------------------------
+# A change is material when it reaches the threshold (inclusive). Percentages
+# compare against the previously published figure; CAR compares absolute
+# basis points. A zero or missing baseline cannot anchor a percentage, so any
+# nonzero move from zero is material and a missing value is reported as
+# unassessed rather than assumed immaterial.
+MATERIALITY_DECISION_DATE = "2026-09-26"
+EARNINGS_MATERIALITY_PCT = 5.0
+VALUE_MATERIALITY_PCT = 5.0
+CAR_MATERIALITY_BP = 50.0
+NAV_MATERIALITY_PCT = 5.0
+MATERIALITY = {
+    "going_concern_fcff": {"fy1_attributable_earnings": ("pct", EARNINGS_MATERIALITY_PCT),
+                           "value_per_share": ("pct", VALUE_MATERIALITY_PCT)},
+    "financial_ddm": {"fy1_attributable_earnings": ("pct", EARNINGS_MATERIALITY_PCT),
+                      "value_per_share": ("pct", VALUE_MATERIALITY_PCT),
+                      "capital_adequacy_ratio": ("bp", CAR_MATERIALITY_BP)},
+    "finite_life_mining": {"fy1_attributable_earnings": ("pct", EARNINGS_MATERIALITY_PCT),
+                           "value_per_share": ("pct", VALUE_MATERIALITY_PCT),
+                           "attributable_asset_nav": ("pct", NAV_MATERIALITY_PCT)},
+}
+
+
+def _number(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def materiality_assessment(profile, before, after) -> dict:
+    """Compare two model summaries against the profile's approved thresholds.
+
+    ``before`` and ``after`` map basis names (``fy1_attributable_earnings``,
+    ``value_per_share``, ``capital_adequacy_ratio`` as a fraction,
+    ``attributable_asset_nav``) to numbers. Returns ``material`` (True when any
+    assessed basis reaches its threshold), each check, and the bases that could
+    not be assessed because a value was missing.
+    """
+    if profile not in MATERIALITY:
+        raise ValueError(f"no materiality rule for Model Profile {profile!r}")
+    checks, unassessed = [], []
+    for basis, (unit, threshold) in MATERIALITY[profile].items():
+        old, new = _number((before or {}).get(basis)), _number((after or {}).get(basis))
+        if old is None or new is None:
+            unassessed.append(basis)
+            continue
+        if unit == "bp":
+            change = (new - old) * 10_000
+            material = abs(change) >= threshold
+        elif old == 0:
+            change = None if new != 0 else 0.0
+            material = new != 0
+        else:
+            change = (new - old) / abs(old) * 100
+            material = abs(change) >= threshold
+        checks.append({"basis": basis, "before": old, "after": new, "unit": unit,
+                       "change": change, "threshold": threshold, "material": material})
+    return {"profile": profile, "material": any(c["material"] for c in checks),
+            "checks": checks, "unassessed": unassessed,
+            "policy_version": POLICY_VERSION}
+
+
+# --- Issuer filing calendar (OJK POJK 14/2022 statutory deadlines) ----------
+# Interim reports: unaudited 1 month, limited review 2 months, audited 3 months
+# after period end; annual audited reports 3 months after fiscal year end. The
+# semester report's assurance level is often not recorded in the source pack,
+# so an unknown level uses the latest lawful deadline (3 months) rather than
+# flagging an issuer that filed an audited semester report on time.
+FILING_DEADLINE_MONTHS = {
+    "quarter": {"unaudited": 1, "limited_review": 2, "audited": 3, None: 1},
+    "semester": {"unaudited": 1, "limited_review": 2, "audited": 3, None: 3},
+    "annual": {"audited": 3, None: 3},
+}
+
+
+def _month_end(year, month):
+    import calendar
+    from datetime import date
+    year, month = year + (month - 1) // 12, (month - 1) % 12 + 1
+    return date(year, month, calendar.monthrange(year, month)[1])
+
+
+def fiscal_periods(fiscal_year, fiscal_year_end_month=12):
+    """Q1, 1H, 9M and FY period ends of one fiscal year, with their report kind."""
+    start = fiscal_year_end_month - 12  # months before the calendar year of FY end
+    return [
+        {"label": f"Q1 {fiscal_year}", "kind": "quarter",
+         "period_end": _month_end(fiscal_year, start + 3)},
+        {"label": f"1H{str(fiscal_year)[-2:]}", "kind": "semester",
+         "period_end": _month_end(fiscal_year, start + 6)},
+        {"label": f"9M{str(fiscal_year)[-2:]}", "kind": "quarter",
+         "period_end": _month_end(fiscal_year, start + 9)},
+        {"label": f"FY{fiscal_year}", "kind": "annual",
+         "period_end": _month_end(fiscal_year, start + 12)},
+    ]
+
+
+def filing_deadline(period_end, kind, assurance=None):
+    months = FILING_DEADLINE_MONTHS[kind].get(assurance, FILING_DEADLINE_MONTHS[kind][None])
+    return _month_end(period_end.year, period_end.month + months)
+
+
+def latest_required_period(as_of, fiscal_year_end_month=12, interim_assurance=None) -> dict:
+    """The most recent period whose statutory filing deadline has passed by ``as_of``.
+
+    ``interim_assurance`` may map a report kind (``quarter``/``semester``) to its
+    verified assurance level for this issuer.
+    """
+    from datetime import date
+    day = as_of if isinstance(as_of, date) else date.fromisoformat(str(as_of)[:10])
+    assurance = interim_assurance or {}
+    due = []
+    for year in (day.year - 1, day.year, day.year + 1):
+        for period in fiscal_periods(year, fiscal_year_end_month):
+            deadline = filing_deadline(period["period_end"], period["kind"],
+                                       assurance.get(period["kind"]))
+            if deadline <= day:
+                due.append({**period, "due": deadline})
+    latest = max(due, key=lambda row: row["period_end"])
+    return {"label": latest["label"], "kind": latest["kind"],
+            "period_end": latest["period_end"].isoformat(), "due": latest["due"].isoformat()}
+
+
+def filing_overdue(actual_period_end, as_of, **calendar) -> dict:
+    """Whether a newer official period than ``actual_period_end`` was due by ``as_of``."""
+    required = latest_required_period(as_of, **calendar)
+    return {"overdue": str(actual_period_end)[:10] < required["period_end"],
+            "required": required}
+
+
+# --- Public staleness and withdrawal (policy 1.2.0) --------------------------
+# A trigger labels a publication stale and opens a review; it stays visible.
+# It is withdrawn only when a measured change is material and no approved
+# replacement exists after the grace window. Trading days count Monday to
+# Friday; IDX exchange holidays are not modelled, which can only shorten the
+# window (withdrawal earlier, never later).
+WITHDRAWAL_GRACE_TRADING_DAYS = 10
+
+
+def trading_days_after(start, end) -> int:
+    """Weekdays strictly after ``start`` up to and including ``end``."""
+    from datetime import date, timedelta
+    first = start if isinstance(start, date) else date.fromisoformat(str(start)[:10])
+    last = end if isinstance(end, date) else date.fromisoformat(str(end)[:10])
+    days, cursor = 0, first
+    while cursor < last:
+        cursor += timedelta(days=1)
+        days += cursor.weekday() < 5
+    return days
+
+
+def publication_decision(triggers, as_of, materiality=None, replacement_approved=False) -> dict:
+    """``current``, ``stale`` or ``withdrawal_due`` for one published Company Update.
+
+    ``triggers`` are dicts with at least ``kind`` and ``date``. ``materiality`` is
+    a :func:`materiality_assessment` of the published model against a rebuilt
+    candidate, or None when no candidate has been measured.
+    """
+    if not triggers:
+        return {"state": "current", "triggers": [], "reason": None}
+    first = min(str(t["date"])[:10] for t in triggers)
+    elapsed = trading_days_after(first, as_of)
+    material = bool(materiality and materiality.get("material"))
+    if material and not replacement_approved and elapsed >= WITHDRAWAL_GRACE_TRADING_DAYS:
+        state = "withdrawal_due"
+        reason = (f"Perubahan material ({', '.join(c['basis'] for c in materiality['checks'] if c['material'])}) "
+                  f"tanpa pengganti yang disetujui dalam {WITHDRAWAL_GRACE_TRADING_DAYS} hari bursa "
+                  f"sejak {first}.")
+    else:
+        state = "stale"
+        reason = ("Pemicu pembaruan terbuka sejak " + first + "; laporan tetap tampil dengan label "
+                  "stale sampai ditinjau." + ("" if materiality else
+                                               " Materialitas belum diukur karena belum ada kandidat pengganti."))
+    return {"state": state, "triggers": list(triggers), "first_trigger": first,
+            "trading_days_elapsed": elapsed, "grace_trading_days": WITHDRAWAL_GRACE_TRADING_DAYS,
+            "materiality": materiality, "replacement_approved": replacement_approved,
+            "reason": reason}
 
 
 _POLICY = {
@@ -480,6 +660,58 @@ _POLICY = {
         },
     ],
 }
+
+
+# Policy 1.2.0 decisions (2026-09-26): quantitative materiality, the OJK filing
+# calendar, and public staleness/withdrawal. The snapshot is filled from the
+# same constants the checks use, so the documented rule cannot drift from the
+# enforced one.
+_DECISION_OWNER = "Sektoral Team"
+for _name, _rules in MATERIALITY.items():
+    _POLICY["profiles"][_name]["quantitative_materiality_threshold"] = {
+        basis: {"unit": unit, "threshold": threshold, "inclusive": True,
+                "comparison": ("absolute change in basis points" if unit == "bp"
+                               else "change relative to the published value")}
+        for basis, (unit, threshold) in _rules.items()}
+    _POLICY["profiles"][_name]["enforcement_status"] = "enforced_by_publication_monitor"
+_POLICY["freshness"]["financial_actuals"].update({
+    "implementation": "app.release_policy.latest_required_period: OJK POJK 14/2022 deadlines",
+    "enforcement_status": "enforced_by_publication_monitor",
+    "filing_deadline_months": {kind: {str(k): v for k, v in levels.items()}
+                               for kind, levels in FILING_DEADLINE_MONTHS.items()},
+    "unknown_assurance": "semester reports use the 3-month audited deadline",
+    "issuer_override": "source pack fiscal_calendar.fiscal_year_end_month and interim_assurance",
+})
+_POLICY["update_triggers"][0]["enforcement_status"] = "enforced_by_publication_monitor"
+_POLICY["public_staleness"] = {
+    "on_trigger": "label the publication stale and open a review; it stays visible",
+    "withdraw_when": ("a rebuilt candidate shows a material change and no approved replacement "
+                      "exists after the grace window"),
+    "grace_trading_days": WITHDRAWAL_GRACE_TRADING_DAYS,
+    "trading_day_basis": "Monday to Friday; IDX exchange holidays are not modelled",
+    "unmeasured_materiality": "stays stale; never withdrawn without a measured material change",
+    "actor": "an authenticated reviewer or compliance identity records every withdrawal",
+    "enforcement_status": "enforced_by_publication_monitor",
+}
+_POLICY["enforcement_summary"].update({
+    "profile_materiality": "enforced_by_publication_monitor for published-vs-candidate changes",
+    "issuer_calendar_freshness": "enforced_by_publication_monitor via OJK filing deadlines",
+    "public_staleness_and_withdrawal": "enforced_by_publication_monitor; withdrawal needs an authenticated actor",
+})
+_RESOLVED = {"quantitative_materiality_cutoffs", "issuer_actual_calendar",
+             "public_staleness_and_withdrawal"}
+_POLICY["decisions"] = [
+    {"id": "quantitative_materiality_cutoffs", "decided": "2026-09-26", "owner": _DECISION_OWNER,
+     "decision": "Material at >=5% of FY1 attributable earnings or value per share; banks also "
+                 ">=50bp CAR; mining also >=5% attributable asset NAV."},
+    {"id": "issuer_actual_calendar", "decided": "2026-09-26", "owner": _DECISION_OWNER,
+     "decision": "A period is due at its OJK POJK 14/2022 deadline; unknown semester assurance "
+                 "uses the 3-month audited deadline."},
+    {"id": "public_staleness_and_withdrawal", "decided": "2026-09-26", "owner": _DECISION_OWNER,
+     "decision": "Label stale on a trigger; withdraw only a measured material change without an "
+                 f"approved replacement after {WITHDRAWAL_GRACE_TRADING_DAYS} trading days."},
+]
+_POLICY["ambiguities"] = [a for a in _POLICY["ambiguities"] if a["id"] not in _RESOLVED]
 
 
 def policy_snapshot() -> dict:
