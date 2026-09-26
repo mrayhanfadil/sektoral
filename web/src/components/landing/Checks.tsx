@@ -1,6 +1,6 @@
 // What the evidence checks and the release harness decide: the four checks
 // with and without enough evidence, the three release statuses, and the
-// The review threshold plotted against each model-value difference.
+// Review Required band plotted with the stored reports' real upside.
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { CircleCheck, CircleMinus, CircleSlash } from "lucide-react";
 import type { ReportItem } from "../../lib/api";
@@ -14,7 +14,7 @@ const CHECKS = [
     "Ditolak atau diperbaiki", "Asumsi tanpa sumber tidak masuk model; alasannya tercatat."],
   ["Metode valuasi", "Rantai dari gerbang framework", "Metode terpilih lolos", "Nilai, sensitivitas, dan silang cek ditampilkan.",
     "Semua metode gagal", "Tidak ada tebakan; tiap metode diberi alasan."],
-  ["Skenario nilai", "Gerbang forecast dan valuasi", "Ditampilkan",
+  ["Rating & target harga", "Gerbang forecast dan valuasi", "Ditampilkan",
     "Hanya setelah metode yang dipilih lolos seluruh pemeriksaan.", "Ditahan",
     "Laporan terbit sebagai draf parsial dengan banner bukti belum lengkap dan alasan penahanan."],
 ] as const;
@@ -63,13 +63,13 @@ export function EvidenceChecks() {
 const RELEASE = [
   { code: "production_ready", title: "Siap produksi",
     body: "Forecast driver yang bersumber dan terekonsiliasi, dinilai dengan metode utama profil.",
-    outcome: "Nilai model dan asumsi terbit.", held: false },
+    outcome: "Rating dan target harga terbit.", held: false },
   { code: "distributable_assumption_led", title: "Berbasis asumsi",
     body: "Dinilai dengan skenario analis yang tervalidasi atau langkah terakhir rantai metode, dengan setiap asumsi diberi label. Forecast belum siap produksi.",
-    outcome: "Nilai model terbit dengan asumsi berlabel.", held: false },
+    outcome: "Rating dan target harga terbit, asumsinya berlabel.", held: false },
   { code: "draft_non_distributable", title: "Draf",
     body: "Tidak untuk didistribusikan. Setiap blocker yang menahan laporan disebut namanya.",
-    outcome: "Nilai model ditahan.", held: true },
+    outcome: "Rating dan target harga ditahan.", held: true },
 ];
 
 export function ReleaseStatuses({ current, ticker }: { current?: string; ticker?: string }) {
@@ -153,11 +153,11 @@ export function ReviewBand({ items }: { items: ReportItem[] }) {
   return (
     <figure className="panel m-0 px-5 pt-4 pb-4 max-sm:px-4">
       <p aria-hidden className="m-0 mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12.5px] text-ink-soft">
-        <span className="flex items-center gap-2"><span className="size-2 rounded-full bg-brand-ink" />Nilai model tercatat</span>
-        <span className="flex items-center gap-2"><span className="h-2.5 w-4 rounded-[2px] bg-warn-bg ring-1 ring-warn-rule/40" />Di luar ambang review</span>
+        <span className="flex items-center gap-2"><span className="size-2 rounded-full bg-brand-ink" />Potensi company update terbit</span>
+        <span className="flex items-center gap-2"><span className="h-2.5 w-4 rounded-[2px] bg-warn-bg ring-1 ring-warn-rule/40" />Review Required</span>
       </p>
       <div ref={axis} className="relative" style={{ height: top + 34 }} aria-hidden>
-        {/* Review zones, outside −50% and +100%. */}
+        {/* Review Required zones, outside −50% and +100%. */}
         <span className="absolute h-4 rounded-l-[3px] bg-warn-bg" style={{ top: top - 8, left: 0, width: at(-50) }} />
         <span className="absolute h-4 rounded-r-[3px] bg-warn-bg" style={{ top: top - 8, left: at(100), right: 0 }} />
         <span className="absolute inset-x-0 h-px bg-rule-strong" style={{ top }} />
@@ -179,12 +179,12 @@ export function ReviewBand({ items }: { items: ReportItem[] }) {
         ))}
       </div>
       <ul className="sr-only">
-        {points.map((p) => <li key={p.ticker}>{p.ticker}: selisih dari harga {signed(p.upside)}</li>)}
+        {points.map((p) => <li key={p.ticker}>{p.ticker}: potensi {signed(p.upside)}</li>)}
       </ul>
       {points.length > 0 && (
         <figcaption className="mt-3 border-t border-rule-soft pt-3 text-[13.5px] text-ink-soft">
-          {inside} dari {points.length} company update terbit berada di dalam rentang peninjauan.
-          {nearest && <> Paling dekat ke ambang: <span className="font-mono font-semibold text-ink">{nearest.ticker}</span>, selisih dari harga <span className="font-mono text-ink">{signed(nearest.upside)}</span>.</>}
+          {inside} dari {points.length} company update terbit berada di dalam rentang.
+          {nearest && <> Paling dekat ke ambang: <span className="font-mono font-semibold text-ink">{nearest.ticker}</span>, potensi <span className="font-mono text-ink">{signed(nearest.upside)}</span>.</>}
         </figcaption>
       )}
     </figure>

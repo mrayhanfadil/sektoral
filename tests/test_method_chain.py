@@ -322,7 +322,7 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path, monkeypa
     assert doc["meta"]["tp"] > 0 and doc["meta"]["rating"]
     titles = [e["judul"] for e in doc["exhibits"]]
     assert "Skenario laba FY26F: aktual 1H dan asumsi H2" in titles
-    assert not any("Target harga" in title for title in titles)
+    assert any(title.startswith("Target harga") for title in titles)
     chain = next(e for e in doc["exhibits"] if e["judul"] == "Rantai metode valuasi")
     value_column = next(i for i, label in enumerate(chain["data"]["cols"])
                         if "saham" in str(label).lower())
@@ -341,7 +341,7 @@ def test_jpfa_report_publishes_on_validated_earnings_scenario(tmp_path, monkeypa
     key_fin = doc["exhibits"][1]
     assert key_fin["judul"] == "Key Financials"
     assert [r["judul"] for r in doc["risks"]][0] == "Harga jagung dan bungkil kedelai"
-    assert "Nilai model" in doc["cover"]["paragraf"][2]["isi"]
+    assert "Kami menetapkan target Rp" in doc["cover"]["paragraf"][2]["isi"]
     risk_page = next(p for p in doc["bagian"] if p["judul"].startswith("Katalis"))
     assert risk_page["risks"] == doc["risks"] and risk_page["risks_after"] == 1
     labels = [row[0] for row in key_fin["data"]["rows"]]

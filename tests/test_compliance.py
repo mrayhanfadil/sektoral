@@ -90,8 +90,7 @@ def test_incomplete_mining_inputs_withhold_target_and_rating(tmp_path):
     assert d["meta"]["status"] == "draft_non_distributable"
     val_sec = next(b for b in d["bagian"]
                    if b["judul"] == "Valuasi dan kelengkapan model")
-    assert any("nilai per saham dan sensitivitas valuasi ditahan sampai tinjauan analis selesai"
-               in p.lower()
+    assert any("target harga dan sensitivitas valuasi ditahan sampai tinjauan analis selesai" in p.lower()
                for p in val_sec["paragraf"])
 
 
