@@ -1,0 +1,279 @@
+{
+ "schema_version": 1,
+ "ticker": "BBCA",
+ "currency": "IDR",
+ "unit": "unit",
+ "reviewed_at": "2026-09-26",
+ "sources": {
+  "bbca-1h26-fs": {
+   "title": "PT Bank Central Asia Tbk Laporan Keuangan Konsolidasian 30 Juni 2026 (tidak diaudit)",
+   "url": "https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q2/BBCA_Q2_2026.pdf",
+   "official_filing_url": "https://www.idx.co.id/StaticData/NewsAndAnnouncement/ANNOUNCEMENTSTOCK/From_EREP/202607/20260728163316-62836-0/FinancialStatement-2026-II-BBCA.xlsx",
+   "published_at": "2026-07-28",
+   "page": "PDF 2-5 (posisi keuangan), 6-7 (laba rugi), 84 (Catatan 19a, simpanan nasabah), 164-165 (Catatan 49e-f: total modal, ATMR dan KPMM entitas induk; buffer)"
+  },
+  "bbca-fy25-publication": {
+   "title": "PT Bank Central Asia Tbk Financial Report December 2025 (publikasi triwulanan, diaudit)",
+   "url": "https://www.bca.co.id/-/media/Feature/Report/File/S8/Laporan-Triwulan/2026/20260127-financial-report-december-2025.pdf",
+   "published_at": "2026-01-27",
+   "page": "Calculation of Capital Adequacy Ratio: total modal Rp268.244.808 juta dan total ATMR Rp901.270.630 juta (Bank), 31 Desember 2025"
+  },
+  "bbca-1h26-broker": {
+   "title": "KB Valbury Sekuritas, BBCA 1H26 Results: Inline 1H26 Earnings; Intact Fundamentals, Unjustified Discount",
+   "url": "https://kbvalbury.com/cfind/source/files/bbca-1h26-results---260729.pdf",
+   "published_at": "2026-07-29",
+   "page": "hal. 1: panduan '26F pertumbuhan kredit 8%-10% dan NIM 5,4%-5,6% (panduan manajemen yang dikutip broker)"
+  },
+  "bbca-fy25-dividend": {
+   "title": "ANTARA: RUPS BCA tetapkan rasio dividen tahun buku 2025 sebesar 72 persen",
+   "url": "https://www.antaranews.com/berita/5470831/rups-bca-tetapkan-rasio-dividen-tahun-buku-2025-sebesar-72-persen",
+   "published_at": "2026-03-12",
+   "page": "dividen tunai Rp336 per saham, 72% laba bersih tahun buku 2025"
+  }
+ },
+ "fy0_close": {
+  "gross_loan": 992900923000000,
+  "allowance_for_loans": 30759571000000,
+  "non_loan_earning_assets": 1518302284000000,
+  "total_assets": 1586828536000000,
+  "total_deposit": 1233799081000000,
+  "current_account": 431010515000000,
+  "savings_account": 608119555000000,
+  "time_deposit": 194669011000000,
+  "other_interest_bearing_liabilities": 21438365000000,
+  "parent_equity": 281466478000000,
+  "non_controlling_interest": 221077000000,
+  "total_equity": 281687555000000,
+  "total_capital": 268244808000000,
+  "total_risk_weighted_asset": 901270630000000,
+  "non_interest_bearing_liabilities": 49903535000000,
+  "source_refs": [
+   "bbca-1h26-fs",
+   "bbca-fy25-publication"
+  ],
+  "date": "2025-12-31",
+  "definition": "kredit bruto = kredit + piutang pembiayaan konsumen + sewa pembiayaan + aset transaksi syariah (sebelum cadangan); aset produktif = giro BI dan bank lain, penempatan, aset keuangan FVTPL, wesel tagih, reverse repo, efek investasi (bruto) dan kredit bruto; liabilitas berbunga lain = dana simpanan syariah, simpanan bank lain, repo, efek utang, pinjaman, subordinasi dan dana syirkah temporer; simpanan = simpanan nasabah (giro, tabungan, deposito); modal dan ATMR entitas induk"
+ },
+ "h1_close": {
+  "gross_loan": 1035627331000000,
+  "allowance_for_loans": 31640267000000,
+  "non_loan_earning_assets": 1591953565000000,
+  "total_assets": 1660579336000000,
+  "total_deposit": 1268824684000000,
+  "current_account": 440796760000000,
+  "savings_account": 635057569000000,
+  "time_deposit": 192970355000000,
+  "other_interest_bearing_liabilities": 70393360000000,
+  "parent_equity": 270437543000000,
+  "non_controlling_interest": 230203000000,
+  "total_equity": 270667746000000,
+  "total_capital": 258780227000000,
+  "total_risk_weighted_asset": 965813658000000,
+  "non_interest_bearing_liabilities": 50693546000000,
+  "source_refs": [
+   "bbca-1h26-fs"
+  ],
+  "date": "2026-06-30"
+ },
+ "h1": {
+  "net_interest_income": 42512568000000,
+  "operating_expense": 17822298000000,
+  "provision": 1984747000000,
+  "earnings_before_tax": 36451829000000,
+  "tax": 6906208000000,
+  "net_profit": 29545621000000,
+  "net_profit_attributable": 29534446000000,
+  "other_income": 13746306000000,
+  "source_refs": [
+   "bbca-1h26-fs"
+  ],
+  "period": "1H26",
+  "definition": "pendapatan lain = laba sebelum pajak - NII + beban operasional lainnya + cadangan (asuransi bersih, provisi dan komisi, trading, lain-lain); cadangan = beban kerugian penurunan nilai aset"
+ },
+ "capital_requirement": {
+  "value": 0.1499,
+  "source_refs": [
+   "bbca-1h26-fs"
+  ],
+  "basis": "KPMM minimum profil risiko 9,99% + capital conservation buffer 2,5% + countercyclical buffer 0% + capital surcharge bank sistemik 2,5% (Catatan 49f)"
+ },
+ "cost_of_funds": {
+  "value": 0.0112,
+  "source_refs": [
+   "bbca-1h26-fs"
+  ],
+  "rationale": "Beban bunga dan syariah 1H26 disetahunkan terhadap rata-rata simpanan + liabilitas berbunga lain 31 Desember 2025 dan 30 Juni 2026."
+ },
+ "payout_path": {
+  "values": [
+   0.72,
+   0.72,
+   0.72,
+   0.72,
+   0.72
+  ],
+  "source_refs": [
+   "bbca-fy25-dividend"
+  ],
+  "rationale": "Payout 72% atas laba tahun buku 2025 (RUPST 12 Maret 2026) dipertahankan; emiten tidak menerbitkan panduan payout ke depan."
+ },
+ "drivers": [
+  {
+   "year": 2026,
+   "loan_growth_pct": {
+    "value": 9.0,
+    "kind": "company_guidance",
+    "rationale": "Titik tengah panduan manajemen 8-10% (dikutip KB Valbury); kredit bruto 30 Juni 2026 +4,3% ytd dan +8,0% yoy.",
+    "source_refs": [
+     "bbca-1h26-broker",
+     "bbca-1h26-fs"
+    ]
+   },
+   "nim_pct": {
+    "value": 5.4,
+    "kind": "company_guidance",
+    "rationale": "Batas bawah panduan NIM 5,4-5,6% (dikutip KB Valbury); NIM 1H26 5,3% menurut emiten dan 5,47% pada definisi aset produktif berkas driver (NII x 2 / rata-rata aset produktif bruto).",
+    "source_refs": [
+     "bbca-1h26-broker",
+     "bbca-1h26-fs"
+    ]
+   },
+   "non_ii_to_nii_pct": {
+    "value": 32.0,
+    "kind": "sourced",
+    "rationale": "Pendapatan lain terhadap NII 1H26 resmi 32,3%.",
+    "source_refs": [
+     "bbca-1h26-fs"
+    ]
+   },
+   "cost_to_income_pct": {
+    "value": 31.7,
+    "kind": "sourced",
+    "rationale": "Beban operasional lainnya terhadap NII + pendapatan lain 1H26 resmi.",
+    "source_refs": [
+     "bbca-1h26-fs"
+    ]
+   },
+   "cost_of_credit_pct": {
+    "value": 0.4,
+    "kind": "sourced",
+    "rationale": "Cadangan 1H26 disetahunkan terhadap rata-rata kredit bruto: 0,39%.",
+    "source_refs": [
+     "bbca-1h26-fs"
+    ]
+   }
+  },
+  {
+   "year": 2027,
+   "loan_growth_pct": {
+    "value": 9.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sejalan dengan panduan 2026."
+   },
+   "nim_pct": {
+    "value": 5.4,
+    "kind": "analyst_assumption",
+    "rationale": "Batas bawah panduan; imbal hasil kredit melunak."
+   },
+   "non_ii_to_nii_pct": {
+    "value": 32.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26."
+   },
+   "cost_to_income_pct": {
+    "value": 32.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sedikit di atas realisasi 1H26 (CIR FY2025 30,7% menurut emiten)."
+   },
+   "cost_of_credit_pct": {
+    "value": 0.4,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26; kualitas aset stabil."
+   }
+  },
+  {
+   "year": 2028,
+   "loan_growth_pct": {
+    "value": 8.5,
+    "kind": "analyst_assumption",
+    "rationale": "Sejalan dengan panduan 2026, lalu menurun bertahap menuju pertumbuhan nominal."
+   },
+   "nim_pct": {
+    "value": 5.4,
+    "kind": "analyst_assumption",
+    "rationale": "Batas bawah panduan; imbal hasil kredit melunak."
+   },
+   "non_ii_to_nii_pct": {
+    "value": 32.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26."
+   },
+   "cost_to_income_pct": {
+    "value": 32.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sedikit di atas realisasi 1H26 (CIR FY2025 30,7% menurut emiten)."
+   },
+   "cost_of_credit_pct": {
+    "value": 0.4,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26; kualitas aset stabil."
+   }
+  },
+  {
+   "year": 2029,
+   "loan_growth_pct": {
+    "value": 8.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sejalan dengan panduan 2026, lalu menurun bertahap menuju pertumbuhan nominal."
+   },
+   "nim_pct": {
+    "value": 5.3,
+    "kind": "analyst_assumption",
+    "rationale": "Kompresi marjin bertahap."
+   },
+   "non_ii_to_nii_pct": {
+    "value": 32.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26."
+   },
+   "cost_to_income_pct": {
+    "value": 32.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sedikit di atas realisasi 1H26 (CIR FY2025 30,7% menurut emiten)."
+   },
+   "cost_of_credit_pct": {
+    "value": 0.4,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26; kualitas aset stabil."
+   }
+  },
+  {
+   "year": 2030,
+   "loan_growth_pct": {
+    "value": 8.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sejalan dengan panduan 2026, lalu menurun bertahap menuju pertumbuhan nominal."
+   },
+   "nim_pct": {
+    "value": 5.3,
+    "kind": "analyst_assumption",
+    "rationale": "Kompresi marjin bertahap."
+   },
+   "non_ii_to_nii_pct": {
+    "value": 32.0,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26."
+   },
+   "cost_to_income_pct": {
+    "value": 32.0,
+    "kind": "analyst_assumption",
+    "rationale": "Sedikit di atas realisasi 1H26 (CIR FY2025 30,7% menurut emiten)."
+   },
+   "cost_of_credit_pct": {
+    "value": 0.4,
+    "kind": "analyst_assumption",
+    "rationale": "Tetap pada realisasi 1H26; kualitas aset stabil."
+   }
+  }
+ ]
+}
