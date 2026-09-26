@@ -87,3 +87,20 @@ def test_the_per_share_effect_of_a_consistent_terminal_is_estimated():
     assert ratio < 1
     assert record["measures"]["per_share_effect_idr"] == pytest.approx((ratio - 1) * 100)
     assert T.not_applicable("SOTP")["status"] == "not_applicable"
+
+
+def test_only_reinvestment_or_return_failures_are_restated_at_the_ceiling():
+    lines = [_line(100, 20, 20, 0, 100)] * 5
+    growth_for_free = T.fcff(_dcf(lines=lines), invested_capital=300, benchmarks=BENCH,
+                             as_of="2026-09-26", cash_currency="IDR")
+    ceiling = growth_for_free["measures"]["ronic_ceiling"]
+    assert T.restatement_ronic(growth_for_free) == ceiling
+    # Restated terminal FCFF = NOPAT x (1 - g / ceiling) passes the same check.
+    nopat = 100 * 1.035
+    restated = T.fcff(_dcf(lines=lines, terminal_fcff=nopat * (1 - 0.035 / ceiling)),
+                      invested_capital=300, benchmarks=BENCH, as_of="2026-09-26",
+                      cash_currency="IDR")
+    assert restated["status"] == "consistent"
+    rate_failure = T.fcff(_dcf(g=0.07, lines=lines), invested_capital=300, benchmarks=BENCH,
+                          as_of="2026-09-26", cash_currency="IDR")
+    assert T.restatement_ronic(rate_failure) is None
