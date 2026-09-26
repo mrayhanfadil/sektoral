@@ -55,6 +55,14 @@ _Avoid_: adjusted earnings, core profit (unsourced)
 Dated, sourced splits, rights issues, placements, buybacks and conversions that set the share count and per-share history known at a Report Date; pending actions stay conditional scenarios.
 _Avoid_: share changes, dilution (unqualified)
 
+**Share Ledger**:
+The issuer's dated official register counts (outstanding, net of treasury shares), the Corporate-Action Ledger between them, the reported weighted averages and potentially dilutive instruments; consecutive counts must reconcile through the actions. Its Report Date count is the one share count every per-share figure uses.
+_Avoid_: share count (unsourced), issued shares as the denominator
+
+**Core Earnings**:
+First-forecast-year parent earnings after the reviewed normalization bridge; P/E and P/B-ROE value them, while the income statement stays as reported.
+_Avoid_: adjusted profit, recurring profit (undefined)
+
 **Market Quote Override**:
 A dated closing price newer than the one in the Sectors Snapshot.
 
