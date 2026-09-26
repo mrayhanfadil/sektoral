@@ -425,6 +425,19 @@ def _check_sotp(result: object, intake: object) -> list[str]:
     return blockers
 
 
+def _stale_deck_blockers(intake):
+    """Release policy 1.3.0: a price deck still stale after the dated fallback."""
+    mineops = (intake or {}).get("mineops") if isinstance(intake, Mapping) else None
+    out = []
+    for key, name in (("cu_price", "copper"), ("au_price", "gold")):
+        deck = (mineops or {}).get(key) if isinstance(mineops, Mapping) else None
+        if isinstance(deck, Mapping) and deck.get("stale"):
+            out.append(f"{name} price deck is {deck.get('age_days')} days old at the Report Date "
+                       f"after the dated fallback (last {deck.get('date')}); release policy "
+                       "1.3.0 blocks production use")
+    return out
+
+
 def common_blockers(profile, intake, forecast, valuation_detail=None):
     """Data/forecast blockers shared by every valuation method of a profile.
 
@@ -442,6 +455,7 @@ def common_blockers(profile, intake, forecast, valuation_detail=None):
         blockers.extend(_deterministic_forecast_blockers(forecast, intake))
         blockers.extend(_check_latest_interim_actuals(intake))
         blockers.extend(_check_operating_bridge(forecast))
+        blockers.extend(_stale_deck_blockers(intake))
         if (not isinstance(forecast, Mapping) or
                 forecast.get("forecast_basis") != "physical_driver_forecast" or
                 forecast.get("production_ready") is not True):

@@ -26,7 +26,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import (assumption_review, gallery, outputs, publication_archive,
+from . import (assumption_review, gallery, outputs, publication_archive, release_policy,
                reviewer_auth, run_events, trace_view)
 from .jobs import ResearchJobs, TICKER, available_tickers
 from agents.analyst import memory as agent_memory
@@ -239,7 +239,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         identity = reviewer_auth.authenticate(x_review_token)
         if identity is None:
             raise HTTPException(403, "Token reviewer tidak valid atau review belum diaktifkan.")
-        if identity["role"] not in {"reviewer", "compliance"}:
+        if not release_policy.role_may(identity["role"], "approve"):
             raise HTTPException(403, "Identitas ini tidak memiliki peran reviewer.")
         manifest = outputs.load(outputs.MANIFEST, jobs.reports, t)
         publication_id = manifest.get("publication_id") if isinstance(manifest, dict) else None
@@ -336,7 +336,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         if not TICKER.fullmatch(t):
             raise HTTPException(404, "Arsip laporan tidak ditemukan.")
         identity = reviewer_auth.authenticate(x_review_token)
-        if identity is None or identity["role"] not in {"reviewer", "compliance"}:
+        if identity is None or not release_policy.role_may(identity["role"], "withdraw"):
             raise HTTPException(403, "Token tidak memiliki peran reviewer atau compliance.")
         try:
             lineage = publication_archive.withdraw_publication(

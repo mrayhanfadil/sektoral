@@ -13,14 +13,14 @@ from app import release_policy
 def test_policy_snapshot_is_detached_serializable_and_deterministically_hashed():
     snapshot = release_policy.policy_snapshot()
     json.dumps(snapshot, ensure_ascii=False, allow_nan=False)
-    assert snapshot["version"] == release_policy.POLICY_VERSION == "1.2.0"
+    assert snapshot["version"] == release_policy.POLICY_VERSION == "1.3.0"
     assert snapshot["effective_date"] == release_policy.EFFECTIVE_DATE == "2026-09-26"
     assert release_policy.policy_sha256(snapshot) == release_policy.policy_sha256()
     assert release_policy.policy_sha256(dict(reversed(list(snapshot.items())))) == (
         release_policy.policy_sha256(snapshot))
 
     snapshot["version"] = "edited-copy"
-    assert release_policy.policy_snapshot()["version"] == "1.2.0"
+    assert release_policy.policy_snapshot()["version"] == "1.3.0"
     assert release_policy.policy_sha256(snapshot) != release_policy.policy_sha256()
     package = release_policy.versioned_snapshot()
     assert package["sha256"] == release_policy.policy_sha256(package["policy"])
@@ -55,7 +55,8 @@ def test_freshness_policy_uses_existing_windows_and_calendar_based_actuals():
     assert policy["usd_idr"]["max_age_days"] == 7
     assert policy["financial_actuals"]["max_age_days"] is None
     assert "verified fiscal calendar" in policy["financial_actuals"]["basis"]
-    assert policy["indogb_rate_benchmark"]["max_age_days"] is None
+    assert policy["indogb_rate_benchmark"]["max_age_days"] == 7
+    assert policy["rate_benchmarks"]["max_age_days"] == release_policy.BENCHMARK_MAX_AGE_DAYS
     assert policy["sectors_snapshot"]["max_age_days"] is None
 
 
@@ -123,17 +124,46 @@ def test_established_tolerance_fields_and_policy_ambiguities_are_explicit():
     assert policy["enforcement_summary"]["profile_materiality"].startswith(
         "enforced_by_publication_monitor")
 
-    ambiguity_ids = {item["id"] for item in policy["ambiguities"]}
     # Policy 1.2.0 resolved materiality, the filing calendar and public
-    # staleness; the rest stay open for a policy owner.
-    assert ambiguity_ids == {
-        "display_tieout_tolerance", "commodity_fallback_status",
-        "indogb_benchmark_freshness", "review_role_authorization",
-    }
+    # staleness; 1.3.0 the tie-out formulas, stale commodity fallback,
+    # benchmark age and review roles. No ambiguity stays open.
+    assert policy["ambiguities"] == []
     assert {d["id"] for d in policy["decisions"]} == {
         "issuer_actual_calendar", "quantitative_materiality_cutoffs",
-        "public_staleness_and_withdrawal",
+        "public_staleness_and_withdrawal", "display_tieout_tolerance",
+        "commodity_fallback_status", "indogb_benchmark_freshness", "review_role_authorization",
     }
+
+
+def test_review_roles_and_permissions():
+    may = release_policy.role_may
+    assert not may("analyst", "approve") and may("analyst", "view_review")
+    assert may("reviewer", "approve") and may("compliance", "withdraw")
+    assert not may("guest", "view_review")
+    roles = release_policy.policy_snapshot()["review_roles"]
+    assert roles["policy_owner"] == "Sektoral Team"
+    assert roles["permissions"]["reviewer"] == ["approve", "view_review", "withdraw"]
+
+
+def test_benchmarks_older_than_their_policy_age_are_not_shown():
+    from app import rate_benchmarks
+    rf = {"as_of": "2026-09-23"}
+    assert rate_benchmarks._dated(rf, "2026-09-26", "rf_idr") is rf
+    assert rate_benchmarks._dated(rf, "2026-10-01", "rf_idr") is None
+    assert rate_benchmarks._dated(rf, "2026-09-22", "rf_idr") is None  # no look-ahead
+    erp = {"as_of": "2026-01-05"}
+    assert rate_benchmarks._dated(erp, "2026-09-26", "erp") is erp
+    assert rate_benchmarks._dated(erp, "2027-03-01", "erp") is None
+
+
+def test_a_deck_still_stale_after_the_fallback_blocks_a_mining_report():
+    from app import release
+    fresh = {"mineops": {"cu_price": {"stale": False}, "au_price": {"stale": False}}}
+    assert release._stale_deck_blockers(fresh) == []
+    stale = {"mineops": {"cu_price": {"stale": True, "age_days": 60, "date": "2026-07-28"}}}
+    (blocker,) = release._stale_deck_blockers(stale)
+    assert "copper price deck is 60 days old" in blocker
+    assert blocker in release.common_blockers("finite_life_mining", stale, None)
 
 
 def test_active_tolerance_checks_cover_inside_outside_and_near_zero_boundaries():
