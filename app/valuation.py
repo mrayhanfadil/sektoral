@@ -365,9 +365,10 @@ def _fcff_scenario_candidate(intake, fc, assumption_status, rf, erp, beta, g, wa
         reasons = reasons + method_chain.scale_reasons(
             detail["per_share"], detail["shares"], intake["price"] * detail["shares"])
     year = fc["earnings_scenario"]["year"]
+    basis = "model operasional" if (detail or {}).get("operating_model") else "skenario"
     return _scenario_candidate(
         "fcff_dcf", detail, reasons, gate,
-        f"DCF FCFF skenario FY{year % 100:02d}F-FY{(year + 4) % 100:02d}F + terminal Gordon; "
+        f"DCF FCFF {basis} FY{year % 100:02d}F-FY{(year + 4) % 100:02d}F + terminal Gordon; "
         "exit EV/EBITDA historis sebagai cross-check")
 
 
