@@ -15,7 +15,7 @@ Source: [coverage baseline](../baselines/2026-09-26-coverage.md), `python -m app
 |---|---|---|---|
 | POWR | going_concern_fcff | Production-Ready, Buy Rp1.490 | authenticated approval |
 | BBRI | financial_ddm | Production-Ready, Buy Rp3.960 | authenticated approval |
-| AMMN | finite_life_mining | Production-Ready, Sell Rp2.840 | authenticated approval; decision D3 |
+| AMMN | finite_life_mining | Production-Ready, Sell Rp2.840 | authenticated approval |
 | BBCA | financial_ddm | Assumption-Led, Hold Rp6.575 | bank driver file |
 | JPFA | going_concern_fcff | Assumption-Led, Hold Rp2.320 | operating driver file |
 | SIDO | going_concern_fcff | Assumption-Led, Buy Rp448 | operating driver file; decision D4 |
@@ -33,7 +33,7 @@ Every ticker also has business-quality dimensions unanswered (all eight for the 
 | D2 | BBRI guidance source | accept the Investing.com call transcript / supply BBRI's 1H26 presentation | Checkpoint 1 |
 | D3 | AMMN without a working-capital schedule | approve with the stated limitation / hold Assumption-Led until working capital is modelled (task T3) | Checkpoint 1 |
 | D4 | SIDO outstanding shares | note 1c total 29.520.300.000 (current) / movement arithmetic 29.435.200.000 / EPS note 29.430.685.529 / IDX register (supply) | Checkpoint 2 |
-| D5 | INET weighted-average shares | ledger's dated derivation 21,59 bn (current) / ask the issuer | Checkpoint 3 |
+| D5 | INET weighted-average shares | ledger's dated derivation 21,98 bn (current) / ask the issuer | Checkpoint 3 |
 | D6 | INET primary method | move to the operating-model DCF / keep the peer EV/EBITDA and stay Assumption-Led | Checkpoint 3 |
 | D7 | SSIA primary method | build a production holding-SOTP path (listed stakes + operating model for the estate business) / move to an operating-model DCF / stay Assumption-Led | Checkpoint 3 |
 | D8 | Governance dimension | name an acceptable dated source (e.g. an ASEAN CG Scorecard or OJK governance report) / keep unanswered | Checkpoint 4 |
@@ -83,8 +83,8 @@ Each checkpoint ends with: the full test suite passing, `git diff --check` clean
 
 | Checkpoint | State | Date | Notes |
 |---|---|---|---|
-| 1 | waiting on D1 (attestations), D3, D10 | 2026-09-26 | Accepted by the Sektoral Team: POWR forward assumptions (industrial volume +5,0/+4,5/+4,0/+3,5% FY27-FY30, flat US$ tariff and fuel cost per MWh, 25% tax); D2 resolved: BBRI 2026 guidance from the Investing.com call transcript, FY27-FY30 analyst drivers and the guided 70%/60% payout (TP Rp4.570 to Rp3.960) accepted. POWR and BBRI still need authenticated attestations on their frozen bundles |
+| 1 | waiting on D1 (attestations), D10 | 2026-09-26 | Accepted by the Sektoral Team: POWR forward assumptions (industrial volume +5,0/+4,5/+4,0/+3,5% FY27-FY30, flat US$ tariff and fuel cost per MWh, 25% tax); D2 resolved: BBRI 2026 guidance from the Investing.com call transcript, FY27-FY30 analyst drivers and the guided 70%/60% payout (TP Rp4.570 to Rp3.960) accepted. D3 resolved by modelling (T3 done, 4bf36d4): AMMN working capital from the 30 Jun 2026 statements (receivable, product-inventory and operating-payable days, supplies released at mine end, customer advance settled in product 2026-2027) and Elang probability 65% (approvals 0,80 x FID 0,80) replacing the flat 50%; per share Rp2.839 to Rp2.843 (working capital -75, advance -89, Elang +168), Sell Rp2.840 unchanged. POWR, BBRI and AMMN still need authenticated attestations on their frozen bundles |
 | 2 | ready to start | | |
-| 3 | waiting on D4-D7 | | |
-| 4 | waiting on D8, D9 | | |
+| 3 | waiting on D5-D7 | 2026-09-26 | D4 accepted: SIDO shares = note 1c total 29.520.300.000. D5 recommendation: keep the ledger's 21,98 bn (FY26 EPS Rp3,06; INET's own 16,62 bn gives Rp4,04; TP Rp222 Sell unchanged either way), awaiting confirmation |
+| 4 | D8, D9 decided; T5, T6 open | 2026-09-26 | D8: governance kept unanswered with that stated reason. D9 decided and implemented as release policy 1.3.0 (1657665): tie-out formulas recorded per check; a deck still stale after fallback blocks mining production use; INDOGB benchmark at most 7 days, ERP/CRP/growth 400 days; role table (analyst views, reviewer and compliance approve and withdraw). The snapshot lists no unresolved item |
 | 5 | scheduled for the 9M26 filings | | |
