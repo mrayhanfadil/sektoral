@@ -4,7 +4,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import (assumption_review, driver_value, earnings_quality, investability, evidence as evidence_mod, forecast, intake,
+from . import (assumption_review, driver_value, earnings_quality, forecast_ledger, investability, evidence as evidence_mod, forecast, intake,
                narrative, outputs, publication_archive, publication_monitor, render,
                report_contract, report_extras, run_manifest, scrub, valuation)
 
@@ -70,6 +70,8 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     doc["driver_value"] = driver_value.assess(doc_in, fc, va)
     doc["investability"] = investability.assess(doc_in)
     doc["model_inputs"] = driver_value.model_inputs(doc_in, fc, va)
+    # Plan §8: the forecast and declared baselines frozen at publication.
+    doc["forecast_record"] = forecast_ledger.record(doc_in, fc)
     report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va, fc=fc)
     doc = narrative.client_copy(doc)
     scrub.normalize_doc_prose(doc)

@@ -122,6 +122,23 @@ def assess(folder, ticker, as_of=None, candidate_folder=None, db=None) -> dict:
                          "detail": (f"Rilis resmi {latest.get('period')} terbit "
                                     f"{str(latest['published_at'])[:10]}; laporan memakai "
                                     f"{filing.get('period')}.")})
+    # Plan §8: a newer official result scores the frozen forecast; a material
+    # fiscal-year error becomes an explicit review task.
+    forecast_checks = []
+    if latest and triggers and any(t["kind"] == "new_official_actual" for t in triggers):
+        from . import forecast_ledger
+        metrics = latest.get("metrics") or {}
+        official = {"period": latest.get("period"), "revenue": metrics.get("revenue"),
+                    "net_profit_attributable": metrics.get("net_profit_attributable",
+                                                           metrics.get("net_profit"))}
+        for frozen in forecast_ledger.frozen_records(t, db):
+            if frozen.get("publication_id") != manifest.get("publication_id"):
+                continue
+            result = forecast_ledger.evaluate(frozen, official)
+            forecast_checks.append(result)
+            if result.get("review_task"):
+                triggers.append({"kind": "forecast_error", "date": str(latest["published_at"])[:10],
+                                 "period": latest.get("period"), "detail": result["review_task"]})
     profile = (doc.get("meta") or {}).get("model_profile") or manifest.get("profile")
     materiality, replacement_approved = None, False
     if candidate_folder is not None:
@@ -135,7 +152,8 @@ def assess(folder, ticker, as_of=None, candidate_folder=None, db=None) -> dict:
         triggers, day, materiality=materiality, replacement_approved=replacement_approved)
     return {"ticker": t, "as_of": day, "profile": profile,
             "publication_id": manifest.get("publication_id"),
-            "report_period": filing.get("period"), **decision}
+            "report_period": filing.get("period"), "forecast_checks": forecast_checks,
+            **decision}
 
 
 def _tickers(folder, db=None) -> list[str]:
