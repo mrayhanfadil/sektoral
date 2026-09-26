@@ -43,8 +43,8 @@ def test_ammn_end_to_end(tmp_path):
     assert doc["log_gate"]["release"]["blocker_count"] > 0
     html = (tmp_path / "AMMN.html").read_text()
     assert "DRAFT NON-DISTRIBUTABLE" in html
-    assert "Nilai model per saham (Rp)" in html
-    assert "Hasil model ditahan hingga pemeriksaan selesai" in html
+    assert "Target Harga (Rp)" in html
+    assert "Rating ditahan hingga pemeriksaan selesai" in html
 
 
 def test_ammn_report_date_includes_published_interim_without_releasing_target(tmp_path):
@@ -58,7 +58,7 @@ def test_ammn_report_date_includes_published_interim_without_releasing_target(tm
     # The interim table carries the figures; a two-period bar chart only repeated them.
     assert not any(item.get("tipe") == "bar_chart" for item in doc["exhibits"])
     assert "Metrik operasi dan pemrosesan" in titles
-    assert "Pemeriksaan model sebelum rilis" in titles
+    assert "Pemeriksaan sebelum rating dan target harga" in titles
     assert len(doc["exhibits"]) >= 9
 
 
@@ -71,7 +71,7 @@ def test_ammn_illustrative_pages_keep_release_boundary(tmp_path):
     titles = {item["judul"] for item in doc["exhibits"]}
     assert "Riwayat keuangan dalam data Sectors" in titles
     assert "Screen proyeksi historis, bukan forecast produksi" in titles
-    assert "Perbandingan nilai model lama dan batasannya" in titles
+    assert "Perbandingan nilai model lama, bukan target harga" in titles
     assert "Sensitivitas Gordon ilustratif (Rp/saham)" in titles
     assert any("Skenario operasi ilustratif" == page["judul"] for page in doc["bagian"])
 

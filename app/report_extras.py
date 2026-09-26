@@ -33,7 +33,7 @@ DISPLAY_FORECAST_YEARS = 3
 COMMODITY_UNITS = {"Copper": ("Tembaga", "USD/ton"), "Gold": ("Emas", "USD/oz"),
                    "Nickel": ("Nikel", "USD/ton"), "Coal": ("Batu bara", "USD/ton")}
 # Page order from spec §5.4, matched on page title prefixes.
-PAGE_ORDER = ("Ringkasan skenario model", "Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
+PAGE_ORDER = ("Tesis investasi", "Hasil terbaru", "Operasi", "Industri", "Kinerja keuangan", "Forecast", "Skenario FY26",
               "Skenario operasi", "Skenario laba", "Berita", "Sensitivitas", "Katalis",
               "Konteks historis", "Target harga", "Cross-check", "Skenario nilai",
               "Perbandingan peer", "Valuasi", "Data keuangan", "Lampiran valuasi")
@@ -192,8 +192,8 @@ def holding_sotp_exhibit(va):
            "Segmen tanpa harga pasar dinilai pada nilai buku (lahan industri tercatat pada "
            "biaya perolehan). ")
         + "Diskon holding 20-30% adalah asumsi analis untuk sensitivitas, bukan data. "
-        + ("Metode utama (grup dengan lini usaha berbeda); nilai model memakai diskon 0%."
-           if primary else "Cross-check, bukan dasar nilai model."))
+        + ("Metode utama (grup dengan lini usaha berbeda); target memakai diskon 0%."
+           if primary else "Cross-check, bukan dasar target harga."))
 
 
 def _rp_signed(value):
@@ -821,7 +821,7 @@ def peer_page(intake, valuation_inputs=None):
                      [basis, fmt.mult(pb_median), f"Rp{fmt.rp(fmt.tick(pb_median * inputs['bvps_idr']))}"])
     if cross:
         if inputs.get("tp"):
-            cross.append(["Nilai model metode utama", inputs.get("method_label", "-"),
+            cross.append(["Target harga metode utama", inputs.get("method_label", "-"),
                           f"Rp{fmt.rp(inputs['tp'])}"])
         exhibits.append(_exhibit(
             "Cross-check nilai per saham dengan multiple peer",
@@ -1932,7 +1932,7 @@ def mining_catalysts(doc, intake):
         high = max(r[3] for r in attainment)
         rows.append([f"Pencapaian panduan {_guidance_period(evidence)}",
                      f"Realisasi {period} {fmt.pct(low)} sampai {fmt.pct(high)} dari panduan volume.",
-                     "Volume semester kedua menentukan EBITDA forecast dan nilai model per saham.",
+                     "Volume semester kedua menentukan EBITDA forecast dan target harga.",
                      "Negatif bila semester kedua di bawah laju yang disiratkan panduan"])
     for name in _commodities(intake):
         points = _series(name, intake.get("as_of"))
@@ -2043,27 +2043,27 @@ def drop_screening_values(doc):
         return
 
     if draft:
-        withheld = "Nilai per saham dan sensitivitas valuasi ditahan sampai tinjauan analis selesai."
+        withheld = "Target harga dan sensitivitas valuasi ditahan sampai tinjauan analis selesai."
         cover = doc.get("cover") or {}
         for index, bullet in enumerate(cover.get("bullets") or []):
             if isinstance(bullet, str) and re.search(
-                    r"(?:menetapkan target|target harga|target Rp|nilai model Rp)",
+                    r"(?:menetapkan target|target(?:\s+harga)?\s+Rp|nilai model Rp)",
                     bullet, flags=re.I):
                 cover["bullets"][index] = withheld
         for paragraph in cover.get("paragraf") or []:
             if not isinstance(paragraph, dict):
                 continue
             text = " ".join(str(paragraph.get(key) or "") for key in ("judul", "isi"))
-            if re.search(r"(?:menetapkan target|target harga|target Rp|nilai model Rp)",
+            if re.search(r"(?:menetapkan target|target(?:\s+harga)?\s+Rp|nilai model Rp)",
                          text, flags=re.I):
-                paragraph["judul"], paragraph["isi"] = "Status nilai model", withheld
+                paragraph["judul"], paragraph["isi"] = "Status target harga", withheld
 
         valuation_titles = ("target harga", "nilai model berbasis", "valuasi dan kelengkapan",
                             "cross-check dan bukti lanjutan", "skenario nilai")
         input_exhibits = {
             "kelengkapan sebelum rilis",
-            "pemeriksaan model sebelum rilis",
-            "bukti lanjutan untuk menguji nilai model",
+            "pemeriksaan sebelum rating dan target harga",
+            "bukti lanjutan untuk menguji target harga",
             "input sotp yang belum lengkap",
             "komponen cost of equity",
             "proyeksi dividen",
@@ -2072,7 +2072,7 @@ def drop_screening_values(doc):
             title = str(page.get("judul") or "").strip().lower()
             if any(title.startswith(prefix) for prefix in valuation_titles):
                 if title.startswith(("target harga", "nilai model berbasis", "skenario nilai")):
-                    page["judul"] = "Nilai model ditahan"
+                    page["judul"] = "Target harga ditahan"
                 page["paragraf"] = [withheld]
                 page["exhibit"] = [exhibit for exhibit in page.get("exhibit") or []
                                    if (str(exhibit.get("judul") or "").lower()
@@ -2100,7 +2100,7 @@ def drop_screening_values(doc):
                     continue
                 label = str(row[0]).strip().lower()
                 if label.startswith("keputusan rilis") and len(row) > 1:
-                    row[1] = "Nilai model ditahan sampai seluruh pemeriksaan selesai."
+                    row[1] = "Rating dan target harga ditahan sampai seluruh pemeriksaan selesai."
                 if re.search(r"nilai (?:wajar|model) per saham|nilai per saham|target harga", label):
                     for index in range(1, len(row)):
                         row[index] = "Ditahan"
@@ -3160,9 +3160,10 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     if va:
         attach_method_chain(doc, va)
         attach_rate_benchmarks(pages, intake, va)
+        # A draft withholds its target, so the consensus table must not print it.
         meta = doc.get("meta") or {}
-        released_value = meta.get("tp") if meta.get("rating") else None
-        attach_consensus(pages, intake, released_value=released_value)
+        released = meta.get("tp") if meta.get("rating") else None
+        attach_consensus(pages, intake, va, released_value=released)
     doc["bagian"] = [p for p in sorted(pages, key=lambda p: _rank(p["judul"]))
                      if p["exhibit"] or p["paragraf"] or p.get("cards") or p.get("risks")]
     slim_mining(doc, intake)
@@ -3175,8 +3176,9 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
 RATE_EXHIBITS = ("Komponen WACC", "Komponen Cost of Equity")
 
 
-def attach_consensus(pages, intake, *, released_value=None):
-    """Informational model value vs dated analyst consensus, before method chain."""
+def attach_consensus(pages, intake, va, *, released_value=None):
+    """House target vs the dated analyst consensus (app.consensus), just
+    before the method chain on the target page."""
     for page in pages:
         exhibits = page.get("exhibit") or []
         at = next((i for i, e in enumerate(exhibits)
@@ -3186,7 +3188,7 @@ def attach_consensus(pages, intake, *, released_value=None):
         if not any(e.get("judul") == consensus.TITLE for e in exhibits):
             exhibits.insert(at, consensus.exhibit(
                 intake.get("ticker"), intake.get("as_of"), _num(released_value),
-                _num(intake.get("price"))))
+                (va or {}).get("rating"), _num(intake.get("price"))))
         return
 
 

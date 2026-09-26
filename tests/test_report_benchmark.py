@@ -18,7 +18,7 @@ def test_gmfi_uses_official_1h26_without_promoting_screen_to_rating(tmp_path):
     latest = next(e for e in doc["exhibits"] if e["judul"].startswith("Hasil interim resmi"))
     assert latest["data"]["cols"] == ["Metrik", "1H25", "1H26", "yoy"]
     assert latest["data"]["rows"][0] == ["Pendapatan (US$ juta)", "179,0", "270,3", "51,0%"]
-    assert "Nilai model per saham (Rp)" in (tmp_path / "GMFI.html").read_text()
+    assert "Target Harga (Rp)" in (tmp_path / "GMFI.html").read_text()
 
 
 def test_rating_bands_are_used_only_after_release():

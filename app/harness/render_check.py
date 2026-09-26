@@ -30,9 +30,9 @@ RENDER_CHECKS: dict[str, tuple[str, str, str]] = {
     "T1.exhibit_label_rendered": (WARNING, "layout", "setiap objek punya caption 'Exhibit N. judul'"),
     "T1.nm_note_rendered": (BLOCKER, "layout", "tabel dengan sel n.m. mencetak alasannya di bawah source line"),
     "T1.source_appendix": (WARNING, "layout", "lampiran sumber di akhir laporan untuk tiap exhibit"),
-    "T1.header": (WARNING, "layout", "header kode emiten dan nilai model, tipe laporan, tanggal, logo"),
+    "T1.header": (WARNING, "layout", "header 'KODE IJ | RATING · TP', 'Equity Research - Company Update | DD Mon YYYY', logo"),
     "T1.footer": (WARNING, "layout", "footer 'sectors.app', disclosure, nomor halaman"),
-    "T2.price_box_rendered": (WARNING, "layout", "kotak harga: harga, nilai model, selisih bertanda satu desimal"),
+    "T2.price_box_rendered": (WARNING, "layout", "kotak harga: harga, TP, upside bertanda satu desimal"),
     "T2.relative_chart_rendered": (WARNING, "layout", "chart relatif IHSG 12-24 bulan, label bulan"),
     "T2.analyst_block": (WARNING, "layout", "blok analis 'Equity Analyst'"),
     "T2.company_header": (WARNING, "layout", "nama emiten + (TICKER IJ)"),
@@ -437,16 +437,16 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
 
     # Price box.
     released = bool(meta.get("rating")) and meta.get("tp") is not None
-    up_line = next((line for line in lines if re.search(r"upside|downside|selisih dari harga", line, re.I)
+    up_line = next((line for line in lines if re.search(r"upside|downside", line, re.I)
                     and re.search(r"\(%\)|%", line)), None)
     if not released:
-        r.na("T2.price_box_rendered", "tanpa nilai model terbit")
+        r.na("T2.price_box_rendered", "tanpa TP terbit")
     else:
         problems = []
         if not any(re.search(r"harga terakhir|last price", line, re.I) for line in lines):
             problems.append("tanpa baris harga terakhir")
-        if not any(re.search(r"nilai model per saham", line, re.I) for line in lines):
-            problems.append("tanpa baris nilai model per saham")
+        if not any(re.search(r"target harga|target price", line, re.I) for line in lines):
+            problems.append("tanpa baris target harga")
         m = re.search(r"([+\-−]?\d[\d.]*(?:,(\d+))?)\s*%\s*$", up_line or "")
         if not m:
             problems.append("upside tidak terbaca")
