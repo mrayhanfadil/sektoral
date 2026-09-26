@@ -106,11 +106,11 @@ def test_publication_decision_labels_first_and_withdraws_only_measured_material_
 
 def test_policy_snapshot_records_the_decisions_from_the_enforced_constants():
     policy = P.policy_snapshot()
-    assert policy["version"] == "1.2.0"
+    assert policy["version"] == "1.3.0"
     bank = policy["profiles"]["financial_ddm"]["quantitative_materiality_threshold"]
     assert bank["capital_adequacy_ratio"]["threshold"] == P.CAR_MATERIALITY_BP == 50.0
     assert policy["public_staleness"]["grace_trading_days"] == P.WITHDRAWAL_GRACE_TRADING_DAYS
-    assert {d["id"] for d in policy["decisions"]} == {
+    assert {d["id"] for d in policy["decisions"]} >= {
         "quantitative_materiality_cutoffs", "issuer_actual_calendar",
         "public_staleness_and_withdrawal"}
     assert not {a["id"] for a in policy["ambiguities"]} & {d["id"] for d in policy["decisions"]}

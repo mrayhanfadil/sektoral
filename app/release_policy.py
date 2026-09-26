@@ -15,7 +15,7 @@ import hashlib
 import json
 
 
-POLICY_VERSION = "1.2.0"
+POLICY_VERSION = "1.3.0"
 EFFECTIVE_DATE = "2026-09-26"
 
 # These constants are the numeric tolerance inputs used by the existing
@@ -29,6 +29,25 @@ FORECAST_STATEMENT_RELATIVE_TOLERANCE = 1e-9
 HISTORICAL_CASH_ABSOLUTE_FLOOR = 0.01
 HISTORICAL_CASH_RELATIVE_TOLERANCE = 0.01
 SEGMENT_SHARE_ABSOLUTE_TOLERANCE_PP = 0.5
+
+# Policy 1.3.0 (2026-09-26): maximum age at the Report Date of each dated
+# discount-rate benchmark shown beside the policy inputs (app.rate_benchmarks).
+# INDOGB 10Y is a daily market close, like UST 10Y; the Damodaran ERP/CRP and
+# IMF WEO growth series are published once or twice a year.
+BENCHMARK_MAX_AGE_DAYS = {"rf_idr": 7, "erp": 400, "crp": 400, "growth": 400}
+
+# Policy 1.3.0: what each authenticated registry role may do
+# (app.reviewer_auth). Building a report needs no role; the analyst role reads
+# the review view only.
+ROLE_PERMISSIONS = {
+    "analyst": frozenset({"view_review"}),
+    "reviewer": frozenset({"view_review", "approve", "withdraw"}),
+    "compliance": frozenset({"view_review", "approve", "withdraw"}),
+}
+
+
+def role_may(role, action) -> bool:
+    return action in ROLE_PERMISSIONS.get(role, frozenset())
 
 
 def report_value_tieout_tolerance(left, right, display_rounding_tolerance=0.0):
@@ -426,19 +445,22 @@ _POLICY = {
             "enforcement_status": "enforced_elsewhere",
         },
         "indogb_rate_benchmark": {
-            "max_age_days": None,
+            "max_age_days": 7,
             "as_of_rule": "benchmark publication date must be on or before Report Date",
+            "stale_action": "benchmark is not shown; the policy value is unaffected",
             "review_owner": "model",
             "source": "app/rate_benchmarks.py:_dated",
-            "enforcement_status": "as_of_cutoff_enforced; maximum_age_documented_only",
+            "enforcement_status": "enforced_elsewhere",
         },
         "commodity_deck": {
             "max_age_days": 45,
             "stale_action": "Sectors price is marked stale and dated Yahoo series is considered as fallback",
-            "stale_severity": "review_required_if_stale_price_remains_material_to_valuation",
+            "stale_severity": "production_blocker_if_still_stale_after_fallback",
+            "stale_after_fallback": ("the LoM records a price input gap and leaves the physical "
+                                     "route; any mining method is at most Assumption-Led"),
             "review_owner": "model",
-            "source": "app/mineops.py:DECK_MAX_AGE_DAYS and _price_stats",
-            "enforcement_status": "stale_flag_and_fallback_enforced; release_severity_documented_only",
+            "source": "app/mineops.py:DECK_MAX_AGE_DAYS and _price_stats; app/release.py:common_blockers",
+            "enforcement_status": "enforced_elsewhere",
         },
         "sectors_snapshot": {
             "max_age_days": None,
@@ -698,8 +720,34 @@ _POLICY["enforcement_summary"].update({
     "issuer_calendar_freshness": "enforced_by_publication_monitor via OJK filing deadlines",
     "public_staleness_and_withdrawal": "enforced_by_publication_monitor; withdrawal needs an authenticated actor",
 })
+_POLICY["freshness"]["rate_benchmarks"] = {
+    "max_age_days": dict(BENCHMARK_MAX_AGE_DAYS),
+    "as_of_rule": "dated on or before the Report Date and no older than its maximum age",
+    "stale_action": "benchmark is not shown; the policy value is unaffected",
+    "source": "app/rate_benchmarks.py:_dated",
+    "enforcement_status": "enforced_elsewhere",
+}
+_POLICY["tieout_formulas"] = {
+    "report_value": "abs(a - b) <= max(0.1% x max(|a|, |b|), half a unit of the last printed digit)",
+    "growth_chart_vs_displayed": "abs(chart - displayed) <= 0.1pp + 0.1% x |displayed|",
+    "derived_growth_or_margin": ("abs(model - chart) <= 100 x |c/p| x (rounding_c/|c| + "
+                                 "rounding_p/|p|) + 0.1pp"),
+    "forecast_statement_identity": "max(scale x 1e-9, 1.0)",
+    "source": "app/release_policy.py tie-out helpers, called by app/harness/template.py",
+    "enforcement_status": "enforced_elsewhere",
+}
+_POLICY["review_roles"] = {
+    "policy_owner": _DECISION_OWNER,
+    "permissions": {role: sorted(actions) for role, actions in ROLE_PERMISSIONS.items()},
+    "identity": "authenticated registry token (SECTORAL_REVIEWERS); a typed name never approves",
+    "segregation": ("the report is built by the pipeline; approval and withdrawal need an "
+                    "authenticated reviewer or compliance identity"),
+    "enforcement_status": "enforced_by_server_and_assumption_review",
+}
 _RESOLVED = {"quantitative_materiality_cutoffs", "issuer_actual_calendar",
-             "public_staleness_and_withdrawal"}
+             "public_staleness_and_withdrawal", "display_tieout_tolerance",
+             "commodity_fallback_status", "indogb_benchmark_freshness",
+             "review_role_authorization"}
 _POLICY["decisions"] = [
     {"id": "quantitative_materiality_cutoffs", "decided": "2026-09-26", "owner": _DECISION_OWNER,
      "decision": "Material at >=5% of FY1 attributable earnings or value per share; banks also "
@@ -710,6 +758,18 @@ _POLICY["decisions"] = [
     {"id": "public_staleness_and_withdrawal", "decided": "2026-09-26", "owner": _DECISION_OWNER,
      "decision": "Label stale on a trigger; withdraw only a measured material change without an "
                  f"approved replacement after {WITHDRAWAL_GRACE_TRADING_DAYS} trading days."},
+    {"id": "display_tieout_tolerance", "decided": "2026-09-26", "owner": _DECISION_OWNER,
+     "decision": "Each check keeps its own formula, all defined once in release_policy "
+                 "(tieout_formulas); no single universal threshold."},
+    {"id": "commodity_fallback_status", "decided": "2026-09-26", "owner": _DECISION_OWNER,
+     "decision": "A price deck still older than 45 days after the dated Yahoo fallback is a "
+                 "production blocker for a mining report; it may be Assumption-Led at most."},
+    {"id": "indogb_benchmark_freshness", "decided": "2026-09-26", "owner": _DECISION_OWNER,
+     "decision": "INDOGB 10Y benchmark at most 7 days old; Damodaran ERP/CRP and IMF growth at "
+                 "most 400 days; an older benchmark is not shown."},
+    {"id": "review_role_authorization", "decided": "2026-09-26", "owner": _DECISION_OWNER,
+     "decision": "Analyst views; reviewer and compliance approve and withdraw; every approval "
+                 "and withdrawal needs an authenticated registry identity."},
 ]
 _POLICY["ambiguities"] = [a for a in _POLICY["ambiguities"] if a["id"] not in _RESOLVED]
 

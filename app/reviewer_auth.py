@@ -12,8 +12,10 @@ import json
 import os
 import re
 
+from .release_policy import ROLE_PERMISSIONS, role_may
+
 _TOKEN_SHA = re.compile(r"^[0-9a-f]{64}$")
-_ROLES = {"analyst", "reviewer", "compliance"}
+_ROLES = set(ROLE_PERMISSIONS)
 _MIN_TOKEN_LENGTH = 32
 
 
@@ -58,7 +60,7 @@ def configured() -> bool:
 
 def approvals_enabled() -> bool:
     """Whether at least one configured identity may approve a publication."""
-    return any(entry["role"] in {"reviewer", "compliance"} for entry in registry())
+    return any(role_may(entry["role"], "approve") for entry in registry())
 
 
 def authenticate(given: str | None) -> dict | None:
