@@ -176,10 +176,12 @@ def markdown(rows, previous_folder, current_folder):
             lines.append(f"- {c['field']}: {c['previous']} -> {c['current']}")
         bridge = r["value_bridge"]
         if bridge["status"] == "decomposed":
-            lines.append(f"- Jembatan nilai per saham ({bridge['kind']}): Rp{bridge['start']:,.0f} -> "
-                         f"Rp{bridge['end']:,.0f}".replace(",", "."))
+            rp = lambda v: f"{v:,.0f}".replace(",", ".")  # noqa: E731
+            lines.append(f"- Jembatan nilai per saham ({bridge['kind']}): Rp{rp(bridge['start'])} -> "
+                         f"Rp{rp(bridge['end'])}")
             for s in bridge["steps"]:
-                lines.append(f"  - {s['group']}: {s['change']:+,.0f}".replace(",", "."))
+                sign = "+" if s["change"] >= 0 else "-"
+                lines.append(f"  - {s['group']}: {sign}Rp{rp(abs(s['change']))}")
         else:
             lines.append(f"- Jembatan nilai: {bridge['reason']}")
         lines.append("")
