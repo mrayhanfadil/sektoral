@@ -68,7 +68,7 @@ def _result(profile, checks, measures, notes=()):
     return {"profile": profile,
             "status": "consistent" if not failed else "inconsistent",
             "checks": checks, "measures": measures, "notes": list(notes),
-            "blockers": [f"ekonomi terminal: {c['text']} tidak terpenuhi" for c in failed]}
+            "blockers": [f"syarat ekonomi terminal belum terpenuhi: {c['text']}" for c in failed]}
 
 
 def fcff(detail, invested_capital, benchmarks, as_of, cash_currency):
