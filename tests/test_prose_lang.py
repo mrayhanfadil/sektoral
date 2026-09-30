@@ -97,3 +97,11 @@ def test_source_text_takes_english_from_the_source_dictionary(monkeypatch):
     monkeypatch.setattr(prose_lang, "_source_text", lambda: {"Rekor Juli.": "A July record."})
     with building("en"):
         assert prose_lang.source("Rekor Juli.") == "A July record."
+
+
+def test_attach_refuses_english_that_still_reads_indonesian():
+    doc = _doc("Pendapatan 1H26 naik ke Rp1.234,5 miliar dari Rp1.000,0 miliar.")
+    en = _doc("Revenue 1H26 naik ke Rp1.234,5 miliar dari Rp1.000,0 miliar.")
+    attach(doc, en)
+    assert "paragraf_en" not in doc["bagian"][0]
+    assert not prose_lang.mixed("Revenue rose 12,4% from a low base in 1H25.")
