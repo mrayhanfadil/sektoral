@@ -179,6 +179,30 @@ def test_long_agent_text_is_cut_at_a_word_boundary():
     assert len(cut) <= 40 and cut.endswith("kata…")
 
 
+def test_the_audit_appendix_carries_its_english():
+    page = {"judul": "Rekonstruksi aktual Q2 2026",
+            "paragraf": ["Q2 dihitung dari H1 dikurangi Q1; 1.979,0 juta.", "Catatan tanpa terjemahan."],
+            "paragraf_en": ["Q2 is H1 less Q1; 1.979,0 juta.", None],
+            "exhibit": [{"tipe": "tabel", "judul": "Arus kas pendanaan H1 2026 (US$m)",
+                         "catatan_sumber": "Sumber: rilis resmi.",
+                         "data": {"cols": ["Pos", "Q2 turunan"],
+                                  "rows": [["Laba operasi", "1.234,5"], ["Kredit produk perak", "-2,0"]]}}]}
+    (shown,) = server._audit_appendix({"lampiran_audit": [page]})
+    assert shown["title"] == "Rekonstruksi aktual Q2 2026"  # the Indonesian is unchanged
+    assert shown["title_en"] == "Q2 2026 actuals reconstruction"
+    assert shown["paragraphs"] == page["paragraf"]
+    assert shown["paragraphs_en"] == ["Q2 is H1 less Q1; 1,979.0mn.", None]
+    (table,) = shown["exhibits"]
+    assert table["rows"] == [["Laba operasi", "1.234,5"], ["Kredit produk perak", "-2,0"]]
+    assert table["title_en"] == "H1 2026 financing cash flow (US$m)"
+    assert table["cols_en"] == ["Item", "Derived Q2"]
+    assert table["rows_en"] == [["Operating profit", "1,234.5"], ["Silver by-product credit", "-2.0"]]
+    assert table["note"] == "Sumber: rilis resmi." and table["note_en"] is None
+    # A report stored before its appendix had English still shows the tables in English.
+    del page["paragraf_en"]
+    assert server._audit_appendix({"lampiran_audit": [page]})[0]["paragraphs_en"] == [None, None]
+
+
 def test_history_lists_remembered_runs(make_client):
     from agents.analyst import memory
 

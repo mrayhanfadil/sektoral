@@ -38,6 +38,21 @@ def test_attach_adds_english_siblings_with_the_same_figures():
     assert doc["cover"]["headline"] == "Laba naik"
 
 
+def test_attach_gives_the_audit_appendix_its_english():
+    def appendix(para, note):
+        return {"lampiran_audit": [{"judul": "Rekonstruksi aktual Q2 2026", "paragraf": [para],
+                                    "exhibit": [{"judul": "Arus kas", "catatan_sumber": note}]}]}
+    doc = {**_doc("Laba naik."), **appendix("Q2 dihitung dari H1 dikurangi Q1; 12,4%.",
+                                            "Sumber: rilis resmi, hlm. 3.")}
+    en = {**_doc("Profit rose."), **appendix("Q2 is H1 less Q1; 12,4%.", "Source: official release, p. 3.")}
+    attach(doc, en)
+    page = doc["lampiran_audit"][0]
+    assert page["paragraf"] == ["Q2 dihitung dari H1 dikurangi Q1; 12,4%."]
+    assert page["paragraf_en"] == ["Q2 is H1 less Q1; 12,4%."]
+    assert page["exhibit"][0]["catatan_sumber"] == "Sumber: rilis resmi, hlm. 3."
+    assert page["exhibit"][0]["catatan_sumber_en"] == "Source: official release, p. 3."
+
+
 def test_attach_refuses_english_whose_figures_differ():
     doc = _doc("Laba naik 12,4% pada 1H26.")
     en = _doc("Profit rose 12,5% in 1H26.")

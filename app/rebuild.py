@@ -318,7 +318,9 @@ def _valuation_event(event: dict) -> bool:
 
 
 def _content(events):
-    return [{k: v for k, v in e.items() if k != "t"} for e in events]
+    # English twins are not a change: a replay fills them in for older events.
+    return [{k: v for k, v in e.items() if k not in ("t", "label_en", "detail_en")}
+            for e in events]
 
 
 def merged_events(stored, fresh) -> list:

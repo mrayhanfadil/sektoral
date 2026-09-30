@@ -11,7 +11,9 @@ started or what it found), ``tool`` (the tool or kind of step, e.g.
 ``find_peers``, ``cache_get``, ``gate_3``), ``agent`` (the emitter when the
 stage does not name it, e.g. ``riset`` or ``forecast.news``) and ``data`` (a
 few short structured fields such as a gate verdict; strings, except the raw
-numbers in ``NUMBERS``).
+numbers in ``NUMBERS``). ``label_en`` and ``detail_en`` are the English twins
+the web app shows in English (#34): given by the emitter (an agent's own
+English), else filled in for host-written text (``app.host_lang``), else absent.
 """
 from __future__ import annotations
 
@@ -35,14 +37,28 @@ def _finite(value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+def _english(given, text):
+    """An English twin: the one given, else the host text's own (app.host_lang)."""
+    if isinstance(given, str) and given.strip():
+        return given
+    from . import host_lang  # imports the analyst's signal tables
+    return host_lang.english(str(text))
+
+
 def event(stage: str, label: str, detail=None, *, status: str = "ok", tool=None,
-          agent=None, data=None, t: float = 0.0) -> dict:
+          agent=None, data=None, t: float = 0.0, label_en=None, detail_en=None) -> dict:
     """One bounded, typed event; unknown values fall back or are dropped."""
     out = {"stage": stage if stage in STAGES else "research",
            "label": str(label)[:160], "status": status if status in STATUSES else "ok",
            "t": round(float(t), 1)}
+    english = _english(label_en, label)
+    if english:
+        out["label_en"] = str(english)[:160]
     if detail:
         out["detail"] = str(detail)[:400]
+        english = _english(detail_en, detail)
+        if english:
+            out["detail_en"] = str(english)[:400]
     if tool:
         out["tool"] = str(tool)[:40]
     if agent and _AGENT.fullmatch(str(agent)):
@@ -58,14 +74,15 @@ def event(stage: str, label: str, detail=None, *, status: str = "ok", tool=None,
 
 def emit(stage: str, label: str, detail: str | None = None, *,
          status: str = "ok", tool: str | None = None, agent: str | None = None,
-         data: dict | None = None) -> None:
+         data: dict | None = None, label_en: str | None = None,
+         detail_en: str | None = None) -> None:
     sink = _SINK.get()
     if sink is None:
         return
     callback, started = sink
     try:
         callback(event(stage, label, detail, status=status, tool=tool, agent=agent, data=data,
-                       t=time.monotonic() - started))
+                       t=time.monotonic() - started, label_en=label_en, detail_en=detail_en))
     except Exception:  # a listener must never break the research run
         pass
 
@@ -109,5 +126,6 @@ def public(events) -> list[dict]:
         out.append(event(str(item.get("stage")), str(item["label"]), item.get("detail"),
                          status=str(item.get("status")), tool=item.get("tool"),
                          agent=item.get("agent"), data=item.get("data"),
-                         t=t if isinstance(t, (int, float)) and not isinstance(t, bool) else 0.0))
+                         t=t if isinstance(t, (int, float)) and not isinstance(t, bool) else 0.0,
+                         label_en=item.get("label_en"), detail_en=item.get("detail_en")))
     return out[:600]
