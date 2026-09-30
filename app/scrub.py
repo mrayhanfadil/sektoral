@@ -124,14 +124,16 @@ def english_problems(id_text, en_text):
 
     The twin must read English (no CJK, no Indonesian clause), carry exactly
     the figures of the Indonesian as written there, and use no banned term
-    the Indonesian avoids. Figures are compared after house style, which
+    the Indonesian avoids. It may repeat the Indonesian only when that is a
+    code or name the same in both languages (``prose_lang.language_neutral``). Figures are compared after house style, which
     rewrites periods the same way in both languages."""
     from . import prose_lang  # prose_lang imports this module
     if not isinstance(en_text, str) or not en_text.strip():
         return ["is missing"]
     id_clean = normalize_prose(str(id_text or ""), english=False)
     en_clean = normalize_prose(en_text, english=True)
-    if en_clean.strip() == id_clean.strip():
+    if en_clean.strip() == id_clean.strip() and not prose_lang.language_neutral(id_clean):
+        # A code or name ("3Q26", "FY2026") is its own English; prose is not.
         return ["repeats the Indonesian instead of translating it"]
     problems = []
     if _CJK.search(en_text) or not prose_lang.reads_english(en_text):
