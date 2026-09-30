@@ -15,7 +15,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import assumption_review, outputs, publication_archive, publication_monitor, release_policy
+from . import (assumption_review, exhibit_ids, outputs, publication_archive, publication_monitor,
+               release_policy)
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
@@ -42,8 +43,7 @@ def _freshness(folder, ticker) -> dict | None:
 
 def _chain(doc):
     """Method-chain rows as (step, decision, value) from the report exhibit."""
-    exhibit = next((e for e in doc.get("exhibits") or []
-                    if e.get("judul") == "Rantai metode valuasi"), None)
+    exhibit = exhibit_ids.find(doc.get("exhibits"), exhibit_ids.METHOD_CHAIN)
     rows = ((exhibit or {}).get("data") or {}).get("rows") or []
     out = []
     for row in rows:

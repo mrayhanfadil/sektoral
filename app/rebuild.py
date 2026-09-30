@@ -84,12 +84,10 @@ from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app import (assumption_review, build, commodity, fx, intake, outputs,
+from app import (assumption_review, build, commodity, exhibit_ids, fx, intake, outputs,
                  peer_fundamentals, progress, publication_archive, rates, render,
                  rnav, run_manifest)  # noqa: E402
 
-KEY_FINANCIALS = "Key Financials"
-REVENUE_CHART = "Pendapatan"  # Slide 3 revenue combo chart
 # Trace ``report`` fields that research._run derives from the built report.
 REPORT_FIELDS = ("status", "as_of", "market_price_date", "illustrative_scenarios",
                  "target_method", "target_price", "rating", "research_status")
@@ -346,12 +344,13 @@ def peer_kind(basis) -> str:
 
 
 def _exhibit(doc: dict, title: str) -> dict | None:
+    """The first exhibit whose stored (Indonesian) title starts with `title`."""
     return next((e for e in doc.get("exhibits") or [] if isinstance(e, dict)
                  and str(e.get("judul") or "").startswith(title)), None)
 
 
 def _key_financials(doc: dict) -> dict:
-    data = (_exhibit(doc, KEY_FINANCIALS) or {}).get("data") or {}
+    data = (exhibit_ids.find(doc.get("exhibits"), exhibit_ids.KEY_FINANCIALS) or {}).get("data") or {}
     cols = [str(c) for c in data.get("cols") or []]
     out = {}
     for row in data.get("rows") or []:
@@ -373,7 +372,7 @@ def forecast_revenue(doc: dict) -> dict:
     """{category: rupiah revenue} for the forecast years of the revenue chart."""
     chart = next((e for e in doc.get("exhibits") or [] if isinstance(e, dict)
                   and e.get("tipe") in ("combo_panel", "combo_chart")
-                  and str(e.get("judul") or "").startswith(REVENUE_CHART)), None)
+                  and exhibit_ids.is_exhibit(e, exhibit_ids.REVENUE_PANEL)), None)
     data = (chart or {}).get("data") or {}
     cols = data.get("cols") or []
     for series in data.get("series") or []:
