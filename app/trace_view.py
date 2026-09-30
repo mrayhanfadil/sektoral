@@ -6,11 +6,33 @@ typed and length-bounded; nothing else leaves the server.
 """
 from __future__ import annotations
 
+import re
+
 from .jobs import http_url, public_intel, text
 
 
 def _list(value):
     return [x for x in value if isinstance(x, dict)] if isinstance(value, list) else []
+
+
+# The analyst validator's "...; hapus kata: a, b" / "...; hapus: 12, 3,5%" and
+# "token non-Indonesia dihapus: x, y": what the model had to drop, as a list.
+_REMOVED = re.compile(r"(?:; hapus(?: kata)?|(?<= dihapus)): ([^;]*)")
+
+
+def problem_notes(problems) -> list[dict]:
+    """Analyst validator notes as {message, removed}: the note without its
+    word lists, and the words it names to remove (stored notes are strings)."""
+    notes = []
+    for problem in (problems if isinstance(problems, list) else [])[:6]:
+        if not isinstance(problem, str):
+            continue
+        removed = [word.strip() for found in _REMOVED.findall(problem)
+                   for word in found.split(", ") if word.strip()]
+        message = _REMOVED.sub("", problem).strip() or problem
+        notes.append({"message": text(message, 300),
+                      "removed": [text(word, 60) for word in removed[:12]]})
+    return notes
 
 
 def _status(report: dict) -> dict:
@@ -210,6 +232,7 @@ def build(audit: dict | None) -> dict | None:
         "report": _status(audit.get("report") if isinstance(audit.get("report"), dict) else {}),
         "analyst": public_intel(analyst),
         "analyst_problems": [text(p, 300) for p in (analyst.get("problems") or [])[:6] if isinstance(p, str)],
+        "analyst_problem_notes": problem_notes(analyst.get("problems")),
         "research": _research(audit.get("research") if isinstance(audit.get("research"), dict) else {}),
         "news": _news(audit.get("news_sources") if isinstance(audit.get("news_sources"), dict) else {}),
         "forecast": _forecast(audit.get("forecast_assumptions")
