@@ -242,7 +242,7 @@ type Links = {
 
 /** The report's release as recorded in the trace: a ruled readout plus, when known, its method chain. */
 function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; run?: RunReplay }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { report } = trace;
   const awaiting = trace.review_state === "pending" && (report.release_status ?? "").startsWith("distributable");
   const [label, tone] = awaiting ? [t({ id: "Lolos gerbang, menunggu review analis", en: "Passed the gates, awaiting analyst review" }), "warn" as ChipTone]
@@ -283,7 +283,7 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
         </div>
         <div className={`${cell} col-span-6 sm:col-span-4 xl:col-span-1`}>
           <dt className={dt}>{t({ id: "Metode", en: "Method" })}</dt>
-          <dd className="m-0 text-[14px] leading-snug text-ink">{report.method || t({ id: "Belum tercatat", en: "Not recorded" })}</dd>
+          <dd className="m-0 text-[14px] leading-snug text-ink">{twin(report, "method", lang) || t({ id: "Belum tercatat", en: "Not recorded" })}</dd>
         </div>
         <div className={`${cell} col-span-3 sm:col-span-1`}>
           <dt className={dt}>{t({ id: "Data per", en: "Data as of" })}</dt>
@@ -395,12 +395,12 @@ function TraceBody({ trace }: { trace: TraceView }) {
             <>
               <div className="border-t border-rule px-6 py-5 max-sm:px-4"><IntelHeadline intel={analyst} as="p" /></div>
               <Problems title={t({ id: "Catatan validator", en: "Validator notes" })}
-                items={problemNotes(trace.analyst_problem_notes, trace.analyst_problems)} />
+                items={problemNotes(trace.analyst_problem_notes, trace.analyst_problems, trace.analyst_problems_en, lang)} />
               <IntelSections intel={analyst} />
             </>
           ) : (
             <div className="border-t border-rule px-6 py-5 max-sm:px-4">
-              <Empty>{trace.analyst_problems.join("; ") || t({ id: "Agent analis tidak dijalankan untuk riset ini.", en: "The analyst agent was not run for this research." })}</Empty>
+              <Empty>{twin(trace, "analyst_problems", lang).join("; ") || t({ id: "Agent analis tidak dijalankan untuk riset ini.", en: "The analyst agent was not run for this research." })}</Empty>
             </div>
           )}
         </AgentGroup>
@@ -408,7 +408,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
         <AgentGroup agent="riset" status={research.summary ? "ok" : "warn"}
           chip={<StatusWord status={research.summary ? "ok" : "warn"}>{research.summary ? t({ id: "Brief tervalidasi", en: "Brief validated" }) : t({ id: "Brief belum tervalidasi", en: "Brief not yet validated" })}</StatusWord>}>
           <Section id="ringkasan" title={t(LABEL.ringkasan)}>
-            {research.summary ? <p className="max-w-[80ch] text-[15.5px]">{research.summary}</p> : <Empty>{t({ id: "Belum ada brief tervalidasi.", en: "No validated brief yet." })}</Empty>}
+            {research.summary ? <p className="max-w-[80ch] text-[15.5px]">{twin(research, "summary", lang)}</p> : <Empty>{t({ id: "Belum ada brief tervalidasi.", en: "No validated brief yet." })}</Empty>}
           </Section>
 
           <Section id="endpoint" title={t(LABEL.endpoint)} count={research.endpoints.length}>
@@ -459,7 +459,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
 
           {research.limitations.length > 0 && (
             <Section id="kurang" title={t(LABEL.kurang)} count={research.limitations.length}>
-              <ul className="m-0 grid gap-1.5 pl-[18px] text-[15px]">{research.limitations.map((l) => <li key={l}>{l}</li>)}</ul>
+              <ul className="m-0 grid gap-1.5 pl-[18px] text-[15px]">{twin(research, "limitations", lang).map((l, i) => <li key={i}>{l}</li>)}</ul>
             </Section>
           )}
         </AgentGroup>
@@ -473,7 +473,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
             })}</span>}>
             <p className="text-[14.5px] text-ink-soft">
               {t({ id: "Status pencarian:", en: "Search status:" })}{" "}
-              <code className="font-mono text-[13px] text-ink">{news.search.status ?? t({ id: "tidak dijalankan", en: "not run" })}</code>
+              <code className="font-mono text-[13px] text-ink">{twin(news.search, "status", lang) ?? t({ id: "tidak dijalankan", en: "not run" })}</code>
               {news.search.as_of && <>, {t({ id: "per", en: "as of" })} <span className="font-mono text-ink">{news.search.as_of}</span></>}.
             </p>
             {news.search.queries.length > 0 && (
@@ -518,7 +518,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                   {news.rejected.map((r, i) => (
                     <li key={i} className="px-3 py-2">
                       {r.title}
-                      {r.reason && <span className="mt-0.5 block text-[13px] text-ink-soft">{r.reason}</span>}
+                      {r.reason && <span className="mt-0.5 block text-[13px] text-ink-soft">{twin(r, "reason", lang)}</span>}
                     </li>
                   ))}
                   {news.rejected_total > news.rejected.length && (
@@ -574,7 +574,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
 
         <AgentGroup agent="forecast" status={fStatus}
           chip={<StatusWord status={fStatus}>{t(fLabel)}</StatusWord>}>
-          <Problems title={t({ id: "Catatan validator forecast", en: "Forecast validator notes" })} items={forecast.problems.map(validatorNote)} />
+          <Problems title={t({ id: "Catatan validator forecast", en: "Forecast validator notes" })} items={twin(forecast, "problems", lang).map(validatorNote)} />
           <Section id="asumsi" title={t(LABEL.asumsi)} count={forecast.news_effects.length || undefined}>
             {forecast.news_effects.length ? (
               <div className="grid divide-y divide-rule-soft">
@@ -787,7 +787,7 @@ function RunManifest({ manifest }: { manifest: NonNullable<TraceView["run_manife
 
 /** Report sections kept out of the printed company update, shown here for audit. */
 function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix"]> }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   return (
     <section id="lampiran-audit" aria-labelledby="lampiran-audit-title" className="panel scroll-mt-20">
       <header className="px-6 py-5 max-sm:px-4">
@@ -805,27 +805,27 @@ function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix
         {pages.map((page, i) => (
           <details key={`${page.title}-${i}`} className="group border-b border-rule-soft last:border-b-0">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-3 text-[15px] font-medium text-ink-strong max-sm:px-4">
-              <span>{page.title}</span>
+              <span>{twin(page, "title", lang)}</span>
               <span className="data text-ink-soft">
                 {t({ id: `${page.exhibits.length} tabel`, en: `${page.exhibits.length} ${page.exhibits.length === 1 ? "table" : "tables"}` })}
               </span>
             </summary>
             <div className="grid gap-4 px-6 pb-5 max-sm:px-4 [&>*]:min-w-0">
-              {page.paragraphs.map((text, j) => <p key={j} className="max-w-[80ch] text-[14.5px] text-ink">{text}</p>)}
+              {twin(page, "paragraphs", lang).map((text, j) => <p key={j} className="max-w-[80ch] text-[14.5px] text-ink">{text}</p>)}
               {page.exhibits.map((e, j) => (
                 <figure key={j} className="m-0">
-                  <figcaption className="mb-2 text-[14px] font-semibold text-ink-strong">{e.title}</figcaption>
+                  <figcaption className="mb-2 text-[14px] font-semibold text-ink-strong">{twin(e, "title", lang)}</figcaption>
                   <div className="overflow-x-auto rounded-md border border-rule">
                     <table className="w-full border-collapse text-[13.5px]">
                       {e.cols.length > 0 && (
                         <thead>
                           <tr className="bg-raised text-left text-[12.5px] text-ink-soft">
-                            {e.cols.map((c, k) => <th key={k} scope="col" className={`px-3 py-2 font-medium ${k ? "text-right" : ""}`}>{c}</th>)}
+                            {twin(e, "cols", lang).map((c, k) => <th key={k} scope="col" className={`px-3 py-2 font-medium ${k ? "text-right" : ""}`}>{c}</th>)}
                           </tr>
                         </thead>
                       )}
                       <tbody>
-                        {e.rows.map((row, r) => (
+                        {twin(e, "rows", lang).map((row, r) => (
                           <tr key={r} className="border-t border-rule-soft align-top">
                             {row.map((c, k) => <td key={k} className={`px-3 py-1.5 ${k ? "text-right font-mono tabular-nums" : "text-ink"}`}>{c}</td>)}
                           </tr>
@@ -833,7 +833,7 @@ function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix
                       </tbody>
                     </table>
                   </div>
-                  {e.note && <p className="mt-1.5 max-w-[90ch] text-[12.5px] text-ink-soft">{e.note}</p>}
+                  {e.note && <p className="mt-1.5 max-w-[90ch] text-[12.5px] text-ink-soft">{twin(e, "note", lang)}</p>}
                 </figure>
               ))}
             </div>

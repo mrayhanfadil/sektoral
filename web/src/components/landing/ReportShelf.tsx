@@ -5,15 +5,16 @@ import { Link } from "react-router-dom";
 import { FileText, Play } from "lucide-react";
 import { readerFiles, type ReportItem } from "../../lib/api";
 import { pct, rp } from "../../lib/format";
-import { useLang } from "../../lib/i18n";
+import { twin, useLang, type Lang } from "../../lib/i18n";
 import { selectedStep } from "../../lib/labels";
 import { RatingBadge } from "../Reports";
 
 const signed = (v: number | null) => (typeof v === "number" && v > 0 ? "+" : "") + pct(v);
 const upTone = (v: number | null) => (typeof v !== "number" ? "text-ink-faint" : v < 0 ? "text-err-ink" : "text-ok-ink");
 
-function selected(item: ReportItem) {
-  return selectedStep(item.chain)?.step ?? (item.published ? item.method : "");
+function selected(item: ReportItem, lang: Lang) {
+  const step = selectedStep(item.chain);
+  return step ? twin(step, "step", lang) : item.published ? twin(item, "method", lang) : "";
 }
 
 function Actions({ item }: { item: ReportItem }) {
@@ -36,7 +37,7 @@ function Actions({ item }: { item: ReportItem }) {
 }
 
 export function ReportShelf({ items }: { items: ReportItem[] }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const held = t({ id: "ditahan", en: "held" });
   const th = "px-4 py-3 text-[13px] font-bold text-ink-soft";
   return (
@@ -61,7 +62,7 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
                 <span className="block font-mono text-[14.5px] font-semibold tracking-[.04em] text-ink-strong">{item.ticker}</span>
                 <span className="block max-w-[26ch] truncate text-[13px] text-ink-soft">{item.name}</span>
               </th>
-              <td className="px-4 py-3 text-ink-soft max-xl:hidden">{item.profile}</td>
+              <td className="px-4 py-3 text-ink-soft max-xl:hidden">{twin(item, "profile", lang)}</td>
               <td className="px-4 py-3"><RatingBadge item={item} /></td>
               <td className="px-4 py-3 text-right font-mono font-semibold whitespace-nowrap text-ink-strong tabular-nums">
                 {item.published ? `Rp${rp(item.tp)}` : <span className="font-sans font-normal text-ink-faint">{held}</span>}
@@ -71,9 +72,9 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
               </td>
               <td className="px-4 py-3">
                 {item.published
-                  ? <span className="font-mono text-[13.5px] text-ink" title={item.method}>{selected(item)}</span>
+                  ? <span className="font-mono text-[13.5px] text-ink" title={twin(item, "method", lang)}>{selected(item, lang)}</span>
                   : <span className="text-[13.5px] text-warn-ink">
-                    {t({ id: "Ditahan:", en: "Held:" })} {item.held_reason || t({ id: "bukti belum lengkap", en: "incomplete evidence" })}
+                    {t({ id: "Ditahan:", en: "Held:" })} {twin(item, "held_reason", lang) || t({ id: "bukti belum lengkap", en: "incomplete evidence" })}
                   </span>}
               </td>
               <td className="px-4 py-3"><Actions item={item} /></td>
@@ -103,7 +104,7 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
               </div>
               <div className="min-w-0">
                 <dt className="text-ink-soft">{t({ id: "Metode", en: "Method" })}</dt>
-                <dd className="m-0 truncate font-mono text-ink">{item.published ? selected(item) : held}</dd>
+                <dd className="m-0 truncate font-mono text-ink">{item.published ? selected(item, lang) : held}</dd>
               </div>
             </dl>
             <div className="mt-3"><Actions item={item} /></div>

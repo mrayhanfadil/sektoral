@@ -33,6 +33,15 @@ describe("twin", () => {
     expect(twin(plan, "hypotheses", "id")).toEqual(["H satu", "H dua", "H tiga"]);
     expect(twin({ next_checks: ["Cek A"] }, "next_checks", "en")).toEqual(["Cek A"]);
   });
+  it("takes a parallel grid cell by cell", () => {
+    const exhibit = {
+      rows: [["Pendapatan", "1.979,0"], ["Laba kotor", "−10,6"]],
+      rows_en: [["Revenue", "1,979.0"], ["", null]],
+    };
+    expect(twin(exhibit, "rows", "en")).toEqual([["Revenue", "1,979.0"], ["Laba kotor", "−10,6"]]);
+    expect(twin(exhibit, "rows", "id")).toEqual(exhibit.rows);
+    expect(twin({ rows: [["Kas"]], rows_en: ["Cash"] }, "rows", "en")).toEqual([["Kas"]]);
+  });
 });
 
 describe("pick", () => {

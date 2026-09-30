@@ -2,7 +2,7 @@ import { CornerDownRight, ExternalLink } from "lucide-react";
 import type { Intel, Signal } from "../lib/api";
 import { STATUS_WORD, type Status } from "../lib/agents";
 import { VERDICT_WORD, verdictCode, type VerdictCode } from "../lib/codes";
-import { twin, useLang, type Bi } from "../lib/i18n";
+import { twin, useLang, type Bi, type Lang } from "../lib/i18n";
 
 /** Section anchors, shared with the trace page's index so labels match headings. Pipeline order. */
 export const INTEL_SECTIONS: [string, Bi][] = [
@@ -112,24 +112,35 @@ function Card({ id, count, children }: { id: string; count?: number; children: R
   return <Section id={id} title={t(TITLE[id])} count={count}>{children}</Section>;
 }
 
+/** A signal's host-written words in the reader's language (lib/i18n.ts `twin`). */
+function signalText(s: Signal, lang: Lang) {
+  return {
+    label: twin(s, "label", lang), display: twin(s, "display", lang), flag: twin(s, "flag", lang),
+    note: twin(s, "note", lang), period: twin(s, "period", lang),
+  };
+}
+
 function Citations({ ids, signals }: { ids: string[]; signals: Record<string, Signal> }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const cited = ids.map((id) => signals[id]).filter(Boolean);
   if (!cited.length) return null;
   return (
     <ul aria-label={t({ id: "Sinyal yang dikutip", en: "Cited signals" })} className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
-      {cited.map((s) => (
-        <li key={s.id} className="max-w-full">
-          {s.kind === "web" ? (
-            <Chip tone="warn"><span className="truncate">Web: {(s.label ?? "").slice(0, 70)}</span></Chip>
-          ) : (
-            <Chip>
-              <span className="text-ink">{s.label}</span>
-              <span className="font-mono text-[12px] font-semibold text-ink-strong">{s.display}</span>
-            </Chip>
-          )}
-        </li>
-      ))}
+      {cited.map((s) => {
+        const text = signalText(s, lang);
+        return (
+          <li key={s.id} className="max-w-full">
+            {s.kind === "web" ? (
+              <Chip tone="warn"><span className="truncate">Web: {(text.label ?? "").slice(0, 70)}</span></Chip>
+            ) : (
+              <Chip>
+                <span className="text-ink">{text.label}</span>
+                <span className="font-mono text-[12px] font-semibold text-ink-strong">{text.display}</span>
+              </Chip>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -158,7 +169,7 @@ export function IntelHeadline({ intel, as: Tag = "h2" }: { intel: Intel; as?: "h
       </Tag>
       <div className="flex flex-wrap gap-2">
         <Chip>{intel.name ?? intel.ticker}</Chip>
-        {intel.peers.group && <Chip tone="brand">{t({ id: "Grup", en: "Group" })}: {intel.peers.group}</Chip>}
+        {intel.peers.group && <Chip tone="brand">{t({ id: "Grup", en: "Group" })}: {twin(intel.peers, "group", lang)}</Chip>}
         {intel.market_date && <Chip mono>{t({ id: "Data pasar", en: "Market data" })} {intel.market_date}</Chip>}
         <Chip tone={byAgent ? "ok" : "warn"}>{byAgent ? t({ id: "Kesimpulan agent tervalidasi", en: "Validated agent conclusion" }) : t({ id: "Ringkasan aturan host", en: "Host-rule summary" })}</Chip>
         {intel.status && intel.status !== "ok" && <Chip tone="warn">Status: {intel.status === "partial" ? t({ id: "parsial", en: "partial" }) : intel.status}</Chip>}
@@ -241,7 +252,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
                     {s.summary && (
                       <p className="mt-1 flex items-start gap-1.5 text-[13.5px] text-ink-soft">
                         <CornerDownRight aria-hidden className="mt-[3px] size-3.5 flex-none text-ink-faint" strokeWidth={2.2} />
-                        <span className="min-w-0"><span className="sr-only">{t({ id: "Hasil: ", en: "Result: " })}</span>{s.summary}</span>
+                        <span className="min-w-0"><span className="sr-only">{t({ id: "Hasil: ", en: "Result: " })}</span>{twin(s, "summary", lang)}</span>
                       </p>
                     )}
                   </div>
@@ -263,18 +274,21 @@ export function IntelSections({ intel }: { intel: Intel }) {
               <th scope="col" className={`${th} max-md:hidden`}>{t({ id: "Periode dan catatan", en: "Period and note" })}</th>
             </tr></thead>
             <tbody>
-              {flagged.map((s) => (
-                <tr key={s.id}>
-                  <th scope="row" className="border-t border-rule-soft px-2 py-2.5 text-left align-top font-medium text-ink-strong">
-                    {s.label}
-                    <span className="mt-1 block sm:hidden"><Chip tone="warn">{s.flag}</Chip></span>
-                    <span className="mt-1 block text-[13px] font-normal text-ink-soft md:hidden">{[s.period, s.note].filter(Boolean).join("; ")}</span>
-                  </th>
-                  <td className="text-right font-mono text-[13.5px] tabular-nums text-ink-strong sm:whitespace-nowrap">{s.display}</td>
-                  <td className="max-sm:hidden"><Chip tone="warn">{s.flag}</Chip></td>
-                  <td className="text-[13.5px] text-ink-soft max-md:hidden">{[s.period, s.note].filter(Boolean).join("; ") || "—"}</td>
-                </tr>
-              ))}
+              {flagged.map((signal) => {
+                const s = signalText(signal, lang);
+                return (
+                  <tr key={signal.id}>
+                    <th scope="row" className="border-t border-rule-soft px-2 py-2.5 text-left align-top font-medium text-ink-strong">
+                      {s.label}
+                      <span className="mt-1 block sm:hidden"><Chip tone="warn">{s.flag}</Chip></span>
+                      <span className="mt-1 block text-[13px] font-normal text-ink-soft md:hidden">{[s.period, s.note].filter(Boolean).join("; ")}</span>
+                    </th>
+                    <td className="text-right font-mono text-[13.5px] tabular-nums text-ink-strong sm:whitespace-nowrap">{s.display}</td>
+                    <td className="max-sm:hidden"><Chip tone="warn">{s.flag}</Chip></td>
+                    <td className="text-[13.5px] text-ink-soft max-md:hidden">{[s.period, s.note].filter(Boolean).join("; ") || "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           </div>
@@ -283,7 +297,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
 
       {peers.length > 0 && (
         <Card id="posisi-peer" count={peers.length}>
-          {intel.peers.basis && <p className="mb-3 text-[13.5px] text-ink-soft">{t({ id: "Basis", en: "Basis" })}: {intel.peers.basis}</p>}
+          {intel.peers.basis && <p className="mb-3 text-[13.5px] text-ink-soft">{t({ id: "Basis", en: "Basis" })}: {twin(intel.peers, "basis", lang)}</p>}
           <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[14px] [&_td]:border-t [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top">
             <thead><tr>
@@ -296,32 +310,35 @@ export function IntelSections({ intel }: { intel: Intel }) {
               <th scope="col" className={`${th} max-md:hidden`}><span className="sr-only">{t({ id: "Tanda", en: "Flag" })}</span></th>
             </tr></thead>
             <tbody>
-              {peers.map((s) => (
-                <tr key={s.id}>
-                  <th scope="row" className="border-t border-rule-soft px-2 py-2.5 text-left align-top font-medium text-ink-strong">
-                    {s.label}
-                    <span className="mt-0.5 block text-[12.5px] font-normal text-ink-soft md:hidden">
-                      {t({ id: "Median peer", en: "Peer median" })} <span className="font-mono">{s.median_display || "—"}</span>
-                    </span>
-                    {s.flag && <span className="mt-1 block md:hidden"><Chip tone="warn">{s.flag}</Chip></span>}
-                  </th>
-                  <td className="text-right font-mono text-[13.5px] tabular-nums text-ink-strong sm:whitespace-nowrap">{s.display}</td>
-                  <td>
-                    {s.rank && s.n ? (
-                      <>
-                        <div role="img" aria-label={t({ id: `peringkat ${s.rank} dari ${s.n}`, en: `rank ${s.rank} of ${s.n}` })} className="mt-1 mb-1 flex gap-[2px] sm:gap-[3px]">
-                          {Array.from({ length: s.n }, (_, i) => (
-                            <span key={i} className={`size-2 rounded-[2px] sm:size-2.5 ${i + 1 === s.rank ? "scale-125 bg-brand" : "bg-rule"}`} />
-                          ))}
-                        </div>
-                        <span className="data text-ink-soft">{s.rank} / {s.n}</span>
-                      </>
-                    ) : <span className="text-[13px] text-ink-soft">{s.note || "n.a."}</span>}
-                  </td>
-                  <td className="text-right font-mono text-[13.5px] whitespace-nowrap tabular-nums text-ink-soft max-md:hidden">{s.median_display || "—"}</td>
-                  <td className="max-md:hidden">{s.flag && <Chip tone="warn">{s.flag}</Chip>}</td>
-                </tr>
-              ))}
+              {peers.map((signal) => {
+                const s = { ...signal, ...signalText(signal, lang) };
+                return (
+                  <tr key={s.id}>
+                    <th scope="row" className="border-t border-rule-soft px-2 py-2.5 text-left align-top font-medium text-ink-strong">
+                      {s.label}
+                      <span className="mt-0.5 block text-[12.5px] font-normal text-ink-soft md:hidden">
+                        {t({ id: "Median peer", en: "Peer median" })} <span className="font-mono">{s.median_display || "—"}</span>
+                      </span>
+                      {s.flag && <span className="mt-1 block md:hidden"><Chip tone="warn">{s.flag}</Chip></span>}
+                    </th>
+                    <td className="text-right font-mono text-[13.5px] tabular-nums text-ink-strong sm:whitespace-nowrap">{s.display}</td>
+                    <td>
+                      {s.rank && s.n ? (
+                        <>
+                          <div role="img" aria-label={t({ id: `peringkat ${s.rank} dari ${s.n}`, en: `rank ${s.rank} of ${s.n}` })} className="mt-1 mb-1 flex gap-[2px] sm:gap-[3px]">
+                            {Array.from({ length: s.n }, (_, i) => (
+                              <span key={i} className={`size-2 rounded-[2px] sm:size-2.5 ${i + 1 === s.rank ? "scale-125 bg-brand" : "bg-rule"}`} />
+                            ))}
+                          </div>
+                          <span className="data text-ink-soft">{s.rank} / {s.n}</span>
+                        </>
+                      ) : <span className="text-[13px] text-ink-soft">{s.note || "n.a."}</span>}
+                    </td>
+                    <td className="text-right font-mono text-[13.5px] whitespace-nowrap tabular-nums text-ink-soft max-md:hidden">{s.median_display || "—"}</td>
+                    <td className="max-md:hidden">{s.flag && <Chip tone="warn">{s.flag}</Chip>}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           </div>
@@ -383,7 +400,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
             </p>
             {changes.items.length ? (
               <ul className="mt-2 grid gap-1 pl-[18px] text-[14.5px]">
-                {changes.items.map((c, i) => <li key={i} className={c.kind === "new_flag" ? "text-warn-ink" : ""}>{c.text}</li>)}
+                {changes.items.map((c, i) => <li key={i} className={c.kind === "new_flag" ? "text-warn-ink" : ""}>{twin(c, "text", lang)}</li>)}
               </ul>
             ) : (
               <p className="mt-1">

@@ -5,12 +5,11 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, TriangleAlert } from "lucide-react";
 import { AGENT, AGENTS, duration, releaseFigures, type AgentId, type DeckState, type Step } from "../../lib/agents";
-import type { EventData } from "../../lib/api";
-import { decisionCode, gateCode, primaryMethodOf, str, type EventKind } from "../../lib/codes";
+import { decisionCode, gateCode, str } from "../../lib/codes";
 import { pick, useLang, type Bi, type Lang } from "../../lib/i18n";
 import { EngineTag, Glyph, Hold, Sweep } from "./kit";
 import {
-  SPRING, clock, decisionWord, gateWord, useChangeCount, verdictGlyph, verdictOf, verdictTone, verdictWord, words,
+  SPRING, clock, decisionWord, gateWord, stepLine, useChangeCount, valuationLabel, verdictGlyph, verdictOf, verdictTone, verdictWord, words,
 } from "./read";
 
 /** Whether rows mounting in this render are new arrivals (animate) or a jump (don't). */
@@ -30,7 +29,7 @@ type Props = {
 };
 
 export function EventStream({ state, filter, onFilter, live, fit, loading, empty }: Props) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const reduce = useReducedMotion();
   const total = state.steps.length;
 
@@ -81,7 +80,7 @@ export function EventStream({ state, filter, onFilter, live, fit, loading, empty
     : state.roots;
   const agentsWithSteps = AGENTS.filter((a) => state.agents[a.id].steps > 0 || a.id === filter);
   const latest = state.active ?? state.steps[state.steps.length - 1];
-  const announce = useThrottled(latest ? latest.result ?? latest.title : "", 2500);
+  const announce = useThrottled(latest ? stepLine(latest, lang) : "", 2500);
 
   const height = fit ? "min-[1100px]:min-h-0 min-[1100px]:flex-1 max-[1099px]:h-[min(68dvh,620px)]" : "";
   return (
@@ -183,7 +182,7 @@ function StepItem({ step, state, filter, depth }: { step: Step; state: DeckState
   const enter = useContext(Enter);
   const body = step.kind === "task" ? <TaskBlock step={step} state={state} filter={filter} depth={depth} />
     : step.kind === "call" ? <CallCard step={step} showAgent={depth === 0 && !filter} />
-    : <CompactRow step={step} showAgent={depth === 0 && !filter} />;
+    : <CompactRow step={step} state={state} showAgent={depth === 0 && !filter} />;
   return (
     <motion.li initial={enter ? { height: 0, opacity: 0 } : false} animate={{ height: "auto", opacity: 1 }}
       transition={{ height: SPRING, opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
@@ -219,19 +218,6 @@ function resultLabel(step: Step, lang: Lang): string | undefined {
     return lang === "id" && label.startsWith(prefix) ? label.slice(prefix.length) : pick(TOOL_OUTCOME[kind], lang);
   }
   return valuationLabel(label, kind, step.data, lang);
-}
-
-/** The gate agent's closing labels, in the reader's words; any other label passes through. */
-function valuationLabel(label: string, kind: EventKind | undefined, data: EventData | undefined, lang: Lang): string {
-  if (kind === "primary_method") {
-    const method = primaryMethodOf({ label, data }) ?? "";
-    return pick({ id: label, en: `Primary method ${method}`.trim() }, lang);
-  }
-  if (kind === "chain_done") return pick({ id: label, en: "Method Chain done" }, lang);
-  if (kind === "release" && data?.status) {
-    return pick({ id: label, en: `Release status: ${words(str(data.status), "en")}` }, lang);
-  }
-  return label;
 }
 
 function resultParts(step: Step, lang: Lang): { label?: string; detail?: string } {
@@ -343,7 +329,7 @@ function TaskBlock({ step, state, filter, depth }: { step: Step; state: DeckStat
 }
 
 /** Hypotheses, verdicts, gates, chain steps, the release and notes: one line each. */
-function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
+function CompactRow({ step, state, showAgent }: { step: Step; state: DeckState; showAgent: boolean }) {
   const { t, lang } = useLang();
   const d = step.data ?? {};
   let lead: ReactNode = null;
@@ -351,15 +337,18 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
   let side: ReactNode = null;
   let sub: string | undefined = words(step.resultDetail, lang);
   let glyph = step.status;
+  // An English reader's hypothesis rows read as the plan panel does (its English twins, lib/agents.ts `planIn`).
+  const planned = lang === "en" ? state.plan.hypotheses.find((h) => h.index === Number(d.index)) : undefined;
 
   if (step.kind === "hypothesis") {
     lead = `H${d.index ?? ""}`;
-    text = (step.resultDetail ?? step.title).replace(/^H\d+:\s*/, "");
+    text = (planned?.text ?? step.resultDetail ?? step.title).replace(/^H\d+:\s*/, "");
     sub = undefined;
   } else if (step.kind === "verdict") {
     const v = verdictOf(d);
     lead = `H${d.index ?? ""}`;
     text = <span className={`pill ${verdictTone(v)} px-2 py-0 text-[12.5px]`}>{verdictWord(v, lang) ?? step.title}</span>;
+    if (planned?.reason) sub = planned.reason;
     // An unanswered hypothesis is not a finished test: it carries the warning mark.
     if (step.status !== "run" && verdictGlyph(v) === "warn") glyph = "warn";
   } else if (step.kind === "gate") {
