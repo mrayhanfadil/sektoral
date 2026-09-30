@@ -117,6 +117,20 @@ def figures(text) -> Counter:
     return Counter(_FIGURE.findall(text)) if isinstance(text, str) else Counter()
 
 
+# Indonesian function words. English text holding two or more of them still
+# carries an untranslated clause (a helper outside the templates, agent text
+# changed only by client copy), so it is not attached.
+_INDONESIAN = re.compile(
+    r"\b(yang|dan|dari|untuk|pada|dengan|tidak|belum|karena|sebesar|menjadi|adalah|dalam|"
+    r"terhadap|sebagai|atau|oleh|akan|ini|itu|naik|turun|tahun|masih|bila|jika|tetap|hanya|"
+    r"sudah|agar|serta)\b", re.I)
+
+
+def mixed(text) -> bool:
+    """True when English text still reads partly Indonesian."""
+    return isinstance(text, str) and len({w.lower() for w in _INDONESIAN.findall(text)}) >= 2
+
+
 def _pair(id_text, en_text):
     """The English twin of one prose string, or None when it may not be attached."""
     if not isinstance(id_text, str) or not isinstance(en_text, str) or not en_text.strip():
@@ -126,6 +140,8 @@ def _pair(id_text, en_text):
     if figures(id_text) != figures(en_text):
         return None
     if scrub.contains_banned(en_text) and not scrub.contains_banned(id_text):
+        return None
+    if mixed(en_text):
         return None
     return en_text
 
