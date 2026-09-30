@@ -9,7 +9,7 @@ import { api, readerFiles, type ReportItem } from "../lib/api";
 import { ratingLabel } from "../lib/labels";
 import { rp } from "../lib/format";
 import { launch } from "../lib/launch";
-import { useLang } from "../lib/i18n";
+import { twin, useLang } from "../lib/i18n";
 
 type PaletteApi = { open: (query?: string) => void; close: () => void };
 const PaletteContext = createContext<PaletteApi>({ open: () => {}, close: () => {} });
@@ -123,7 +123,7 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
         run: () => go(`/laporan/${r.ticker}/putar`) });
     }
     for (const r of reports.filter((r) => q && r.ticker === q && r.files.html)) {
-      out.push({ id: `report-${r.ticker}`, group: t({ id: "Laporan", en: "Reports" }), label: `Company update ${r.ticker}`, sub: r.headline || r.name,
+      out.push({ id: `report-${r.ticker}`, group: t({ id: "Laporan", en: "Reports" }), label: `Company update ${r.ticker}`, sub: twin(r, "headline", lang) || r.name,
         hint: t({ id: "Buka", en: "Open" }), icon: "report", run: () => { onClose(); window.location.assign(readerFiles(r, lang).html); } });
     }
     const fresh = tickers.filter((tk) => match(tk) && tk !== q && !known.has(tk)).slice(0, q ? 6 : 4);

@@ -1,11 +1,12 @@
 // Pure helpers of the Deck: motion constants, formats and word maps.
 import { useState } from "react";
-import type { Status } from "../../lib/agents";
+import type { Status, Step } from "../../lib/agents";
 import type { EventData } from "../../lib/api";
 import {
-  DECISION_WORD, GATE_WORD, VERDICT_WORD, str, verdictCode, type DecisionCode, type GateCode, type VerdictCode,
+  DECISION_WORD, GATE_WORD, VERDICT_WORD, primaryMethodOf, str, verdictCode,
+  type DecisionCode, type EventKind, type GateCode, type VerdictCode,
 } from "../../lib/codes";
-import { getLang, type Bi, type Lang } from "../../lib/i18n";
+import { getLang, pick, type Bi, type Lang } from "../../lib/i18n";
 
 /** Damped springs: the deck never bounces. */
 export const SPRING = { type: "spring", stiffness: 420, damping: 40, mass: 0.8 } as const;
@@ -109,3 +110,24 @@ const CODE_WORDS = new Map<string, Bi>([
   ...[VERDICT_WORD, GATE_WORD, DECISION_WORD].flatMap((map) => Object.values<Bi>(map).map((bi) => [bi.id, bi] as const)),
 ]);
 export const words = (text?: string, lang: Lang = getLang()) => (text && CODE_WORDS.get(text)?.[lang]) || text;
+
+/**
+ * The gate agent's closing labels and the release label, in the reader's
+ * words (from the event's data, so a label without an English twin still
+ * reads English); any other label passes through.
+ */
+export function valuationLabel(label: string, kind: EventKind | undefined, data: EventData | undefined, lang: Lang = getLang()): string {
+  if (kind === "primary_method") {
+    const method = primaryMethodOf({ label, data }) ?? "";
+    return pick({ id: label, en: `Primary method ${method}`.trim() }, lang);
+  }
+  if (kind === "chain_done") return pick({ id: label, en: "Method Chain done" }, lang);
+  if (kind === "release" && data?.status) {
+    return pick({ id: label, en: `Release status: ${words(str(data.status), "en")}` }, lang);
+  }
+  return label;
+}
+
+/** What a step reads as last: its closing label, else its title, in the reader's words. */
+export const stepLine = (step: Step, lang: Lang = getLang()): string =>
+  step.result ? valuationLabel(step.result, step.resultEvent, step.data, lang) : valuationLabel(step.title, step.event, step.data, lang);
