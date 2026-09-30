@@ -10,8 +10,9 @@ translates those labels (``app.report_lang``).
 
 ``attach`` then copies the English prose onto the Indonesian document as
 ``<field>_en`` siblings (``headline_en``, ``bullets_en``, ``paragraf_en``,
-``isi_en``, ``text_en``, ``narasi_en``, ``catatan_metodologi_en``), which every
-other reader of the document ignores. A sibling is attached only where both
+``isi_en``, ``text_en``, ``narasi_en``, ``catatan_metodologi_en``, and on the
+audit appendix pages ``catatan_sumber_en``), which every other reader of the
+document ignores. A sibling is attached only where both
 runs produced the same structure and the English text carries exactly the
 figures of its Indonesian twin, so the English edition can never state a
 number the Indonesian one does not. Anything else falls back to Indonesian.
@@ -282,7 +283,26 @@ def attach(doc: dict, doc_en: dict) -> dict:
     notes, notes_en = doc.get("catatan_metodologi"), doc_en.get("catatan_metodologi")
     if isinstance(notes, list):
         _set(doc, "catatan_metodologi", _pair_list(notes, notes_en))
+    # The audit appendix is not printed; the web trace page shows it, source notes too.
+    audit, audit_en = doc.get("lampiran_audit"), doc_en.get("lampiran_audit")
+    if isinstance(audit, list) and isinstance(audit_en, list) and len(audit) == len(audit_en):
+        for page, page_en in zip(audit, audit_en):
+            if not (isinstance(page, dict) and isinstance(page_en, dict)) or \
+                    page.get("judul") != page_en.get("judul"):
+                continue
+            _attach_paragraphs(page, page_en)
+            _attach_exhibits(page.get("exhibit"), page_en.get("exhibit"))
+            _attach_source_notes(page.get("exhibit"), page_en.get("exhibit"))
     return doc
+
+
+def _attach_source_notes(id_exhibits, en_exhibits):
+    if not isinstance(id_exhibits, list) or not isinstance(en_exhibits, list) or \
+            len(id_exhibits) != len(en_exhibits):
+        return
+    for a, b in zip(id_exhibits, en_exhibits):
+        if isinstance(a, dict) and isinstance(b, dict) and a.get("judul") == b.get("judul"):
+            _set(a, "catatan_sumber", _pair(a.get("catatan_sumber"), b.get("catatan_sumber")))
 
 
 class _View:

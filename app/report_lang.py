@@ -613,6 +613,155 @@ TERMS = {
 }
 TERMS.update(valtables.LABELS_EN)
 
+# The mining audit appendix (app.narrative's FY26 H2 reconstruction, moved out
+# of the printed report by report_extras.slim_mining): the web trace page shows it.
+# A label the report already translates keeps its English.
+_AUDIT_APPENDIX = {
+    # Column headings.
+    "Batasan": "Limits", "Domestik": "Domestic", "Ekspor": "Export", "Selisih": "Difference",
+    "Pos": "Item", "Produk/tahap": "Product/stage", "Produksi H1": "H1 production",
+    "Penjualan H1": "H1 sales", "Produksi dikurangi penjualan": "Production less sales",
+    "Q2 terjual": "Q2 sold", "Revenue / metrik": "Revenue / metric",
+    "Revenue per unit, proxy": "Revenue per unit, proxy", "H1 terjual": "H1 sold",
+    "H1 revenue": "H1 revenue", "Basis harga H2": "H2 price basis",
+    "H2 produksi tersirat": "Implied H2 production", "H2 penjualan skenario": "Scenario H2 sales",
+    "H2 terjual / output": "H2 sold / output", "Net realized price H1": "H1 net realized price",
+    "H2 terjual skenario": "Scenario H2 sold", "H2 revenue": "H2 revenue",
+    "Net realized H1 / nilai efektif": "H1 net realized / effective value",
+    "Benchmark pasar terbaru": "Latest market benchmark",
+    "Basis harga skenario H2": "Scenario H2 price basis",
+    "Sisa H2 tersirat": "Implied H2 remainder",
+    "Basis / batas interpretasi": "Basis / limits of interpretation",
+    "Produksi Q2": "Q2 production", "Terjual Q2": "Q2 sold", "Q2 turunan": "Derived Q2",
+    "Pengungkapan interim": "Interim disclosure", "Saldo keuangan": "Financial balance",
+    "Fakta resmi": "Official facts", "Arus kas pendanaan H1 2026": "H1 2026 financing cash flow",
+    "Basis / batas rekonsiliasi": "Basis / limits of reconciliation",
+    "H1 terjual aktual": "H1 actual sold", "H2 output tersirat": "Implied H2 output",
+    "H2 sales skenario": "Scenario H2 sales", "Volume × harga terealisasi H1":
+        "Volume × H1 realized price", "Revenue hitungan": "Calculated revenue",
+    "Revenue segmen dilaporkan": "Reported segment revenue",
+    "FY26 balance vs H1": "FY26 balance vs H1", "½ kapasitas desain": "½ design capacity",
+    "Utilisasi H2 tersirat": "Implied H2 utilisation", "Dampak pada forecast": "Effect on the forecast",
+    "Klasifikasi dan batas data": "Classification and data limits",
+    "Makna untuk forecast": "Meaning for the forecast",
+    "H2 revenue pada basis harga H2": "H2 revenue on the H2 price basis",
+    "H2 terjual untuk rekonsiliasi": "H2 sold for reconciliation",
+    "US$ juta, kecuali per saham": "US$ mn, except per share",
+    # Row labels.
+    "Net sales": "Net sales", "Penjualan bersih": "Net sales", "Laba operasi": "Operating profit",
+    "Beban keuangan": "Finance costs", "Beban pokok penjualan": "Cost of sales",
+    "Lainnya": "Other", "Konsentrat": "Concentrate", "Pendapatan": "Revenue",
+    "Laba bersih": "Net profit", "Arus kas operasi": "Operating cash flow",
+    "Arus kas pendanaan": "Financing cash flow", "Depresiasi dan amortisasi":
+        "Depreciation and amortisation", "Saham beredar": "Shares outstanding",
+    "Nilai": "Value", "Nilai skenario (Rp/saham)": "Scenario value (Rp/share)",
+    "Ekuitas induk setelah utang dan minoritas": "Parent equity after debt and minorities",
+    "EBITDA FY26 skenario": "Scenario FY26 EBITDA", "Utang bersih 1H": "1H net debt",
+    "Tembaga terkandung dalam konsentrat": "Copper contained in concentrate",
+    "Emas terkandung dalam konsentrat": "Gold contained in concentrate",
+    "Tembaga dalam konsentrat": "Copper in concentrate", "Emas dalam konsentrat": "Gold in concentrate",
+    "Cu terkandung dalam konsentrat": "Cu contained in concentrate",
+    "Au terkandung dalam konsentrat": "Au contained in concentrate",
+    "Subtotal pada basis harga H2": "Subtotal on the H2 price basis",
+    "Selisih yang belum dijelaskan": "Unexplained difference", "Gap belum dijelaskan":
+        "Unexplained gap", "Selisih yang tidak dijembatani catatan": "Difference the notes do not bridge",
+    "Skenario pendapatan H2": "H2 revenue scenario",
+    "Tembaga, benchmark LME": "Copper, LME benchmark", "Emas, benchmark LBMA": "Gold, LBMA benchmark",
+    "Konsentrat, nilai penjualan efektif": "Concentrate, effective sales value",
+    "sisa guidance FY dikurangi aktual H1": "FY guidance remainder less H1 actual",
+    "Output katoda tembaga": "Copper cathode output",
+    "Rasio output katoda / Cu terkandung": "Cathode output / contained Cu ratio",
+    "diagnostik antar-tahap; bukan recovery metalurgi":
+        "inter-stage diagnostic; not metallurgical recovery",
+    "Output emas murni": "Refined gold output",
+    "Rasio output emas murni / Au terkandung": "Refined gold output / contained Au ratio",
+    "H1 laporan keuangan dikurangi Q1": "H1 financial statements less Q1",
+    "H1 laporan arus kas dikurangi Q1": "H1 cash flow statement less Q1",
+    "H1 laporan posisi keuangan; kas 30 Jun": "H1 statement of financial position; cash at 30 Jun",
+    "Arus kas bebas indikatif": "Indicative free cash flow",
+    "OCF + arus kas investasi; turunan analis": "OCF + investing cash flow; analyst-derived",
+    "Kenaikan kas sebelum kurs": "Cash increase before FX", "Dampak kurs": "FX effect",
+    "Kas akhir Q2": "Q2 closing cash", "Kas untuk investasi/capex": "Cash for investment/capex",
+    "Harga provisional saat penjualan": "Provisional price at sale",
+    "Sebelum settlement final": "Before final settlement", "Periode final pricing":
+        "Final pricing period", "Risiko harga": "Price risk", "Assay dan kuantitas": "Assay and quantity",
+    "Piutang usaha total": "Total trade receivables", "Piutang usaha FVPL": "FVPL trade receivables",
+    "Piutang usaha amortized cost": "Amortised-cost trade receivables",
+    "Aset derivatif": "Derivative assets", "Liabilitas derivatif": "Derivative liabilities",
+    "Mining, processing, dan operasi": "Mining, processing and operations",
+    "Amortisasi stripping tertunda": "Deferred stripping amortisation",
+    "Royalti pemerintah": "Government royalty", "Bea ekspor": "Export duty",
+    "Beban karyawan": "Employee costs", "Angkut dan pemasaran": "Freight and marketing",
+    "Kredit produk perak": "Silver by-product credit",
+    "Kredit produk selenium": "Selenium by-product credit",
+    "Kredit produk asam sulfat": "Sulphuric acid by-product credit",
+    "Mutasi stockpile dan persediaan produk": "Stockpile and product inventory movement",
+    "Total beban pokok penjualan": "Total cost of sales", "HPP dilaporkan": "Reported cost of sales",
+    "Pergerakan stockpile/persediaan di HPP": "Stockpile/inventory movement in cost of sales",
+    "Laba kotor dilaporkan": "Reported gross profit",
+    "HPP setelah membalik pergerakan tersebut": "Cost of sales with that movement reversed",
+    "Laba kotor diagnostik setelah dibalik": "Diagnostic gross profit after the reversal",
+    "Persediaan bersih": "Net inventories", "Gabungan nilai tercatat": "Combined carrying value",
+    "Kredit pergerakan persediaan di HPP H1": "Inventory movement credit in H1 cost of sales",
+    "Penerimaan pinjaman bank jangka pendek": "Short-term bank loan proceeds",
+    "Pembayaran pinjaman bank jangka pendek": "Short-term bank loan repayments",
+    "Penerimaan pinjaman bank jangka panjang": "Long-term bank loan proceeds",
+    "Pembayaran pokok pinjaman bank jangka panjang": "Long-term bank loan principal repayments",
+    "Arus kas bersih pinjaman bank (hasil hitung)": "Net bank loan cash flow (calculated)",
+    "Arus kas perubahan kas dibatasi": "Restricted cash change cash flow",
+    "Arus kas bersih aktivitas pendanaan": "Net cash flow from financing activities",
+    "Headline presentasi: utang dibayar YTD": "Presentation headline: debt repaid YTD",
+    "Pelunasan utang yang dilaporkan untuk Q3 2026": "Debt repayment reported for Q3 2026",
+    "Total produk": "Total products", "Revenue dihitung dari volume × realized price":
+        "Revenue calculated from volume × realized price",
+    # Short notes in the cells.
+    "Arus kas masuk aktual H1.": "Actual H1 cash inflow.",
+    "Arus kas keluar aktual H1.": "Actual H1 cash outflow.",
+    "Arus kas yang dilaporkan di bagian pendanaan.": "Cash flow reported under financing.",
+    "Jumlah penerimaan dan pembayaran short- plus long-term.":
+        "Sum of short- plus long-term proceeds and repayments.",
+    "Nilai laporan; sama dengan arus pinjaman bersih plus perubahan kas dibatasi.":
+        "Reported value; equals net loan flow plus the restricted cash change.",
+    "Dilaporkan telah dibayar; saldo utang/kas setelah pembayaran belum dilaporkan.":
+        "Reported as paid; the debt/cash balance after payment is not yet reported.",
+    "Belum disesuaikan dengan arus kas dan capex 2H.": "Not yet adjusted for 2H cash flow and capex.",
+    "Dikurangkan dari enterprise value setelah utang bersih.":
+        "Deducted from enterprise value after net debt.",
+    "Sesudah saham treasuri; dilusi berikutnya belum dimodelkan.":
+        "After treasury shares; later dilution not yet modelled.",
+    "Hasil 1H aktual + asumsi 2H; bukan forecast LoM.":
+        "1H actual results + 2H assumptions; not a LoM forecast.",
+    "H1 revenue/unit dipertahankan datar untuk skenario; benchmark spot hanya pembanding.":
+        "H1 revenue/unit held flat for the scenario; the spot benchmark is a comparison only.",
+    "Tidak sebanding dengan benchmark Cu/Au tanpa kadar payable dan TC-RC":
+        "Not comparable with the Cu/Au benchmark without payable grades and TC-RC",
+    "H1 revenue/dmt dipakai sebagai proxy datar; belum merupakan netback produk.":
+        "H1 revenue/dmt used as a flat proxy; not yet a product netback.",
+    "Konsentrat dan katoda awalnya dicatat 100% pada harga provisional; pengakuan revenue tetap "
+    "mensyaratkan delivery/title transfer.":
+        "Concentrate and cathode are first recorded at 100% of the provisional price; revenue "
+        "recognition still requires delivery/title transfer.",
+    "Harga/kuantitas provisional bisa disesuaikan saat assay dan informasi jumlah metal baru "
+    "diterima.":
+        "Provisional price/quantity can be adjusted when assays and new metal quantity "
+        "information are received.",
+    "Harga di-mark-to-market memakai forward price untuk estimasi bulan settlement; embedded "
+    "derivative masuk laba rugi.":
+        "Prices are marked to market at the forward price for the estimated settlement month; "
+        "the embedded derivative goes through profit or loss.",
+    "Mengikuti periode yang ditetapkan kontrak; periode per shipment/customer tidak diungkap "
+    "dalam catatan ini.":
+        "Follows the period set by the contract; the period per shipment/customer is not "
+        "disclosed in this note.",
+    "Seluruh produk/customer; tidak dipilah shipment.": "All products/customers; not split by shipment.",
+    "Kebijakan akuntansi mengaitkan kategori ini dengan sebagian piutang provisional Cu/Au.":
+        "The accounting policy links this category to part of the provisional Cu/Au receivables.",
+    "Tidak dirinci menurut produk/customer.": "Not itemised by product/customer.",
+    "Note 18 merinci IRS/CCS/POS; bukan saldo provisional metal terpisah.":
+        "Note 18 itemises IRS/CCS/POS; not a separate provisional metal balance.",
+}
+TERMS.update({k: v for k, v in _AUDIT_APPENDIX.items() if k not in TERMS})
+
 # Method Chain short names (app.method_chain.SHORT) and report method lines.
 TERMS.update({
     "EV/Sales peer": "Peer EV/Sales", "P/S peer": "Peer P/S", "P/BV relatif": "Relative P/BV",
@@ -690,6 +839,12 @@ _PATTERNS = [(re.compile(p), t) for p, t in (
      "SOTP/LoM: {0} ({1} probability) to {2}, no perpetual terminal value"),
     # Cover rating status.
     (r"Dalam peninjauan \(rating terakhir (\S+)\)", "Under review (last rating {0})"),
+    # Mining audit appendix cells.
+    (r"Kurs (\S+); harga saham Sectors (\S+) lebih lama\.",
+     "FX rate {0}; the Sectors share price of {1} is older."),
+    (r"Penurunan (\S+) dinilai tidak signifikan terhadap laba per (.+); tidak ada sensitivitas "
+     r"dolar yang diberikan\.",
+     "A {0} fall is judged not significant to profit as at {1}; no dollar sensitivity is given."),
 )]
 TERMS.update({"Inisiasi": "Initiation", "Dipertahankan": "Maintained", "Dalam peninjauan": "Under review",
               "Skenario informasional": "Informational scenario", "Analisis": "Analysis"})
