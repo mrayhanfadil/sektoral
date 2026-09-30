@@ -24,6 +24,19 @@ Driver Scenario), never to re-roll a plan whose evidence did not change::
     python -m app.rebuild --from out/demo-reports --out out/bank-drivers \
         --refresh-assumptions --pdf BBCA BBRI
 
+``--translate-assumptions`` (explicit tickers only) is the other paid
+exception: it keeps the Forecast Plan the trace stored (the plan the builder
+reads) and only asks the model for the English twins of its prose
+(``agents.forecast_assumptions.run.translate_plan``), then rebuilds on the
+translated plan; the rebuilt trace stores it with its twins and the
+translation notes (``forecast_assumptions.translation``). No Indonesian value
+of the plan changes, so status, rating, Target Price and every Indonesian
+figure are those of a plain rebuild; only the English edition gains the
+agent's prose. Use it for reports whose plan predates the translation step::
+
+    python -m app.rebuild --from out/demo-reports --out out/english \
+        --translate-assumptions BBRI
+
 Use it after a change to presentation, peer groups or valuation code to
 re-render every report reproducibly and see exactly what moved. It prints one
 line per ticker: release status, rating and Target Price of the rebuilt report;
@@ -261,6 +274,15 @@ def refreshed_assumptions(trace: dict, as_of: str) -> dict:
     return run_cached(forecast_intake, refresh=True)
 
 
+def translated_assumptions(plan):
+    """The stored Forecast Plan with the English twins of its prose, and the
+    translation notes (``translate_plan``). This calls the LLM; it runs
+    outside the offline guard. The interim rule that reads the official
+    release is not applied: the trace does not store that release."""
+    from agents.forecast_assumptions.run import translate_plan
+    return translate_plan(plan)
+
+
 def report_fields(doc: dict) -> dict:
     """The trace ``report`` block research._run writes for this report."""
     meta = doc.get("meta") or {}
@@ -430,13 +452,16 @@ def _build_once(t, out, kwargs, pins):
 
 def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
                 analyst_target: bool = False, live_inputs: bool = False,
-                refresh_assumptions: bool = False, db=None, log=None,
+                refresh_assumptions: bool = False, translate_assumptions: bool = False,
+                db=None, log=None,
                 plan_override: dict | None = None, trace_extra: dict | None = None,
                 as_of: str | None = None) -> dict:
     """Rebuild one ticker from ``source`` into ``out``; returns the comparison.
 
     ``refresh_assumptions`` re-runs the Forecast Assumption Agent on the stored
     evidence first (see ``refreshed_assumptions``) and stores its new plan.
+    ``translate_assumptions`` adds the English twins to the stored plan
+    (``translated_assumptions``) and stores the translated plan.
     ``plan_override`` builds on a reviewed plan instead (app.assumption_review:
     the analyst's edits); the trace stores it as the plan, keeps the agent's
     as ``agent_plan_before_review`` and takes ``trace_extra`` keys as given.
@@ -470,6 +495,10 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         kwargs.update(assumption_plan=copy.deepcopy(fresh_plan["plan"]),
                       assumption_status=assumption_status(fresh_plan),
                       spec_sha=fresh_plan.get("spec_sha256"))
+    translation = translated_plan = None
+    if translate_assumptions and isinstance(kwargs.get("assumption_plan"), dict):
+        translated_plan, translation = translated_assumptions(kwargs["assumption_plan"])
+        kwargs["assumption_plan"] = copy.deepcopy(translated_plan)
     if plan_override is not None:
         kwargs["assumption_plan"] = copy.deepcopy(plan_override)
     recorded = source_manifest.get("market_inputs") if isinstance(
@@ -521,6 +550,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         "pinned": pinned, "live_inputs": live_inputs,
         "analyst_target": kwargs["analyst_target"], "method_override": kwargs["method_override"],
         "refreshed_assumptions": bool(refresh_assumptions),
+        "translated_assumptions": bool(translate_assumptions),
         "as_of_override": as_of,
     }
     doc["run_manifest"] = manifest
@@ -537,6 +567,20 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
             fresh_plan["plan"] = normalized
             fresh_plan["plan_normalized_for_report"] = True
         trace["forecast_assumptions"] = fresh_plan
+    if translation is not None:
+        # The trace records the translated plan, as research._run records a plan.
+        fa = dict(trace.get("forecast_assumptions") or {})
+        if translation["status"] != "failed":
+            fa.pop("agent_plan_raw", None)
+            fa.pop("plan_normalized_for_report", None)
+            fa["plan"] = translated_plan
+            normalized = (doc.get("forecast_assumptions") or {}).get("plan")
+            if isinstance(normalized, dict) and normalized != translated_plan:
+                fa["agent_plan_raw"] = translated_plan
+                fa["plan"] = normalized
+                fa["plan_normalized_for_report"] = True
+        fa["translation"] = translation
+        trace["forecast_assumptions"] = fa
     if plan_override is not None:
         fa = dict(trace.get("forecast_assumptions") or {})
         before = fa.get("agent_plan_raw") if "agent_plan_raw" in fa else fa.get("plan")
@@ -567,6 +611,8 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     forecast_ledger.freeze_if_auto_published(out, t, db)
     result = {"ticker": t, **compare(source_doc, doc), "pinned": pinned,
               "intake_peer_basis": seen.get("peer_basis"), "pdf": pdf_path}
+    if translation is not None:
+        result["translation"] = translation
     return result
 
 
@@ -601,11 +647,15 @@ def line(result: dict) -> str:
     if added or dropped:
         peers += " (" + " ".join([f"+{t}" for t in added] + [f"-{t}" for t in dropped]) + ")"
     pinned = "; ".join(result.get("pinned") or []) or "snapshot kini"
+    translation = result.get("translation")
+    translated = (f" | terjemahan: {translation.get('status')} "
+                  f"{translation.get('attached', 0)}/{translation.get('fields', 0)} teks"
+                  if isinstance(translation, dict) else "")
     return (f"{result['ticker']:<5} {status:<30} {str(result.get('rating') or '-'):<6} "
             f"TP {_tp(result.get('tp')):<9} "
             + ("BERUBAH: " + ", ".join(moved) + was if moved else "rating/TP sama")
             + f" | Key Financials: {'sama' if not kf else f'{kf} sel berubah'}"
-            + f" | input: {pinned} | peer: {peers}")
+            + f" | input: {pinned} | peer: {peers}" + translated)
 
 
 def main(argv=None) -> int:
@@ -625,6 +675,9 @@ def main(argv=None) -> int:
     parser.add_argument("--refresh-assumptions", action="store_true",
                         help="re-run the forecast assumption agent (paid LLM) on the stored "
                              "evidence of the named tickers before rebuilding")
+    parser.add_argument("--translate-assumptions", action="store_true",
+                        help="translate the stored forecast plan's prose to English (paid "
+                             "LLM) for the named tickers before rebuilding")
     parser.add_argument("--as-of", dest="as_of",
                         help="a later Report Date for the rebuild (same stored evidence)")
     parser.add_argument("tickers", nargs="*", help="default: every report in --from")
@@ -634,6 +687,11 @@ def main(argv=None) -> int:
         parser.error("--out must differ from --from; the source run is the reference")
     if args.refresh_assumptions and not args.tickers:
         parser.error("--refresh-assumptions calls the LLM; name the tickers to refresh")
+    if args.translate_assumptions and not args.tickers:
+        parser.error("--translate-assumptions calls the LLM; name the tickers to translate")
+    if args.translate_assumptions and args.refresh_assumptions:
+        parser.error("--refresh-assumptions already translates the new plan; "
+                     "drop --translate-assumptions")
     tickers = [t.upper() for t in args.tickers] or outputs.tickers(outputs.REPORT, source)
     if not tickers:
         print(f"tidak ada report tersimpan di {source}", file=sys.stderr)
@@ -645,6 +703,7 @@ def main(argv=None) -> int:
                                  analyst_target=args.analyst_target,
                                  live_inputs=args.live_inputs,
                                  refresh_assumptions=args.refresh_assumptions,
+                                 translate_assumptions=args.translate_assumptions,
                                  as_of=args.as_of,
                                  log=(lambda text: print(text, end="")) if args.verbose else None)
         except Exception as error:  # report every ticker, then fail the command
