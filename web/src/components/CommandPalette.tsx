@@ -5,7 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useMemo, useR
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownLeft, FileText, Play, Search, SquareTerminal, Compass } from "lucide-react";
-import { api, type ReportItem } from "../lib/api";
+import { api, readerFiles, type ReportItem } from "../lib/api";
 import { ratingLabel } from "../lib/labels";
 import { rp } from "../lib/format";
 import { launch } from "../lib/launch";
@@ -71,7 +71,7 @@ function useData() {
 function Palette({ initial, onClose }: { initial: string; onClose: () => void }) {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { reports, tickers } = useData();
   const [query, setQuery] = useState(initial);
   const [active, setActive] = useState(0);
@@ -124,7 +124,7 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
     }
     for (const r of reports.filter((r) => q && r.ticker === q && r.files.html)) {
       out.push({ id: `report-${r.ticker}`, group: t({ id: "Laporan", en: "Reports" }), label: `Company update ${r.ticker}`, sub: r.headline || r.name,
-        hint: t({ id: "Buka", en: "Open" }), icon: "report", run: () => { onClose(); window.location.assign(`/files/reports/${r.ticker}.html`); } });
+        hint: t({ id: "Buka", en: "Open" }), icon: "report", run: () => { onClose(); window.location.assign(readerFiles(r, lang).html); } });
     }
     const fresh = tickers.filter((tk) => match(tk) && tk !== q && !known.has(tk)).slice(0, q ? 6 : 4);
     for (const ticker of fresh) {
@@ -140,7 +140,7 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
       out.push({ id: `nav-${to}`, group: t({ id: "Navigasi", en: "Navigation" }), label, hint: key, icon: "nav", run: () => go(to) });
     }
     return out;
-  }, [query, reports, tickers, start, go, onClose, t]);
+  }, [query, reports, tickers, start, go, onClose, t, lang]);
 
   useEffect(() => { setActive(0); }, [query]);
   useEffect(() => {

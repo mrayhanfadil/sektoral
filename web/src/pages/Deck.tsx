@@ -5,7 +5,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CircleX, FileDown, FileText, Route, SquareTerminal } from "lucide-react";
 import { AGENTS, derive, PHASES, releaseFigures, type DeckState } from "../lib/agents";
-import { api, ApiError, type Job, type JobEvent, type ReportItem, type RunReplay } from "../lib/api";
+import {
+  api, ApiError, readerFiles, reportFiles, type Job, type JobEvent, type ReportItem, type RunReplay,
+} from "../lib/api";
 import { primaryMethodOf, str } from "../lib/codes";
 import { pct, rp } from "../lib/format";
 import { useLang, type Bi, type Lang } from "../lib/i18n";
@@ -319,10 +321,11 @@ export function DeckReplay() {
   const result = state.release && report ? fromReport(report, state, lang)
     : state.release ? fromRelease(state, lang)
     : finished && report ? fromReport(report, state, lang) : undefined;
+  const files = report ? readerFiles(report, lang) : reportFiles(T);
   const links: Links = {
-    report: !report || report.files.html ? `/files/reports/${T}.html` : undefined,
+    report: !report || report.files.html ? files.html : undefined,
     trace: `/laporan/${T}/jejak`,
-    pdf: report?.files.pdf ? `/files/reports/${T}.pdf` : undefined,
+    pdf: report?.files.pdf ? files.pdf : undefined,
   };
 
   return (

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { featuredReport, problemNotes, progressStep, ratingLabel, ratingTone, selectedStep, validatorNote } from "./labels";
 import { pct, rp } from "./format";
-import type { ReportItem } from "./api";
+import { hasEnglish, readerFiles, type ReportItem } from "./api";
 
 const item = (over: Partial<ReportItem>): ReportItem => ({
   ticker: "AAAA", name: "PT A", date: "2026-09-24", release_status: "distributable",
@@ -46,6 +46,21 @@ describe("featured report", () => {
     expect(featuredReport([labelled, coded])?.ticker).toBe("CODED");
     expect(selectedStep(coded.chain)?.step).toBe("A");
     expect(selectedStep([{ step: "X", decision: "Terpilih", decision_code: undefined }])?.step).toBe("X");
+  });
+});
+
+describe("report files", () => {
+  const en = item({ languages: ["id", "en"], files: { pdf: true, html: true, trace: true, trace_json: true, html_en: true, pdf_en: true } });
+  it("opens the English files for an English reader when English is published", () => {
+    expect(readerFiles(en, "en").html).toBe("/files/reports/AAAA.en.html");
+    expect(readerFiles(en, "en").pdf).toBe("/files/reports/AAAA.en.pdf");
+    expect(readerFiles(en, "id").html).toBe("/files/reports/AAAA.html");
+  });
+  it("keeps the Indonesian files when English is not published or the server predates languages", () => {
+    expect(readerFiles(item({ languages: ["id"] }), "en").pdf).toBe("/files/reports/AAAA.pdf");
+    expect(readerFiles(item({}), "en").html).toBe("/files/reports/AAAA.html");
+    expect(hasEnglish(item({ files: { pdf: true, html: true, trace: true, trace_json: true, html_en: true } }))).toBe(true);
+    expect(readerFiles(en, "en").traceHtml).toBe("/files/reports/AAAA-trace.html");
   });
 });
 

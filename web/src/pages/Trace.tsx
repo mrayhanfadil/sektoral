@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
-import { api, ApiError, reportFiles, type ProblemNote, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
+import { api, ApiError, readerFiles, reportFiles, type ProblemNote, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
 import { LOCALE, useLang, type Bi } from "../lib/i18n";
 import { problemNotes, validatorNote } from "../lib/labels";
@@ -751,6 +751,8 @@ function RunManifest({ manifest }: { manifest: NonNullable<TraceView["run_manife
         {row(t({ id: "Tanggal data / profile", en: "Data date / profile" }), `${manifest.as_of ?? "—"} · ${manifest.profile ?? "—"}`)}
         {row("Forecast agent", `${manifest.model.forecast_agent ?? "—"} · ${manifest.model.agent_effort ?? "—"}`)}
         {row("Spec / evidence register", `${manifest.spec_sha256 ?? "—"} · ${manifest.evidence_register_sha256 ?? "—"}`)}
+        {manifest.source_text_en_sha256 !== undefined &&
+          row(t({ id: "Terjemahan teks sumber", en: "Source-text translations" }), manifest.source_text_en_sha256)}
         {manifest.release_policy && row("Release policy", `${manifest.release_policy.version ?? "—"} · ${manifest.release_policy.status ?? "—"} · ${manifest.release_policy.sha256 ?? "—"}`)}
         {manifest.release_policy?.ambiguities.length ? row("Policy ambiguities", manifest.release_policy.ambiguities.join(", ")) : null}
         {manifest.house_assumptions && row("House assumptions", `${manifest.house_assumptions.version ?? "—"} · documented ${manifest.house_assumptions.documented_as_of ?? "—"} · effective date ${manifest.house_assumptions.effective_from ?? "unrecorded"} · ${manifest.house_assumptions.status ?? "—"} · ${manifest.house_assumptions.sha256 ?? "—"}`)}
@@ -844,7 +846,7 @@ function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix
 
 export function ReportTrace() {
   const { ticker = "" } = useParams();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const T = ticker.toUpperCase();
   const [reviewToken, setReviewToken] = useState(readReviewToken);
   const state = useLoad(async () => {
@@ -862,11 +864,13 @@ export function ReportTrace() {
   const reports = useLoad(() => api.reports().catch(() => [] as ReportItem[]), []);
   const run = useLoad(() => api.reportRun(T).catch(() => undefined), [T]);
   const item = reports.data?.find((r) => r.ticker === T);
-  const files = reportFiles(T);
+  const files = item ? readerFiles(item, lang) : reportFiles(T);
+  // The bundle kinds this run's manifest lists: English previews are offered only when it has them.
+  const kinds = Object.keys(state.data?.run_manifest?.artifacts ?? {});
   return (
     <TracePage state={state} item={item} run={run.data ?? undefined} missing={t({ id: `Jejak riset ${T} tidak ditemukan.`, en: `No Audit Trace found for ${T}.` })}
       links={{ reportUrl: files.html, pdfUrl: item?.files.pdf ? files.pdf : undefined, replayUrl: `/laporan/${T}/putar` }}
-      review={<ReviewPanel ticker={T}
+      review={<ReviewPanel ticker={T} bundleKinds={kinds}
         reviewToken={state.data?.review_state === "pending" ? reviewToken || undefined : undefined}
         onApproved={() => { state.reload(); reports.reload(); }} />}
       reviewAccess={reviewState.data?.enabled && reviewState.data.state === "pending"
