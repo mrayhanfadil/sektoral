@@ -201,7 +201,9 @@ def test_web_header_uses_the_canonical_logo_file():
     brand = (web / "src" / "components" / "Brand.tsx").read_text(encoding="utf-8")
     layout = (web / "src" / "components" / "Layout.tsx").read_text(encoding="utf-8")
     assert "app/assets/brand/sectoral-logo.svg?raw" in brand
-    assert 'aria-label="Sektoral, beranda"' in layout and "<Logo" in layout
+    # The home link's label is bilingual (web/src/lib/i18n.ts).
+    assert 'aria-label={t({ id: "Sektoral, beranda", en: "Sektoral, home" })}' in layout
+    assert "<Logo" in layout
     logo = (Path(render.__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg").read_text()
     assert "CTORAL" in logo
     for color in ("#0928B1", "#1DCD9F", "#3ED628"):
