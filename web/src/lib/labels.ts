@@ -1,6 +1,6 @@
 import type { ChainStep, ProblemNote, ReportItem } from "./api";
 import { decisionCode } from "./codes";
-import type { Bi } from "./i18n";
+import { getLang, twin, type Bi, type Lang } from "./i18n";
 
 export type RatingTone = "buy" | "hold" | "sell" | "review";
 
@@ -85,9 +85,13 @@ export function validatorNote(text: string): { message: string; removed: string[
 }
 
 /**
- * The analyst validator's notes for people: the server's parsed
- * `analyst_problem_notes` when it sends them, else each raw note parsed here.
+ * The analyst validator's notes for people, in the reader's language: the
+ * server's parsed `analyst_problem_notes` (each message's `message_en` twin
+ * for an English reader) when it sends them, else each raw note parsed here
+ * (`raw_en`, the raw notes' parallel English list, where the server has it).
  */
-export function problemNotes(notes: ProblemNote[] | null | undefined, raw: string[]): ProblemNote[] {
-  return notes?.length ? notes : raw.map(validatorNote);
+export function problemNotes(notes: ProblemNote[] | null | undefined, raw: string[],
+  raw_en?: (string | null)[], lang: Lang = getLang()): ProblemNote[] {
+  if (notes?.length) return lang === "en" ? notes.map((n) => ({ ...n, message: twin(n, "message", lang) })) : notes;
+  return twin({ raw, raw_en }, "raw", lang).map(validatorNote);
 }
