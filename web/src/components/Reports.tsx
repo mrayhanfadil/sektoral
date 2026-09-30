@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, ChevronRight, FileDown, FileText, Footprints, Play 
 import { api, readerFiles, reportFiles, type ArchivedPublication, type ChainStep, type ReportItem } from "../lib/api";
 import { DECISION_WORD, decisionCode } from "../lib/codes";
 import { pct, rp } from "../lib/format";
-import { getLang, LOCALE, useLang, type Bi, type Lang } from "../lib/i18n";
+import { getLang, LOCALE, twin, useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone, selectedStep, type RatingTone } from "../lib/labels";
 import { IssuerLogo } from "./IssuerLogo";
 
@@ -36,10 +36,11 @@ const PUBLICATION_STATE_LABEL: Record<string, Bi> = {
 /** The rating, analytical Release Status, and separate publication state. */
 /** Release policy 1.2.0: a published view that a newer official period has overtaken. */
 export function StaleBadge({ item }: { item: Pick<ReportItem, "freshness"> }) {
-  const { t } = useLang();
-  const state = item.freshness?.state;
-  if (state !== "stale" && state !== "withdrawal_due") return null;
-  const why = [item.freshness?.reason, ...(item.freshness?.triggers ?? [])].filter(Boolean).join(" ");
+  const { t, lang } = useLang();
+  const freshness = item.freshness;
+  const state = freshness?.state;
+  if (!freshness || (state !== "stale" && state !== "withdrawal_due")) return null;
+  const why = [twin(freshness, "reason", lang), ...(twin(freshness, "triggers", lang) ?? [])].filter(Boolean).join(" ");
   return (
     <span title={why} className="mt-1 inline-flex h-6 items-center rounded-[5px] border border-warn-rule/60 bg-warn-bg px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-warn-ink">
       {state === "withdrawal_due"
@@ -117,9 +118,10 @@ export function formatDay(iso: string | null | undefined, lang: Lang = getLang()
   return Number.isNaN(date.getTime()) ? iso : DAY[lang].format(date);
 }
 
-/** The method the chain selected, short ("DDM"); the full description stays in `item.method`. */
-export function primaryMethod(item: Pick<ReportItem, "chain" | "method">): string {
-  return selectedStep(item.chain)?.step ?? item.chain[0]?.step ?? item.method;
+/** The method the chain selected, short ("DDM"), in the reader's language; the full description stays in `item.method`. */
+export function primaryMethod(item: Pick<ReportItem, "chain" | "method" | "method_en">, lang: Lang = getLang()): string {
+  const step = selectedStep(item.chain) ?? item.chain[0];
+  return step ? twin(step, "step", lang) : twin(item, "method", lang);
 }
 
 type Decision = "pick" | "cross" | "skip" | "other";
@@ -154,7 +156,7 @@ function StepMark({ kind, children }: { kind: Decision; children: React.ReactNod
 
 /** The method chain as one inline sequence: selected step first-class, cross-checks secondary, unrun steps muted. */
 export function MethodChain({ chain, className = "" }: { chain: ChainStep[]; className?: string }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   if (!chain.length) return <span className={`text-[13px] text-ink-faint ${className}`}>{t({ id: "Rantai metode belum tercatat", en: "Method Chain not yet recorded" })}</span>;
   const skipped = chain.filter((s) => decisionOf(s) === "skip").length;
   return (
@@ -164,13 +166,14 @@ export function MethodChain({ chain, className = "" }: { chain: ChainStep[]; cla
         const code = decisionCode(s.decision_code, s.decision);
         // Other decisions show in the reader's words when their code is known, else as the API gave them.
         const decision = kind !== "other" ? t(DECISION_LABEL[kind]) : code ? t(DECISION_WORD[code]) : s.decision;
+        const step = twin(s, "step", lang);
         return (
-          <li key={`${s.step}-${i}`} title={`${s.step}: ${decision}${hasValue(s) ? `, ${s.value}` : ""}`}
+          <li key={`${s.step}-${i}`} title={`${step}: ${decision}${hasValue(s) ? `, ${s.value}` : ""}`}
             className={`flex items-center gap-1 ${kind === "skip" ? "max-sm:hidden" : ""}`}>
             {i > 0 && <ChevronRight aria-hidden className="size-3 flex-none text-ink-faint" strokeWidth={2.2} />}
             <StepMark kind={kind}>
               <span className="sr-only">{decision}: </span>
-              {s.step}
+              {step}
               {hasValue(s) && <span className="font-mono text-[12px] tabular-nums">{s.value}</span>}
             </StepMark>
           </li>
@@ -379,7 +382,8 @@ function RegisterHead({ sort, onSort }: { sort?: Sort; onSort?: (s: Sort) => voi
 }
 
 function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const headline = twin(item, "headline", lang);
   const figure = "min-w-0 lg:text-right";
   const label = "text-[11.5px] text-ink-soft lg:sr-only";
   const value = "m-0 font-mono text-[14px] font-medium tabular-nums text-ink-strong";
@@ -390,7 +394,7 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
 
       <div style={{ gridArea: "tk" }} className="min-w-0">
         <h3 id={`row-${item.ticker}`} className="font-mono text-[14.5px] leading-6 font-bold tracking-[.03em] text-brand-ink">{item.ticker}</h3>
-        <p className="text-[12px] leading-5 text-ink-soft">{item.profile}</p>
+        <p className="text-[12px] leading-5 text-ink-soft">{twin(item, "profile", lang)}</p>
       </div>
 
       <div style={{ gridArea: "nm" }} className="flex min-w-0 items-start gap-3">
@@ -398,10 +402,10 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
         <div className="min-w-0 flex-1">
         <p className="truncate text-[14.5px] leading-6 font-medium text-ink-strong" title={item.name}>{item.name}</p>
         {item.published ? (
-          <p className="truncate text-[13px] leading-5 text-ink-soft" title={item.headline}>{item.headline}</p>
+          <p className="truncate text-[13px] leading-5 text-ink-soft" title={headline}>{headline}</p>
         ) : (
           <p className="text-[13px] leading-5 text-warn-ink">
-            {t({ id: "Rating ditahan", en: "Rating withheld" })}: {item.held_reason || t({ id: "bukti belum lengkap", en: "evidence incomplete" })}
+            {t({ id: "Rating ditahan", en: "Rating withheld" })}: {twin(item, "held_reason", lang) || t({ id: "bukti belum lengkap", en: "evidence incomplete" })}
           </p>
         )}
         </div>
@@ -413,8 +417,8 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
         <time dateTime={item.date} className="data mt-1.5 block text-ink-soft lg:hidden">{formatDay(item.date)}</time>
       </div>
 
-      <p style={{ gridArea: "me" }} className="truncate pt-0.5 text-[13.5px] text-ink max-xl:hidden" title={item.published ? item.method : ""}>
-        {item.published ? primaryMethod(item) : t({ id: "Metode ditampilkan setelah publikasi", en: "Method shown after publication" })}
+      <p style={{ gridArea: "me" }} className="truncate pt-0.5 text-[13.5px] text-ink max-xl:hidden" title={item.published ? twin(item, "method", lang) : ""}>
+        {item.published ? primaryMethod(item, lang) : t({ id: "Metode ditampilkan setelah publikasi", en: "Method shown after publication" })}
       </p>
 
       <dl style={{ gridArea: "num" }}

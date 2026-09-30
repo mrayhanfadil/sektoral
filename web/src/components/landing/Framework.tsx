@@ -4,7 +4,7 @@
 import { GATES, type ChainState, type GateState } from "../../lib/agents";
 import type { ReportItem } from "../../lib/api";
 import { decisionCode, type DecisionCode } from "../../lib/codes";
-import { useLang, type Bi } from "../../lib/i18n";
+import { twin, useLang, type Bi } from "../../lib/i18n";
 import { decisionWord, gateWord } from "../deck/read";
 import { GATE_TONE, GateMeter } from "./GateMeter";
 
@@ -79,7 +79,7 @@ const RULES: [term: Bi, body: Bi][] = [
 export function MethodChain({ item, chain }: { item?: ReportItem; chain?: ChainState[] }) {
   const { lang, t } = useLang();
   const rows: ChainRow[] = chain?.length ? chain : (item?.chain ?? []).map((s) => ({
-    method: s.step, decision: s.decision, code: decisionCode(s.decision_code, s.decision), value: s.value,
+    method: twin(s, "step", lang), decision: s.decision, code: decisionCode(s.decision_code, s.decision), value: s.value,
   }));
   return (
     <div className="grid gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -101,7 +101,7 @@ export function MethodChain({ item, chain }: { item?: ReportItem; chain?: ChainS
         <div className="panel self-start overflow-hidden">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule px-4 py-3.5">
             <h3 className="text-[16px]">{t({ id: "Rantai metode", en: "Method Chain" })} <span className="font-mono tracking-[.03em]">{item.ticker}</span></h3>
-            <span className="text-[13px] text-ink-soft">{t({ id: "Profil", en: "Profile" })} {item.profile}</span>
+            <span className="text-[13px] text-ink-soft">{t({ id: "Profil", en: "Profile" })} {twin(item, "profile", lang)}</span>
           </div>
           <ol aria-label={t({ id: `Rantai metode ${item.ticker}`, en: `Method Chain ${item.ticker}` })} className="m-0 list-none p-0">
             {rows.map((row, i) => (
@@ -120,7 +120,7 @@ export function MethodChain({ item, chain }: { item?: ReportItem; chain?: ChainS
           </ol>
           {item.method && (
             <p className="m-0 border-t border-rule bg-raised px-4 py-3 text-[13px] leading-snug text-ink-soft">
-              {t({ id: "Metode di laporan:", en: "Method in the report:" })} <span className="text-ink">{item.method}</span>
+              {t({ id: "Metode di laporan:", en: "Method in the report:" })} <span className="text-ink">{twin(item, "method", lang)}</span>
             </p>
           )}
         </div>
