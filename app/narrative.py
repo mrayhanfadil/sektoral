@@ -12,6 +12,7 @@ from . import ddm
 from . import fmt
 from . import share_basis
 from . import method_chain
+from . import exhibit_ids
 from . import methodnote
 from . import rnav
 from . import scrub
@@ -512,8 +513,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "multiple belum tersedia karena model belum lolos validasi "
                     "(NA: belum dimodelkan).")
     years = [str(row["year"]) for row in history]
-    add("Key Financials", ["Tahun buku 31 Des"] + years +
-        f_labels, key_rows, key_note)
+    exhibit_ids.tag(add("Key Financials", ["Tahun buku 31 Des"] + years +
+                        f_labels, key_rows, key_note), exhibit_ids.KEY_FINANCIALS)
 
     actual_rows = []
     if actual:
@@ -2274,9 +2275,9 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 f"{operating_source['source_url']}. "
             )
         watch_source_note += "Kolom implikasi adalah analisis Sektoral dan belum menjadi asumsi valuasi."
-        add("Katalis, risiko, dan indikator pemantauan",
-            ["Tema", "Bukti terkini", "Implikasi yang diuji"], watch_rows,
-            watch_source_note)
+        exhibit_ids.tag(add("Katalis, risiko, dan indikator pemantauan",
+                            ["Tema", "Bukti terkini", "Implikasi yang diuji"], watch_rows,
+                            watch_source_note), exhibit_ids.CATALYSTS)
 
     if actual:
         current = actual["metrics"]
@@ -4770,7 +4771,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                 exhibit["data"]["rows"][-1][1] = (
                     f"Skenario nilai memakai {selected_short}; tinjau batas bukti pada tabel "
                     "dan catatan metode sebelum menggunakannya.")
-            elif exhibit.get("judul") == "Katalis, risiko, dan indikator pemantauan" and catalyst_rows:
+            elif exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS) and catalyst_rows:
                 exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
                                             "Driver dan jalur dampak", "Arah"],
                                    "rows": catalyst_rows}
@@ -4906,7 +4907,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     doc["exhibits"].extend(exhibits)
 
     # --- Key Financials: FY forecast columns, EPS and PER
-    key_fin = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
+    key_fin = exhibit_ids.find(doc["exhibits"], exhibit_ids.KEY_FINANCIALS)
     if key_fin:
         cols = key_fin["data"]["cols"]
         # Scenario EBITDA is shown wherever the scenario carries it, the same
@@ -5625,6 +5626,7 @@ def _build_report(intake, fc, va, s1, method="auto", illustrative_scenarios=Fals
         kf_rows += [["ROE (%)"] + _roe_row]
     kf_cols = ["Key Financials"] + [str(a["year"]) for a in A[-2:]] + [r["label"] for r in F]
     E("Key Financials", "tabel", {"cols": kf_cols, "rows": kf_rows})
+    exhibit_ids.tag(exh[-1], exhibit_ids.KEY_FINANCIALS)
 
     hist3 = A[-3:]
     hist_rows = [

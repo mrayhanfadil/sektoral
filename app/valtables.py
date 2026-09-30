@@ -7,17 +7,82 @@ diisi orkestrator mengikuti urutan global laporan):
      "data": {"cols": [...], "rows": [...]},
      "catatan_sumber": ...}
 
-Semua uang diformat via app.fmt. Label Bahasa Indonesia, tanpa emoji.
+Semua uang diformat via app.fmt. Label Bahasa Indonesia, tanpa emoji. Each
+exhibit carries a stable ``exhibit_id``; its English title and fixed labels
+(``TITLES_EN``, ``LABELS_EN``) sit below, for the English Company Update
+(app.report_lang).
 """
 
 from . import fmt
 from . import valuation as _valuation
 
 
-def _exhibit(judul, cols, rows, note="Source: Company, Sektoral Estimates"):
+def _exhibit(judul, cols, rows, note="Source: Company, Sektoral Estimates", exhibit_id=None):
     return {"n": None, "judul": judul, "tipe": "tabel",
             "data": {"cols": cols, "rows": rows},
-            "catatan_sumber": note}
+            "catatan_sumber": note, "exhibit_id": exhibit_id}
+
+
+TITLES_EN = {
+    "fcff_bridge": "FCFF projection, terminal value and value-scenario bridge",
+    "wacc_components": "WACC components",
+    "value_sensitivity": "Scenario value per share sensitivity (Rp)",
+    "ddm_bridge": "Dividend forecast, terminal value and inverse CoE",
+    "rnav_bridge": "Asset breakdown and RNAV bridge",
+}
+
+LABELS_EN = {
+    "Terminal / Total": "Terminal / Total",
+    "Blok 1: FCFF eksplisit (Rp miliar)": "Block 1: explicit FCFF (Rp bn)",
+    "Blok 2: Nilai terminal Gordon": "Block 2: Gordon terminal value",
+    "Blok 3: Jembatan ke nilai skenario": "Block 3: bridge to scenario value",
+    "(-/+) Delta NWC (plug penyeimbang)": "(-/+) Delta NWC (balancing plug)",
+    "Faktor diskonto (mid-year)": "Discount factor (mid-year)",
+    "FCFF terminal (= FCFF terakhir x (1+g))": "Terminal FCFF (= last FCFF x (1+g))",
+    "Pertumbuhan terminal g (di bawah risk-free)": "Terminal growth g (below risk-free)",
+    "Terminal Value (undiscounted)": "Terminal value (undiscounted)",
+    "PV Terminal Value": "PV of terminal value",
+    "Jumlah PV FCFF (Rp miliar)": "Sum of PV of FCFF (Rp bn)",
+    "(+) PV Terminal Value (Rp miliar)": "(+) PV of terminal value (Rp bn)",
+    "(=) Enterprise Value (Rp miliar)": "(=) Enterprise value (Rp bn)",
+    "(-) Utang bersih tanggal valuasi (Rp miliar)": "(-) Net debt at valuation date (Rp bn)",
+    "(+/-) Minority Interest / Aset non-operasi (Rp miliar)":
+        "(+/-) Minority interest / non-operating assets (Rp bn)",
+    "0 (tidak ada di data Sectors)": "0 (not in Sectors data)",
+    "(=) Nilai Ekuitas Gordon (Rp miliar)": "(=) Gordon equity value (Rp bn)",
+    "(/) Saham beredar (saham)": "(/) Shares outstanding (shares)",
+    "(=) Nilai skenario per Saham Gordon (Rp)": "(=) Gordon scenario value per share (Rp)",
+    "Nilai per saham exit (Rp)": "Exit value per share (Rp)",
+    "Nilai skenario gabungan per saham Gordon+exit (Rp)": "Combined Gordon + exit scenario value per share (Rp)",
+    "Risk-free rate IDR (house policy)": "IDR risk-free rate (house policy)",
+    "Equity Risk Premium": "Equity risk premium",
+    "(=) Cost of Equity (Rf + Beta x ERP)": "(=) Cost of Equity (Rf + Beta x ERP)",
+    "Cost of Debt pra-pajak": "Pre-tax cost of debt",
+    "(=) Cost of Debt setelah pajak": "(=) After-tax cost of debt",
+    "WACC / g terminal": "WACC / terminal g",
+    "Blok 1: Dividen Gordon (diskonto CoE, valuasi ekuitas langsung)":
+        "Block 1: Gordon dividends (CoE discounting, direct equity valuation)",
+    "BVPS forward (Rp)": "Forward BVPS (Rp)",
+    "ROAE forward": "Forward ROAE",
+    "EPS forward (= ROAE x BVPS, Rp)": "Forward EPS (= ROAE x BVPS, Rp)",
+    "DPS forward (= EPS x payout, Rp)": "Forward DPS (= EPS x payout, Rp)",
+    "DPS terminal (= DPS x (1+g), Rp)": "Terminal DPS (= DPS x (1+g), Rp)",
+    "Terminal Value (= DPS terminal/(CoE-g), Rp)": "Terminal value (= terminal DPS/(CoE-g), Rp)",
+    "Faktor diskonto (1/(1+CoE))": "Discount factor (1/(1+CoE))",
+    "Nilai skenario per Saham Gordon (Rp)": "Gordon scenario value per share (Rp)",
+    "Blok 2: Inverse Cost of Equity": "Block 2: inverse Cost of Equity",
+    "Nilai skenario (= P/BV x BVPS, Rp)": "Scenario value (= P/BV x BVPS, Rp)",
+    "Blok 1: NAV per aset (Rp miliar)": "Block 1: NAV by asset (Rp bn)",
+    "Jumlah NAV atribuibel (Rp miliar)": "Sum of attributable NAV (Rp bn)",
+    "Blok 2: Jembatan RNAV ke skenario nilai": "Block 2: RNAV bridge to scenario value",
+    "(+) Kas dan setara kas (Rp miliar)": "(+) Cash and equivalents (Rp bn)",
+    "(-) Total utang (Rp miliar)": "(-) Total debt (Rp bn)",
+    "(-) Overhead korporat, PV biaya tak teratribusi (Rp miliar)":
+        "(-) Corporate overhead, PV of unallocated costs (Rp bn)",
+    "(=) Total RNAV (Rp miliar)": "(=) Total RNAV (Rp bn)",
+    "(=) RNAV per saham (Rp)": "(=) RNAV per share (Rp)",
+    "(=) Nilai skenario (= RNAVps x (1-diskon), Rp)": "(=) Scenario value (= RNAVps x (1-discount), Rp)",
+}
 
 
 def _teff(fc):
@@ -119,7 +184,7 @@ def fcff_exhibit(intake, fc, val):
                     cols, R,
                     "Source: Company, Sektoral Estimates; Delta NWC = plug "
                     "penyeimbang; konvensi diskonto mid-year; silang cek "
-                    "Gordon vs exit multiple tampil berdampingan")
+                    "Gordon vs exit multiple tampil berdampingan", "fcff_bridge")
 
 
 def wacc_exhibit(intake, fc, val):
@@ -147,7 +212,7 @@ def wacc_exhibit(intake, fc, val):
     ]
     return _exhibit("Komponen WACC", ["Komponen", "Nilai"], rows,
                     "Source: Company, Sektoral Estimates; Rf = house policy parameter, compared with dated INDOGB 10Y in the policy benchmark table; "
-                    "ERP = Damodaran, Beta = Bloomberg; tanpa CRP ganda")
+                    "ERP = Damodaran, Beta = Bloomberg; tanpa CRP ganda", "wacc_components")
 
 
 def sens_matrix_5x3(intake, fc, val):
@@ -174,7 +239,7 @@ def sens_matrix_5x3(intake, fc, val):
         rows.append([lab] + cells)
     return _exhibit("Sensitivitas Nilai Skenario per Saham (Rp)", cols, rows,
                     "Source: Sektoral Estimates; sel base (*) = skenario dasar; "
-                    "rerata Gordon + exit, basis skenario sama")
+                    "rerata Gordon + exit, basis skenario sama", "value_sensitivity")
 
 
 def ddm_exhibits(payout, roae_fwd, bvps, coe, g=0.035):
@@ -209,7 +274,7 @@ def ddm_exhibits(payout, roae_fwd, bvps, coe, g=0.035):
     return _exhibit("Prakiraan Dividen, Nilai Terminal, dan Inverse CoE",
                     ["Uraian", "Nilai"], rows,
                     "Source: Company, Sektoral Estimates; DDM = valuasi "
-                    "ekuitas langsung, bukan WACC")
+                    "ekuitas langsung, bukan WACC", "ddm_bridge")
 
 
 def rnav_exhibits(assets, cash, debt, overhead, shares, discount):
@@ -244,4 +309,4 @@ def rnav_exhibits(assets, cash, debt, overhead, shares, discount):
     return _exhibit("Rincian Aset dan Jembatan RNAV", ["Uraian", "Nilai"],
                     rows,
                     "Source: Company, Sektoral Estimates; diskon RNAV = "
-                    "judgment analis")
+                    "judgment analis", "rnav_bridge")

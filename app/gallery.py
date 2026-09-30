@@ -15,7 +15,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import assumption_review, outputs, publication_archive, publication_monitor, release_policy
+from . import (assumption_review, exhibit_ids, outputs, publication_archive, publication_monitor,
+               release_policy)
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
@@ -23,6 +24,15 @@ PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
 FILES = {"pdf": ("{t}.pdf", "application/pdf"),
          "html": ("{t}.html", "text/html; charset=utf-8"),
          "trace": ("{t}-trace.html", "text/html; charset=utf-8")}
+# The English Company Update (app.report_lang) sits beside the Indonesian
+# files. It is not part of the hash-verified publication bundle (ADR 0009,
+# app.run_manifest), so only an authenticated reviewer preview serves it;
+# no public route does until #34 decides how both languages publish.
+PREVIEW_FILES = {**FILES,
+                 "html_en": ("{t}.en.html", "text/html; charset=utf-8"),
+                 "pdf_en": ("{t}.en.pdf", "application/pdf")}
+# Languages a reader may open from a public route, with their HTML kind.
+PUBLIC_LANGUAGES = {"id": "html"}
 ANALYTICALLY_ELIGIBLE = frozenset({"production_ready", "distributable",
                                    "distributable_assumption_led"})
 RELEASE_STATUSES = ANALYTICALLY_ELIGIBLE | frozenset({"draft_non_distributable"})
@@ -42,8 +52,7 @@ def _freshness(folder, ticker) -> dict | None:
 
 def _chain(doc):
     """Method-chain rows as (step, decision, value) from the report exhibit."""
-    exhibit = next((e for e in doc.get("exhibits") or []
-                    if e.get("judul") == "Rantai metode valuasi"), None)
+    exhibit = exhibit_ids.find(doc.get("exhibits"), exhibit_ids.METHOD_CHAIN)
     rows = ((exhibit or {}).get("data") or {}).get("rows") or []
     out = []
     for row in rows:
@@ -179,6 +188,9 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
         "files": {**{kind: published and (folder / pattern.format(t=ticker)).is_file()
                       for kind, (pattern, _) in FILES.items()},
                   "trace_json": published and outputs.exists(outputs.TRACE, folder, ticker)},
+        # Report languages a reader can open now (see PUBLIC_LANGUAGES).
+        "languages": [lang for lang, kind in PUBLIC_LANGUAGES.items()
+                      if published and (folder / FILES[kind][0].format(t=ticker)).is_file()],
     }
 
 
@@ -192,11 +204,13 @@ def load(folder) -> list[dict]:
 
 
 def artifact(folder, ticker: str, kind: str) -> tuple[Path, str] | None:
-    """A physical file for one ticker, confined to ``folder`` (no release check)."""
+    """A physical file for one ticker, confined to ``folder`` (no release check).
+
+    ``kind`` is one of PREVIEW_FILES; public callers go through public_artifact."""
     ticker = str(ticker).upper()
-    if not TICKER.fullmatch(ticker) or kind not in FILES:
+    if not TICKER.fullmatch(ticker) or kind not in PREVIEW_FILES:
         return None
-    pattern, content_type = FILES[kind]
+    pattern, content_type = PREVIEW_FILES[kind]
     folder = Path(folder).resolve()
     path = (folder / pattern.format(t=ticker)).resolve()
     if path.parent != folder or not path.is_file():
@@ -206,7 +220,7 @@ def artifact(folder, ticker: str, kind: str) -> tuple[Path, str] | None:
 
 def public_artifact(folder, ticker: str, kind: str, db=None) -> tuple[Path, str] | None:
     """A file from the currently approved, analytically eligible report bundle."""
-    if not is_publishable(folder, ticker, db):
+    if kind not in FILES or not is_publishable(folder, ticker, db):
         return None
     return artifact(folder, ticker, kind)
 

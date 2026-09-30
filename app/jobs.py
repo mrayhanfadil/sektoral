@@ -188,12 +188,13 @@ class ResearchJobs:
                 archived = publication_archive.archive_approved_bundle(self.reports, ticker)
                 if archived is None:
                     raise OSError(f"refusing to replace approved {ticker}: publication archive failed")
-            for name in (f"{ticker}.html", f"{ticker}.pdf", f"{ticker}-trace.html"):
+            for name in (f"{ticker}.html", f"{ticker}.pdf", f"{ticker}-trace.html",
+                         f"{ticker}.en.html", f"{ticker}.en.pdf"):
                 source = job_outdir / name
                 if source.is_file():
                     shutil.copy2(source, self.reports / name)
-                elif name == f"{ticker}.pdf":
-                    # A run without PDF output must not inherit an older PDF.
+                elif name not in (f"{ticker}.html", f"{ticker}-trace.html"):
+                    # A run without PDF or English output must not inherit an older file.
                     (self.reports / name).unlink(missing_ok=True)
             outputs.copy(job_outdir, ticker, self.reports)
         except OSError:
