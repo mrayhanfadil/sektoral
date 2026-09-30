@@ -5,7 +5,9 @@ Output validated deterministically:
  "dissimilar_segments": ..., "rationale": ..., "source_ids": [...]}
 
 Validation: enum only; non-default classification must cite official or dated
-article; rationale consistent with Sectors history. Analyst file
+article; rationale consistent with Sectors history. The rationale is Indonesian;
+its English twin ``rationale_en`` must read English and state the same figures
+(a bad twin is dropped, never the classification). Analyst file
 data/method_overrides/<TICKER>.json wins over LLM and is shown in report.
 Without validated classification gates use conservative defaults labeled unverified.
 """
@@ -13,6 +15,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
+from .scrub import EN_SOFT, english_problems
 
 
 STAGES = {"pre_revenue", "high_growth_pre_profit", "mature", "decline"}
@@ -47,12 +51,31 @@ def _latest(annuals, key):
     return None
 
 
-def validate(payload: dict, annuals=None, allowed_sources=None) -> tuple[bool, list[str], dict]:
+def rationale_en_problems(payload: dict, required=False) -> list[str]:
+    """The English twin of the rationale: English, 40-600 characters, the
+    Indonesian's figures. Each problem ends with ``EN_SOFT``; a missing twin
+    is one only when `required` (the agent must write it, stored plans need not)."""
+    rationale = payload.get("rationale")
+    if not isinstance(rationale, str) or not rationale.strip() or (
+            "rationale_en" not in payload and not required):
+        return []
+    twin = payload.get("rationale_en")
+    problems = english_problems(rationale, twin)
+    if not problems and not 40 <= len(twin) <= 600:
+        problems.append("must be English 40-600 characters")
+    return [f"rationale_en {problem}{EN_SOFT}" for problem in problems]
+
+
+def validate(payload: dict, annuals=None, allowed_sources=None,
+             require_english=False) -> tuple[bool, list[str], dict]:
     """Validate stage payload. Returns (ok, errors, normalized).
 
     ``allowed_sources`` is the set of citable ids actually supplied to the
     agent ("official" only when an official release exists, "news:N" only for
     supplied articles). When given, every cited id must be in it.
+    ``require_english`` makes a missing ``rationale_en`` an error too. Errors
+    about the English twin end with ``EN_SOFT``; ``normalized`` keeps the twin
+    only when it is valid, and they do not unverify the classification.
     """
     errors = []
     if not isinstance(payload, dict):
@@ -101,6 +124,9 @@ def validate(payload: dict, annuals=None, allowed_sources=None) -> tuple[bool, l
             has_news = any(str(s).startswith("news:") for s in sources)
             if not has_news:
                 errors.append("decline requires falling revenue in latest annuals or cited restructuring")
+    english = rationale_en_problems(payload, required=require_english)
+    verified = not errors
+    errors += english
     normalized = {
         "life_cycle_stage": stage if stage in STAGES else "mature",
         "has_steady_state_3y": steady if isinstance(steady, bool) else True,
@@ -108,8 +134,10 @@ def validate(payload: dict, annuals=None, allowed_sources=None) -> tuple[bool, l
         "dissimilar_segments": segs if isinstance(segs, int) and 1 <= segs <= 10 else 1,
         "rationale": rationale if isinstance(rationale, str) else "",
         "source_ids": [str(s) for s in sources if isinstance(s, str)],
-        "verified": not errors,
+        "verified": verified,
     }
+    if isinstance(payload.get("rationale_en"), str) and not english:
+        normalized["rationale_en"] = payload["rationale_en"]
     return (not errors), errors, normalized
 
 
@@ -161,11 +189,15 @@ def classify(intake: dict, assumption_plan: dict | None = None) -> dict:
     if isinstance(assumption_plan, dict):
         plan_stage = assumption_plan.get("stage_classification") or assumption_plan.get("stage")
     if isinstance(plan_stage, dict):
-        ok, _, normalized = validate(plan_stage, (intake or {}).get("annuals"))
-        if ok:
-            return {"values": {k: normalized[k] for k in DEFAULTS}, "source": "llm",
-                    "override": None, "method_override": None, "method_reason": None,
-                    "rationale": normalized.get("rationale"), "source_ids": normalized.get("source_ids")}
+        _, _, normalized = validate(plan_stage, (intake or {}).get("annuals"))
+        if normalized["verified"]:
+            found = {"values": {k: normalized[k] for k in DEFAULTS}, "source": "llm",
+                     "override": None, "method_override": None, "method_reason": None,
+                     "rationale": normalized.get("rationale"),
+                     "source_ids": normalized.get("source_ids")}
+            if "rationale_en" in normalized:
+                found["rationale_en"] = normalized["rationale_en"]
+            return found
     # Conservative defaults, unverified
     return {"values": dict(DEFAULTS), "source": "default_unverified", "override": None,
             "method_override": None, "method_reason": None}
