@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import urllib.request
 from pathlib import Path
 
@@ -101,18 +102,36 @@ def test_flow_streak_and_price_divergence():
 # --------------------------------------------------------------- agent loop
 
 PLAN = {"question": "Bagaimana posisi SIDO terhadap peer farmasi?",
+        "question_en": "How does SIDO compare with its pharmaceutical peers?",
         "hypotheses": ["Profitabilitas di atas median peer", "Laba kuartalan melemah"],
-        "steps": [{"tool": "find_peers", "args": {}, "why": "grup"},
-                  {"tool": "rank_peers", "args": {"metrics": ["roe", "net_margin"]}, "why": "posisi"},
-                  {"tool": "quarterly_financials", "args": {}, "why": "tren"}]}
+        "hypotheses_en": ["Profitability is above the peer median", "Quarterly profit is weakening"],
+        "steps": [{"tool": "find_peers", "args": {}, "why": "grup", "why_en": "group"},
+                  {"tool": "rank_peers", "args": {"metrics": ["roe", "net_margin"]}, "why": "posisi",
+                   "why_en": "position"},
+                  {"tool": "quarterly_financials", "args": {}, "why": "tren", "why_en": "trend"}]}
 SYNTHESIS = {"headline": "Profitabilitas memimpin grup, laba kuartalan melemah",
+             "headline_en": "Profitability leads the group while quarterly profit weakens",
              "findings": [{"title": "Margin teratas", "signal_ids": ["peer.net_margin"],
-                           "interpretation": "Margin tertinggi di grup.", "caveat": "Data tahunan."}],
+                           "interpretation": "Margin tertinggi di grup.", "caveat": "Data tahunan.",
+                           "title_en": "Top margin", "interpretation_en": "The highest margin in the group.",
+                           "caveat_en": "Annual data."}],
              "hypotheses": [{"index": 0, "verdict": "didukung", "signal_ids": ["peer.roe"],
-                             "reason": "Peringkat teratas."},
+                             "reason": "Peringkat teratas.", "reason_en": "Ranked first."},
                             {"index": 1, "verdict": "didukung", "signal_ids": ["quarter.earnings_yoy"],
-                             "reason": "Laba turun."}],
-             "next_checks": ["Periksa segmen"]}
+                             "reason": "Laba turun.", "reason_en": "Profit fell."}],
+             "next_checks": ["Periksa segmen"], "next_checks_en": ["Check the segments"]}
+
+
+def _indonesian_only(doc):
+    """What a model reply without English twins looks like."""
+    if isinstance(doc, list):
+        return [_indonesian_only(x) for x in doc]
+    if isinstance(doc, dict):
+        return {k: _indonesian_only(v) for k, v in doc.items() if not k.endswith("_en")}
+    return doc
+
+
+PLAN_ID, SYNTHESIS_ID = _indonesian_only(PLAN), _indonesian_only(SYNTHESIS)
 
 
 def scripted(*responses):
@@ -438,3 +457,173 @@ def test_stray_cjk_tokens_are_stripped_from_synthesis_prose():
     only = {**doc, "headline": "優位"}
     A._strip_foreign(only)
     assert any("wajib diisi" in p for p in A._synthesis_problems(only, {"a"}, 1))
+
+
+# ------------------------------------------------------------ English twins
+
+def test_agent_writes_english_twins_that_cite_the_same_signals(tmp_path):
+    synthesis = dict(SYNTHESIS, headline_en="Net profit margin leads the group (peer.net_margin)")
+    chat = scripted(PLAN,
+                    {"calls": [{"tool": "foreign_flow", "args": {}, "why": "cek asing",
+                                "why_en": "check foreign flow"}]},
+                    {"done": True}, synthesis)
+    result = A.run("SIDO", chat=chat, db=tmp_path)
+    assert result["status"] == "ok" and result["problems"] == [] and result["problem_notes"] == []
+    plan = result["plan"]
+    assert plan["question_en"] == PLAN["question_en"] and plan["hypotheses_en"] == PLAN["hypotheses_en"]
+    assert [s.get("why_en") for s in plan["steps"]] == ["group", "position", "trend"]
+    whys = {s["tool"]: s.get("why_en") for s in result["steps"]}
+    assert whys["foreign_flow"] == "check foreign flow"  # the agent's own call
+    assert whys["find_peers"] == "group"  # a planned step the host completed
+    out = result["synthesis"]
+    # The twin's signal id reads as the English label; the Indonesian is untouched.
+    assert out["headline_en"] == "Net profit margin leads the group (net profit margin)"
+    assert out["headline"] == SYNTHESIS["headline"]
+    assert out["findings"][0]["interpretation_en"] == "The highest margin in the group."
+    assert out["findings"][0]["signal_ids"] == ["peer.net_margin"]
+    assert [h["reason_en"] for h in out["hypotheses"]] == ["Ranked first.", "Profit fell."]
+    assert [h["verdict_code"] for h in out["hypotheses"]] == ["supported", "supported"]
+    assert out["next_checks_en"] == ["Check the segments"]
+    roe = next(s for s in result["signals"] if s["id"] == "peer.roe")
+    assert roe["label_en"] == "ROE"
+    # The model is asked for both languages in the same reply.
+    assert "hypotheses_en" in chat.calls[0][-1]["content"]
+    assert "headline_en" in chat.calls[-1][-1]["content"]
+
+
+def test_bad_english_twins_are_repaired_then_dropped_keeping_the_indonesian(tmp_path):
+    bad = dict(SYNTHESIS, headline_en="Profit fell 49% and the stock is worth buying soon",
+               findings=[dict(SYNTHESIS["findings"][0], caveat_en="Data tahunan yang belum diaudit.")])
+    chat = scripted(PLAN, {"done": True}, bad, bad)
+    result = A.run("SIDO", chat=chat, db=tmp_path)
+    out = result["synthesis"]
+    assert out["source"] == "agent" and result["status"] == "ok"
+    assert out["headline"] == SYNTHESIS["headline"] and "headline_en" not in out
+    assert "caveat_en" not in out["findings"][0]
+    assert out["findings"][0]["interpretation_en"] == "The highest margin in the group."
+    # One repair turn named the English problems.
+    repair = chat.calls[-1][-1]["content"]
+    assert "headline_en" in repair and "49%" in repair and "findings[0].caveat_en" in repair
+    note = result["problem_notes"][-1]
+    assert result["problems"][-1].startswith("sintesis: teks Inggris dibuang")
+    assert note["removed"] == ["49%"] and "hapus" not in note["message"]
+
+
+def test_a_model_reply_without_english_still_runs_as_before(tmp_path):
+    chat = scripted(PLAN_ID, PLAN_ID, {"done": True}, SYNTHESIS_ID, SYNTHESIS_ID)
+    result = A.run("SIDO", chat=chat, db=tmp_path)
+    assert result["status"] == "ok"
+    assert result["plan"]["question"] == PLAN["question"] and "question_en" not in result["plan"]
+    assert all("why_en" not in s for s in result["plan"]["steps"])
+    out = result["synthesis"]
+    assert out["headline"] == SYNTHESIS["headline"] and "headline_en" not in out
+    assert "next_checks_en" not in out and out["next_checks"] == ["Periksa segmen"]
+    assert [p.split(":")[0] for p in result["problems"]] == ["plan", "sintesis"]
+
+
+def test_a_repair_that_breaks_the_indonesian_keeps_the_draft_that_passed(tmp_path):
+    broken = dict(SYNTHESIS, headline="Laba turun 49%")
+    result = A.run("SIDO", chat=scripted(PLAN, {"done": True}, SYNTHESIS_ID, broken), db=tmp_path)
+    assert result["synthesis"]["source"] == "agent"
+    assert result["synthesis"]["headline"] == SYNTHESIS["headline"]
+    assert "headline_en" not in result["synthesis"]
+
+
+def test_english_twins_hold_no_numbers_advice_or_indonesian():
+    ids = {"peer.roe"}
+    assert A._english_note("ROE leads the group (peer.roe) in 2026", signal_ids=ids) is None
+    assert "hapus: 12%" in A._english_note("ROE of 12% leads", signal_ids=ids)
+    assert "buy" in A._english_note("Investors should buy", signal_ids=ids)
+    assert "price target" in A._english_note("The price target is unchanged", signal_ids=ids)
+    assert "Indonesia" in A._english_note("Laba yang turun dan margin", signal_ids=ids)
+    assert "wajib" in A._english_note(None, signal_ids=ids)
+    # Plan text may hold figures, but exactly those of its Indonesian twin.
+    assert A._english_note("Is the 20-session flow reversing?", "Apakah arus 20 sesi berbalik?") is None
+    assert A._english_note("Is the 30-session flow reversing?", "Apakah arus 20 sesi berbalik?")
+
+
+def test_partial_verdict_is_marked_in_both_languages_with_a_code():
+    doc = {"hypotheses": [{"verdict": "Sebagian didukung", "reason": "Margin naik, laba belum.",
+                           "reason_en": "Margin rose, profit did not."}]}
+    A._normalize_verdicts(doc)
+    item = doc["hypotheses"][0]
+    assert item["reason_en"] == "Partly supported: margin rose, profit did not."
+    assert A.verdict_code(item) == "partly_supported"
+    assert A.verdict_code({"verdict": "tidak didukung"}) == "not_supported"
+    assert A.verdict_code({"verdict": ["x"]}) is None
+
+
+def test_host_fallbacks_are_bilingual(tmp_path):
+    def down(_messages):
+        raise TimeoutError("provider timeout")
+    result = A.run("AMMN", chat=down, db=tmp_path)
+    plan, out = result["plan"], result["synthesis"]
+    assert plan["source"] == "host_fallback" and plan["question_en"].startswith("How does")
+    assert len(plan["hypotheses_en"]) == len(plan["hypotheses"])
+    assert all(s["why_en"] == "standard host step" for s in plan["steps"])
+    assert out["source"] == "host_fallback" and out["headline_en"]
+    assert all(h["verdict_code"] == "unanswered" and h["reason_en"] for h in out["hypotheses"])
+    assert out["next_checks_en"] == [] and out["findings"]
+    for finding in out["findings"]:
+        signal = next(s for s in result["signals"] if s["id"] == finding["signal_ids"][0])
+        assert finding["title_en"] == f"{signal['label_en']}: {signal['flag_en']}"
+    for text in [plan["question_en"], out["headline_en"], *plan["hypotheses_en"],
+                 *(f[k] for f in out["findings"] for k in ("title_en", "interpretation_en", "caveat_en"))]:
+        assert A._english_note(text, text) is None, text
+
+
+def test_every_signal_label_and_flag_has_english():
+    ids = {f"peer.{m}" for m in S.PEER_METRICS} | {
+        "quarter.revenue_yoy", "quarter.earnings_yoy", "price.return_window", "price.vs_ihsg",
+        "price.volume_ratio", "flow.net_20d", "flow.net_window", "flow.streak",
+        "valuation.pe_vs_history", "valuation.pe_vs_peer_avg", "cross.flow_vs_price", "news.count"}
+    assert ids <= set(S.LABELS_EN)
+    source = (ROOT / "agents" / "analyst" / "signals.py").read_text(encoding="utf-8")
+    flags = set(re.findall(r'\["flag"\] = "([^"]+)"', source))
+    flags |= {"tertinggi di grup", "terendah di grup", "berbalik ke laba", "lonjakan", "penurunan tajam",
+              "jauh mengungguli IHSG", "jauh tertinggal dari IHSG", "beruntun", "divergensi asing vs harga"}
+    assert flags <= set(S.FLAGS_EN)
+    assert S.label_en({"id": "web.0", "kind": "web", "display": "2026-09-01 · kontan.co.id"}) == \
+        "web article (kontan.co.id)"
+
+
+def test_live_events_carry_codes_beside_the_labels(tmp_path, monkeypatch):
+    execute = T.execute
+
+    def patchy(name, ticker, args, state):
+        if name == "foreign_flow":
+            raise T.ToolError("data arus asing tidak tersedia")
+        return execute(name, ticker, args, state)
+    monkeypatch.setattr(T, "execute", patchy)
+    partial = dict(SYNTHESIS, hypotheses=[
+        dict(SYNTHESIS["hypotheses"][0], verdict="sebagian didukung"), SYNTHESIS["hypotheses"][1]])
+    chat = scripted(PLAN, {"calls": [{"tool": "foreign_flow", "args": {}, "why": "asing"}]},
+                    {"done": True}, partial)
+    events = []
+    with progress.capture(events.append):
+        A.run("SIDO", chat=chat, db=tmp_path)
+    kinds = [(e["label"], e.get("data", {}).get("kind")) for e in events if e["stage"] == "tool"]
+    assert ("Menjalankan foreign_flow", "tool_start") in kinds
+    assert ("foreign_flow: data tidak tersedia", "tool_empty") in kinds
+    assert ("find_peers selesai", "tool_done") in kinds
+    hypotheses = [e for e in events if e.get("tool") == "hypothesis"]
+    assert [e["data"] for e in hypotheses] == [{"index": "1", "kind": "hypothesis"},
+                                               {"index": "2", "kind": "hypothesis"}]
+    verdicts = [e for e in events if e.get("tool") == "verdict"]
+    assert [e["label"] for e in verdicts] == ["H1 belum terjawab", "H2 didukung"]
+    assert [e["data"] for e in verdicts] == [
+        {"index": "1", "verdict": "belum terjawab", "kind": "hypothesis", "verdict_code": "partly_supported"},
+        {"index": "2", "verdict": "didukung", "kind": "hypothesis", "verdict_code": "supported"}]
+
+
+def test_problem_notes_list_the_words_to_remove():
+    bad = dict(SYNTHESIS, headline="Laba turun 49% dan saham layak dibeli")
+    found = A._synthesis_problems(bad, {"peer.net_margin", "peer.roe", "quarter.earnings_yoy"}, 2)
+    line = A._joined("sintesis ditolak: ", found)
+    assert line == "sintesis ditolak: " + "; ".join(found)
+    notes = A.problem_notes([line, "plan: TimeoutError: x"])
+    assert notes[0]["message"] == ("sintesis ditolak: prosa tidak boleh memuat angka (angka ditampilkan "
+                                   "dari sinyal yang dicite); prosa memuat bahasa rekomendasi investasi")
+    assert notes[0]["removed"] == ["49%", "layak dibeli"]
+    assert notes[1] == {"message": "plan: TimeoutError: x", "removed": []}
+
