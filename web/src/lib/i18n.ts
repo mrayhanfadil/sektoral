@@ -79,20 +79,21 @@ export function pick<T>(bi: Bi<T>, lang: Lang = current): T {
 }
 
 /**
- * Agent text in the reader's language. Agents write Indonesian `<key>` and,
- * where they managed it, an English `<key>_en` beside it (a parallel list for
- * a list of strings). English readers get the twin where it is present and
- * the Indonesian where it is not; Indonesian readers always get `<key>`.
+ * Server text in the reader's language. Agents and host code write Indonesian
+ * `<key>` and, where they have one, an English `<key>_en` beside it (a
+ * parallel list for a list of strings, a parallel grid for table rows).
+ * English readers get the twin where it is present and the Indonesian where
+ * it is not, string by string; Indonesian readers always get `<key>`.
  */
 export function twin<T extends object, K extends keyof T & string>(obj: T, key: K, lang: Lang = current): T[K] {
   const id = obj[key];
   if (lang !== "en") return id;
-  const en = (obj as Record<string, unknown>)[`${key}_en`];
-  const usable = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
-  if (Array.isArray(id)) {
-    return (Array.isArray(en) ? id.map((v, i) => (usable(en[i]) ? en[i] : v)) : id) as T[K];
-  }
-  return (usable(en) ? en : id) as T[K];
+  return paired(id, (obj as Record<string, unknown>)[`${key}_en`]) as T[K];
+}
+
+function paired(id: unknown, en: unknown): unknown {
+  if (Array.isArray(id)) return Array.isArray(en) ? id.map((v, i) => paired(v, en[i])) : id;
+  return typeof en === "string" && en.trim() !== "" && (id == null || typeof id === "string") ? en : id;
 }
 
 /**

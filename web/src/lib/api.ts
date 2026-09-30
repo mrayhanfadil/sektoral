@@ -3,8 +3,11 @@
 
 import { pick } from "./i18n";
 
-/** One Method Chain row; `decision` is the Indonesian label, `decision_code` its stable code (#34). */
-export type ChainStep = { step: string; decision: string; decision_code?: string; value: string };
+/**
+ * One Method Chain row; `decision` is the Indonesian label, `decision_code` its stable code (#34).
+ * `step_en` is the method's English name where the server has one.
+ */
+export type ChainStep = { step: string; step_en?: string | null; decision: string; decision_code?: string; value: string };
 
 /** Report languages: Bahasa Indonesia always, English once it is part of the published bundle. */
 export type ReportLang = "id" | "en";
@@ -23,16 +26,24 @@ export type ReportItem = {
   rating: string | null;
   tp: number | null;
   upside: number | null;
+  // Host-written text: Indonesian, with an English twin `<field>_en` where the
+  // server has one (lib/i18n.ts `twin`).
   method: string;
+  method_en?: string | null;
   profile: string;
+  profile_en?: string | null;
   headline: string;
+  headline_en?: string | null;
   rating_status?: string | null;
   risks?: string[];
+  risks_en?: (string | null)[];
   chain: ChainStep[];
   blockers: number | null;
   held_reason: string;
+  held_reason_en?: string | null;
   /** Release policy freshness: a stale view stays visible with its reason. */
-  freshness?: { state: "current" | "stale" | "withdrawal_due"; reason?: string | null; triggers?: string[] } | null;
+  freshness?: { state: "current" | "stale" | "withdrawal_due"; reason?: string | null; reason_en?: string | null;
+    triggers?: string[]; triggers_en?: (string | null)[] } | null;
   /** Public languages of the report (`[]` when unpublished); older servers omit it and publish Indonesian only. */
   languages?: ReportLang[];
   files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean; html_en?: boolean; pdf_en?: boolean };
@@ -58,14 +69,16 @@ export type ReviewField = {
   path: string;
   field: string;
   label: string;
+  label_en?: string | null;
   unit: "%" | "x";
   year: number | null;
   value: number;
   rationale: string;
+  rationale_en?: string | null;
 };
 
 export type ReviewEdit = {
-  path: string; label: string; year: number | null; unit: string; from: number; to: number; reason: string;
+  path: string; label: string; label_en?: string | null; year: number | null; unit: string; from: number; to: number; reason: string;
   reviewer?: string | null; reviewed_at?: string | null;
 };
 
@@ -160,14 +173,20 @@ export type HistoryItem = {
   pdf_url: string | null;
 };
 
+/** A computed signal; its host-written words may carry English twins `<field>_en`. */
 export type Signal = {
   id: string | null;
   kind: string | null;
   label: string | null;
+  label_en?: string | null;
   display: string | null;
+  display_en?: string | null;
   note: string | null;
+  note_en?: string | null;
   flag: string | null;
+  flag_en?: string | null;
   period: string | null;
+  period_en?: string | null;
   median_display: string | null;
   rank: number | null;
   n: number | null;
@@ -175,8 +194,8 @@ export type Signal = {
   peers?: { symbol: string | null; display: string | null }[];
 };
 
-// Agent text fields may carry an English twin `<field>_en` (#34); lib/i18n.ts
-// `twin` picks it for English readers and falls back to the Indonesian.
+// Agent and host text fields may carry an English twin `<field>_en` (#34);
+// lib/i18n.ts `twin` picks it for English readers and falls back to the Indonesian.
 export type Intel = {
   ticker: string | null;
   name: string | null;
@@ -184,9 +203,10 @@ export type Intel = {
   status: string | null;
   plan: { question: string | null; question_en?: string | null; source: string | null;
     hypotheses: (string | null)[]; hypotheses_en?: (string | null)[] };
-  steps: { tool: string | null; why: string | null; why_en?: string | null; summary: string | null; status: string | null; origin: string | null }[];
+  steps: { tool: string | null; why: string | null; why_en?: string | null; summary: string | null; summary_en?: string | null;
+    status: string | null; origin: string | null }[];
   signals: Signal[];
-  peers: { basis: string | null; group: string | null };
+  peers: { basis: string | null; basis_en?: string | null; group: string | null; group_en?: string | null };
   web_news: { window: string | null; items: { title: string | null; url: string | null; domain: string | null; date: string | null }[] };
   synthesis: {
     headline: string | null;
@@ -204,7 +224,7 @@ export type Intel = {
     same_market_date: boolean;
     previous_run_at: string | null;
     previous_market_date: string | null;
-    items: { kind: string | null; text: string | null }[];
+    items: { kind: string | null; text: string | null; text_en?: string | null }[];
   };
 };
 
@@ -216,10 +236,14 @@ export type Intel = {
  */
 export type JobEvent = {
   stage: string;
+  /** Indonesian; logic reads it (lib/codes.ts `eventKind`). */
   label: string;
+  /** English twins of the label and detail, where the server has them. */
+  label_en?: string | null;
   status: "ok" | "warn" | "error" | "run";
   t: number;
   detail?: string;
+  detail_en?: string | null;
   tool?: string;
   agent?: string;
   data?: EventData;
@@ -256,7 +280,7 @@ export type Job = {
 };
 
 /** A validator note: its message and the tokens it asked the model to remove. */
-export type ProblemNote = { message: string; removed: string[] };
+export type ProblemNote = { message: string; message_en?: string | null; removed: string[] };
 
 export type TraceView = {
   ticker: string;
@@ -297,38 +321,42 @@ export type TraceView = {
   /** Gallery reports only: whether an analyst approved the Forecast Plan. */
   review_state?: ReviewState;
   /** Gallery reports only: sections kept out of the printed report (mining audit detail). */
-  audit_appendix?: { title: string; paragraphs: string[];
-    exhibits: { title: string; cols: string[]; rows: string[][]; note: string }[] }[];
+  audit_appendix?: AppendixPage[];
   report: {
     release_status: string | null;
     published: boolean;
     rating: string | null;
     target_price: number | null;
     method: string | null;
+    method_en?: string | null;
     as_of: string | null;
     market_price_date: string | null;
   };
   analyst: Intel | null;
   analyst_problems: string[];
+  analyst_problems_en?: (string | null)[];
   /** The same notes parsed server-side (#34); older traces carry only `analyst_problems`. */
   analyst_problem_notes?: ProblemNote[];
   research: {
     summary: string | null;
+    summary_en?: string | null;
     endpoints: string[];
     insights: { title: string | null; title_en?: string | null; observation: string | null; observation_en?: string | null;
       implication: string | null; implication_en?: string | null; caveat: string | null; caveat_en?: string | null;
       citations: { endpoint: string | null; field_path: string | null; value: string | null }[] }[];
     limitations: string[];
+    limitations_en?: (string | null)[];
   };
   news: {
-    search: { status: string | null; as_of: string | null; queries: string[] };
+    search: { status: string | null; status_en?: string | null; as_of: string | null; queries: string[] };
     articles: { id: string | null; date: string | null; origins: string[]; title: string | null; url: string | null }[];
-    rejected: { title: string | null; reason: string | null }[];
+    rejected: { title: string | null; reason: string | null; reason_en?: string | null }[];
     rejected_total: number;
   };
   forecast: {
     status: string | null;
     problems: string[];
+    problems_en?: (string | null)[];
     news_effects: { driver: string | null; change: string | null; years: string[]; rationale: string | null; rationale_en?: string | null;
       date: string | null; url: string | null; factual_basis: string | null; factual_basis_en?: string | null;
       mechanism: string | null; mechanism_en?: string | null; uncertainty: string | null; uncertainty_en?: string | null }[];
@@ -342,6 +370,26 @@ export type TraceView = {
       rationale: string | null; rationale_en?: string | null; source_ids: string[] }[];
   };
   deepdive: { title: string | null; date: string | null; url: string | null; status: string | null; length: number; preview: string | null }[];
+};
+
+/** A report section kept out of the printed Company Update; every text may carry an English twin. */
+export type AppendixPage = {
+  title: string;
+  title_en?: string | null;
+  paragraphs: string[];
+  paragraphs_en?: (string | null)[];
+  exhibits: AppendixExhibit[];
+};
+
+export type AppendixExhibit = {
+  title: string;
+  title_en?: string | null;
+  cols: string[];
+  cols_en?: (string | null)[];
+  rows: string[][];
+  rows_en?: (string | null)[][];
+  note: string;
+  note_en?: string | null;
 };
 
 export class ApiError extends Error {
