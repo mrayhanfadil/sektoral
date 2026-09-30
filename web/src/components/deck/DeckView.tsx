@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MotionConfig } from "motion/react";
 import type { AgentId, DeckState } from "../../lib/agents";
+import { useLang } from "../../lib/i18n";
 import { AgentRail } from "./AgentRail";
 import { EventStream } from "./EventStream";
 import { PhaseBar } from "./PhaseBar";
@@ -30,6 +31,7 @@ type Props = {
 };
 
 export function DeckView({ state, top, notice, live, paused, fit = true, loading, empty, result, actions }: Props) {
+  const { t } = useLang();
   const [filter, setFilter] = useState<AgentId | null>(null);
   const aside = useRef<HTMLDivElement>(null);
   const touched = useRef(false);
@@ -66,7 +68,7 @@ export function DeckView({ state, top, notice, live, paused, fit = true, loading
           <div className="flex min-h-0 min-w-0 flex-col max-md:border-b max-md:border-rule min-[1100px]:col-span-7 min-[1100px]:border-r min-[1100px]:border-rule">
             <EventStream state={state} filter={filter} onFilter={setFilter} live={live} fit={fit} loading={loading} empty={empty} />
           </div>
-          <aside aria-label="Method Gates, rencana, dan hasil"
+          <aside aria-label={t({ id: "Method Gates, rencana, dan hasil", en: "Method Gates, plan and result" })}
             className="flex min-w-0 flex-col min-[1100px]:col-span-5 min-[1100px]:min-h-0 md:max-[1099px]:order-first md:max-[1099px]:border-b md:max-[1099px]:border-rule">
             <div className="flex-none"><GateBoard state={state} /></div>
             <div ref={aside} onWheel={() => { touched.current = true; }} onTouchMove={() => { touched.current = true; }}

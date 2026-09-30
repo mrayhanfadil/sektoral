@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowDown, ArrowUp, ChevronRight, FileDown, FileText, Footprints, Play } from "lucide-react";
 import { api, reportFiles, type ArchivedPublication, type ChainStep, type ReportItem } from "../lib/api";
 import { pct, rp } from "../lib/format";
+import { getLang, LOCALE, useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone, type RatingTone } from "../lib/labels";
 import { IssuerLogo } from "./IssuerLogo";
 
@@ -22,29 +23,34 @@ const RELEASE_STATUS_LABEL: Record<string, string> = {
   distributable_assumption_led: "Assumption-Led",
   draft_non_distributable: "Draft",
 };
-const PUBLICATION_STATE_LABEL: Record<string, string> = {
-  built: "Belum lolos release",
-  review_pending: "Menunggu review",
-  auto_published: "Terbit otomatis · belum direview analis",
-  published: "Terbit · direview analis",
-  superseded: "Superseded",
-  withdrawn: "Dicabut",
+const PUBLICATION_STATE_LABEL: Record<string, Bi> = {
+  built: { id: "Belum lolos release", en: "Not yet cleared for release" },
+  review_pending: { id: "Menunggu review", en: "Awaiting review" },
+  auto_published: { id: "Terbit otomatis · belum direview analis", en: "Auto-published · not analyst-reviewed" },
+  published: { id: "Terbit · direview analis", en: "Published · analyst-reviewed" },
+  superseded: { id: "Superseded", en: "Superseded" },
+  withdrawn: { id: "Dicabut", en: "Withdrawn" },
 };
 
 /** The rating, analytical Release Status, and separate publication state. */
 /** Release policy 1.2.0: a published view that a newer official period has overtaken. */
 export function StaleBadge({ item }: { item: Pick<ReportItem, "freshness"> }) {
+  const { t } = useLang();
   const state = item.freshness?.state;
   if (state !== "stale" && state !== "withdrawal_due") return null;
   const why = [item.freshness?.reason, ...(item.freshness?.triggers ?? [])].filter(Boolean).join(" ");
   return (
     <span title={why} className="mt-1 inline-flex h-6 items-center rounded-[5px] border border-warn-rule/60 bg-warn-bg px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-warn-ink">
-      {state === "withdrawal_due" ? "Stale · penarikan jatuh tempo" : "Stale · perlu ditinjau"}
+      {state === "withdrawal_due"
+        ? t({ id: "Stale · penarikan jatuh tempo", en: "Stale · withdrawal due" })
+        : t({ id: "Stale · perlu ditinjau", en: "Stale · needs review" })}
     </span>
   );
 }
 
 export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "held_reason" | "release_status" | "publication_state"> }) {
+  const { t } = useLang();
+  const state = PUBLICATION_STATE_LABEL[item.publication_state];
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <span className={`inline-flex h-6 items-center gap-1.5 rounded-[5px] border px-2 font-mono text-[12px] leading-none font-semibold whitespace-nowrap ${TONE[ratingTone(item)]}`}>
@@ -55,7 +61,7 @@ export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "held_
         Release: {RELEASE_STATUS_LABEL[item.release_status] ?? item.release_status}
       </span>}
       <span className={`inline-flex h-6 items-center rounded-[5px] border px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap ${item.publication_state === "published" ? "border-ok-ink/30 bg-ok-bg text-ok-ink" : item.publication_state === "auto_published" ? "border-rule bg-raised text-ink-soft" : "border-warn-rule/50 bg-warn-bg/60 text-warn-ink"}`}>
-        {PUBLICATION_STATE_LABEL[item.publication_state] ?? item.publication_state}
+        {state ? t(state) : item.publication_state}
       </span>
     </span>
   );
@@ -77,12 +83,13 @@ export function signedPct(value: number | null | undefined): string {
 const upsideTone = (v: number | null | undefined) => (typeof v !== "number" ? "text-ink-soft" : v < 0 ? "text-err-ink" : "text-ok-ink");
 
 export function Stats({ item }: { item: ReportItem }) {
+  const { t } = useLang();
   return (
     <dl className="m-0 grid grid-cols-3 divide-x divide-rule rounded-md border border-rule bg-surface">
       {[
         ["Target", `Rp${rp(item.tp)}`, "text-ink-strong"],
-        ["Potensi", signedPct(item.upside), upsideTone(item.upside)],
-        ["Harga", `Rp${rp(item.price)}`, "text-ink-strong"],
+        [t({ id: "Potensi", en: "Upside" }), signedPct(item.upside), upsideTone(item.upside)],
+        [t({ id: "Harga", en: "Price" }), `Rp${rp(item.price)}`, "text-ink-strong"],
       ].map(([label, value, cls]) => (
         <div key={label} className="min-w-0 px-3 py-2">
           <dt className="text-[12px] text-ink-soft">{label}</dt>
@@ -98,13 +105,15 @@ export function traceHref(item: ReportItem) {
   return item.files.trace_json ? `/laporan/${item.ticker}/jejak` : reportFiles(item.ticker).traceHtml;
 }
 
-const DAY = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const dayFormat = (locale: string) =>
+  new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const DAY: Bi<Intl.DateTimeFormat> = { id: dayFormat(LOCALE.id), en: dayFormat(LOCALE.en) };
 
-/** "2026-09-24" → "24 Sep 2026"; anything unparseable is shown as given. */
-export function formatDay(iso: string | null | undefined): string {
+/** "2026-09-24" → "24 Sep 2026" ("Sep 24, 2026" in English); anything unparseable is shown as given. */
+export function formatDay(iso: string | null | undefined, lang: Lang = getLang()): string {
   if (!iso) return "—";
   const date = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? iso : DAY.format(date);
+  return Number.isNaN(date.getTime()) ? iso : DAY[lang].format(date);
 }
 
 /** The method the chain selected, short ("DDM"); the full description stays in `item.method`. */
@@ -115,6 +124,13 @@ export function primaryMethod(item: Pick<ReportItem, "chain" | "method">): strin
 type Decision = "pick" | "cross" | "skip" | "other";
 const decisionOf = (d: string): Decision =>
   d === "Terpilih" ? "pick" : d === "Silang cek" ? "cross" : d === "Tidak dijalankan" ? "skip" : "other";
+
+/** Labels for the decisions the chain maps; any other decision is shown as the API gave it. */
+const DECISION_LABEL: Record<Exclude<Decision, "other">, Bi> = {
+  pick: { id: "Terpilih", en: "Selected" },
+  cross: { id: "Silang cek", en: "Cross-check" },
+  skip: { id: "Tidak dijalankan", en: "Not run" },
+};
 
 const STEP: Record<Decision, string> = {
   pick: "border-brand-ink/35 bg-brand-50 font-semibold text-brand-ink",
@@ -135,37 +151,40 @@ function StepMark({ kind, children }: { kind: Decision; children: React.ReactNod
 
 /** The method chain as one inline sequence: selected step first-class, cross-checks secondary, unrun steps muted. */
 export function MethodChain({ chain, className = "" }: { chain: ChainStep[]; className?: string }) {
-  if (!chain.length) return <span className={`text-[13px] text-ink-faint ${className}`}>Rantai metode belum tercatat</span>;
+  const { t } = useLang();
+  if (!chain.length) return <span className={`text-[13px] text-ink-faint ${className}`}>{t({ id: "Rantai metode belum tercatat", en: "Method Chain not yet recorded" })}</span>;
   const skipped = chain.filter((s) => decisionOf(s.decision) === "skip").length;
   return (
-    <ol aria-label="Rantai metode" className={`m-0 flex list-none flex-wrap items-center gap-x-1 gap-y-1.5 p-0 ${className}`}>
+    <ol aria-label={t({ id: "Rantai metode", en: "Method Chain" })} className={`m-0 flex list-none flex-wrap items-center gap-x-1 gap-y-1.5 p-0 ${className}`}>
       {chain.map((s, i) => {
         const kind = decisionOf(s.decision);
+        const decision = kind === "other" ? s.decision : t(DECISION_LABEL[kind]);
         return (
-          <li key={`${s.step}-${i}`} title={`${s.step}: ${s.decision}${hasValue(s) ? `, ${s.value}` : ""}`}
+          <li key={`${s.step}-${i}`} title={`${s.step}: ${decision}${hasValue(s) ? `, ${s.value}` : ""}`}
             className={`flex items-center gap-1 ${kind === "skip" ? "max-sm:hidden" : ""}`}>
             {i > 0 && <ChevronRight aria-hidden className="size-3 flex-none text-ink-faint" strokeWidth={2.2} />}
             <StepMark kind={kind}>
-              <span className="sr-only">{s.decision}: </span>
+              <span className="sr-only">{decision}: </span>
               {s.step}
               {hasValue(s) && <span className="font-mono text-[12px] tabular-nums">{s.value}</span>}
             </StepMark>
           </li>
         );
       })}
-      {skipped > 0 && <li className="text-[12.5px] text-ink-faint tabular-nums sm:hidden">+{skipped} tidak dijalankan</li>}
+      {skipped > 0 && <li className="text-[12.5px] text-ink-faint tabular-nums sm:hidden">+{skipped} {t({ id: "tidak dijalankan", en: "not run" })}</li>}
     </ol>
   );
 }
 
 /** Key to the chain marks, shown once per register. */
 export function ChainLegend() {
+  const { t } = useLang();
   return (
     <p className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12.5px] text-ink-soft">
-      <span>Rantai metode:</span>
-      <StepMark kind="pick">Terpilih</StepMark>
-      <StepMark kind="cross">Silang cek</StepMark>
-      <StepMark kind="skip">Tidak dijalankan</StepMark>
+      <span>{t({ id: "Rantai metode:", en: "Method Chain:" })}</span>
+      <StepMark kind="pick">{t(DECISION_LABEL.pick)}</StepMark>
+      <StepMark kind="cross">{t(DECISION_LABEL.cross)}</StepMark>
+      <StepMark kind="skip">{t(DECISION_LABEL.skip)}</StepMark>
     </p>
   );
 }
@@ -192,6 +211,7 @@ function UpsideMeter({ value, scale }: { value: number | null; scale: number }) 
 
 /** Replay, report, PDF and trace for one company update, as one compact group. */
 export function ReportActions({ item, className = "" }: { item: ReportItem; className?: string }) {
+  const { t } = useLang();
   const files = reportFiles(item.ticker);
   const trace = traceHref(item);
   const cell =
@@ -202,16 +222,16 @@ export function ReportActions({ item, className = "" }: { item: ReportItem; clas
   const who = <span className="sr-only"> {item.ticker}</span>;
   return (
     <>
-      <div role="group" aria-label={`Tindakan untuk ${item.ticker}`}
+      <div role="group" aria-label={`${t({ id: "Tindakan untuk", en: "Actions for" })} ${item.ticker}`}
         className={`inline-flex items-stretch divide-x divide-rule rounded-md border border-rule bg-surface ${className}`}>
         <Link to={`/laporan/${item.ticker}/putar`} className={`${cell} font-semibold text-brand-ink hover:bg-brand-50`}>
           <Play aria-hidden className="size-3.5 flex-none" strokeWidth={2.2} />
-          Putar ulang<span className="max-sm:hidden"> run</span>{who}
+          {t({ id: "Putar ulang", en: "Replay" })}<span className="max-sm:hidden"> run</span>{who}
         </Link>
         {item.files.html && (
           <a href={files.html} className={quiet}>
             <FileText aria-hidden className={icon} strokeWidth={2.2} />
-            <span className="max-sm:hidden">Buka laporan</span><span className="sm:hidden">Laporan</span>{who}
+            <span className="max-sm:hidden">{t({ id: "Buka laporan", en: "Open report" })}</span><span className="sm:hidden">{t({ id: "Laporan", en: "Report" })}</span>{who}
           </a>
         )}
         {item.files.pdf && (
@@ -221,9 +241,9 @@ export function ReportActions({ item, className = "" }: { item: ReportItem; clas
           </a>
         )}
         {(item.files.trace_json || item.files.trace) && (trace.startsWith("/laporan") ? (
-          <Link to={trace} className={quiet}><Footprints aria-hidden className={icon} strokeWidth={2.2} />Jejak{who}</Link>
+          <Link to={trace} className={quiet}><Footprints aria-hidden className={icon} strokeWidth={2.2} />{t({ id: "Jejak", en: "Trace" })}{who}</Link>
         ) : (
-          <a href={trace} className={quiet}><Footprints aria-hidden className={icon} strokeWidth={2.2} />Jejak{who}</a>
+          <a href={trace} className={quiet}><Footprints aria-hidden className={icon} strokeWidth={2.2} />{t({ id: "Jejak", en: "Trace" })}{who}</a>
         ))}
       </div>
       <ArchivedVersions ticker={item.ticker} />
@@ -233,6 +253,7 @@ export function ReportActions({ item, className = "" }: { item: ReportItem; clas
 
 /** Earlier approved bundles stay reachable with an explicit archived label. */
 function ArchivedVersions({ ticker }: { ticker: string }) {
+  const { t } = useLang();
   const [archives, setArchives] = useState<ArchivedPublication[] | null>(null);
   useEffect(() => {
     let current = true;
@@ -248,15 +269,15 @@ function ArchivedVersions({ ticker }: { ticker: string }) {
   return (
     <details className="relative text-[12.5px] text-ink-soft">
       <summary className="flex h-8 cursor-pointer list-none items-center rounded-md border border-rule bg-surface px-2.5 font-medium hover:bg-raised focus-visible:outline-offset-2">
-        Arsip ({archives.length})
+        {t({ id: "Arsip", en: "Archive" })} ({archives.length})
       </summary>
       <div className="absolute right-0 z-20 mt-1.5 w-[min(360px,calc(100vw-2rem))] rounded-md border border-rule bg-surface p-3 shadow-[var(--shadow-pop)]">
-        <p className="m-0 mb-2 text-[12px] text-ink-soft">Versi terdahulu yang disetujui, disimpan sebagai arsip.</p>
+        <p className="m-0 mb-2 text-[12px] text-ink-soft">{t({ id: "Versi terdahulu yang disetujui, disimpan sebagai arsip.", en: "Earlier approved versions, kept as archives." })}</p>
         <ul className="m-0 list-none divide-y divide-rule-soft p-0">
           {archives.map((archive) => (
             <li key={archive.publication_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0">
               <span className="min-w-0 flex-1 truncate font-medium text-ink" title={archive.publication_id}>
-                Arsip · {formatDay(archive.archived_at)} · {archive.publication_id.slice(0, 10)}
+                {t({ id: "Arsip", en: "Archived" })} · {formatDay(archive.archived_at)} · {archive.publication_id.slice(0, 10)}
               </span>
               {archive.files.html && <a className="underline underline-offset-2" href={archive.files.html}>HTML</a>}
               {archive.files.pdf && <a className="underline underline-offset-2" href={archive.files.pdf}>PDF</a>}
@@ -271,6 +292,7 @@ function ArchivedVersions({ ticker }: { ticker: string }) {
 
 /** The PDF cover as a row thumbnail; hover or focus lifts a readable preview beside it. */
 function Cover({ item }: { item: ReportItem }) {
+  const { t } = useLang();
   const [broken, setBroken] = useState(false);
   const files = reportFiles(item.ticker);
   if (!item.files.pdf || broken) {
@@ -278,7 +300,7 @@ function Cover({ item }: { item: ReportItem }) {
   }
   return (
     <a href={files.pdf} className="group/cover relative block w-11 rounded-[3px] focus-visible:outline-offset-2">
-      <img src={files.cover} alt={`Sampul PDF company update ${item.ticker}`} loading="lazy" width={44} height={62}
+      <img src={files.cover} alt={t({ id: `Sampul PDF company update ${item.ticker}`, en: `PDF cover of the ${item.ticker} company update` })} loading="lazy" width={44} height={62}
         onError={() => setBroken(true)}
         className="block h-[62px] w-11 rounded-[3px] border border-rule bg-white object-cover object-top transition-[border-color] group-hover/cover:border-brand-ink" />
       <span aria-hidden
@@ -308,6 +330,7 @@ export type Sort = { key: SortKey; dir: "asc" | "desc" };
 
 function SortButton({ label, col, sort, onSort, align = "left" }:
   { label: string; col: SortKey; sort?: Sort; onSort?: (s: Sort) => void; align?: "left" | "right" }) {
+  const { t } = useLang();
   if (!sort || !onSort) return <>{label}</>;
   const active = sort.key === col;
   const next: Sort = active ? { key: col, dir: sort.dir === "asc" ? "desc" : "asc" } : { key: col, dir: col === "upside" ? "desc" : "asc" };
@@ -318,29 +341,35 @@ function SortButton({ label, col, sort, onSort, align = "left" }:
       {label}
       <Arrow aria-hidden className={`size-3 transition-opacity ${active ? "opacity-100" : "opacity-40"}`} strokeWidth={2.4} />
       <span className="sr-only">
-        {active ? `, diurutkan ${sort.dir === "asc" ? "naik" : "turun"}; klik untuk membalik` : ", klik untuk mengurutkan"}
+        {active
+          ? t(sort.dir === "asc"
+            ? { id: ", diurutkan naik; klik untuk membalik", en: ", sorted ascending; click to reverse" }
+            : { id: ", diurutkan turun; klik untuk membalik", en: ", sorted descending; click to reverse" })
+          : t({ id: ", klik untuk mengurutkan", en: ", click to sort" })}
       </span>
     </button>
   );
 }
 
 function RegisterHead({ sort, onSort }: { sort?: Sort; onSort?: (s: Sort) => void }) {
+  const { t } = useLang();
   const cell = "flex items-center";
   return (
     <div className={`${HEAD} sticky top-[52px] z-20 border-b border-rule bg-surface px-5 py-2 text-[12.5px] font-medium text-ink-soft`}>
-      <span style={{ gridArea: "tk" }} className={cell}><SortButton label="Kode" col="ticker" sort={sort} onSort={onSort} /></span>
-      <span style={{ gridArea: "nm" }} className={cell}>Emiten</span>
+      <span style={{ gridArea: "tk" }} className={cell}><SortButton label={t({ id: "Kode", en: "Ticker" })} col="ticker" sort={sort} onSort={onSort} /></span>
+      <span style={{ gridArea: "nm" }} className={cell}>{t({ id: "Emiten", en: "Issuer" })}</span>
       <span style={{ gridArea: "rt" }} className={cell}>Rating</span>
-      <span style={{ gridArea: "me" }} className={`${cell} max-xl:hidden`}>Metode utama</span>
+      <span style={{ gridArea: "me" }} className={`${cell} max-xl:hidden`}>{t({ id: "Metode utama", en: "Primary method" })}</span>
       <span style={{ gridArea: "tp" }} className={`${cell} justify-end`}>Target</span>
-      <span style={{ gridArea: "px" }} className={`${cell} justify-end`}>Harga</span>
-      <span style={{ gridArea: "up" }} className={`${cell} justify-end`}><SortButton label="Potensi" col="upside" sort={sort} onSort={onSort} align="right" /></span>
-      <span style={{ gridArea: "dt" }} className={`${cell} justify-end max-xl:hidden`}>Tanggal</span>
+      <span style={{ gridArea: "px" }} className={`${cell} justify-end`}>{t({ id: "Harga", en: "Price" })}</span>
+      <span style={{ gridArea: "up" }} className={`${cell} justify-end`}><SortButton label={t({ id: "Potensi", en: "Upside" })} col="upside" sort={sort} onSort={onSort} align="right" /></span>
+      <span style={{ gridArea: "dt" }} className={`${cell} justify-end max-xl:hidden`}>{t({ id: "Tanggal", en: "Date" })}</span>
     </div>
   );
 }
 
 function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
+  const { t } = useLang();
   const figure = "min-w-0 lg:text-right";
   const label = "text-[11.5px] text-ink-soft lg:sr-only";
   const value = "m-0 font-mono text-[14px] font-medium tabular-nums text-ink-strong";
@@ -361,7 +390,9 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
         {item.published ? (
           <p className="truncate text-[13px] leading-5 text-ink-soft" title={item.headline}>{item.headline}</p>
         ) : (
-          <p className="text-[13px] leading-5 text-warn-ink">Rating ditahan: {item.held_reason || "bukti belum lengkap"}</p>
+          <p className="text-[13px] leading-5 text-warn-ink">
+            {t({ id: "Rating ditahan", en: "Rating withheld" })}: {item.held_reason || t({ id: "bukti belum lengkap", en: "evidence incomplete" })}
+          </p>
         )}
         </div>
       </div>
@@ -373,7 +404,7 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
       </div>
 
       <p style={{ gridArea: "me" }} className="truncate pt-0.5 text-[13.5px] text-ink max-xl:hidden" title={item.published ? item.method : ""}>
-        {item.published ? primaryMethod(item) : "Metode ditampilkan setelah publikasi"}
+        {item.published ? primaryMethod(item) : t({ id: "Metode ditampilkan setelah publikasi", en: "Method shown after publication" })}
       </p>
 
       <dl style={{ gridArea: "num" }}
@@ -383,11 +414,11 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
           <dd className={value}>Rp{rp(item.tp)}</dd>
         </div>
         <div className={`${figure} lg:[grid-area:px]`}>
-          <dt className={label}>Harga</dt>
+          <dt className={label}>{t({ id: "Harga", en: "Price" })}</dt>
           <dd className={`${value} !text-ink`}>Rp{rp(item.price)}</dd>
         </div>
         <div className={`${figure} lg:[grid-area:up]`}>
-          <dt className={label}>Potensi</dt>
+          <dt className={label}>{t({ id: "Potensi", en: "Upside" })}</dt>
           <dd className="m-0 flex items-center gap-2 lg:justify-end">
             <span className="order-2 lg:order-1"><UpsideMeter value={item.upside} scale={scale} /></span>
             <span className={`order-1 font-mono text-[14px] font-semibold tabular-nums lg:order-2 ${upsideTone(item.upside)}`}>{signedPct(item.upside)}</span>
@@ -399,7 +430,7 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
 
       <div style={{ gridArea: "l2" }} className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2.5 lg:mt-2">
         {item.published ? <MethodChain chain={item.chain} className="min-w-[200px] flex-1 basis-0" />
-          : <span className="text-[13px] text-ink-faint">Company Update menunggu publikasi</span>}
+          : <span className="text-[13px] text-ink-faint">{t({ id: "Company Update menunggu publikasi", en: "Company Update awaiting publication" })}</span>}
         <time dateTime={item.date} className="data hidden text-ink-soft lg:block xl:hidden">{formatDay(item.date)}</time>
         <ReportActions item={item} className="max-sm:basis-full" />
       </div>

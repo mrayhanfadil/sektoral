@@ -1,4 +1,5 @@
 import type { ReportItem } from "./api";
+import type { Bi } from "./i18n";
 
 export type RatingTone = "buy" | "hold" | "sell" | "review";
 
@@ -28,13 +29,13 @@ export function featuredReport(items: ReportItem[]): ReportItem | undefined {
   }, undefined);
 }
 
-export const PROGRESS_STEPS = [
-  { title: "Rencana", sub: "Pertanyaan & hipotesis" },
-  { title: "Tool & sinyal", sub: "Data Sectors, peer, anomali" },
-  { title: "Uji hipotesis", sub: "Kesimpulan tervalidasi" },
-  { title: "Skenario & valuasi", sub: "Asumsi, rantai metode, harness" },
-  { title: "Hasil siap", sub: "Laporan, PDF, dan jejak" },
-] as const;
+export const PROGRESS_STEPS: readonly { title: Bi; sub: Bi }[] = [
+  { title: { id: "Rencana", en: "Plan" }, sub: { id: "Pertanyaan & hipotesis", en: "Questions & hypotheses" } },
+  { title: { id: "Tool & sinyal", en: "Tools & signals" }, sub: { id: "Data Sectors, peer, anomali", en: "Sectors data, peers, anomalies" } },
+  { title: { id: "Uji hipotesis", en: "Hypothesis tests" }, sub: { id: "Kesimpulan tervalidasi", en: "Validated conclusions" } },
+  { title: { id: "Skenario & valuasi", en: "Scenarios & valuation" }, sub: { id: "Asumsi, rantai metode, harness", en: "Assumptions, Method Chain, harness" } },
+  { title: { id: "Hasil siap", en: "Results ready" }, sub: { id: "Laporan, PDF, dan jejak", en: "Report, PDF and Audit Trace" } },
+];
 
 const STEP_OF: Record<string, number> = {
   memory: 0, plan: 0, tool: 1, signals: 1, synthesis: 2, research: 3, forecast: 3, report: 3, done: 4,

@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
 import { api, ApiError, reportFiles, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
+import { LOCALE, useLang, type Bi } from "../lib/i18n";
 import { validatorNote } from "../lib/labels";
 import { AGENT, derive, type AgentId, type Status } from "../lib/agents";
 import { LiveMark } from "../components/Mark";
@@ -19,21 +20,33 @@ import { IssuerLogo } from "../components/IssuerLogo";
 /* The index: the trace's table of contents, grouped by the agent that */
 /* produced each part. Only sections present on the page are listed.  */
 
-type IndexGroup = { agent: AgentId; sections: [string, string][] };
+type IndexGroup = { agent: AgentId; sections: [string, Bi][] };
 
-const RESEARCH: [string, string][] = [
-  ["ringkasan", "Ringkasan brief"], ["endpoint", "Endpoint yang dibaca"],
-  ["temuan", "Temuan bersitasi"], ["kurang", "Bukti yang masih kurang"],
+const RESEARCH: [string, Bi][] = [
+  ["ringkasan", { id: "Ringkasan brief", en: "Brief summary" }],
+  ["endpoint", { id: "Endpoint yang dibaca", en: "Endpoints read" }],
+  ["temuan", { id: "Temuan bersitasi", en: "Cited findings" }],
+  ["kurang", { id: "Bukti yang masih kurang", en: "Missing evidence" }],
 ];
-const NEWS: [string, string][] = [["berita", "Pencarian berita"], ["deep-dive", "Deep-dive berita"]];
-const FORECAST: [string, string][] = [
-  ["asumsi", "Dampak berita"], ["interim", "Skenario interim"], ["tahun-lanjutan", "Tahun lanjutan"], ["driver-bank", "Driver bank"],
+const NEWS: [string, Bi][] = [
+  ["berita", { id: "Pencarian berita", en: "News search" }],
+  ["deep-dive", { id: "Deep-dive berita", en: "News deep-dive" }],
 ];
-const BANK_COLS: [keyof NonNullable<TraceView["forecast"]["bank_drivers"]>[number], string][] = [
-  ["loan_growth_pct", "Pertumbuhan kredit"], ["nim_pct", "NIM"], ["non_ii_to_nii_pct", "Non-bunga / NII"],
-  ["cost_to_income_pct", "Biaya / pendapatan"], ["cost_of_credit_pct", "Biaya kredit"], ["deposit_growth_pct", "Pertumbuhan DPK"],
+const FORECAST: [string, Bi][] = [
+  ["asumsi", { id: "Dampak berita", en: "News impact" }],
+  ["interim", { id: "Skenario interim", en: "Interim scenario" }],
+  ["tahun-lanjutan", { id: "Tahun lanjutan", en: "Out-years" }],
+  ["driver-bank", { id: "Driver bank", en: "Bank drivers" }],
 ];
-const LABEL = Object.fromEntries([...RESEARCH, ...NEWS, ...FORECAST]);
+const BANK_COLS: [keyof NonNullable<TraceView["forecast"]["bank_drivers"]>[number], Bi][] = [
+  ["loan_growth_pct", { id: "Pertumbuhan kredit", en: "Loan growth" }],
+  ["nim_pct", { id: "NIM", en: "NIM" }],
+  ["non_ii_to_nii_pct", { id: "Non-bunga / NII", en: "Non-interest / NII" }],
+  ["cost_to_income_pct", { id: "Biaya / pendapatan", en: "Cost / income" }],
+  ["cost_of_credit_pct", { id: "Biaya kredit", en: "Cost of credit" }],
+  ["deposit_growth_pct", { id: "Pertumbuhan DPK", en: "Deposit growth" }],
+];
+const LABEL: Record<string, Bi> = Object.fromEntries([...RESEARCH, ...NEWS, ...FORECAST]);
 
 const INDEX: IndexGroup[] = [
   { agent: "analis", sections: INTEL_SECTIONS },
@@ -69,6 +82,7 @@ function useSectionIndex() {
 }
 
 function SectionIndex({ present, current }: { present: IndexGroup[]; current: string | null }) {
+  const { t } = useLang();
   const reduce = useReducedMotion();
   const bar = useRef<HTMLUListElement>(null);
   const spring = reduce ? { duration: 0 } : { type: "spring" as const, stiffness: 420, damping: 40 };
@@ -79,17 +93,19 @@ function SectionIndex({ present, current }: { present: IndexGroup[]; current: st
     if (!list || !link) return;
     list.scrollTo({ left: link.offsetLeft - list.clientWidth / 2 + link.clientWidth / 2, behavior: reduce ? "auto" : "smooth" });
   }, [current, reduce]);
-  const flat = present.flatMap((g) => g.sections.length ? g.sections : [[groupId(g.agent), AGENT[g.agent].name] as [string, string]]);
+  const flat = present.flatMap((g): [string, string][] =>
+    g.sections.length ? g.sections.map(([id, label]) => [id, t(label)]) : [[groupId(g.agent), t(AGENT[g.agent].name)]]);
+  const navLabel = t({ id: "Bagian jejak riset", en: "Audit Trace sections" });
 
   return (
     <>
-      <nav aria-label="Bagian jejak riset" className="sticky top-[76px] max-h-[calc(100vh-96px)] min-w-0 overflow-y-auto pb-6 max-lg:hidden">
+      <nav aria-label={navLabel} className="sticky top-[76px] max-h-[calc(100vh-96px)] min-w-0 overflow-y-auto pb-6 max-lg:hidden">
         <ol className="m-0 grid list-none gap-4 p-0">
           {present.map((g) => (
             <li key={g.agent}>
               <a href={`#${groupId(g.agent)}`} aria-current={current === groupId(g.agent) ? "location" : undefined}
                 className="mb-1 flex items-center gap-2 text-[13px] font-semibold text-ink-strong no-underline hover:text-brand-ink">
-                <LiveMark status="ok" className="h-2.5 w-3" />{AGENT[g.agent].name}
+                <LiveMark status="ok" className="h-2.5 w-3" />{t(AGENT[g.agent].name)}
               </a>
               <ul className="m-0 grid list-none border-l border-rule p-0">
                 {g.sections.map(([id, label]) => {
@@ -99,7 +115,7 @@ function SectionIndex({ present, current }: { present: IndexGroup[]; current: st
                       {on && <motion.span layoutId="trace-index" aria-hidden className="absolute inset-y-0 -left-px w-[2px] rounded-full bg-brand-ink" transition={spring} />}
                       <a href={`#${id}`} aria-current={on ? "location" : undefined}
                         className={`block py-1 pl-3 text-[13.5px] leading-snug no-underline transition-colors ${on ? "font-medium text-ink-strong" : "text-ink-soft hover:text-ink-strong"}`}>
-                        {label}
+                        {t(label)}
                       </a>
                     </li>
                   );
@@ -110,7 +126,7 @@ function SectionIndex({ present, current }: { present: IndexGroup[]; current: st
         </ol>
       </nav>
 
-      <nav aria-label="Bagian jejak riset" className="sticky top-[52px] z-30 -mx-6 min-w-0 border-b border-rule bg-surface max-sm:-mx-4 lg:hidden">
+      <nav aria-label={navLabel} className="sticky top-[52px] z-30 -mx-6 min-w-0 border-b border-rule bg-surface max-sm:-mx-4 lg:hidden">
         <ul ref={bar} className="relative m-0 flex list-none gap-1 overflow-x-auto px-2 py-1.5 whitespace-nowrap [scrollbar-width:none]">
           {flat.map(([id, label]) => {
             const on = current === id;
@@ -135,6 +151,7 @@ function SectionIndex({ present, current }: { present: IndexGroup[]; current: st
 /** One agent's part of the trace: a console panel with its own header. */
 function AgentGroup({ agent, status, chip, children }:
   { agent: AgentId; status: Status; chip: React.ReactNode; children: React.ReactNode }) {
+  const { t } = useLang();
   const meta = AGENT[agent];
   const id = groupId(agent);
   return (
@@ -143,12 +160,12 @@ function AgentGroup({ agent, status, chip, children }:
         <div className="flex min-w-0 items-start gap-3">
           <LiveMark status={status === "warn" ? "warn" : status === "error" ? "error" : "ok"} className="mt-[9px] h-3 w-3.5 flex-none" />
           <div className="min-w-0">
-            <h2 id={`${id}-title`} className="text-[20px]">{meta.name}</h2>
-            <p className="text-[14px] text-ink-soft">{meta.role}</p>
+            <h2 id={`${id}-title`} className="text-[20px]">{t(meta.name)}</h2>
+            <p className="text-[14px] text-ink-soft">{t(meta.role)}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Chip tone="dashed">{meta.engine === "llm" ? "Diputuskan model" : "Kode deterministik"}</Chip>
+          <Chip tone="dashed">{meta.engine === "llm" ? t({ id: "Diputuskan model", en: "Model-decided" }) : t({ id: "Kode deterministik", en: "Deterministic code" })}</Chip>
           {chip}
         </div>
       </header>
@@ -159,6 +176,7 @@ function AgentGroup({ agent, status, chip, children }:
 
 /** Validator notes (rejected drafts, failed calls) kept visible at the top of an agent's panel. */
 function Problems({ title, items }: { title: string; items: string[] }) {
+  const { t } = useLang();
   if (!items.length) return null;
   return (
     <div className="border-t border-rule px-6 py-4 max-sm:px-4">
@@ -174,7 +192,7 @@ function Problems({ title, items }: { title: string; items: string[] }) {
                 {message}{/[.!?]$/.test(message) ? "" : "."}
                 {removed.length > 0 && (
                   <span className="ml-1 text-ink-soft">
-                    Dihapus dari prosa:{" "}
+                    {t({ id: "Dihapus dari prosa:", en: "Removed from prose:" })}{" "}
                     {removed.map((v, j) => (
                       <span key={v}>{j > 0 && ", "}<code className="font-mono text-[12.5px] text-ink-strong">{v}</code></span>
                     ))}
@@ -195,19 +213,23 @@ const epId = (endpoint: string) => `ep-${endpoint.replace(/[^a-z0-9]+/gi, "-").r
 const isNoEffect = (e: { driver: string | null; change: string | null }) =>
   !e.driver || e.driver === "none" || Number(e.change) === 0;
 
-const pctCell = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
-const pctOf = (v: number | null) => (v == null ? "n.a." : `${pctCell.format(v).replace("-", "−")}%`);
+const pctCell: Bi<Intl.NumberFormat> = {
+  id: new Intl.NumberFormat(LOCALE.id, { maximumFractionDigits: 1 }),
+  en: new Intl.NumberFormat(LOCALE.en, { maximumFractionDigits: 1 }),
+};
+const pctOf = (v: number | null, cell: Intl.NumberFormat) => (v == null ? "n.a." : `${cell.format(v).replace("-", "−")}%`);
 
-const RELEASE: Record<string, [string, ChipTone]> = {
-  production_ready: ["Siap produksi", "ok"],
-  distributable_assumption_led: ["Terbit, berbasis asumsi analis", "brand"],
-  draft_non_distributable: ["Draft, belum didistribusikan", "warn"],
+const RELEASE: Record<string, [Bi, ChipTone]> = {
+  production_ready: [{ id: "Siap produksi", en: "Production-ready" }, "ok"],
+  distributable_assumption_led: [{ id: "Terbit, berbasis asumsi analis", en: "Published, analyst-assumption led" }, "brand"],
+  draft_non_distributable: [{ id: "Draft, belum didistribusikan", en: "Draft, not distributed" }, "warn"],
 };
 
-function forecastStatus(status: string | null): [string, Status] {
-  if (status === "validated") return ["Tervalidasi", "ok"];
-  if (status === "partial") return ["Parsial", "warn"];
-  return [status ? `Status ${status}` : "Status tidak tercatat", status ? "warn" : "idle"];
+function forecastStatus(status: string | null): [Bi, Status] {
+  if (status === "validated") return [{ id: "Tervalidasi", en: "Validated" }, "ok"];
+  if (status === "partial") return [{ id: "Parsial", en: "Partial" }, "warn"];
+  if (status) return [{ id: `Status ${status}`, en: `Status ${status}` }, "warn"];
+  return [{ id: "Status tidak tercatat", en: "Status not recorded" }, "idle"];
 }
 
 /* ------------------------------------------------------------------ */
@@ -221,10 +243,13 @@ type Links = {
 
 /** The report's release as recorded in the trace: a ruled readout plus, when known, its method chain. */
 function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; run?: RunReplay }) {
+  const { t } = useLang();
   const { report } = trace;
   const awaiting = trace.review_state === "pending" && (report.release_status ?? "").startsWith("distributable");
-  const [label, tone] = awaiting ? ["Lolos gerbang, menunggu review analis", "warn" as ChipTone]
-    : RELEASE[report.release_status ?? ""] ?? [report.release_status ? report.release_status : "Status belum tercatat", "neutral" as ChipTone];
+  const [label, tone] = awaiting ? [t({ id: "Lolos gerbang, menunggu review analis", en: "Passed the gates, awaiting analyst review" }), "warn" as ChipTone]
+    : RELEASE[report.release_status ?? ""]
+      ? [t(RELEASE[report.release_status!][0]), RELEASE[report.release_status!][1]]
+      : [report.release_status ? report.release_status : t({ id: "Status belum tercatat", en: "Status not recorded" }), "neutral" as ChipTone];
   const counts = useMemo(() => (run?.events.length ? derive(run.events, { finished: true }).counts : null), [run]);
   const cell = "min-w-0 bg-surface px-4 py-3";
   const dt = "mb-1 text-[12px] text-ink-soft";
@@ -232,7 +257,7 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
     <div className="mt-6 grid gap-3">
       <dl className="m-0 grid grid-cols-6 gap-px overflow-clip rounded-md border border-rule bg-rule xl:grid-cols-[1.3fr_auto_auto_auto_2fr_auto_auto]">
         <div className={`${cell} col-span-6 sm:col-span-3 xl:col-span-1`}>
-          <dt className={dt}>Status rilis</dt>
+          <dt className={dt}>{t({ id: "Status rilis", en: "Release status" })}</dt>
           <dd className="m-0 grid gap-1">
             <span><Chip tone={tone}>{label}</Chip></span>
             {report.release_status && <code className="font-mono text-[11.5px] break-all text-ink-faint">{report.release_status}</code>}
@@ -248,25 +273,25 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
           }} /></dd>
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
-          <dt className={dt}>Target harga</dt>
-          <dd className="m-0 font-mono text-[15px] font-semibold tabular-nums text-ink-strong">{report.published ? `Rp${rp(report.target_price)}` : "Ditahan"}</dd>
+          <dt className={dt}>{t({ id: "Target harga", en: "Target price" })}</dt>
+          <dd className="m-0 font-mono text-[15px] font-semibold tabular-nums text-ink-strong">{report.published ? `Rp${rp(report.target_price)}` : t({ id: "Ditahan", en: "Withheld" })}</dd>
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
-          <dt className={dt}>Potensi</dt>
+          <dt className={dt}>{t({ id: "Potensi", en: "Upside" })}</dt>
           <dd className={`m-0 font-mono text-[15px] font-semibold tabular-nums ${item?.upside == null ? "text-ink-soft" : item.upside < 0 ? "text-err-ink" : "text-ok-ink"}`}>
             {item ? signedPct(item.upside) : "—"}
           </dd>
         </div>
         <div className={`${cell} col-span-6 sm:col-span-4 xl:col-span-1`}>
-          <dt className={dt}>Metode</dt>
-          <dd className="m-0 text-[14px] leading-snug text-ink">{report.method || "Belum tercatat"}</dd>
+          <dt className={dt}>{t({ id: "Metode", en: "Method" })}</dt>
+          <dd className="m-0 text-[14px] leading-snug text-ink">{report.method || t({ id: "Belum tercatat", en: "Not recorded" })}</dd>
         </div>
         <div className={`${cell} col-span-3 sm:col-span-1`}>
-          <dt className={dt}>Data per</dt>
+          <dt className={dt}>{t({ id: "Data per", en: "Data as of" })}</dt>
           <dd className="m-0 font-mono text-[13.5px] text-ink-strong">{report.as_of ?? "—"}</dd>
         </div>
         <div className={`${cell} col-span-3 sm:col-span-1`}>
-          <dt className={dt}>Harga pasar per</dt>
+          <dt className={dt}>{t({ id: "Harga pasar per", en: "Market price as of" })}</dt>
           <dd className="m-0 font-mono text-[13.5px] text-ink-strong">{report.market_price_date ?? "—"}</dd>
         </div>
       </dl>
@@ -275,7 +300,11 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
           {item?.chain.length ? <MethodChain chain={item.chain} /> : <span />}
           {counts && (
             <p className="text-[13px] text-ink-soft tabular-nums">
-              Run {run?.source === "recorded" ? "terekam" : "disusun ulang dari jejak"}: {counts.events} event, {counts.calls} tool call
+              {run?.source === "recorded"
+                ? t({ id: "Run terekam", en: "Recorded run" })
+                : t({ id: "Run disusun ulang dari jejak", en: "Run rebuilt from the Audit Trace" })}
+              : {counts.events} {t({ id: "event", en: counts.events === 1 ? "event" : "events" })},{" "}
+              {counts.calls} {t({ id: "tool call", en: counts.calls === 1 ? "tool call" : "tool calls" })}
             </p>
           )}
         </div>
@@ -285,17 +314,18 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
 }
 
 function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: ReportItem; run?: RunReplay; links: Links }) {
+  const { t } = useLang();
   const name = item?.name ?? trace.analyst?.name;
   return (
     <header className="border-b border-rule bg-surface">
       <div className="wrap pt-5 pb-6">
-        <nav aria-label="Remah roti" className="mb-4 text-[13px] text-ink-soft">
+        <nav aria-label={t({ id: "Remah roti", en: "Breadcrumb" })} className="mb-4 text-[13px] text-ink-soft">
           <ol className="m-0 flex list-none flex-wrap items-center gap-1.5 p-0">
-            <li><Link to="/laporan" className="text-ink-soft no-underline hover:text-brand-ink hover:underline">Laporan</Link></li>
+            <li><Link to="/laporan" className="text-ink-soft no-underline hover:text-brand-ink hover:underline">{t({ id: "Laporan", en: "Reports" })}</Link></li>
             <li aria-hidden><ChevronRight className="size-3.5 text-ink-faint" strokeWidth={2.2} /></li>
             <li className="font-mono">{trace.ticker}</li>
             <li aria-hidden><ChevronRight className="size-3.5 text-ink-faint" strokeWidth={2.2} /></li>
-            <li aria-current="page" className="text-ink">Jejak riset</li>
+            <li aria-current="page" className="text-ink">{t({ id: "Jejak riset", en: "Audit Trace" })}</li>
           </ol>
         </nav>
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
@@ -303,7 +333,7 @@ function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: Rep
             <IssuerLogo ticker={trace.ticker} size="lg" className="max-sm:hidden" />
             <div className="min-w-0">
               <h1 className="text-[clamp(26px,3vw,36px)] font-black tracking-[-.02em]">
-                Jejak riset <span className="font-mono tracking-[.02em] text-brand-ink">{trace.ticker}</span>
+                {t({ id: "Jejak riset", en: "Audit Trace" })} <span className="font-mono tracking-[.02em] text-brand-ink">{trace.ticker}</span>
               </h1>
               {name && <p className="mt-1 text-[15.5px] text-ink-soft">{name}</p>}
             </div>
@@ -311,16 +341,17 @@ function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: Rep
           <div className="flex flex-wrap gap-2.5 max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:[&>*:first-child]:col-span-2 max-sm:[&>*:nth-child(2):last-child]:col-span-2">
             {links.replayUrl && (
               <Link className="btn btn-primary" to={links.replayUrl}>
-                <Play aria-hidden className="size-4" strokeWidth={2.2} />Putar ulang run
+                <Play aria-hidden className="size-4" strokeWidth={2.2} />{t({ id: "Putar ulang run", en: "Replay run" })}
               </Link>
             )}
             <a className={`btn ${links.replayUrl ? "btn-ghost" : "btn-primary"}`} href={links.reportUrl}>
               <FileText aria-hidden className="size-4" strokeWidth={2.2} />
-              <span className="max-sm:hidden">Buka company update</span><span className="sm:hidden">Buka laporan</span>
+              <span className="max-sm:hidden">{t({ id: "Buka company update", en: "Open Company Update" })}</span>
+              <span className="sm:hidden">{t({ id: "Buka laporan", en: "Open report" })}</span>
             </a>
             {links.deckUrl && (
               <Link className="btn btn-ghost" to={links.deckUrl}>
-                <ArrowLeft aria-hidden className="size-4" strokeWidth={2.2} />Kembali ke deck
+                <ArrowLeft aria-hidden className="size-4" strokeWidth={2.2} />{t({ id: "Kembali ke deck", en: "Back to deck" })}
               </Link>
             )}
             {links.pdfUrl && (
@@ -337,8 +368,10 @@ function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: Rep
 }
 
 function TraceBody({ trace }: { trace: TraceView }) {
+  const { t, locale, lang } = useLang();
   const { research, news, forecast } = trace;
   const index = useSectionIndex();
+  const cell = pctCell[lang];
   const cited = useMemo(() => {
     const n: Record<string, number> = {};
     research.insights.forEach((i) => i.citations.forEach((c) => { if (c.endpoint) n[c.endpoint] = (n[c.endpoint] ?? 0) + 1; }));
@@ -355,61 +388,65 @@ function TraceBody({ trace }: { trace: TraceView }) {
       <div className="grid gap-5 pt-0 max-lg:pt-4 [&>*]:min-w-0">
 
         <AgentGroup agent="analis" status={!analyst ? "warn" : analyst.status === "ok" ? "ok" : "warn"}
-          chip={analyst ? <StatusWord status={analyst.status === "ok" ? "ok" : "warn"}>{analyst.status === "ok" ? "Selesai" : "Parsial"}</StatusWord>
-            : <StatusWord status="idle">Tidak dijalankan</StatusWord>}>
+          chip={analyst ? <StatusWord status={analyst.status === "ok" ? "ok" : "warn"}>
+            {analyst.status === "ok" ? t({ id: "Selesai", en: "Done" }) : t({ id: "Parsial", en: "Partial" })}
+          </StatusWord>
+            : <StatusWord status="idle">{t({ id: "Tidak dijalankan", en: "Not run" })}</StatusWord>}>
           {analyst ? (
             <>
               <div className="border-t border-rule px-6 py-5 max-sm:px-4"><IntelHeadline intel={analyst} as="p" /></div>
-              <Problems title="Catatan validator" items={trace.analyst_problems} />
+              <Problems title={t({ id: "Catatan validator", en: "Validator notes" })} items={trace.analyst_problems} />
               <IntelSections intel={analyst} />
             </>
           ) : (
             <div className="border-t border-rule px-6 py-5 max-sm:px-4">
-              <Empty>{trace.analyst_problems.join("; ") || "Agent analis tidak dijalankan untuk riset ini."}</Empty>
+              <Empty>{trace.analyst_problems.join("; ") || t({ id: "Agent analis tidak dijalankan untuk riset ini.", en: "The analyst agent was not run for this research." })}</Empty>
             </div>
           )}
         </AgentGroup>
 
         <AgentGroup agent="riset" status={research.summary ? "ok" : "warn"}
-          chip={<StatusWord status={research.summary ? "ok" : "warn"}>{research.summary ? "Brief tervalidasi" : "Brief belum tervalidasi"}</StatusWord>}>
-          <Section id="ringkasan" title={LABEL.ringkasan}>
-            {research.summary ? <p className="max-w-[80ch] text-[15.5px]">{research.summary}</p> : <Empty>Belum ada brief tervalidasi.</Empty>}
+          chip={<StatusWord status={research.summary ? "ok" : "warn"}>{research.summary ? t({ id: "Brief tervalidasi", en: "Brief validated" }) : t({ id: "Brief belum tervalidasi", en: "Brief not yet validated" })}</StatusWord>}>
+          <Section id="ringkasan" title={t(LABEL.ringkasan)}>
+            {research.summary ? <p className="max-w-[80ch] text-[15.5px]">{research.summary}</p> : <Empty>{t({ id: "Belum ada brief tervalidasi.", en: "No validated brief yet." })}</Empty>}
           </Section>
 
-          <Section id="endpoint" title={LABEL.endpoint} count={research.endpoints.length}>
+          <Section id="endpoint" title={t(LABEL.endpoint)} count={research.endpoints.length}>
             {research.endpoints.length ? (
               <ul className="m-0 grid list-none divide-y divide-rule-soft rounded-md border border-rule p-0">
                 {research.endpoints.map((e) => (
                   <li key={e} id={epId(e)} className="flex scroll-mt-28 items-center justify-between gap-3 rounded-[inherit] px-3 py-2 target:animate-hold">
                     <code className="min-w-0 font-mono text-[13px] break-all text-brand-ink">{e}</code>
-                    <span className="text-[12.5px] whitespace-nowrap text-ink-faint tabular-nums">{cited[e] ? `${cited[e]} sitasi` : "dibaca"}</span>
+                    <span className="text-[12.5px] whitespace-nowrap text-ink-faint tabular-nums">{cited[e]
+                      ? t({ id: `${cited[e]} sitasi`, en: `${cited[e]} ${cited[e] === 1 ? "citation" : "citations"}` })
+                      : t({ id: "dibaca", en: "read" })}</span>
                   </li>
                 ))}
               </ul>
-            ) : <Empty>Tidak ada endpoint tercatat.</Empty>}
+            ) : <Empty>{t({ id: "Tidak ada endpoint tercatat.", en: "No endpoints recorded." })}</Empty>}
           </Section>
 
-          <Section id="temuan" title={LABEL.temuan} count={research.insights.length || undefined}>
+          <Section id="temuan" title={t(LABEL.temuan)} count={research.insights.length || undefined}>
             {research.insights.length ? (
               <div className="grid divide-y divide-rule-soft">
                 {research.insights.map((insight, i) => (
                   <article key={i} className="grid gap-2.5 py-4 first:pt-0 last:pb-0">
-                    <h4 className="text-[16px]">{insight.title || "Temuan"}</h4>
+                    <h4 className="text-[16px]">{insight.title || t({ id: "Temuan", en: "Finding" })}</h4>
                     <dl className="m-0 grid gap-x-5 gap-y-1.5 text-[15px] sm:grid-cols-[104px_minmax(0,1fr)]">
-                      {insight.observation && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">Observasi</dt><dd className="m-0">{insight.observation}</dd></>}
-                      {insight.implication && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">Implikasi</dt><dd className="m-0">{insight.implication}</dd></>}
-                      {insight.caveat && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">Batas bukti</dt><dd className="m-0 text-ink-soft">{insight.caveat}</dd></>}
+                      {insight.observation && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Observasi", en: "Observation" })}</dt><dd className="m-0">{insight.observation}</dd></>}
+                      {insight.implication && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Implikasi", en: "Implication" })}</dt><dd className="m-0">{insight.implication}</dd></>}
+                      {insight.caveat && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Batas bukti", en: "Evidence limit" })}</dt><dd className="m-0 text-ink-soft">{insight.caveat}</dd></>}
                     </dl>
                     {insight.citations.length > 0 && (
-                      <ul aria-label="Sitasi" className="m-0 grid list-none divide-y divide-rule-soft rounded-md border border-rule bg-raised p-0">
+                      <ul aria-label={t({ id: "Sitasi", en: "Citations" })} className="m-0 grid list-none divide-y divide-rule-soft rounded-md border border-rule bg-raised p-0">
                         {insight.citations.map((c, j) => (
                           <li key={j} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 px-3 py-2 font-mono text-[12.5px]">
                             <span className="min-w-0 break-all">
-                              {c.endpoint ? <a href={`#${epId(c.endpoint)}`} className="text-brand-ink">{c.endpoint}</a> : <span className="text-ink-faint">endpoint tidak tercatat</span>}
+                              {c.endpoint ? <a href={`#${epId(c.endpoint)}`} className="text-brand-ink">{c.endpoint}</a> : <span className="text-ink-faint">{t({ id: "endpoint tidak tercatat", en: "endpoint not recorded" })}</span>}
                               <ChevronRight aria-hidden className="mx-1 inline size-3 align-[-1px] text-ink-faint" strokeWidth={2.2} />
                               <span className="sr-only">field </span><span className="text-ink">{c.field_path}</span>
                             </span>
-                            <span className="font-semibold text-ink-strong tabular-nums"><span className="sr-only">nilai </span>{c.value}</span>
+                            <span className="font-semibold text-ink-strong tabular-nums"><span className="sr-only">{t({ id: "nilai ", en: "value " })}</span>{c.value}</span>
                           </li>
                         ))}
                       </ul>
@@ -417,27 +454,31 @@ function TraceBody({ trace }: { trace: TraceView }) {
                   </article>
                 ))}
               </div>
-            ) : <Empty>Belum ada temuan yang lolos validasi sitasi.</Empty>}
+            ) : <Empty>{t({ id: "Belum ada temuan yang lolos validasi sitasi.", en: "No finding has passed citation validation yet." })}</Empty>}
           </Section>
 
           {research.limitations.length > 0 && (
-            <Section id="kurang" title={LABEL.kurang} count={research.limitations.length}>
+            <Section id="kurang" title={t(LABEL.kurang)} count={research.limitations.length}>
               <ul className="m-0 grid gap-1.5 pl-[18px] text-[15px]">{research.limitations.map((l) => <li key={l}>{l}</li>)}</ul>
             </Section>
           )}
         </AgentGroup>
 
         <AgentGroup agent="berita" status={searched ? "ok" : "warn"}
-          chip={<StatusWord status={searched ? "ok" : "idle"}>{searched ? "Pencarian dijalankan" : "Pencarian tidak dijalankan"}</StatusWord>}>
-          <Section id="berita" title={LABEL.berita}
-            aside={<span className="text-[13px] text-ink-soft tabular-nums">{news.articles.length} diterima, {news.rejected_total} ditolak</span>}>
+          chip={<StatusWord status={searched ? "ok" : "idle"}>{searched ? t({ id: "Pencarian dijalankan", en: "Search run" }) : t({ id: "Pencarian tidak dijalankan", en: "Search not run" })}</StatusWord>}>
+          <Section id="berita" title={t(LABEL.berita)}
+            aside={<span className="text-[13px] text-ink-soft tabular-nums">{t({
+              id: `${news.articles.length} diterima, ${news.rejected_total} ditolak`,
+              en: `${news.articles.length} accepted, ${news.rejected_total} rejected`,
+            })}</span>}>
             <p className="text-[14.5px] text-ink-soft">
-              Status pencarian: <code className="font-mono text-[13px] text-ink">{news.search.status ?? "tidak dijalankan"}</code>
-              {news.search.as_of && <>, per <span className="font-mono text-ink">{news.search.as_of}</span></>}.
+              {t({ id: "Status pencarian:", en: "Search status:" })}{" "}
+              <code className="font-mono text-[13px] text-ink">{news.search.status ?? t({ id: "tidak dijalankan", en: "not run" })}</code>
+              {news.search.as_of && <>, {t({ id: "per", en: "as of" })} <span className="font-mono text-ink">{news.search.as_of}</span></>}.
             </p>
             {news.search.queries.length > 0 && (
               <div className="mt-4">
-                <SubHead>Kueri</SubHead>
+                <SubHead>{t({ id: "Kueri", en: "Queries" })}</SubHead>
                 <ul className="m-0 grid list-none divide-y divide-rule-soft rounded-md border border-rule bg-raised p-0">
                   {news.search.queries.map((q, i) => (
                     <li key={i} className="flex items-start gap-2.5 px-3 py-2 font-mono text-[12.5px] break-words text-ink">
@@ -450,7 +491,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
             )}
             {news.articles.length > 0 && (
               <div className="mt-5">
-                <SubHead>Artikel diterima <span className="data text-ink-faint">{news.articles.length}</span></SubHead>
+                <SubHead>{t({ id: "Artikel diterima", en: "Accepted articles" })} <span className="data text-ink-faint">{news.articles.length}</span></SubHead>
                 <ol className="m-0 grid list-none divide-y divide-rule-soft p-0 text-[14.5px]">
                   {news.articles.map((a, i) => (
                     <li key={a.id ?? i} className="grid gap-x-4 gap-y-0.5 py-2 first:pt-0 sm:grid-cols-[96px_minmax(0,1fr)]">
@@ -468,7 +509,10 @@ function TraceBody({ trace }: { trace: TraceView }) {
               <details className="group mt-5 rounded-md border border-rule">
                 <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-2.5 text-[14.5px] font-medium text-ink-strong hover:bg-raised [&::-webkit-details-marker]:hidden">
                   <ChevronRight aria-hidden className="size-4 flex-none text-ink-soft transition-transform duration-200 group-open:rotate-90" strokeWidth={2.2} />
-                  {news.rejected_total} berita ditolak (tidak relevan atau dampak nol)
+                  {t({
+                    id: `${news.rejected_total} berita ditolak (tidak relevan atau dampak nol)`,
+                    en: `${news.rejected_total} ${news.rejected_total === 1 ? "article" : "articles"} rejected (irrelevant or zero impact)`,
+                  })}
                 </summary>
                 <ol className="m-0 grid list-none divide-y divide-rule-soft border-t border-rule p-0 text-[14px]">
                   {news.rejected.map((r, i) => (
@@ -478,15 +522,22 @@ function TraceBody({ trace }: { trace: TraceView }) {
                     </li>
                   ))}
                   {news.rejected_total > news.rejected.length && (
-                    <li className="px-3 py-2 text-ink-soft">dan {news.rejected_total - news.rejected.length} penolakan lain</li>
+                    <li className="px-3 py-2 text-ink-soft">
+                      {t({
+                        id: `dan ${news.rejected_total - news.rejected.length} penolakan lain`,
+                        en: `and ${news.rejected_total - news.rejected.length} more rejected`,
+                      })}
+                    </li>
                   )}
                 </ol>
               </details>
             )}
           </Section>
 
-          <Section id="deep-dive" title={LABEL["deep-dive"]}
-            aside={trace.deepdive.length > 0 && <span className="text-[13px] text-ink-soft tabular-nums">{fetched} dari {trace.deepdive.length} teks terbaca</span>}>
+          <Section id="deep-dive" title={t(LABEL["deep-dive"])}
+            aside={trace.deepdive.length > 0 && <span className="text-[13px] text-ink-soft tabular-nums">
+              {t({ id: `${fetched} dari ${trace.deepdive.length} teks terbaca`, en: `${fetched} of ${trace.deepdive.length} texts read` })}
+            </span>}>
             {trace.deepdive.length ? (
               <div className="grid divide-y divide-rule-soft">
                 {trace.deepdive.map((item, i) => {
@@ -494,39 +545,46 @@ function TraceBody({ trace }: { trace: TraceView }) {
                   return (
                     <article key={i} className="grid gap-1.5 py-3.5 first:pt-0 last:pb-0">
                       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-                        <h4 className="min-w-0 flex-1 basis-[260px] text-[15px] font-medium">{item.title || "(tanpa judul)"}</h4>
-                        <Chip tone={ok ? "ok" : "neutral"}>{ok ? "Teks terbaca" : "Teks tidak terbaca"}</Chip>
+                        <h4 className="min-w-0 flex-1 basis-[260px] text-[15px] font-medium">{item.title || t({ id: "(tanpa judul)", en: "(untitled)" })}</h4>
+                        <Chip tone={ok ? "ok" : "neutral"}>{ok ? t({ id: "Teks terbaca", en: "Text read" }) : t({ id: "Teks tidak terbaca", en: "Text not read" })}</Chip>
                       </div>
                       <p className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[12px] text-ink-soft">
                         {item.date && <span>{item.date}</span>}
                         {item.url && <Source url={item.url} />}
                         <span>status {item.status}</span>
-                        <span>{item.length} karakter</span>
+                        <span>{item.length.toLocaleString(locale)} {t({ id: "karakter", en: "characters" })}</span>
                       </p>
                       {item.preview ? (
                         <p className="mt-1 rounded-md border border-rule-soft bg-raised px-3.5 py-2.5 text-[14px] leading-relaxed whitespace-pre-line text-ink">{item.preview}</p>
                       ) : (
-                        <p className="text-[13.5px] text-ink-soft">Teks lengkap tidak tersedia; ringkasan berita hanya untuk konteks.</p>
+                        <p className="text-[13.5px] text-ink-soft">
+                          {t({
+                            id: "Teks lengkap tidak tersedia; ringkasan berita hanya untuk konteks.",
+                            en: "Full text unavailable; the news summary is context only.",
+                          })}
+                        </p>
                       )}
                     </article>
                   );
                 })}
               </div>
-            ) : <Empty>Belum ada hasil deep-dive berita.</Empty>}
+            ) : <Empty>{t({ id: "Belum ada hasil deep-dive berita.", en: "No news deep-dive results yet." })}</Empty>}
           </Section>
         </AgentGroup>
 
         <AgentGroup agent="forecast" status={fStatus}
-          chip={<StatusWord status={fStatus}>{fLabel}</StatusWord>}>
-          <Problems title="Catatan validator forecast" items={forecast.problems} />
-          <Section id="asumsi" title={LABEL.asumsi} count={forecast.news_effects.length || undefined}>
+          chip={<StatusWord status={fStatus}>{t(fLabel)}</StatusWord>}>
+          <Problems title={t({ id: "Catatan validator forecast", en: "Forecast validator notes" })} items={forecast.problems} />
+          <Section id="asumsi" title={t(LABEL.asumsi)} count={forecast.news_effects.length || undefined}>
             {forecast.news_effects.length ? (
               <div className="grid divide-y divide-rule-soft">
                 {forecast.news_effects.map((e, i) => (
                   <article key={i} className="grid gap-2 py-4 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       {isNoEffect(e)
-                        ? <strong className="text-[15px] font-medium text-ink-strong">Tanpa dampak terukur ke forecast</strong>
+                        ? <strong className="text-[15px] font-medium text-ink-strong">
+                          {t({ id: "Tanpa dampak terukur ke forecast", en: "No measurable effect on the forecast" })}
+                        </strong>
                         : <strong className="font-mono text-[14px] font-semibold text-brand-ink">{e.driver}: {e.change}</strong>}
                       {e.years.map((y) => <Chip key={y} mono>{y}</Chip>)}
                       <span className="ml-auto flex items-center gap-3 font-mono text-[12px] text-ink-soft">
@@ -536,9 +594,13 @@ function TraceBody({ trace }: { trace: TraceView }) {
                     {e.rationale && <p className="text-[15px]">{e.rationale}</p>}
                     {(e.factual_basis || e.mechanism || e.uncertainty) && (
                       <dl className="m-0 grid gap-x-6 gap-y-2.5 text-[14px] text-ink xl:grid-cols-3">
-                        {([["Fakta", e.factual_basis], ["Mekanisme", e.mechanism], ["Ketidakpastian", e.uncertainty]] as const).map(([k, v]) => v && (
-                          <div key={k} className="min-w-0 border-t border-rule-soft pt-2">
-                            <dt className="text-[12.5px] font-medium text-ink-soft">{k}</dt>
+                        {([
+                          [{ id: "Fakta", en: "Fact" }, e.factual_basis],
+                          [{ id: "Mekanisme", en: "Mechanism" }, e.mechanism],
+                          [{ id: "Ketidakpastian", en: "Uncertainty" }, e.uncertainty],
+                        ] as const).map(([k, v]) => v && (
+                          <div key={k.id} className="min-w-0 border-t border-rule-soft pt-2">
+                            <dt className="text-[12.5px] font-medium text-ink-soft">{t(k)}</dt>
                             <dd className="m-0">{v}</dd>
                           </div>
                         ))}
@@ -547,29 +609,29 @@ function TraceBody({ trace }: { trace: TraceView }) {
                   </article>
                 ))}
               </div>
-            ) : <Empty>Subagent dampak berita tidak mencatat dampak.</Empty>}
+            ) : <Empty>{t({ id: "Subagent dampak berita tidak mencatat dampak.", en: "The news-impact subagent recorded no effect." })}</Empty>}
           </Section>
 
           {forecast.interim && (
-            <Section id="interim" title={LABEL.interim}>
+            <Section id="interim" title={t(LABEL.interim)}>
               <p className="max-w-[80ch] text-[15px]">{forecast.interim.rationale}</p>
               <p className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[12px] text-ink-soft">
-                {forecast.interim.published_at && <span>Rilis {forecast.interim.published_at}</span>}
+                {forecast.interim.published_at && <span>{t({ id: "Rilis", en: "Released" })} {forecast.interim.published_at}</span>}
                 <Source url={forecast.interim.url} />
               </p>
             </Section>
           )}
 
           {forecast.outyears.length > 0 && (
-            <Section id="tahun-lanjutan" title={LABEL["tahun-lanjutan"]} count={forecast.outyears.length}>
+            <Section id="tahun-lanjutan" title={t(LABEL["tahun-lanjutan"])} count={forecast.outyears.length}>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-[14px]">
                   <thead>
                     <tr className="text-[12.5px] text-ink-soft [&>th]:px-2 [&>th]:pb-2 [&>th]:align-bottom [&>th]:font-medium">
-                      <th scope="col" className="text-left">Tahun</th>
-                      <th scope="col" className="text-right">Pertumbuhan revenue</th>
-                      <th scope="col" className="text-right">Margin EBITDA</th>
-                      <th scope="col" className="text-right">Margin laba</th>
+                      <th scope="col" className="text-left">{t({ id: "Tahun", en: "Year" })}</th>
+                      <th scope="col" className="text-right">{t({ id: "Pertumbuhan revenue", en: "Revenue growth" })}</th>
+                      <th scope="col" className="text-right">{t({ id: "Margin EBITDA", en: "EBITDA margin" })}</th>
+                      <th scope="col" className="text-right">{t({ id: "Margin laba", en: "Net margin" })}</th>
                       <th scope="col" className="text-right">Capex/revenue</th>
                     </tr>
                   </thead>
@@ -578,12 +640,12 @@ function TraceBody({ trace }: { trace: TraceView }) {
                       <tr className="[&>td]:px-2 [&>td]:pt-2.5 [&>td]:pb-1">
                         <th scope="row" className="px-2 pt-2.5 pb-1 text-left font-mono font-semibold text-ink-strong">{row.year}</th>
                         {[row.revenue_growth_pct, row.ebitda_margin_pct, row.net_income_margin_pct, row.capex_to_revenue_pct].map((v, j) => (
-                          <td key={j} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(v)}</td>
+                          <td key={j} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(v, cell)}</td>
                         ))}
                       </tr>
                       <tr>
                         <td colSpan={5} className="px-2 pb-3 text-[13.5px] text-ink-soft">
-                          <span className="sr-only">Dasar: </span>{row.rationale}
+                          <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{row.rationale}
                           {row.source_ids.length > 0 && (
                             <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                               {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
@@ -598,17 +660,21 @@ function TraceBody({ trace }: { trace: TraceView }) {
             </Section>
           )}
           {(forecast.bank_drivers?.length ?? 0) > 0 && (
-            <Section id="driver-bank" title={LABEL["driver-bank"]} count={forecast.bank_drivers!.length}>
+            <Section id="driver-bank" title={t(LABEL["driver-bank"])} count={forecast.bank_drivers!.length}>
               <p className="mb-3 max-w-[80ch] text-[14px] text-ink-soft">
-                Driver model bank per tahun: tahun berjalan memakai aktual 1H resmi ditambah driver H2; tahun berikutnya setahun penuh.
-                Neraca, laba dan dividen dihitung model dari driver ini, dengan batas modal dan pendanaan.
+                {t({
+                  id: "Driver model bank per tahun: tahun berjalan memakai aktual 1H resmi ditambah driver H2; tahun berikutnya setahun penuh. "
+                    + "Neraca, laba dan dividen dihitung model dari driver ini, dengan batas modal dan pendanaan.",
+                  en: "Bank model drivers by year: the current year uses official 1H actuals plus H2 drivers; later years are full-year. "
+                    + "The model derives the balance sheet, earnings and dividends from these drivers, within capital and funding limits.",
+                })}
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] border-collapse text-[14px]">
                   <thead>
                     <tr className="text-[12.5px] text-ink-soft [&>th]:px-2 [&>th]:pb-2 [&>th]:align-bottom [&>th]:font-medium">
-                      <th scope="col" className="text-left">Tahun</th>
-                      {BANK_COLS.map(([key, label]) => <th key={key} scope="col" className="text-right">{label}</th>)}
+                      <th scope="col" className="text-left">{t({ id: "Tahun", en: "Year" })}</th>
+                      {BANK_COLS.map(([key, label]) => <th key={key} scope="col" className="text-right">{t(label)}</th>)}
                     </tr>
                   </thead>
                   {forecast.bank_drivers!.map((row, i) => (
@@ -619,7 +685,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                         </th>
                         {BANK_COLS.map(([key]) => {
                           const v = row[key] as number | null;
-                          return <td key={key} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(v)}</td>;
+                          return <td key={key} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(v, cell)}</td>;
                         })}
                       </tr>
                       {row.rationale && (
@@ -627,7 +693,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                           <td colSpan={BANK_COLS.length + 1} className="px-2 pb-3 text-[13.5px] text-ink-soft">
                             {/* The table scrolls sideways on phones; the rationale stays in view and wraps to it. */}
                             <div className="sticky left-2 max-w-[min(80ch,calc(100vw-72px))]">
-                              <span className="sr-only">Dasar: </span>{row.rationale}
+                              <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{row.rationale}
                               {row.source_ids.length > 0 && (
                                 <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                                   {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
@@ -648,13 +714,16 @@ function TraceBody({ trace }: { trace: TraceView }) {
         {(trace.audit_appendix?.length ?? 0) > 0 && <AuditAppendix pages={trace.audit_appendix!} />}
         {trace.run_manifest && <RunManifest manifest={trace.run_manifest} />}
 
-        <p className="text-[13px] text-ink-soft">Materi informasi dan analisis; bukan rekomendasi investasi.</p>
+        <p className="text-[13px] text-ink-soft">
+          {t({ id: "Materi informasi dan analisis; bukan rekomendasi investasi.", en: "Information and analysis only; not investment advice." })}
+        </p>
       </div>
     </div>
   );
 }
 
 function RunManifest({ manifest }: { manifest: NonNullable<TraceView["run_manifest"]> }) {
+  const { t } = useLang();
   const artifacts = Object.entries(manifest.artifacts);
   const sources = Object.entries(manifest.source_pack_sha256);
   const caches = Object.entries(manifest.cache_snapshot_sha256);
@@ -673,13 +742,13 @@ function RunManifest({ manifest }: { manifest: NonNullable<TraceView["run_manife
   return (
     <details className="panel scroll-mt-20">
       <summary className="cursor-pointer list-none px-6 py-5 text-[20px] font-semibold text-ink-strong max-sm:px-4">
-        Provenance dan identitas bundle
+        {t({ id: "Provenance dan identitas bundle", en: "Provenance and bundle identity" })}
       </summary>
       <dl className="m-0">
         {row("Publication ID", manifest.publication_id)}
-        {row("Kode dan source tree", `${manifest.code_revision ?? "—"} · ${manifest.source_tree_sha256 ?? "—"}`)}
+        {row(t({ id: "Kode dan source tree", en: "Code and source tree" }), `${manifest.code_revision ?? "—"} · ${manifest.source_tree_sha256 ?? "—"}`)}
         {row("Working tree", `${manifest.working_tree.dirty == null ? "unknown" : manifest.working_tree.dirty ? "dirty" : "clean"} · ${manifest.working_tree.sha256 ?? "—"}`)}
-        {row("Tanggal data / profile", `${manifest.as_of ?? "—"} · ${manifest.profile ?? "—"}`)}
+        {row(t({ id: "Tanggal data / profile", en: "Data date / profile" }), `${manifest.as_of ?? "—"} · ${manifest.profile ?? "—"}`)}
         {row("Forecast agent", `${manifest.model.forecast_agent ?? "—"} · ${manifest.model.agent_effort ?? "—"}`)}
         {row("Spec / evidence register", `${manifest.spec_sha256 ?? "—"} · ${manifest.evidence_register_sha256 ?? "—"}`)}
         {manifest.release_policy && row("Release policy", `${manifest.release_policy.version ?? "—"} · ${manifest.release_policy.status ?? "—"} · ${manifest.release_policy.sha256 ?? "—"}`)}
@@ -691,20 +760,20 @@ function RunManifest({ manifest }: { manifest: NonNullable<TraceView["run_manife
         <div className="border-t border-rule-soft px-5 py-3 max-sm:px-4">
           <dt className="text-[13px] text-ink-soft">Source pack hashes</dt>
           <dd className="m-0 mt-1 grid gap-1">
-            {sources.length ? sources.map(([path, hash]) => <code key={path} className="break-all text-[11.5px]">{path} · {hash}</code>) : <span className="text-[13px] text-ink-faint">Tidak tercatat</span>}
+            {sources.length ? sources.map(([path, hash]) => <code key={path} className="break-all text-[11.5px]">{path} · {hash}</code>) : <span className="text-[13px] text-ink-faint">{t({ id: "Tidak tercatat", en: "Not recorded" })}</span>}
           </dd>
         </div>
         <div className="border-t border-rule-soft px-5 py-3 max-sm:px-4">
           <dt className="text-[13px] text-ink-soft">Cache snapshot hashes</dt>
           <dd className="m-0 mt-1 grid gap-1">
-            {caches.length ? caches.map(([endpoint, value]) => <code key={endpoint} className="break-all text-[11.5px]">{endpoint} · {value.cache_key ?? "—"} · {value.content_sha256 ?? "—"}</code>) : <span className="text-[13px] text-ink-faint">Tidak tercatat</span>}
+            {caches.length ? caches.map(([endpoint, value]) => <code key={endpoint} className="break-all text-[11.5px]">{endpoint} · {value.cache_key ?? "—"} · {value.content_sha256 ?? "—"}</code>) : <span className="text-[13px] text-ink-faint">{t({ id: "Tidak tercatat", en: "Not recorded" })}</span>}
           </dd>
         </div>
         <div className="border-t border-rule-soft px-5 py-3 max-sm:px-4">
           <dt className="text-[13px] text-ink-soft">Rendered artifact hashes</dt>
           <dd className="m-0 mt-1 grid gap-1">
-            {artifacts.length ? artifacts.map(([kind, value]) => <code key={kind} className="break-all text-[11.5px]">{kind} · {value.file ?? "—"} · {value.sha256 ?? "—"}</code>) : <span className="text-[13px] text-ink-faint">Tidak tercatat</span>}
-            {manifest.missing_artifacts.map((kind) => <span key={kind} className="text-[13px] text-warn-ink">Artefak hilang: {kind}</span>)}
+            {artifacts.length ? artifacts.map(([kind, value]) => <code key={kind} className="break-all text-[11.5px]">{kind} · {value.file ?? "—"} · {value.sha256 ?? "—"}</code>) : <span className="text-[13px] text-ink-faint">{t({ id: "Tidak tercatat", en: "Not recorded" })}</span>}
+            {manifest.missing_artifacts.map((kind) => <span key={kind} className="text-[13px] text-warn-ink">{t({ id: "Artefak hilang", en: "Missing artifact" })}: {kind}</span>)}
           </dd>
         </div>
       </dl>
@@ -716,13 +785,18 @@ function RunManifest({ manifest }: { manifest: NonNullable<TraceView["run_manife
 
 /** Report sections kept out of the printed company update, shown here for audit. */
 function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix"]> }) {
+  const { t } = useLang();
   return (
     <section id="lampiran-audit" aria-labelledby="lampiran-audit-title" className="panel scroll-mt-20">
       <header className="px-6 py-5 max-sm:px-4">
-        <h2 id="lampiran-audit-title" className="text-[20px]">Lampiran audit</h2>
+        <h2 id="lampiran-audit-title" className="text-[20px]">{t({ id: "Lampiran audit", en: "Audit appendix" })}</h2>
         <p className="text-[14px] text-ink-soft">
-          Bagian rekonstruksi dan uji rekonsiliasi yang tidak dicetak di company update karena hampir tidak menggerakkan target.
-          Angkanya sama dengan yang dihitung saat laporan dibangun.
+          {t({
+            id: "Bagian rekonstruksi dan uji rekonsiliasi yang tidak dicetak di company update karena hampir tidak menggerakkan target. "
+              + "Angkanya sama dengan yang dihitung saat laporan dibangun.",
+            en: "Reconstruction and reconciliation sections left out of the printed Company Update because they barely move the target. "
+              + "The figures are the same ones computed when the report was built.",
+          })}
         </p>
       </header>
       <div className="border-t border-rule">
@@ -730,7 +804,9 @@ function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix
           <details key={`${page.title}-${i}`} className="group border-b border-rule-soft last:border-b-0">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-3 text-[15px] font-medium text-ink-strong max-sm:px-4">
               <span>{page.title}</span>
-              <span className="data text-ink-soft">{page.exhibits.length} tabel</span>
+              <span className="data text-ink-soft">
+                {t({ id: `${page.exhibits.length} tabel`, en: `${page.exhibits.length} ${page.exhibits.length === 1 ? "table" : "tables"}` })}
+              </span>
             </summary>
             <div className="grid gap-4 px-6 pb-5 max-sm:px-4 [&>*]:min-w-0">
               {page.paragraphs.map((text, j) => <p key={j} className="max-w-[80ch] text-[14.5px] text-ink">{text}</p>)}
@@ -768,6 +844,7 @@ function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix
 
 export function ReportTrace() {
   const { ticker = "" } = useParams();
+  const { t } = useLang();
   const T = ticker.toUpperCase();
   const [reviewToken, setReviewToken] = useState(readReviewToken);
   const state = useLoad(async () => {
@@ -787,7 +864,7 @@ export function ReportTrace() {
   const item = reports.data?.find((r) => r.ticker === T);
   const files = reportFiles(T);
   return (
-    <TracePage state={state} item={item} run={run.data ?? undefined} missing={`Jejak riset ${T} tidak ditemukan.`}
+    <TracePage state={state} item={item} run={run.data ?? undefined} missing={t({ id: `Jejak riset ${T} tidak ditemukan.`, en: `No Audit Trace found for ${T}.` })}
       links={{ reportUrl: files.html, pdfUrl: item?.files.pdf ? files.pdf : undefined, replayUrl: `/laporan/${T}/putar` }}
       review={<ReviewPanel ticker={T}
         reviewToken={state.data?.review_state === "pending" ? reviewToken || undefined : undefined}
@@ -802,15 +879,21 @@ export function ReportTrace() {
 function ReviewerPreviewAccess({ ticker, error, onUnlock }: {
   ticker: string; error?: string; onUnlock: (token: string) => void;
 }) {
+  const { t } = useLang();
   const [token, setToken] = useState(readReviewToken);
   const label = "mb-1 block text-[12.5px] font-medium text-ink-soft";
   const input = "h-10 w-full rounded-md border border-rule bg-raised px-3 text-[14.5px] text-ink-strong placeholder:text-ink-faint focus:border-brand-ink";
   return (
     <section className="panel grid gap-4 p-6 max-sm:p-4" aria-labelledby="preview-access-title">
       <div>
-        <h2 id="preview-access-title" className="m-0 text-[18px]">Jejak ini menunggu review publikasi</h2>
+        <h2 id="preview-access-title" className="m-0 text-[18px]">
+          {t({ id: "Jejak ini menunggu review publikasi", en: "This trace is awaiting publication review" })}
+        </h2>
         <p className="mb-0 mt-1 text-[14px] text-ink-soft">
-          Masukkan token reviewer untuk membuka pratinjau privat dan memeriksa laporan sebelum diterbitkan.
+          {t({
+            id: "Masukkan token reviewer untuk membuka pratinjau privat dan memeriksa laporan sebelum diterbitkan.",
+            en: "Enter a reviewer token to open the private preview and check the report before it is published.",
+          })}
         </p>
       </div>
       <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={(event) => {
@@ -818,27 +901,34 @@ function ReviewerPreviewAccess({ ticker, error, onUnlock }: {
         if (token.trim()) onUnlock(token.trim());
       }}>
         <div>
-          <label htmlFor="preview-review-token" className={label}>Token reviewer</label>
+          <label htmlFor="preview-review-token" className={label}>{t({ id: "Token reviewer", en: "Reviewer token" })}</label>
           <input id="preview-review-token" type="password" value={token}
             onChange={(event) => setToken(event.target.value)} autoComplete="off"
             className={input} />
         </div>
         <button type="submit" disabled={!token.trim()} className="btn btn-primary disabled:cursor-not-allowed">
-          Buka pratinjau
+          {t({ id: "Buka pratinjau", en: "Open preview" })}
         </button>
       </form>
       {error && <p role="alert" className="m-0 text-[14px] text-err-ink">{error}</p>}
-      <p className="m-0 text-[12.5px] text-ink-faint">Emiten {ticker} · Nilai model tetap tidak tersedia untuk umum sampai review lolos.</p>
+      <p className="m-0 text-[12.5px] text-ink-faint">
+        {t({ id: "Emiten", en: "Issuer" })} {ticker} ·{" "}
+        {t({ id: "Nilai model tetap tidak tersedia untuk umum sampai review lolos.", en: "Model values stay unavailable to the public until the review passes." })}
+      </p>
     </section>
   );
 }
 
 export function JobTrace() {
   const { id = "" } = useParams();
+  const { t } = useLang();
   const state = useLoad(() => api.jobTrace(id), [id]);
   const ticker = state.data?.ticker ?? "";
   return (
-    <TracePage state={state} missing="Jejak riset ini tidak ditemukan. Riset yang berjalan di server hanya disimpan selama server hidup."
+    <TracePage state={state} missing={t({
+      id: "Jejak riset ini tidak ditemukan. Riset yang berjalan di server hanya disimpan selama server hidup.",
+      en: "This Audit Trace was not found. Research run on the server is kept only while the server is up.",
+    })}
       links={{ reportUrl: `/files/jobs/${id}/${ticker}.html`, deckUrl: `/jobs/${id}` }} />
   );
 }
@@ -846,6 +936,7 @@ export function JobTrace() {
 function TracePage({ state, item, run, links, missing, review, reviewAccess }:
   { state: ReturnType<typeof useLoad<TraceView>>; item?: ReportItem; run?: RunReplay; links: Links; missing: string;
     review?: React.ReactNode; reviewAccess?: React.ReactNode }) {
+  const { t } = useLang();
   if (state.data) {
     return (
       <div className="min-h-full bg-canvas">
@@ -859,7 +950,7 @@ function TracePage({ state, item, run, links, missing, review, reviewAccess }:
     <div className="wrap py-10 max-sm:py-6">
       {state.loading && (
         <div role="status" className="grid gap-5">
-          <span className="sr-only">Memuat jejak riset…</span>
+          <span className="sr-only">{t({ id: "Memuat jejak riset…", en: "Loading Audit Trace…" })}</span>
           <span aria-hidden className="h-4 w-40 animate-pulse rounded bg-raised" />
           <span aria-hidden className="h-9 w-72 animate-pulse rounded bg-raised" />
           <span aria-hidden className="h-24 w-full animate-pulse rounded-md bg-surface ring-1 ring-rule" />
@@ -870,17 +961,22 @@ function TracePage({ state, item, run, links, missing, review, reviewAccess }:
         reviewAccess ?? <Notice tone={state.status === 404 ? "muted" : "error"}>
           {state.status === 404 ? (
             <>
-              <p><strong className="text-ink-strong">{missing}</strong> Buka jejak dari galeri laporan atau dari deck riset.</p>
+              <p><strong className="text-ink-strong">{missing}</strong>{" "}
+                {t({ id: "Buka jejak dari galeri laporan atau dari deck riset.", en: "Open a trace from the Report Gallery or the research deck." })}
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link className="btn btn-sm btn-ghost" to="/laporan">Buka galeri laporan</Link>
-                <Link className="btn btn-sm btn-ghost" to="/research">Mulai riset</Link>
+                <Link className="btn btn-sm btn-ghost" to="/laporan">{t({ id: "Buka galeri laporan", en: "Open Report Gallery" })}</Link>
+                <Link className="btn btn-sm btn-ghost" to="/research">{t({ id: "Mulai riset", en: "Start research" })}</Link>
               </div>
             </>
           ) : (
             <>
-              <p><strong>Jejak riset belum bisa dimuat.</strong> Server API tidak menjawab ({state.error}).</p>
+              <p>
+                <strong>{t({ id: "Jejak riset belum bisa dimuat.", en: "The Audit Trace could not be loaded." })}</strong>{" "}
+                {t({ id: "Server API tidak menjawab", en: "The API server did not respond" })} ({state.error}).
+              </p>
               <button type="button" onClick={state.reload} className="btn btn-sm btn-ghost mt-3">
-                <RefreshCw aria-hidden className="size-3.5" strokeWidth={2.2} />Coba lagi
+                <RefreshCw aria-hidden className="size-3.5" strokeWidth={2.2} />{t({ id: "Coba lagi", en: "Try again" })}
               </button>
             </>
           )}

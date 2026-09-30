@@ -3,39 +3,68 @@
 // method chain decided. Everything here is derived from the progress events
 // (app/progress.py), so a live job and a replayed run render the same way.
 import type { JobEvent } from "./api";
+import { getLang, type Bi, type Lang } from "./i18n";
 
 export type AgentId = "memori" | "analis" | "riset" | "berita" | "forecast" | "gerbang" | "laporan";
 export type Status = "idle" | "run" | "ok" | "warn" | "error";
 
 export type AgentMeta = {
   id: AgentId;
-  name: string;
-  short: string;
-  role: string;
+  name: Bi;
+  short: Bi;
+  role: Bi;
   /** "llm": a model decides; "host": deterministic code the model cannot change. */
   engine: "llm" | "host";
 };
 
 /** Pipeline order. */
 export const AGENTS: AgentMeta[] = [
-  { id: "memori", name: "Memori riset", short: "Memori", role: "Membaca riset sebelumnya dan menyimpan hasil baru", engine: "host" },
-  { id: "analis", name: "Agent perencana", short: "Perencana", role: "Menyusun pertanyaan, memanggil tool data, menguji hipotesis", engine: "llm" },
-  { id: "riset", name: "Agent riset", short: "Riset", role: "Membaca endpoint Sectors dan menulis brief bersitasi", engine: "llm" },
-  { id: "berita", name: "Pencari berita", short: "Berita", role: "Mencari berita bertanggal dan menolak yang tidak relevan", engine: "host" },
-  { id: "forecast", name: "Agent forecast", short: "Forecast", role: "Subagent menyusun asumsi dari berita dan rilis resmi", engine: "llm" },
-  { id: "gerbang", name: "Gerbang metode", short: "Gerbang", role: "Method Gates 0–5 memilih metode; rantai metode menghitung nilai", engine: "host" },
-  { id: "laporan", name: "Penyusun laporan", short: "Laporan", role: "Harness rilis, company update, PDF, dan jejak audit", engine: "host" },
+  {
+    id: "memori", engine: "host",
+    name: { id: "Memori riset", en: "Run memory" }, short: { id: "Memori", en: "Memory" },
+    role: { id: "Membaca riset sebelumnya dan menyimpan hasil baru", en: "Reads earlier research and stores the new results" },
+  },
+  {
+    id: "analis", engine: "llm",
+    name: { id: "Agent perencana", en: "Planning agent" }, short: { id: "Perencana", en: "Planner" },
+    role: { id: "Menyusun pertanyaan, memanggil tool data, menguji hipotesis", en: "Frames the questions, calls data tools, tests hypotheses" },
+  },
+  {
+    id: "riset", engine: "llm",
+    name: { id: "Agent riset", en: "Research agent" }, short: { id: "Riset", en: "Research" },
+    role: { id: "Membaca endpoint Sectors dan menulis brief bersitasi", en: "Reads Sectors endpoints and writes a cited brief" },
+  },
+  {
+    id: "berita", engine: "host",
+    name: { id: "Pencari berita", en: "News search" }, short: { id: "Berita", en: "News" },
+    role: { id: "Mencari berita bertanggal dan menolak yang tidak relevan", en: "Finds dated news and rejects what is not relevant" },
+  },
+  {
+    id: "forecast", engine: "llm",
+    name: { id: "Agent forecast", en: "Forecast agent" }, short: { id: "Forecast", en: "Forecast" },
+    role: { id: "Subagent menyusun asumsi dari berita dan rilis resmi", en: "Subagents build assumptions from news and official releases" },
+  },
+  {
+    id: "gerbang", engine: "host",
+    name: { id: "Gerbang metode", en: "Method Gates" }, short: { id: "Gerbang", en: "Gates" },
+    role: { id: "Method Gates 0–5 memilih metode; rantai metode menghitung nilai", en: "Method Gates 0–5 choose the method; the Method Chain computes the value" },
+  },
+  {
+    id: "laporan", engine: "host",
+    name: { id: "Penyusun laporan", en: "Report builder" }, short: { id: "Laporan", en: "Report" },
+    role: { id: "Harness rilis, company update, PDF, dan jejak audit", en: "Release harness, Company Update, PDF and Audit Trace" },
+  },
 ];
 
 export const AGENT: Record<AgentId, AgentMeta> = Object.fromEntries(AGENTS.map((a) => [a.id, a])) as Record<AgentId, AgentMeta>;
 
 /** Forecast subagents (agents/forecast_assumptions), in the order they can run. */
-export const SUBAGENTS: { id: string; name: string }[] = [
-  { id: "news", name: "Dampak berita" },
-  { id: "interim", name: "Skenario interim" },
-  { id: "earnings", name: "Skenario laba FY" },
-  { id: "stage", name: "Tahap bisnis" },
-  { id: "outyears", name: "Tahun lanjutan" },
+export const SUBAGENTS: { id: string; name: Bi }[] = [
+  { id: "news", name: { id: "Dampak berita", en: "News impact" } },
+  { id: "interim", name: { id: "Skenario interim", en: "Interim scenario" } },
+  { id: "earnings", name: { id: "Skenario laba FY", en: "FY earnings scenario" } },
+  { id: "stage", name: { id: "Tahap bisnis", en: "Business stage" } },
+  { id: "outyears", name: { id: "Tahun lanjutan", en: "Out-years" } },
 ];
 
 const STAGE_AGENT: Record<string, AgentId> = {
@@ -43,27 +72,42 @@ const STAGE_AGENT: Record<string, AgentId> = {
   research: "riset", news: "berita", forecast: "forecast", gate: "gerbang", report: "laporan", done: "laporan",
 };
 
-export type PhaseMeta = { id: string; title: string; sub: string; stages: string[] };
+export type PhaseMeta = { id: string; title: Bi; sub: Bi; stages: string[] };
 
 export const PHASES: PhaseMeta[] = [
-  { id: "rencana", title: "Rencana", sub: "Memori, pertanyaan, hipotesis", stages: ["memory", "plan"] },
-  { id: "tool", title: "Tool & hipotesis", sub: "Data Sectors, peer, sinyal", stages: ["tool", "signals", "synthesis"] },
-  { id: "riset", title: "Riset & berita", sub: "Brief bersitasi, berita bertanggal", stages: ["research", "news"] },
-  { id: "forecast", title: "Forecast", sub: "Subagent asumsi", stages: ["forecast"] },
-  { id: "valuasi", title: "Valuasi & laporan", sub: "Method Gates, rantai metode, harness", stages: ["gate", "report", "done"] },
+  {
+    id: "rencana", stages: ["memory", "plan"],
+    title: { id: "Rencana", en: "Plan" }, sub: { id: "Memori, pertanyaan, hipotesis", en: "Memory, questions, hypotheses" },
+  },
+  {
+    id: "tool", stages: ["tool", "signals", "synthesis"],
+    title: { id: "Tool & hipotesis", en: "Tools & hypotheses" }, sub: { id: "Data Sectors, peer, sinyal", en: "Sectors data, peers, signals" },
+  },
+  {
+    id: "riset", stages: ["research", "news"],
+    title: { id: "Riset & berita", en: "Research & news" }, sub: { id: "Brief bersitasi, berita bertanggal", en: "Cited brief, dated news" },
+  },
+  {
+    id: "forecast", stages: ["forecast"],
+    title: { id: "Forecast", en: "Forecast" }, sub: { id: "Subagent asumsi", en: "Assumption subagents" },
+  },
+  {
+    id: "valuasi", stages: ["gate", "report", "done"],
+    title: { id: "Valuasi & laporan", en: "Valuation & report" }, sub: { id: "Method Gates, rantai metode, harness", en: "Method Gates, Method Chain, harness" },
+  },
 ];
 
 const PHASE_OF: Record<string, number> = Object.fromEntries(
   PHASES.flatMap((p, i) => p.stages.map((s) => [s, i])),
 );
 
-export const GATES: { n: number; name: string }[] = [
-  { n: 0, name: "Model bisnis" },
-  { n: 1, name: "Kelayakan data" },
-  { n: 2, name: "Struktur kepemilikan" },
-  { n: 3, name: "Siklus & tahap operasi" },
-  { n: 4, name: "Tahap siklus hidup" },
-  { n: 5, name: "Kewajaran hasil" },
+export const GATES: { n: number; name: Bi }[] = [
+  { n: 0, name: { id: "Model bisnis", en: "Business model" } },
+  { n: 1, name: { id: "Kelayakan data", en: "Data eligibility" } },
+  { n: 2, name: { id: "Struktur kepemilikan", en: "Ownership structure" } },
+  { n: 3, name: { id: "Siklus & tahap operasi", en: "Cyclicality & operating stage" } },
+  { n: 4, name: { id: "Tahap siklus hidup", en: "Life-cycle stage" } },
+  { n: 5, name: { id: "Kewajaran hasil", en: "Output sanity" } },
 ];
 
 export type StepKind = "task" | "call" | "note" | "hypothesis" | "verdict" | "gate" | "chain" | "release";
@@ -92,7 +136,7 @@ export type Step = {
 };
 
 export type AgentState = { status: Status; steps: number; calls: number; last?: string; lastEvent: number };
-export type GateState = { n: number; name: string; status: "idle" | "ok" | "warn" | "skip"; verdict?: string; detail?: string };
+export type GateState = { n: number; name: Bi; status: "idle" | "ok" | "warn" | "skip"; verdict?: string; detail?: string };
 export type ChainState = { method: string; decision: string; value: string; reason?: string; order: number };
 export type Hypothesis = { index: number; text: string; verdict?: string; reason?: string };
 
@@ -269,16 +313,29 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
   };
 }
 
-/** "12,4 dtk" or "2 mnt 05 dtk" for elapsed seconds. */
-export function duration(seconds: number | undefined): string {
+const UNIT: Bi<{ s: string; m: string; comma: boolean }> = {
+  id: { s: "dtk", m: "mnt", comma: true },
+  en: { s: "s", m: "min", comma: false },
+};
+
+/** "12,4 dtk" or "2 mnt 05 dtk" ("12.4 s", "2 min 05 s") for elapsed seconds. */
+export function duration(seconds: number | undefined, lang: Lang = getLang()): string {
   if (seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return "";
-  if (seconds < 60) return `${seconds.toFixed(1).replace(".", ",")} dtk`;
+  const unit = UNIT[lang];
+  if (seconds < 60) {
+    const text = seconds.toFixed(1);
+    return `${unit.comma ? text.replace(".", ",") : text} ${unit.s}`;
+  }
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
-  return `${m} mnt ${String(s).padStart(2, "0")} dtk`;
+  return `${m} ${unit.m} ${String(s).padStart(2, "0")} ${unit.s}`;
 }
 
 /** Status words of the deck (from the Command Deck: ANTRI / JALAN / SELESAI). */
-export const STATUS_WORD: Record<Status, string> = {
-  idle: "Antri", run: "Jalan", ok: "Selesai", warn: "Catatan", error: "Gagal",
+export const STATUS_WORD: Record<Status, Bi> = {
+  idle: { id: "Antri", en: "Queued" },
+  run: { id: "Jalan", en: "Running" },
+  ok: { id: "Selesai", en: "Done" },
+  warn: { id: "Catatan", en: "Notes" },
+  error: { id: "Gagal", en: "Failed" },
 };

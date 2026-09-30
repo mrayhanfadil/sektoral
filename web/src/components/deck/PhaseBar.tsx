@@ -1,6 +1,7 @@
 // The five pipeline phases as one segmented track. The current phase carries a
 // moving sweep, finished phases are solid, phases with notes are amber.
 import type { DeckState, Status } from "../../lib/agents";
+import { useLang, type Bi } from "../../lib/i18n";
 
 const FILL: Record<Status, string> = {
   idle: "scale-x-0", run: "scale-x-0", ok: "scale-x-100 bg-done", warn: "scale-x-100 bg-warn-rule", error: "scale-x-100 bg-err-ink",
@@ -8,24 +9,31 @@ const FILL: Record<Status, string> = {
 const TITLE_INK: Record<Status, string> = {
   idle: "text-ink-soft", run: "text-brand-ink", ok: "text-ink-strong", warn: "text-ink-strong", error: "text-err-ink",
 };
-const WORD: Record<Status, string> = { idle: "belum mulai", run: "berjalan", ok: "selesai", warn: "selesai dengan catatan", error: "gagal" };
+const WORD: Record<Status, Bi> = {
+  idle: { id: "belum mulai", en: "not started" },
+  run: { id: "berjalan", en: "running" },
+  ok: { id: "selesai", en: "done" },
+  warn: { id: "selesai dengan catatan", en: "done with notes" },
+  error: { id: "gagal", en: "failed" },
+};
 
 export function PhaseBar({ state }: { state: DeckState }) {
+  const { t } = useLang();
   const current = state.phases.findIndex((p) => p.status === "run");
   const at = current >= 0 ? current : Math.max(0, state.phaseAt);
   const phase = state.phases[at];
   return (
     <div className="px-4 py-3 max-sm:px-3">
-      <ol aria-label="Fase riset" className="m-0 grid list-none grid-cols-5 gap-2 p-0 max-sm:hidden">
+      <ol aria-label={t({ id: "Fase riset", en: "Research phases" })} className="m-0 grid list-none grid-cols-5 gap-2 p-0 max-sm:hidden">
         {state.phases.map((p, i) => (
           <li key={p.id} aria-current={p.status === "run" ? "step" : undefined} className="min-w-0">
             <Track status={p.status} />
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="data text-ink-faint">{i + 1}</span>
-              <span className={`truncate text-[13.5px] leading-tight font-bold transition-colors duration-300 ${TITLE_INK[p.status]}`}>{p.title}</span>
-              <span className="sr-only">, {WORD[p.status]}</span>
+              <span className={`truncate text-[13.5px] leading-tight font-bold transition-colors duration-300 ${TITLE_INK[p.status]}`}>{t(p.title)}</span>
+              <span className="sr-only">, {t(WORD[p.status])}</span>
             </div>
-            <p className="mt-0.5 truncate pl-[15px] text-[12.5px] leading-snug text-ink-soft max-lg:hidden [@media(max-height:959px)]:hidden">{p.sub}</p>
+            <p className="mt-0.5 truncate pl-[15px] text-[12.5px] leading-snug text-ink-soft max-lg:hidden [@media(max-height:959px)]:hidden">{t(p.sub)}</p>
           </li>
         ))}
       </ol>
@@ -33,9 +41,9 @@ export function PhaseBar({ state }: { state: DeckState }) {
       <div className="sm:hidden">
         <div className="flex items-center gap-3">
           <p className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-ink-strong">
-            <span className="data mr-1.5 text-ink-faint">Fase {at + 1}/5</span>
-            {phase.title}
-            <span className="sr-only">, {WORD[phase.status]}</span>
+            <span className="data mr-1.5 text-ink-faint">{t({ id: "Fase", en: "Phase" })} {at + 1}/5</span>
+            {t(phase.title)}
+            <span className="sr-only">, {t(WORD[phase.status])}</span>
           </p>
           <ol aria-hidden className="m-0 flex list-none items-center gap-1 p-0">
             {state.phases.map((p, i) => (

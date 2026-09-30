@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Info, TriangleAlert } from "lucide-react";
 import { ApiError } from "../lib/api";
+import { pick } from "../lib/i18n";
 
 /** Load once; `error` is a reader-facing message, `status` the HTTP status when the API answered. */
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
@@ -12,7 +13,7 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
     load().then(
       (data) => live && setState({ data, loading: false }),
       (error: Error) => live && setState({
-        error: error.message || "Data belum tersedia.",
+        error: error.message || pick({ id: "Data belum tersedia.", en: "Data not available yet." }),
         status: error instanceof ApiError ? error.status : undefined,
         loading: false,
       }),

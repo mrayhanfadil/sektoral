@@ -9,6 +9,7 @@ import { api, type ReportItem } from "../lib/api";
 import { ratingLabel } from "../lib/labels";
 import { rp } from "../lib/format";
 import { launch } from "../lib/launch";
+import { useLang } from "../lib/i18n";
 
 type PaletteApi = { open: (query?: string) => void; close: () => void };
 const PaletteContext = createContext<PaletteApi>({ open: () => {}, close: () => {} });
@@ -70,6 +71,7 @@ function useData() {
 function Palette({ initial, onClose }: { initial: string; onClose: () => void }) {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
+  const { t } = useLang();
   const { reports, tickers } = useData();
   const [query, setQuery] = useState(initial);
   const [active, setActive] = useState(0);
@@ -110,29 +112,35 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
     const out: Item[] = [];
     const known = new Set(reports.map((r) => r.ticker));
     if (q && TICKER.test(q)) {
-      out.push({ id: `run-${q}`, group: "Aksi", label: `Jalankan riset ${q}`, sub: "Agent menyusun rencana, memanggil tool, lalu menulis company update",
-        hint: "Mulai", icon: "run", run: () => start(q) });
+      out.push({ id: `run-${q}`, group: t({ id: "Aksi", en: "Actions" }), label: t({ id: `Jalankan riset ${q}`, en: `Run research on ${q}` }),
+        sub: t({ id: "Agent menyusun rencana, memanggil tool, lalu menulis company update", en: "The agent plans, calls tools, then writes the company update" }),
+        hint: t({ id: "Mulai", en: "Start" }), icon: "run", run: () => start(q) });
     }
     const match = (text: string) => !q || text.toUpperCase().includes(q);
     for (const r of reports.filter((r) => match(`${r.ticker} ${r.name}`)).slice(0, 6)) {
-      out.push({ id: `replay-${r.ticker}`, group: "Putar ulang run tersimpan", label: r.ticker, sub: r.name,
+      out.push({ id: `replay-${r.ticker}`, group: t({ id: "Putar ulang run tersimpan", en: "Replay a stored run" }), label: r.ticker, sub: r.name,
         hint: r.published ? `${ratingLabel(r)}, TP Rp${rp(r.tp)}` : ratingLabel(r), icon: "replay",
         run: () => go(`/laporan/${r.ticker}/putar`) });
     }
     for (const r of reports.filter((r) => q && r.ticker === q && r.files.html)) {
-      out.push({ id: `report-${r.ticker}`, group: "Laporan", label: `Company update ${r.ticker}`, sub: r.headline || r.name,
-        hint: "Buka", icon: "report", run: () => { onClose(); window.location.assign(`/files/reports/${r.ticker}.html`); } });
+      out.push({ id: `report-${r.ticker}`, group: t({ id: "Laporan", en: "Reports" }), label: `Company update ${r.ticker}`, sub: r.headline || r.name,
+        hint: t({ id: "Buka", en: "Open" }), icon: "report", run: () => { onClose(); window.location.assign(`/files/reports/${r.ticker}.html`); } });
     }
-    const fresh = tickers.filter((t) => match(t) && t !== q && !known.has(t)).slice(0, q ? 6 : 4);
-    for (const t of fresh) {
-      out.push({ id: `run-${t}`, group: "Jalankan riset", label: t, sub: "Belum ada laporan tersimpan", hint: "Mulai", icon: "run", run: () => start(t) });
+    const fresh = tickers.filter((tk) => match(tk) && tk !== q && !known.has(tk)).slice(0, q ? 6 : 4);
+    for (const ticker of fresh) {
+      out.push({ id: `run-${ticker}`, group: t({ id: "Jalankan riset", en: "Run research" }), label: ticker,
+        sub: t({ id: "Belum ada laporan tersimpan", en: "No stored report yet" }), hint: t({ id: "Mulai", en: "Start" }), icon: "run", run: () => start(ticker) });
     }
-    const nav: [string, string, string][] = [["Riset", "/research", "F1"], ["Laporan", "/laporan", "F2"], ["Cara kerja", "/#cara-kerja", "F3"]];
+    const nav: [string, string, string][] = [
+      [t({ id: "Riset", en: "Research" }), "/research", "F1"],
+      [t({ id: "Laporan", en: "Reports" }), "/laporan", "F2"],
+      [t({ id: "Cara kerja", en: "How it works" }), "/#cara-kerja", "F3"],
+    ];
     for (const [label, to, key] of nav.filter(([label]) => match(label))) {
-      out.push({ id: `nav-${to}`, group: "Navigasi", label, hint: key, icon: "nav", run: () => go(to) });
+      out.push({ id: `nav-${to}`, group: t({ id: "Navigasi", en: "Navigation" }), label, hint: key, icon: "nav", run: () => go(to) });
     }
     return out;
-  }, [query, reports, tickers, start, go, onClose]);
+  }, [query, reports, tickers, start, go, onClose, t]);
 
   useEffect(() => { setActive(0); }, [query]);
   useEffect(() => {
@@ -152,7 +160,7 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
     <motion.div className="fixed inset-0 z-[200] flex items-start justify-center px-4 pt-[12vh] max-sm:pt-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
       <div aria-hidden className="absolute inset-0 bg-[rgb(6_10_24/.45)] dark:bg-[rgb(0_0_0/.6)]" onClick={onClose} />
-      <motion.div role="dialog" aria-modal="true" aria-label="Cari emiten dan perintah" onKeyDown={onKeyDown}
+      <motion.div role="dialog" aria-modal="true" aria-label={t({ id: "Cari emiten dan perintah", en: "Search issuers and commands" })} onKeyDown={onKeyDown}
         className="relative w-full max-w-[620px] overflow-hidden rounded-xl border border-rule bg-surface shadow-[var(--shadow-pop)]"
         initial={reduce ? false : { opacity: 0, y: -10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.985 }} transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.7 }}>
@@ -161,13 +169,15 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
           <input ref={input} value={query} onChange={(e) => { setQuery(e.target.value); setError(null); }}
             role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list"
             aria-activedescendant={items[active] ? `${listId}-${active}` : undefined}
-            placeholder="Kode emiten, misalnya AMMN" spellCheck={false} autoComplete="off" maxLength={24}
+            placeholder={t({ id: "Kode emiten, misalnya AMMN", en: "Ticker, for example AMMN" })} spellCheck={false} autoComplete="off" maxLength={24}
             className="h-14 min-w-0 flex-1 bg-transparent font-mono text-[17px] font-medium tracking-[.04em] text-ink-strong uppercase outline-none placeholder:font-sans placeholder:text-[15px] placeholder:tracking-normal placeholder:normal-case placeholder:text-ink-faint" />
           <kbd className="kbd">Esc</kbd>
         </div>
         {error && <p role="alert" className="border-b border-rule bg-err-bg px-4 py-2.5 text-[14px] font-medium text-err-ink">{error}</p>}
-        <ul ref={list} id={listId} role="listbox" aria-label="Hasil" className="m-0 max-h-[min(440px,62vh)] list-none overflow-y-auto overscroll-contain p-2">
-          {items.length === 0 && <li className="px-3 py-8 text-center text-[14px] text-ink-soft">Tidak ada yang cocok. Ketik kode emiten BEI untuk menjalankan riset baru.</li>}
+        <ul ref={list} id={listId} role="listbox" aria-label={t({ id: "Hasil", en: "Results" })} className="m-0 max-h-[min(440px,62vh)] list-none overflow-y-auto overscroll-contain p-2">
+          {items.length === 0 && <li className="px-3 py-8 text-center text-[14px] text-ink-soft">
+            {t({ id: "Tidak ada yang cocok. Ketik kode emiten BEI untuk menjalankan riset baru.", en: "Nothing matches. Type an IDX ticker to run new research." })}
+          </li>}
           {items.map((item, i) => {
             const Icon = ICONS[item.icon];
             const header = item.group !== lastGroup ? (lastGroup = item.group) : null;
@@ -188,7 +198,7 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
                     {item.sub && <span className="block truncate text-[13px] text-ink-soft">{item.sub}</span>}
                   </span>
                   <span className="relative flex flex-none items-center gap-1.5 text-[12.5px] text-ink-soft">
-                    {busy && item.id === `run-${busy}` ? "Memulai…" : item.hint}
+                    {busy && item.id === `run-${busy}` ? t({ id: "Memulai…", en: "Starting…" }) : item.hint}
                     {selected && <CornerDownLeft aria-hidden className="size-3.5 text-brand-ink" />}
                   </span>
                 </div>
@@ -197,9 +207,9 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
           })}
         </ul>
         <div className="flex items-center gap-4 border-t border-rule bg-raised px-4 py-2 text-[12px] text-ink-soft max-sm:hidden">
-          <span className="flex items-center gap-1.5"><kbd className="kbd">↑</kbd><kbd className="kbd">↓</kbd> pilih</span>
-          <span className="flex items-center gap-1.5"><kbd className="kbd">↵</kbd> jalankan</span>
-          <span className="ml-auto">Run tersimpan diputar ulang dari jejak auditnya.</span>
+          <span className="flex items-center gap-1.5"><kbd className="kbd">↑</kbd><kbd className="kbd">↓</kbd> {t({ id: "pilih", en: "select" })}</span>
+          <span className="flex items-center gap-1.5"><kbd className="kbd">↵</kbd> {t({ id: "jalankan", en: "run" })}</span>
+          <span className="ml-auto">{t({ id: "Run tersimpan diputar ulang dari jejak auditnya.", en: "Stored runs replay from their audit trace." })}</span>
         </div>
       </motion.div>
     </motion.div>
