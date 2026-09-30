@@ -1,7 +1,9 @@
 """Report prose in two languages (app.prose_lang)."""
 import copy
 
-from app import prose_lang
+import pytest
+
+from app import prose_lang, scrub
 from app.prose_lang import attach, building, english_view, t
 
 
@@ -182,3 +184,17 @@ def test_reads_english_rejects_indonesian_the_mixed_guard_lets_through():
     assert not prose_lang.reads_english("Biaya kredit 1H26 3,02% sudah di atas rata-rata")
     assert prose_lang.reads_english("NIM margin risk from the BI rate cycle")
     assert prose_lang.reads_english("Rising funding costs")
+
+
+@pytest.mark.parametrize("text", ["3Q26", "FY2026", "2H26", "1H26-2H26", "Bank Indonesia",
+                                  "BI-Rate", "Semester II 2026"])
+def test_a_code_or_name_may_be_its_own_english(text):
+    assert prose_lang.language_neutral(text)
+    assert scrub.english_problems(text, text) == []
+
+
+@pytest.mark.parametrize("text", ["Penurunan suku bunga", "Kredit naik pada 3Q26",
+                                  "rilis earnings 3Q26", "Loans rise in 3Q26"])
+def test_prose_may_not_repeat_as_its_own_english(text):
+    assert not prose_lang.language_neutral(text)
+    assert "repeats the Indonesian instead of translating it" in scrub.english_problems(text, text)
