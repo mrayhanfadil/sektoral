@@ -4,7 +4,10 @@ An archive is stored below ``<run folder>/archives/<TICKER>/<publication_id>``.
 Rendered files are copied byte-for-byte. Structured documents are serialized
 as stable JSON snapshots from ``app.outputs`` (and its selected database).
 Every copied file is hashed in ``archive.json``; readers verify confinement
-and the recorded content hash before returning an artifact path.
+and the recorded content hash before returning an artifact path. An archive
+keeps the languages its bundle was approved with: the English HTML/PDF are
+archived when the approved bundle held them (ADR 0015), and archives without
+them verify as before.
 """
 from __future__ import annotations
 
@@ -21,10 +24,14 @@ from . import assumption_review, outputs, reviewer_auth, store
 _TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,19}$")
 _PUBLICATION_ID = re.compile(r"^[a-f0-9]{64}$")
 _FINAL_KINDS = ("html", "pdf", "trace_html")
+# Rendered English files, archived only when the approved bundle had them.
+_OPTIONAL_KINDS = ("html_en", "pdf_en")
 _FILE_NAMES = {
     "html": "{ticker}.html",
     "pdf": "{ticker}.pdf",
     "trace_html": "{ticker}-trace.html",
+    "html_en": "{ticker}.en.html",
+    "pdf_en": "{ticker}.en.pdf",
     "report": "{ticker}-report.json",
     "trace": "{ticker}-trace.json",
     "manifest": "{ticker}-manifest.json",
@@ -134,9 +141,10 @@ def _load_archive(directory: Path, root: Path, ticker: str,
 def archive_approved_bundle(folder, ticker, db=None) -> dict | None:
     """Archive a currently approved report bundle once, without replacing it.
 
-    The three rendered-file hashes must agree across the live files, the
-    approved review record, and the run manifest. Report, trace and manifest
-    database documents are required. Recorded events are included when they
+    The rendered-file hashes (the three required ones, plus the English
+    edition when the approved bundle holds it) must agree across the live
+    files, the approved review record, and the run manifest. Report, trace
+    and manifest database documents are required. Recorded events are included when they
     exist; older runs without recorded events remain archivable.
 
     Returns the archive manifest plus its local ``archive_dir``, or ``None``
@@ -171,7 +179,9 @@ def archive_approved_bundle(folder, ticker, db=None) -> dict | None:
 
     rendered_sources: dict[str, Path] = {}
     expected_hashes: dict[str, str] = {}
-    for kind in _FINAL_KINDS:
+    optional = [kind for kind in _OPTIONAL_KINDS
+                if kind in review_hashes or kind in current_hashes or kind in manifest_artifacts]
+    for kind in (*_FINAL_KINDS, *optional):
         expected = review_hashes.get(kind)
         current = current_hashes.get(kind)
         manifest_item = manifest_artifacts.get(kind)
@@ -207,7 +217,7 @@ def archive_approved_bundle(folder, ticker, db=None) -> dict | None:
     if documents["manifest"].get("publication_id") != publication_id:
         return None
 
-    files = {kind: _FILE_NAMES[kind].format(ticker=symbol) for kind in _FINAL_KINDS}
+    files = {kind: _FILE_NAMES[kind].format(ticker=symbol) for kind in rendered_sources}
     for kind in _OUTPUT_COLLECTIONS:
         if documents[kind] is not None:
             files[kind] = _FILE_NAMES[kind].format(ticker=symbol)
@@ -314,9 +324,11 @@ def list_archives(folder, ticker) -> list[dict]:
 def artifact(folder, ticker, publication_id, kind) -> Path | None:
     """Return a verified archived file path for a known bundle kind, else None.
 
-    Supported kinds are ``html``, ``pdf``, ``trace_html``, ``report``,
-    ``trace``, ``manifest``, and ``events``. The returned path is inside the
-    archive and its bytes match the archive manifest's SHA-256 digest.
+    Supported kinds are ``html``, ``pdf``, ``trace_html``, ``html_en``,
+    ``pdf_en``, ``report``, ``trace``, ``manifest``, and ``events``; the
+    English kinds exist only in archives of a bundle approved with them. The
+    returned path is inside the archive and its bytes match the archive
+    manifest's SHA-256 digest.
     """
     symbol = _symbol(ticker)
     if (symbol is None or not isinstance(publication_id, str)
