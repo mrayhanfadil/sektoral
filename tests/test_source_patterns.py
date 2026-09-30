@@ -387,12 +387,33 @@ def _statement_examples():
     ]
 
 
+def _label_examples():
+    # Valuation method labels (va["method"]) as app.valuation builds them.
+    return [
+        ("DDM dividen skenario FY26F-FY30F + terminal Gordon (CoE, bukan WACC)",
+         "scenario dividend DDM FY26F-FY30F + Gordon terminal (CoE, not WACC)"),
+        ("DCF FCFF skenario FY26F-FY30F + terminal Gordon; exit EV/EBITDA historis sebagai cross-check",
+         "scenario FCFF DCF FY26F-FY30F + Gordon terminal; historical exit EV/EBITDA as a cross-check"),
+        ("DCF FCFF model operasional FY26F-FY30F + terminal Gordon; exit EV/EBITDA historis sebagai "
+         "cross-check",
+         "Operating Model FCFF DCF FY26F-FY30F + Gordon terminal; historical exit EV/EBITDA as a "
+         "cross-check"),
+        ("FY26F EV/EBITDA median peer x EBITDA skenario analis",
+         "FY26F median peer EV/EBITDA x Analyst Scenario EBITDA"),
+        *[(label, label) for label in ("SOTP/LoM (asset-based, no perpetual terminal)",
+                                       "EV/EBITDA peer forward x EBITDA", "EV/Sales peer x Revenue")],
+    ]
+
+
 EXAMPLES = (_bridge_examples() + _driver_examples() + _payout_examples()
-            + _candidate_examples() + _method_examples() + _statement_examples())
+            + _candidate_examples() + _method_examples() + _label_examples()
+            + _statement_examples())
 
 # Fixed texts read straight from their producers: each must have English.
 PRODUCED = sorted(
     {text for _, text in method_chain._READER_REASONS}
+    | {label for label in method_chain.LABELS.values()
+       if label not in {e[0] for e in _label_examples()}}
     | {name for name in method_chain.SHORT.values()
        if source_patterns.SHORT_EN[name] != name}
     | set(forecast_statements._BANK_REASONS.values())

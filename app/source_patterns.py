@@ -328,6 +328,43 @@ _METHOD = [
      "curated Peer Group (Sectors peer table and Yahoo Finance snapshots)"),
 ])
 
+# --- Valuation method labels (va["method"]): the scenario primaries of
+# app.valuation and the fixed app.method_chain.LABELS, quoted as "the Target
+# Price uses {method}".
+_YEARS = r"FY(\d{2})F-FY(\d{2})F"
+_LABEL = [
+    (r"DDM dividen skenario " + _YEARS + r" \+ terminal Gordon \(CoE, bukan WACC\)",
+     "scenario dividend DDM FY{0}F-FY{1}F + Gordon terminal (CoE, not WACC)"),
+    (r"DCF FCFF skenario " + _YEARS + r" \+ terminal Gordon; exit EV/EBITDA historis sebagai cross-check",
+     "scenario FCFF DCF FY{0}F-FY{1}F + Gordon terminal; historical exit EV/EBITDA as a cross-check"),
+    (r"DCF FCFF model operasional " + _YEARS
+     + r" \+ terminal Gordon; exit EV/EBITDA historis sebagai cross-check",
+     "Operating Model FCFF DCF FY{0}F-FY{1}F + Gordon terminal; historical exit EV/EBITDA as a cross-check"),
+    (r"FY(\d{2})F EV/EBITDA median peer x EBITDA skenario analis",
+     "FY{0}F median peer EV/EBITDA x Analyst Scenario EBITDA"),
+] + _fixed([
+    # Already English in app.method_chain.LABELS.
+    ("SOTP/LoM (asset-based, no perpetual terminal)", "SOTP/LoM (asset-based, no perpetual terminal)"),
+    ("EV/EBITDA peer forward x EBITDA", "EV/EBITDA peer forward x EBITDA"),
+    ("EV/Sales peer x Revenue", "EV/Sales peer x Revenue"),
+    ("RNAV LoM anuitas (tanpa terminal perpetual)", "annuity RNAV LoM (no perpetual terminal)"),
+    ("FY26F EV/EBITDA 8x (asumsi analis)", "FY26F EV/EBITDA 8x (analyst assumption)"),
+    ("P/S peer x Sales per share", "peer P/S x sales per share"),
+    ("P/BV relatif peer x BVPS", "peer-relative P/BV x BVPS"),
+    ("Holding SOTP per anak usaha/aset", "holding SOTP by subsidiary/asset"),
+    ("Property NAV per aset", "property NAV by asset"),
+    ("DCF konsolidasi (referensi)", "consolidated DCF (reference)"),
+    ("DCF FCFF eksplisit + terminal Gordon, dibobot sama dengan exit EV/EBITDA",
+     "explicit FCFF DCF + Gordon terminal, weighted equally with exit EV/EBITDA"),
+    ("Relatif PER peer (median) x EPS forward", "peer-relative PER (median) x forward EPS"),
+    ("DDM dividen eksplisit + terminal Gordon (CoE, bukan WACC)",
+     "explicit dividend DDM + Gordon terminal (CoE, not WACC)"),
+    ("P/BV wajar vs ROE (Inverse CoE)", "fair P/BV vs ROE (Inverse CoE)"),
+    ("P/BV wajar dari ROE skenario laba FY", "fair P/BV from the FY earnings scenario ROE"),
+    ("P/BV peer x nilai buku terlapor (aset berat)", "peer P/BV x reported book value (asset-heavy)"),
+    ("FY26F PER median peer x EPS skenario analis", "FY26F median peer PER x Analyst Scenario EPS"),
+])
+
 # --- Statement notes (app.forecast_statements notes; app.bank_model._notes): why a
 # line is not modelled, quoted next to the charts.
 _MOVED = (r"jumlah saham berubah " + PCT + r" sejak akhir FY(\d{4}) \(aksi korporasi\); neraca "
@@ -560,5 +597,5 @@ _NOTES = _NOTE_PARTS + [
 ])
 
 PATTERNS = [(re.compile(p), t) for p, t in (
-    _BRIDGE + _DRIVERS + _PAYOUT + _READER + _CANDIDATE + _METHOD + _NOTES
+    _BRIDGE + _DRIVERS + _PAYOUT + _READER + _CANDIDATE + _METHOD + _LABEL + _NOTES
 )]
