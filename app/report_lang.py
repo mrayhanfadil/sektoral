@@ -709,7 +709,7 @@ _MONTH = re.compile(r"\b(Mei|Agu|Okt|Des)\b(?=[- ]?\d)")
 _MONTHS = {"Mei": "May", "Agu": "Aug", "Okt": "Oct", "Des": "Dec"}
 
 
-def _plain(text: str) -> str:
+def plain(text: str) -> str:
     """Words kept; figures, currency scales and months in English."""
     out = fmt.localize(text, "en")
     out = _CURRENCY_SCALE.sub(lambda m: f"{m[1]} {_SCALE[m[2]]}", out)
@@ -740,7 +740,7 @@ def _en(text: str) -> str:
     for sep in (" & ", " / "):
         if sep in text:
             return sep.join(_en(part) for part in text.split(sep))
-    return _plain(text)
+    return plain(text)
 
 
 def label(text, lang: str = DEFAULT):
