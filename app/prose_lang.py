@@ -26,6 +26,7 @@ import contextlib
 import contextvars
 import copy
 import functools
+import hashlib
 import json
 import re
 from collections import Counter
@@ -74,6 +75,15 @@ def _source_text() -> dict:
     for path in sorted(SOURCE_TEXT_DIR.glob("*.json")):
         found.update(json.loads(path.read_text(encoding="utf-8")))
     return found
+
+
+def source_text_sha256() -> str:
+    """SHA-256 of the translations loaded from ``data/source_text_en``.
+
+    The run manifest records it (``source_text_en_sha256``), so a translation
+    edit that changes a report's English shows up as a new manifest."""
+    blob = json.dumps(_source_text(), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest()
 
 
 def source(id_text, en_text=None):

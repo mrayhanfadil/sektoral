@@ -1,3 +1,5 @@
 # Publication uses an approved frozen bundle
 
 The analytical Release Status and public Publication State are separate decisions: passing the Release Gate makes a Company Update eligible for review, while public routes serve only the exact hash-verified bundle an identified analyst approved. A new build becomes review-pending, and the previously approved bundle remains retrievable as an archive; approval never repairs a failed Release Gate. This controls accidental distribution when shared output paths are rebuilt and keeps the evidence, review, and bytes readers see tied together. This decision does not claim that the product meets regulated research distribution requirements; that requires a separate policy and local compliance review.
+
+Both report languages publish as one bundle: see [0015](0015-both-languages-publish-as-one-bundle.md).

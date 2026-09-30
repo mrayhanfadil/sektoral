@@ -31,7 +31,8 @@ def approve(folder: Path, ticker: str):
                                      reviewer_identity=_reviewer_identity("Penguji"))
 
 
-def _report(folder: Path, ticker: str, published: bool = True, chain=True, reviewed=True):
+def _report(folder: Path, ticker: str, published: bool = True, chain=True, reviewed=True,
+            english=False):
     evidence_register = _test_register(ticker)
     doc = {"meta": {"ticker": ticker, "emiten": f"PT {ticker} Tbk", "tanggal": "2026-09-24",
                     "harga": 1000.0, "status": ("distributable_assumption_led" if published
@@ -53,6 +54,9 @@ def _report(folder: Path, ticker: str, published: bool = True, chain=True, revie
     (folder / f"{ticker}.html").write_text("<html>report</html>")
     (folder / f"{ticker}.pdf").write_bytes(b"%PDF-1.4 test")
     (folder / f"{ticker}-trace.html").write_text("<html>trace</html>")
+    if english:  # rendered before the manifest is finalized, so part of the bundle
+        (folder / f"{ticker}.en.html").write_text("<html lang='en'>report</html>")
+        (folder / f"{ticker}.en.pdf").write_bytes(b"%PDF-1.4 english")
     manifest = run_manifest.finalize_manifest({
         "ticker": ticker, "code_revision": "test", "source_tree_sha256": "a" * 64,
         "spec_sha256": "b" * 64,

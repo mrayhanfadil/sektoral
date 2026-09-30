@@ -40,7 +40,7 @@ def _attestation():
     }
 
 
-def _approved_bundle(folder: Path, db: Path, ticker="UJIA"):
+def _approved_bundle(folder: Path, db: Path, ticker="UJIA", english=False):
     folder.mkdir(parents=True, exist_ok=True)
     evidence_register = _test_register(ticker)
     outputs.save(outputs.REPORT, folder, ticker,
@@ -55,6 +55,9 @@ def _approved_bundle(folder: Path, db: Path, ticker="UJIA"):
     (folder / f"{ticker}.html").write_bytes(b"<html>company update</html>")
     (folder / f"{ticker}.pdf").write_bytes(b"%PDF-1.4 company update")
     (folder / f"{ticker}-trace.html").write_bytes(b"<html>audit trace</html>")
+    if english:
+        (folder / f"{ticker}.en.html").write_bytes(b"<html lang='en'>company update</html>")
+        (folder / f"{ticker}.en.pdf").write_bytes(b"%PDF-1.4 english company update")
     base_manifest = {"ticker": ticker, "as_of": "2026-09-26",
                      "source_tree_sha256": "a" * 64,
                      "spec_sha256": "b" * 64,
@@ -101,6 +104,52 @@ def test_archive_snapshots_approved_files_and_db_documents(tmp_path):
     assert archived_html.read_bytes() == b"<html>company update</html>"
     assert publication_archive.artifact(
         folder, "UJIA", manifest["publication_id"], "report") == archive_dir / "UJIA-report.json"
+
+
+def test_english_files_beside_a_bundle_approved_without_them_are_not_archived(tmp_path):
+    folder, db = tmp_path / "reports", tmp_path / "outputs.db"
+    _approved_bundle(folder, db)
+    (folder / "UJIA.en.html").write_bytes(b"<html lang='en'>written later</html>")
+
+    archived = publication_archive.archive_approved_bundle(folder, "UJIA", db=db)
+
+    assert archived is not None and "html_en" not in archived["files"]
+    assert publication_archive.artifact(
+        folder, "UJIA", archived["publication_id"], "html_en") is None
+
+
+def test_archive_keeps_the_english_edition_its_bundle_was_approved_with(tmp_path):
+    folder, db = tmp_path / "reports", tmp_path / "outputs.db"
+    manifest, review = _approved_bundle(folder, db, english=True)
+
+    archived = publication_archive.archive_approved_bundle(folder, "UJIA", db=db)
+
+    assert archived is not None
+    assert set(archived["files"]) == {"html", "pdf", "trace_html", "html_en", "pdf_en",
+                                      "report", "trace", "manifest", "events"}
+    for kind in ("html_en", "pdf_en"):
+        assert archived["artifact_hashes"][kind] == review["artifact_hashes"][kind]
+        assert archived["artifact_hashes"][kind] == manifest["artifacts"][kind]["sha256"]
+    archive_dir = Path(archived["archive_dir"])
+    html_en = publication_archive.artifact(folder, "UJIA", manifest["publication_id"], "html_en")
+    assert html_en == archive_dir / "UJIA.en.html"
+    assert html_en.read_bytes() == b"<html lang='en'>company update</html>"
+    assert publication_archive.archive_approved_bundle(folder, "UJIA", db=db) == archived
+    assert publication_archive.list_archives(folder, "UJIA") == [
+        {key: value for key, value in archived.items() if key != "archive_dir"}]
+
+    # A corrupted English copy fails the whole archive closed.
+    (archive_dir / "UJIA.en.pdf").write_bytes(b"tampered")
+    assert publication_archive.list_archives(folder, "UJIA") == []
+    assert publication_archive.artifact(
+        folder, "UJIA", manifest["publication_id"], "html_en") is None
+
+
+def test_changed_english_edition_is_not_archived_as_the_approved_bundle(tmp_path):
+    folder, db = tmp_path / "reports", tmp_path / "outputs.db"
+    _approved_bundle(folder, db, english=True)
+    (folder / "UJIA.en.html").write_bytes(b"changed after approval")
+    assert publication_archive.archive_approved_bundle(folder, "UJIA", db=db) is None
 
 
 def test_archiving_requires_approved_state_and_all_final_hashes(tmp_path):
