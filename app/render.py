@@ -14,6 +14,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from . import cache as cache_mod
+from . import exhibit_ids
 from . import fmt
 from . import idx_history
 
@@ -1745,8 +1746,8 @@ def _render(doc):
     placed = {id(e) for b in doc["bagian"] for e in b.get("exhibit", [])}
     cover_tables = [e for e in doc["exhibits"]
                     if e.get("tipe") != "price_chart" and id(e) not in placed]
-    key_fin = next((e for e in cover_tables if e.get("judul") == "Key Financials"),
-                   cover_tables[0] if cover_tables else None)
+    key_fin = (exhibit_ids.find(cover_tables, exhibit_ids.KEY_FINANCIALS)
+               or (cover_tables[0] if cover_tables else None))
     if key_fin:
         h.append(_table(key_fin, "cover"))
     h.append("</div></div>")

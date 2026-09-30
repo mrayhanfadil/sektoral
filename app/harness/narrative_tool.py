@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+from app import exhibit_ids
+
 _LONG_DASH = re.compile(r"[—–]")
 _EMOJI = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF]")
 _PERIOD_OK = re.compile(r"\b(?:[1-4]Q\d{2}|[12]H\d{2}|9M\d{2}|FY\d{2})\b")
@@ -255,7 +257,7 @@ def check_narrative(doc: dict | None) -> dict:
 
     # Phase 2: Key Financials 2A+3F, tie-out charts/statements, belum dimodelkan.
     try:
-        kf = next((e for e in _exhibits(doc) if (e.get("judul") or "") == "Key Financials"), None)
+        kf = exhibit_ids.find(_exhibits(doc), exhibit_ids.KEY_FINANCIALS)
         if kf:
             cols = ((kf.get("data") or {}).get("cols") or [])
             # Expect 1 label + 5 periods (2A+3F) after trim.
