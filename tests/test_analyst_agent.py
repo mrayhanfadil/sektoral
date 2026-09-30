@@ -627,3 +627,40 @@ def test_problem_notes_list_the_words_to_remove():
     assert notes[0]["removed"] == ["49%", "layak dibeli"]
     assert notes[1] == {"message": "plan: TimeoutError: x", "removed": []}
 
+
+def test_public_intel_passes_twins_and_serves_old_results():
+    from app.jobs import public_intel
+    old = {"ticker": "SIDO", "plan": {"question": "Q?", "hypotheses": ["H1", "H2"], "source": "agent",
+                                      "steps": []},
+           "steps": [{"tool": "find_peers", "why": "grup"}],
+           "signals": [{"id": "peer.roe", "kind": "peer", "label": "ROE", "display": "1%"}],
+           "synthesis": {"headline": "H", "source": "agent", "findings": [
+               {"title": "T", "interpretation": "I", "caveat": "C", "signal_ids": ["peer.roe"]}],
+               "hypotheses": [{"index": 0, "verdict": "belum terjawab", "signal_ids": ["peer.roe"],
+                               "reason": "Sebagian didukung: margin naik."},
+                              {"index": 1, "verdict": "tidak didukung", "signal_ids": ["peer.roe"],
+                               "reason": "R"}],
+               "next_checks": ["N"]}}
+    public = public_intel(old)
+    assert public["plan"]["question_en"] is None and public["plan"]["hypotheses_en"] is None
+    assert public["steps"][0]["why_en"] is None and public["signals"][0]["label_en"] is None
+    assert public["synthesis"]["headline_en"] is None and public["synthesis"]["next_checks_en"] is None
+    assert public["synthesis"]["findings"][0]["title_en"] is None
+    assert [h["verdict_code"] for h in public["synthesis"]["hypotheses"]] == ["partly_supported",
+                                                                              "not_supported"]
+    new = json.loads(json.dumps(old))
+    new["plan"].update(question_en="Q in English?", hypotheses_en=["H one", "H two"])
+    new["steps"][0]["why_en"] = "group"
+    new["signals"][0].update(label_en="ROE", flag_en="highest in the group")
+    new["synthesis"].update(headline_en="Headline", next_checks_en=["Next"])
+    new["synthesis"]["findings"][0].update(title_en="Title", interpretation_en="Reading", caveat_en="Limit")
+    new["synthesis"]["hypotheses"][0]["reason_en"] = "Partly supported: margin rose."
+    public = public_intel(new)
+    assert public["plan"]["question_en"] == "Q in English?"
+    assert public["plan"]["hypotheses_en"] == ["H one", "H two"]
+    assert public["steps"][0]["why_en"] == "group"
+    assert public["signals"][0]["flag_en"] == "highest in the group"
+    synthesis = public["synthesis"]
+    assert synthesis["headline_en"] == "Headline" and synthesis["next_checks_en"] == ["Next"]
+    assert synthesis["findings"][0]["caveat_en"] == "Limit"
+    assert synthesis["hypotheses"][0]["reason_en"] == "Partly supported: margin rose."

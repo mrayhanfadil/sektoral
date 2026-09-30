@@ -16,6 +16,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 import uuid
 
+from agents.analyst.run import verdict_code
+
 from . import assumption_review, cache, gallery, outputs, progress, publication_archive, research
 
 LOG = logging.getLogger(__name__)
@@ -41,7 +43,11 @@ def http_url(value):
 
 
 def public_intel(intel) -> dict | None:
-    """Whitelist the analyst result fields the web app renders."""
+    """Whitelist the analyst result fields the web app renders.
+
+    English twins (``<field>_en``) pass through beside their Indonesian; results
+    stored before them simply have none (None). ``verdict_code`` is the
+    verdict's stable code, worked out for results stored before it."""
     if not isinstance(intel, dict) or not isinstance(intel.get("plan"), dict):
         return None
     plan, synthesis = intel["plan"], intel.get("synthesis") or {}
@@ -51,7 +57,8 @@ def public_intel(intel) -> dict | None:
         if not isinstance(signal, dict):
             continue
         row = {key: text(signal.get(key), 200) for key in
-               ("id", "kind", "label", "display", "note", "flag", "period", "median_display")}
+               ("id", "kind", "label", "label_en", "display", "note", "flag", "flag_en", "period",
+                "median_display")}
         for key in ("rank", "n"):
             row[key] = signal.get(key) if isinstance(signal.get(key), int) else None
         if signal.get("kind") == "web":
@@ -64,12 +71,21 @@ def public_intel(intel) -> dict | None:
     def ids(values):
         return [text(x, 60) for x in (values or []) if isinstance(x, str)][:8]
 
+    def texts(values, limit, count):
+        """A parallel list of English twins, or None when there is none."""
+        if not isinstance(values, list):
+            return None
+        return [text(x, limit) for x in values[:count]]
+
     return {
         "ticker": text(intel.get("ticker"), 12), "name": text(intel.get("name"), 120),
         "market_date": text(intel.get("market_date"), 20), "status": text(intel.get("status"), 20),
         "plan": {"question": text(plan.get("question"), 500), "source": text(plan.get("source"), 20),
-                 "hypotheses": [text(h, 400) for h in (plan.get("hypotheses") or [])[:4]]},
-        "steps": [{key: text(step.get(key), 240) for key in ("tool", "why", "summary", "status", "origin")}
+                 "hypotheses": [text(h, 400) for h in (plan.get("hypotheses") or [])[:4]],
+                 "question_en": text(plan.get("question_en"), 500),
+                 "hypotheses_en": texts(plan.get("hypotheses_en"), 400, 4)},
+        "steps": [{key: text(step.get(key), 240)
+                   for key in ("tool", "why", "why_en", "summary", "status", "origin")}
                   for step in (intel.get("steps") or [])[:10] if isinstance(step, dict)],
         "signals": signals[:30],
         "peers": {key: text((intel.get("peers") or {}).get(key), 160) for key in ("basis", "group")},
@@ -80,14 +96,20 @@ def public_intel(intel) -> dict | None:
                                if isinstance(i, dict) and http_url(i.get("url"))]},
         "synthesis": {
             "headline": text(synthesis.get("headline"), 400), "source": text(synthesis.get("source"), 20),
+            "headline_en": text(synthesis.get("headline_en"), 400),
             "findings": [{"title": text(f.get("title"), 200), "interpretation": text(f.get("interpretation"), 900),
-                          "caveat": text(f.get("caveat"), 400), "signal_ids": ids(f.get("signal_ids"))}
+                          "caveat": text(f.get("caveat"), 400), "signal_ids": ids(f.get("signal_ids")),
+                          "title_en": text(f.get("title_en"), 200),
+                          "interpretation_en": text(f.get("interpretation_en"), 900),
+                          "caveat_en": text(f.get("caveat_en"), 400)}
                          for f in (synthesis.get("findings") or [])[:4] if isinstance(f, dict)],
             "hypotheses": [{"index": h.get("index") if isinstance(h.get("index"), int) else None,
                             "verdict": text(h.get("verdict"), 30), "reason": text(h.get("reason"), 400),
-                            "signal_ids": ids(h.get("signal_ids"))}
+                            "signal_ids": ids(h.get("signal_ids")),
+                            "verdict_code": verdict_code(h), "reason_en": text(h.get("reason_en"), 400)}
                            for h in (synthesis.get("hypotheses") or [])[:4] if isinstance(h, dict)],
             "next_checks": [text(x, 200) for x in (synthesis.get("next_checks") or [])[:3]],
+            "next_checks_en": texts(synthesis.get("next_checks_en"), 200, 3),
         },
         "changes": {"first_run": bool(changes.get("first_run")),
                     "same_market_date": bool(changes.get("same_market_date")),
