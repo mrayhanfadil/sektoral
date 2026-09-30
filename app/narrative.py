@@ -5133,8 +5133,10 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
             "Figures beyond the actual period are analyst assumptions, not company guidance. ")
     doc["cover"]["paragraf"][1] = {
         "judul": "Asumsi skenario dan batasannya",
+        # The bank basis ends without a space (the Indonesian keeps that as is).
         "isi": (scenario_basis + _t(f"Laba bersih {label} model {fy_money}.",
-                                    f"Model {label} net profit is {fy_money}.") + path + priced)}
+                                    ("" if scenario_basis.endswith(" ") else " ")
+                                    + f"Model {label} net profit is {fy_money}.") + path + priced)}
     skipped = [_t(t["short"], _SHORT_EN.get(t["key"], t["short"]))
                for t in va["method_chain"]["trace"] if t["decision"] == "skipped"]
     # Struktur paragraph 3: method, forecast linkage, trading multiple (risk is
