@@ -182,7 +182,7 @@ function StepItem({ step, state, filter, depth }: { step: Step; state: DeckState
   const enter = useContext(Enter);
   const body = step.kind === "task" ? <TaskBlock step={step} state={state} filter={filter} depth={depth} />
     : step.kind === "call" ? <CallCard step={step} showAgent={depth === 0 && !filter} />
-    : <CompactRow step={step} showAgent={depth === 0 && !filter} />;
+    : <CompactRow step={step} state={state} showAgent={depth === 0 && !filter} />;
   return (
     <motion.li initial={enter ? { height: 0, opacity: 0 } : false} animate={{ height: "auto", opacity: 1 }}
       transition={{ height: SPRING, opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
@@ -329,7 +329,7 @@ function TaskBlock({ step, state, filter, depth }: { step: Step; state: DeckStat
 }
 
 /** Hypotheses, verdicts, gates, chain steps, the release and notes: one line each. */
-function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
+function CompactRow({ step, state, showAgent }: { step: Step; state: DeckState; showAgent: boolean }) {
   const { t, lang } = useLang();
   const d = step.data ?? {};
   let lead: ReactNode = null;
@@ -337,15 +337,18 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
   let side: ReactNode = null;
   let sub: string | undefined = words(step.resultDetail, lang);
   let glyph = step.status;
+  // An English reader's hypothesis rows read as the plan panel does (its English twins, lib/agents.ts `planIn`).
+  const planned = lang === "en" ? state.plan.hypotheses.find((h) => h.index === Number(d.index)) : undefined;
 
   if (step.kind === "hypothesis") {
     lead = `H${d.index ?? ""}`;
-    text = (step.resultDetail ?? step.title).replace(/^H\d+:\s*/, "");
+    text = (planned?.text ?? step.resultDetail ?? step.title).replace(/^H\d+:\s*/, "");
     sub = undefined;
   } else if (step.kind === "verdict") {
     const v = verdictOf(d);
     lead = `H${d.index ?? ""}`;
     text = <span className={`pill ${verdictTone(v)} px-2 py-0 text-[12.5px]`}>{verdictWord(v, lang) ?? step.title}</span>;
+    if (planned?.reason) sub = planned.reason;
     // An unanswered hypothesis is not a finished test: it carries the warning mark.
     if (step.status !== "run" && verdictGlyph(v) === "warn") glyph = "warn";
   } else if (step.kind === "gate") {
