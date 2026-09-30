@@ -4,11 +4,18 @@
 import { useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { AGENTS, STATUS_WORD, SUBAGENTS, type AgentId, type DeckState, type Status } from "../../lib/agents";
+import { useLang, type Bi } from "../../lib/i18n";
 import { EngineTag, Glyph, Hold } from "./kit";
 import { SPRING, STATUS_INK, useChangeCount } from "./read";
 
 /** Short names for the forecast subagent chips; the full name is in the title. */
-const SUB_SHORT: Record<string, string> = { news: "Berita", interim: "Interim", earnings: "Laba FY", stage: "Tahap", outyears: "Lanjut" };
+const SUB_SHORT: Record<string, Bi> = {
+  news: { id: "Berita", en: "News" },
+  interim: { id: "Interim", en: "Interim" },
+  earnings: { id: "Laba FY", en: "Earnings" },
+  stage: { id: "Tahap", en: "Stage" },
+  outyears: { id: "Lanjut", en: "Out-year" },
+};
 
 const LINE: Record<Status, string> = {
   idle: "bg-rule", run: "bg-brand-ink", ok: "bg-done/60", warn: "bg-warn-rule", error: "bg-err-ink/60",
@@ -21,6 +28,7 @@ type Props = {
 };
 
 export function AgentRail({ state, filter, onFilter }: Props) {
+  const { t } = useLang();
   const scroller = useRef<HTMLDivElement>(null);
   const active = state.active?.agent;
 
@@ -35,7 +43,7 @@ export function AgentRail({ state, filter, onFilter }: Props) {
 
   return (
     <div ref={scroller} className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] max-[1099px]:snap-x max-[1099px]:snap-mandatory max-[1099px]:scroll-px-3">
-      <div role="group" aria-label="Agent, klik untuk menyaring aliran kerja"
+      <div role="group" aria-label={t({ id: "Agent, klik untuk menyaring aliran kerja", en: "Agents, click to filter the work stream" })}
         className="grid min-w-max grid-cols-[repeat(7,minmax(156px,1fr))] px-2 py-2 min-[1100px]:min-w-0 min-[1100px]:grid-cols-7">
         {AGENTS.map((agent, i) => {
           const next = AGENTS[i + 1];
@@ -55,13 +63,15 @@ function RailNode({ id, state, pressed, leftLine, rightLine, onPress }: {
   id: AgentId; state: DeckState; pressed: boolean;
   leftLine: Status | null; rightLine: Status | null; onPress: () => void;
 }) {
+  const { t } = useLang();
   const meta = AGENTS.find((a) => a.id === id)!;
   const agent = state.agents[id];
   const changed = useChangeCount(agent.status);
-  const count = agent.calls > 0 ? `${agent.calls} call` : agent.steps > 0 ? `${agent.steps} langkah` : "";
+  const count = agent.calls > 0 ? t({ id: `${agent.calls} call`, en: `${agent.calls} ${agent.calls === 1 ? "call" : "calls"}` })
+    : agent.steps > 0 ? t({ id: `${agent.steps} langkah`, en: `${agent.steps} ${agent.steps === 1 ? "step" : "steps"}` }) : "";
   return (
     <div data-agent={id} className="snap-start">
-      <button type="button" aria-pressed={pressed} onClick={onPress} title={`${meta.name}: ${meta.role}`}
+      <button type="button" aria-pressed={pressed} onClick={onPress} title={`${t(meta.name)}: ${t(meta.role)}`}
         className="group relative isolate mx-1 flex w-[calc(100%-8px)] cursor-pointer flex-col gap-1.5 rounded-md px-2 pt-2 pb-2.5 text-left transition-colors hover:bg-raised">
         <Hold n={changed} tone={agent.status} />
         {pressed && (
@@ -77,11 +87,11 @@ function RailNode({ id, state, pressed, leftLine, rightLine, onPress }: {
           </span>
         </span>
         <span className="flex items-center gap-2">
-          <span className={`min-w-0 flex-1 truncate text-[14px] leading-tight font-bold ${agent.status === "idle" ? "text-ink-soft" : "text-ink-strong"}`}>{meta.short}</span>
+          <span className={`min-w-0 flex-1 truncate text-[14px] leading-tight font-bold ${agent.status === "idle" ? "text-ink-soft" : "text-ink-strong"}`}>{t(meta.short)}</span>
           <EngineTag engine={meta.engine} />
         </span>
         <span className="flex items-baseline gap-1 overflow-hidden whitespace-nowrap">
-          <span className={`data text-[10.5px] uppercase ${STATUS_INK[agent.status]}`}>{STATUS_WORD[agent.status]}</span>
+          <span className={`data text-[10.5px] uppercase ${STATUS_INK[agent.status]}`}>{t(STATUS_WORD[agent.status])}</span>
           {count && <span className="data truncate text-[10.5px] tracking-normal text-ink-soft" title={count}>{count}</span>}
         </span>
         {/* Forecast subagents: a sub-row inside the node's own width, off the rail line. */}
@@ -92,11 +102,12 @@ function RailNode({ id, state, pressed, leftLine, rightLine, onPress }: {
 }
 
 function SubChips({ state }: { state: DeckState }) {
+  const { t } = useLang();
   return (
     <span className="-mt-0.5 flex flex-wrap gap-[2px]">
       {SUBAGENTS.map((s) => {
         const status = state.subagents[s.id] ?? "idle";
-        return <SubChip key={s.id} name={s.name} short={SUB_SHORT[s.id] ?? s.name} status={status} />;
+        return <SubChip key={s.id} name={t(s.name)} short={t(SUB_SHORT[s.id] ?? s.name)} status={status} />;
       })}
     </span>
   );
@@ -111,14 +122,16 @@ const CHIP: Record<Status, string> = {
 };
 
 function SubChip({ name, short, status }: { name: string; short: string; status: Status }) {
+  const { t } = useLang();
   const changed = useChangeCount(status);
+  const word = t(STATUS_WORD[status]);
   return (
-    <span title={`Subagent ${name}: ${STATUS_WORD[status]}`}
+    <span title={`Subagent ${name}: ${word}`}
       className={`relative isolate inline-flex h-4 items-center gap-1 rounded-[3px] border px-[3px] text-[10.5px] leading-none font-medium whitespace-nowrap transition-colors duration-300 ${CHIP[status]}`}>
       <Hold n={changed} tone={status} />
       {status === "run" && <i aria-hidden className="size-1.5 animate-pulse rounded-full bg-live" />}
       {short}
-      <span className="sr-only">: {STATUS_WORD[status]}</span>
+      <span className="sr-only">: {word}</span>
     </span>
   );
 }

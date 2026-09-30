@@ -1,13 +1,17 @@
 import { CornerDownRight, ExternalLink } from "lucide-react";
 import type { Intel, Signal } from "../lib/api";
 import { STATUS_WORD, type Status } from "../lib/agents";
+import { useLang, type Bi } from "../lib/i18n";
 
 /** Section anchors, shared with the trace page's index so labels match headings. Pipeline order. */
-export const INTEL_SECTIONS: [string, string][] = [
-  ["rencana", "Rencana & hipotesis"], ["keputusan-tool", "Keputusan tool"],
-  ["sinyal", "Sinyal yang perlu dicek"], ["posisi-peer", "Posisi terhadap peer"],
-  ["temuan-agent", "Temuan agent"], ["berita-web", "Konteks berita web"],
-  ["perubahan", "Sejak riset terakhir"],
+export const INTEL_SECTIONS: [string, Bi][] = [
+  ["rencana", { id: "Rencana & hipotesis", en: "Plan & hypotheses" }],
+  ["keputusan-tool", { id: "Keputusan tool", en: "Tool decisions" }],
+  ["sinyal", { id: "Sinyal yang perlu dicek", en: "Signals to check" }],
+  ["posisi-peer", { id: "Posisi terhadap peer", en: "Position against peers" }],
+  ["temuan-agent", { id: "Temuan agent", en: "Agent findings" }],
+  ["berita-web", { id: "Konteks berita web", en: "Web News context" }],
+  ["perubahan", { id: "Sejak riset terakhir", en: "Since the last run" }],
 ];
 const TITLE = Object.fromEntries(INTEL_SECTIONS);
 
@@ -40,10 +44,11 @@ const WORD_TONE: Record<Status, string> = {
 
 /** A status: dot plus word. The bare status code reads in mono; a sentence in Roboto. */
 export function StatusWord({ status, children }: { status: Status; children?: React.ReactNode }) {
+  const { t } = useLang();
   return (
     <span className={`inline-flex items-center gap-1.5 whitespace-nowrap ${children ? "text-[12.5px] font-medium" : "data"} ${WORD_TONE[status]}`}>
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
-      {children ?? STATUS_WORD[status]}
+      {children ?? t(STATUS_WORD[status])}
     </span>
   );
 }
@@ -80,13 +85,14 @@ export function Empty({ children }: { children: React.ReactNode }) {
   return <p className="rounded-md border border-dashed border-rule px-4 py-3 text-[14.5px] text-ink-soft">{children}</p>;
 }
 
-export function Source({ url, children = "sumber" }: { url: string | null | undefined; children?: React.ReactNode }) {
+export function Source({ url, children }: { url: string | null | undefined; children?: React.ReactNode }) {
+  const { t } = useLang();
   if (!url) return null;
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="font-sans">
-      {children}
+      {children ?? t({ id: "sumber", en: "source" })}
       <ExternalLink aria-hidden className="ml-1 inline size-3 align-[-1px]" strokeWidth={2.2} />
-      <span className="sr-only">(tab baru)</span>
+      <span className="sr-only">{t({ id: "(tab baru)", en: "(new tab)" })}</span>
     </a>
   );
 }
@@ -94,20 +100,28 @@ export function Source({ url, children = "sumber" }: { url: string | null | unde
 /* ------------------------------------------------------------------ */
 
 const VERDICT: Record<string, ChipTone> = { didukung: "ok", "tidak didukung": "err" };
-const ORIGIN: Record<string, [ChipTone, string]> = {
-  agent: ["neutral", "sesuai rencana"],
-  agent_adaptive: ["brand", "keputusan baru agent"],
+/** The analyst agent's verdict values (agents/analyst/run.py), read for people; anything else shows as sent. */
+const VERDICT_LABEL: Record<string, Bi> = {
+  didukung: { id: "didukung", en: "supported" },
+  "tidak didukung": { id: "tidak didukung", en: "not supported" },
+  "belum terjawab": { id: "belum terjawab", en: "unanswered" },
+};
+const ORIGIN: Record<string, [ChipTone, Bi]> = {
+  agent: ["neutral", { id: "sesuai rencana", en: "as planned" }],
+  agent_adaptive: ["brand", { id: "keputusan baru agent", en: "new agent decision" }],
 };
 
 function Card({ id, count, children }: { id: string; count?: number; children: React.ReactNode }) {
-  return <Section id={id} title={TITLE[id]} count={count}>{children}</Section>;
+  const { t } = useLang();
+  return <Section id={id} title={t(TITLE[id])} count={count}>{children}</Section>;
 }
 
 function Citations({ ids, signals }: { ids: string[]; signals: Record<string, Signal> }) {
+  const { t } = useLang();
   const cited = ids.map((id) => signals[id]).filter(Boolean);
   if (!cited.length) return null;
   return (
-    <ul aria-label="Sinyal yang dikutip" className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
+    <ul aria-label={t({ id: "Sinyal yang dikutip", en: "Cited signals" })} className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
       {cited.map((s) => (
         <li key={s.id} className="max-w-full">
           {s.kind === "web" ? (
@@ -138,6 +152,7 @@ export function IntelPanel({ intel }: { intel: Intel }) {
 
 /** Headline and provenance chips. `as="p"` when the page already has an h2 for the agent. */
 export function IntelHeadline({ intel, as: Tag = "h2" }: { intel: Intel; as?: "h2" | "p" }) {
+  const { t } = useLang();
   const synthesis = intel.synthesis;
   const byAgent = synthesis.source === "agent";
   return (
@@ -147,10 +162,10 @@ export function IntelHeadline({ intel, as: Tag = "h2" }: { intel: Intel; as?: "h
       </Tag>
       <div className="flex flex-wrap gap-2">
         <Chip>{intel.name ?? intel.ticker}</Chip>
-        {intel.peers.group && <Chip tone="brand">Grup: {intel.peers.group}</Chip>}
-        {intel.market_date && <Chip mono>Data pasar {intel.market_date}</Chip>}
-        <Chip tone={byAgent ? "ok" : "warn"}>{byAgent ? "Kesimpulan agent tervalidasi" : "Ringkasan aturan host"}</Chip>
-        {intel.status && intel.status !== "ok" && <Chip tone="warn">Status: {intel.status === "partial" ? "parsial" : intel.status}</Chip>}
+        {intel.peers.group && <Chip tone="brand">{t({ id: "Grup", en: "Group" })}: {intel.peers.group}</Chip>}
+        {intel.market_date && <Chip mono>{t({ id: "Data pasar", en: "Market data" })} {intel.market_date}</Chip>}
+        <Chip tone={byAgent ? "ok" : "warn"}>{byAgent ? t({ id: "Kesimpulan agent tervalidasi", en: "Validated agent conclusion" }) : t({ id: "Ringkasan aturan host", en: "Host-rule summary" })}</Chip>
+        {intel.status && intel.status !== "ok" && <Chip tone="warn">Status: {intel.status === "partial" ? t({ id: "parsial", en: "partial" }) : intel.status}</Chip>}
       </div>
     </>
   );
@@ -164,6 +179,7 @@ function hypothesisText(text: string | null, i: number): [string, string] {
 }
 
 export function IntelSections({ intel }: { intel: Intel }) {
+  const { t } = useLang();
   const signals = Object.fromEntries(intel.signals.filter((s) => s.id).map((s) => [s.id as string, s]));
   const verdicts = Object.fromEntries(intel.synthesis.hypotheses.filter((h) => h.index != null).map((h) => [h.index as number, h]));
   const peers = intel.signals.filter((s) => s.kind === "peer");
@@ -177,7 +193,8 @@ export function IntelSections({ intel }: { intel: Intel }) {
         <p className="mb-1 max-w-[80ch] text-[16.5px] leading-snug font-bold text-ink-strong">{intel.plan.question}</p>
         {intel.plan.source && (
           <p className="mb-4 text-[13px] text-ink-soft">
-            Disusun oleh {intel.plan.source === "agent" ? "agent perencana" : <span className="font-mono">{intel.plan.source}</span>}
+            {t({ id: "Disusun oleh", en: "Written by" })}{" "}
+            {intel.plan.source === "agent" ? t({ id: "agent perencana", en: "the planning agent" }) : <span className="font-mono">{intel.plan.source}</span>}
           </p>
         )}
         <ol className="m-0 grid max-w-[920px] list-none divide-y divide-rule-soft p-0">
@@ -190,7 +207,9 @@ export function IntelSections({ intel }: { intel: Intel }) {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1.5">
                     <p className="min-w-0 flex-1 basis-[280px] text-[15px]">{text}</p>
-                    <Chip tone={v?.verdict ? VERDICT[v.verdict] ?? "neutral" : "dashed"} className="flex-none">{v?.verdict ?? "belum dinilai"}</Chip>
+                    <Chip tone={v?.verdict ? VERDICT[v.verdict] ?? "neutral" : "dashed"} className="flex-none">
+                      {v?.verdict ? (VERDICT_LABEL[v.verdict] ? t(VERDICT_LABEL[v.verdict]) : v.verdict) : t({ id: "belum dinilai", en: "not assessed" })}
+                    </Chip>
                   </div>
                   {v?.reason && <p className="mt-1 text-[13.5px] text-ink-soft">{v.reason}</p>}
                   <Citations ids={v?.signal_ids ?? []} signals={signals} />
@@ -205,7 +224,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
         <Card id="keputusan-tool" count={intel.steps.length}>
           <ol className="m-0 grid list-none divide-y divide-rule-soft p-0">
             {intel.steps.map((s, i) => {
-              const [tone, label] = ORIGIN[s.origin ?? ""] ?? ["dashed", "dilengkapi host"];
+              const [tone, label] = ORIGIN[s.origin ?? ""] ?? ["dashed", { id: "dilengkapi host", en: "filled in by host" }];
               const status = asStatus(s.status);
               return (
                 <li key={i} className="grid grid-cols-[28px_minmax(0,1fr)] gap-x-3 py-3 first:pt-0 last:pb-0">
@@ -213,7 +232,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                       <code className="font-mono text-[13.5px] font-semibold text-brand-ink">{s.tool}</code>
-                      <Chip tone={tone}>{label}</Chip>
+                      <Chip tone={tone}>{t(label)}</Chip>
                       <span className="ml-auto">
                         {status === "idle" && s.status ? <StatusWord status="idle"><code className="font-mono text-[12px]">{s.status}</code></StatusWord> : status !== "idle" && <StatusWord status={status} />}
                       </span>
@@ -222,7 +241,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
                     {s.summary && (
                       <p className="mt-1 flex items-start gap-1.5 text-[13.5px] text-ink-soft">
                         <CornerDownRight aria-hidden className="mt-[3px] size-3.5 flex-none text-ink-faint" strokeWidth={2.2} />
-                        <span className="min-w-0"><span className="sr-only">Hasil: </span>{s.summary}</span>
+                        <span className="min-w-0"><span className="sr-only">{t({ id: "Hasil: ", en: "Result: " })}</span>{s.summary}</span>
                       </p>
                     )}
                   </div>
@@ -238,8 +257,10 @@ export function IntelSections({ intel }: { intel: Intel }) {
           <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[14px] [&_td]:border-t [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top">
             <thead><tr>
-              <th scope="col" className={th}>Sinyal</th><th scope="col" className={`${th} text-right`}>Nilai</th>
-              <th scope="col" className={`${th} max-sm:hidden`}>Tanda</th><th scope="col" className={`${th} max-md:hidden`}>Periode dan catatan</th>
+              <th scope="col" className={th}>{t({ id: "Sinyal", en: "Signal" })}</th>
+              <th scope="col" className={`${th} text-right`}>{t({ id: "Nilai", en: "Value" })}</th>
+              <th scope="col" className={`${th} max-sm:hidden`}>{t({ id: "Tanda", en: "Flag" })}</th>
+              <th scope="col" className={`${th} max-md:hidden`}>{t({ id: "Periode dan catatan", en: "Period and note" })}</th>
             </tr></thead>
             <tbody>
               {flagged.map((s) => (
@@ -262,14 +283,17 @@ export function IntelSections({ intel }: { intel: Intel }) {
 
       {peers.length > 0 && (
         <Card id="posisi-peer" count={peers.length}>
-          {intel.peers.basis && <p className="mb-3 text-[13.5px] text-ink-soft">Basis: {intel.peers.basis}</p>}
+          {intel.peers.basis && <p className="mb-3 text-[13.5px] text-ink-soft">{t({ id: "Basis", en: "Basis" })}: {intel.peers.basis}</p>}
           <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[14px] [&_td]:border-t [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top">
             <thead><tr>
-              <th scope="col" className={th}>Metrik</th><th scope="col" className={`${th} text-right`}>Emiten</th>
-              <th scope="col" className={th}>Peringkat <span className="font-normal max-sm:sr-only">(kiri = tertinggi)</span></th>
-              <th scope="col" className={`${th} text-right max-md:hidden`}>Median peer</th>
-              <th scope="col" className={`${th} max-md:hidden`}><span className="sr-only">Tanda</span></th>
+              <th scope="col" className={th}>{t({ id: "Metrik", en: "Metric" })}</th>
+              <th scope="col" className={`${th} text-right`}>{t({ id: "Emiten", en: "Issuer" })}</th>
+              <th scope="col" className={th}>
+                {t({ id: "Peringkat", en: "Rank" })} <span className="font-normal max-sm:sr-only">{t({ id: "(kiri = tertinggi)", en: "(left = highest)" })}</span>
+              </th>
+              <th scope="col" className={`${th} text-right max-md:hidden`}>{t({ id: "Median peer", en: "Peer median" })}</th>
+              <th scope="col" className={`${th} max-md:hidden`}><span className="sr-only">{t({ id: "Tanda", en: "Flag" })}</span></th>
             </tr></thead>
             <tbody>
               {peers.map((s) => (
@@ -277,7 +301,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
                   <th scope="row" className="border-t border-rule-soft px-2 py-2.5 text-left align-top font-medium text-ink-strong">
                     {s.label}
                     <span className="mt-0.5 block text-[12.5px] font-normal text-ink-soft md:hidden">
-                      Median peer <span className="font-mono">{s.median_display || "—"}</span>
+                      {t({ id: "Median peer", en: "Peer median" })} <span className="font-mono">{s.median_display || "—"}</span>
                     </span>
                     {s.flag && <span className="mt-1 block md:hidden"><Chip tone="warn">{s.flag}</Chip></span>}
                   </th>
@@ -285,7 +309,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
                   <td>
                     {s.rank && s.n ? (
                       <>
-                        <div role="img" aria-label={`peringkat ${s.rank} dari ${s.n}`} className="mt-1 mb-1 flex gap-[2px] sm:gap-[3px]">
+                        <div role="img" aria-label={t({ id: `peringkat ${s.rank} dari ${s.n}`, en: `rank ${s.rank} of ${s.n}` })} className="mt-1 mb-1 flex gap-[2px] sm:gap-[3px]">
                           {Array.from({ length: s.n }, (_, i) => (
                             <span key={i} className={`size-2 rounded-[2px] sm:size-2.5 ${i + 1 === s.rank ? "scale-125 bg-brand" : "bg-rule"}`} />
                           ))}
@@ -311,7 +335,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
               <article key={i} className="grid content-start gap-1.5 border-t border-rule-soft pt-3.5">
                 <h4 className="text-[15.5px]">{f.title}</h4>
                 <p className="text-[15px]">{f.interpretation}</p>
-                <p className="text-[13.5px] text-ink-soft"><span className="font-medium text-ink">Batas bukti. </span>{f.caveat}</p>
+                <p className="text-[13.5px] text-ink-soft"><span className="font-medium text-ink">{t({ id: "Batas bukti. ", en: "Evidence limit. " })}</span>{f.caveat}</p>
                 <Citations ids={f.signal_ids} signals={signals} />
               </article>
             ))}
@@ -322,8 +346,11 @@ export function IntelSections({ intel }: { intel: Intel }) {
       {intel.web_news.items.length > 0 && (
         <Card id="berita-web" count={intel.web_news.items.length}>
           <p className="mb-3 text-[13.5px] text-ink-soft">
-            Berita {intel.web_news.window ? <span className="font-mono">{intel.web_news.window}</span> : ""}. Hanya konteks naratif, bukan data
-            Sectors; tidak ada angka sinyal yang berasal dari sini.
+            {t({ id: "Berita", en: "News" })} {intel.web_news.window ? <span className="font-mono">{intel.web_news.window}</span> : ""}.{" "}
+            {t({
+              id: "Hanya konteks naratif, bukan data Sectors; tidak ada angka sinyal yang berasal dari sini.",
+              en: "Narrative context only, not Sectors data; no signal figure comes from here.",
+            })}
           </p>
           <ul className="m-0 grid list-none divide-y divide-rule-soft p-0 text-[14.5px]">
             {intel.web_news.items.map((item, i) => (
@@ -341,26 +368,36 @@ export function IntelSections({ intel }: { intel: Intel }) {
 
       <Card id="perubahan">
         {changes.first_run ? (
-          <p className="text-ink-soft">Riset pertama untuk emiten ini. Hasilnya disimpan sebagai memori untuk dibandingkan pada riset berikutnya.</p>
+          <p className="text-ink-soft">
+            {t({
+              id: "Riset pertama untuk emiten ini. Hasilnya disimpan sebagai memori untuk dibandingkan pada riset berikutnya.",
+              en: "First run for this issuer. Its results are kept as Run Memory for comparison with the next run.",
+            })}
+          </p>
         ) : (
           <>
             <p className="text-[13.5px] text-ink-soft">
-              Dibanding riset <span className="font-mono">{String(changes.previous_run_at ?? "").slice(0, 16).replace("T", " ")}</span> (data
-              pasar <span className="font-mono">{changes.previous_market_date ?? "—"}</span>).
+              {t({ id: "Dibanding riset", en: "Compared with the run of" })}{" "}
+              <span className="font-mono">{String(changes.previous_run_at ?? "").slice(0, 16).replace("T", " ")}</span>{" "}
+              ({t({ id: "data pasar", en: "market data" })} <span className="font-mono">{changes.previous_market_date ?? "—"}</span>).
             </p>
             {changes.items.length ? (
               <ul className="mt-2 grid gap-1 pl-[18px] text-[14.5px]">
                 {changes.items.map((c, i) => <li key={i} className={c.kind === "new_flag" ? "text-warn-ink" : ""}>{c.text}</li>)}
               </ul>
             ) : (
-              <p className="mt-1">{changes.same_market_date ? "Data pasar belum berubah sejak riset terakhir; tidak ada sinyal yang bergeser." : "Tidak ada sinyal yang bergeser."}</p>
+              <p className="mt-1">
+                {changes.same_market_date
+                  ? t({ id: "Data pasar belum berubah sejak riset terakhir; tidak ada sinyal yang bergeser.", en: "Market data unchanged since the last run; no signal moved." })
+                  : t({ id: "Tidak ada sinyal yang bergeser.", en: "No signal moved." })}
+              </p>
             )}
           </>
         )}
         {next.length > 0 && (
           <div className="mt-5">
-            <SubHead>Pemeriksaan lanjutan yang disarankan agent</SubHead>
-            <ul className="m-0 grid gap-1 pl-[18px] text-[14.5px]">{next.map((t) => <li key={t}>{t}</li>)}</ul>
+            <SubHead>{t({ id: "Pemeriksaan lanjutan yang disarankan agent", en: "Follow-up checks suggested by the agent" })}</SubHead>
+            <ul className="m-0 grid gap-1 pl-[18px] text-[14.5px]">{next.map((check) => <li key={check}>{check}</li>)}</ul>
           </div>
         )}
       </Card>
