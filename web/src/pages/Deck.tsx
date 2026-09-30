@@ -4,12 +4,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CircleX, FileDown, FileText, Route, SquareTerminal } from "lucide-react";
-import { AGENTS, derive, PHASES, releaseFigures, type DeckState } from "../lib/agents";
+import { AGENTS, derive, PHASES, planIn, releaseFigures, type DeckState } from "../lib/agents";
 import {
-  api, ApiError, readerFiles, reportFiles, type Job, type JobEvent, type ReportItem, type RunReplay,
+  api, ApiError, readerFiles, reportFiles, type Intel, type Job, type JobEvent, type ReportItem, type RunReplay,
 } from "../lib/api";
 import { primaryMethodOf, str } from "../lib/codes";
 import { pct, rp } from "../lib/format";
+import { useRunIntel } from "../lib/useRunIntel";
 import { useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone } from "../lib/labels";
 import { useReplay } from "../lib/replay";
@@ -27,6 +28,12 @@ import { launch } from "../lib/launch";
 
 const NO_EVENTS: JobEvent[] = [];
 const IDLE = derive([]);
+
+/** The run's state with its plan in the reader's language (lib/agents.ts `planIn`). */
+function withPlan(state: DeckState, intel: Intel | null | undefined, lang: Lang): DeckState {
+  const plan = planIn(state.plan, intel, lang);
+  return plan === state.plan ? state : { ...state, plan };
+}
 
 function Page({ children }: { children: ReactNode }) {
   return <div className="wrap py-4 max-sm:py-3">{children}</div>;
@@ -189,7 +196,9 @@ export function DeckJob() {
   const events = job?.events ?? NO_EVENTS;
   const finished = job?.state === "completed" || job?.state === "error";
   const failed = job?.state === "error";
-  const state = useMemo(() => derive(events, { finished, failed }), [events, finished, failed]);
+  const derived = useMemo(() => derive(events, { finished, failed }), [events, finished, failed]);
+  // The finished job's analyst result carries the plan's English twins.
+  const state = useMemo(() => withPlan(derived, job?.intel, lang), [derived, job?.intel, lang]);
 
   if (!job) {
     if (missing) {
@@ -284,7 +293,9 @@ export function DeckReplay() {
   const run = load.run;
   const events = run?.events ?? NO_EVENTS;
   const replay = useReplay(events, { speed: 4, autoplay: true });
-  const state = useMemo(() => derive(replay.shown, { finished: replay.finished }), [replay.shown, replay.finished]);
+  const derived = useMemo(() => derive(replay.shown, { finished: replay.finished }), [replay.shown, replay.finished]);
+  const intel = useRunIntel(load.run ? T : undefined, lang);
+  const state = useMemo(() => withPlan(derived, intel, lang), [derived, intel, lang]);
 
   if (load.error) {
     const missing = load.error instanceof ApiError && load.error.status === 404;

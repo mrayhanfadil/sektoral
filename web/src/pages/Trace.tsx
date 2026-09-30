@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
 import { api, ApiError, readerFiles, reportFiles, type ProblemNote, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
-import { LOCALE, useLang, type Bi } from "../lib/i18n";
+import { LOCALE, twin, useLang, type Bi } from "../lib/i18n";
 import { problemNotes, validatorNote } from "../lib/labels";
 import { AGENT, derive, type AgentId, type Status } from "../lib/agents";
 import { LiveMark } from "../components/Mark";
@@ -431,11 +431,11 @@ function TraceBody({ trace }: { trace: TraceView }) {
               <div className="grid divide-y divide-rule-soft">
                 {research.insights.map((insight, i) => (
                   <article key={i} className="grid gap-2.5 py-4 first:pt-0 last:pb-0">
-                    <h4 className="text-[16px]">{insight.title || t({ id: "Temuan", en: "Finding" })}</h4>
+                    <h4 className="text-[16px]">{twin(insight, "title", lang) || t({ id: "Temuan", en: "Finding" })}</h4>
                     <dl className="m-0 grid gap-x-5 gap-y-1.5 text-[15px] sm:grid-cols-[104px_minmax(0,1fr)]">
-                      {insight.observation && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Observasi", en: "Observation" })}</dt><dd className="m-0">{insight.observation}</dd></>}
-                      {insight.implication && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Implikasi", en: "Implication" })}</dt><dd className="m-0">{insight.implication}</dd></>}
-                      {insight.caveat && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Batas bukti", en: "Evidence limit" })}</dt><dd className="m-0 text-ink-soft">{insight.caveat}</dd></>}
+                      {insight.observation && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Observasi", en: "Observation" })}</dt><dd className="m-0">{twin(insight, "observation", lang)}</dd></>}
+                      {insight.implication && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Implikasi", en: "Implication" })}</dt><dd className="m-0">{twin(insight, "implication", lang)}</dd></>}
+                      {insight.caveat && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Batas bukti", en: "Evidence limit" })}</dt><dd className="m-0 text-ink-soft">{twin(insight, "caveat", lang)}</dd></>}
                     </dl>
                     {insight.citations.length > 0 && (
                       <ul aria-label={t({ id: "Sitasi", en: "Citations" })} className="m-0 grid list-none divide-y divide-rule-soft rounded-md border border-rule bg-raised p-0">
@@ -591,13 +591,13 @@ function TraceBody({ trace }: { trace: TraceView }) {
                         {e.date}{e.url && <Source url={e.url} />}
                       </span>
                     </div>
-                    {e.rationale && <p className="text-[15px]">{e.rationale}</p>}
+                    {e.rationale && <p className="text-[15px]">{twin(e, "rationale", lang)}</p>}
                     {(e.factual_basis || e.mechanism || e.uncertainty) && (
                       <dl className="m-0 grid gap-x-6 gap-y-2.5 text-[14px] text-ink xl:grid-cols-3">
                         {([
-                          [{ id: "Fakta", en: "Fact" }, e.factual_basis],
-                          [{ id: "Mekanisme", en: "Mechanism" }, e.mechanism],
-                          [{ id: "Ketidakpastian", en: "Uncertainty" }, e.uncertainty],
+                          [{ id: "Fakta", en: "Fact" }, twin(e, "factual_basis", lang)],
+                          [{ id: "Mekanisme", en: "Mechanism" }, twin(e, "mechanism", lang)],
+                          [{ id: "Ketidakpastian", en: "Uncertainty" }, twin(e, "uncertainty", lang)],
                         ] as const).map(([k, v]) => v && (
                           <div key={k.id} className="min-w-0 border-t border-rule-soft pt-2">
                             <dt className="text-[12.5px] font-medium text-ink-soft">{t(k)}</dt>
@@ -614,7 +614,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
 
           {forecast.interim && (
             <Section id="interim" title={t(LABEL.interim)}>
-              <p className="max-w-[80ch] text-[15px]">{forecast.interim.rationale}</p>
+              <p className="max-w-[80ch] text-[15px]">{twin(forecast.interim, "rationale", lang)}</p>
               <p className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[12px] text-ink-soft">
                 {forecast.interim.published_at && <span>{t({ id: "Rilis", en: "Released" })} {forecast.interim.published_at}</span>}
                 <Source url={forecast.interim.url} />
@@ -645,7 +645,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                       </tr>
                       <tr>
                         <td colSpan={5} className="px-2 pb-3 text-[13.5px] text-ink-soft">
-                          <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{row.rationale}
+                          <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{twin(row, "rationale", lang)}
                           {row.source_ids.length > 0 && (
                             <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                               {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
@@ -693,7 +693,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                           <td colSpan={BANK_COLS.length + 1} className="px-2 pb-3 text-[13.5px] text-ink-soft">
                             {/* The table scrolls sideways on phones; the rationale stays in view and wraps to it. */}
                             <div className="sticky left-2 max-w-[min(80ch,calc(100vw-72px))]">
-                              <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{row.rationale}
+                              <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{twin(row, "rationale", lang)}
                               {row.source_ids.length > 0 && (
                                 <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                                   {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}

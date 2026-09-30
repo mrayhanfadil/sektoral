@@ -175,22 +175,29 @@ export type Signal = {
   peers?: { symbol: string | null; display: string | null }[];
 };
 
+// Agent text fields may carry an English twin `<field>_en` (#34); lib/i18n.ts
+// `twin` picks it for English readers and falls back to the Indonesian.
 export type Intel = {
   ticker: string | null;
   name: string | null;
   market_date: string | null;
   status: string | null;
-  plan: { question: string | null; source: string | null; hypotheses: (string | null)[] };
-  steps: { tool: string | null; why: string | null; summary: string | null; status: string | null; origin: string | null }[];
+  plan: { question: string | null; question_en?: string | null; source: string | null;
+    hypotheses: (string | null)[]; hypotheses_en?: (string | null)[] };
+  steps: { tool: string | null; why: string | null; why_en?: string | null; summary: string | null; status: string | null; origin: string | null }[];
   signals: Signal[];
   peers: { basis: string | null; group: string | null };
   web_news: { window: string | null; items: { title: string | null; url: string | null; domain: string | null; date: string | null }[] };
   synthesis: {
     headline: string | null;
+    headline_en?: string | null;
     source: string | null;
-    findings: { title: string | null; interpretation: string | null; caveat: string | null; signal_ids: string[] }[];
-    hypotheses: { index: number | null; verdict: string | null; verdict_code?: string | null; reason: string | null; signal_ids: string[] }[];
+    findings: { title: string | null; title_en?: string | null; interpretation: string | null; interpretation_en?: string | null;
+      caveat: string | null; caveat_en?: string | null; signal_ids: string[] }[];
+    hypotheses: { index: number | null; verdict: string | null; verdict_code?: string | null;
+      reason: string | null; reason_en?: string | null; signal_ids: string[] }[];
     next_checks: (string | null)[];
+    next_checks_en?: (string | null)[];
   };
   changes: {
     first_run: boolean;
@@ -308,7 +315,8 @@ export type TraceView = {
   research: {
     summary: string | null;
     endpoints: string[];
-    insights: { title: string | null; observation: string | null; implication: string | null; caveat: string | null;
+    insights: { title: string | null; title_en?: string | null; observation: string | null; observation_en?: string | null;
+      implication: string | null; implication_en?: string | null; caveat: string | null; caveat_en?: string | null;
       citations: { endpoint: string | null; field_path: string | null; value: string | null }[] }[];
     limitations: string[];
   };
@@ -321,15 +329,17 @@ export type TraceView = {
   forecast: {
     status: string | null;
     problems: string[];
-    news_effects: { driver: string | null; change: string | null; years: string[]; rationale: string | null; date: string | null;
-      url: string | null; factual_basis: string | null; mechanism: string | null; uncertainty: string | null }[];
-    interim: { rationale: string | null; published_at: string | null; url: string | null } | null;
+    news_effects: { driver: string | null; change: string | null; years: string[]; rationale: string | null; rationale_en?: string | null;
+      date: string | null; url: string | null; factual_basis: string | null; factual_basis_en?: string | null;
+      mechanism: string | null; mechanism_en?: string | null; uncertainty: string | null; uncertainty_en?: string | null }[];
+    interim: { rationale: string | null; rationale_en?: string | null; published_at: string | null; url: string | null } | null;
     outyears: { year: string | null; revenue_growth_pct: number | null; ebitda_margin_pct: number | null;
-      net_income_margin_pct: number | null; capex_to_revenue_pct: number | null; rationale: string | null; source_ids: string[] }[];
+      net_income_margin_pct: number | null; capex_to_revenue_pct: number | null; rationale: string | null; rationale_en?: string | null;
+      source_ids: string[] }[];
     /** Bank Driver Scenario: the interim year's H2 drivers, then the out-years (percent). */
     bank_drivers?: { year: string | null; loan_growth_pct: number | null; nim_pct: number | null; non_ii_to_nii_pct: number | null;
       cost_to_income_pct: number | null; cost_of_credit_pct: number | null; deposit_growth_pct: number | null;
-      rationale: string | null; source_ids: string[] }[];
+      rationale: string | null; rationale_en?: string | null; source_ids: string[] }[];
   };
   deepdive: { title: string | null; date: string | null; url: string | null; status: string | null; length: number; preview: string | null }[];
 };

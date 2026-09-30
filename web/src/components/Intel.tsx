@@ -2,7 +2,7 @@ import { CornerDownRight, ExternalLink } from "lucide-react";
 import type { Intel, Signal } from "../lib/api";
 import { STATUS_WORD, type Status } from "../lib/agents";
 import { VERDICT_WORD, verdictCode, type VerdictCode } from "../lib/codes";
-import { useLang, type Bi } from "../lib/i18n";
+import { twin, useLang, type Bi } from "../lib/i18n";
 
 /** Section anchors, shared with the trace page's index so labels match headings. Pipeline order. */
 export const INTEL_SECTIONS: [string, Bi][] = [
@@ -148,13 +148,13 @@ export function IntelPanel({ intel }: { intel: Intel }) {
 
 /** Headline and provenance chips. `as="p"` when the page already has an h2 for the agent. */
 export function IntelHeadline({ intel, as: Tag = "h2" }: { intel: Intel; as?: "h2" | "p" }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const synthesis = intel.synthesis;
   const byAgent = synthesis.source === "agent";
   return (
     <>
       <Tag className="mb-3.5 max-w-[72ch] text-[21px] leading-snug font-bold text-ink-strong text-balance max-sm:text-[19px]">
-        {synthesis.headline}
+        {twin(synthesis, "headline", lang)}
       </Tag>
       <div className="flex flex-wrap gap-2">
         <Chip>{intel.name ?? intel.ticker}</Chip>
@@ -175,18 +175,20 @@ function hypothesisText(text: string | null, i: number): [string, string] {
 }
 
 export function IntelSections({ intel }: { intel: Intel }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const signals = Object.fromEntries(intel.signals.filter((s) => s.id).map((s) => [s.id as string, s]));
   const verdicts = Object.fromEntries(intel.synthesis.hypotheses.filter((h) => h.index != null).map((h) => [h.index as number, h]));
   const peers = intel.signals.filter((s) => s.kind === "peer");
   const flagged = intel.signals.filter((s) => s.flag && s.kind !== "peer");
   const changes = intel.changes;
-  const next = intel.synthesis.next_checks.filter(Boolean) as string[];
+  // Agent text in the reader's language: each `_en` twin where the agent wrote one (lib/i18n.ts `twin`).
+  const hypotheses = twin(intel.plan, "hypotheses", lang);
+  const next = twin(intel.synthesis, "next_checks", lang).filter(Boolean) as string[];
 
   return (
     <>
       <Card id="rencana">
-        <p className="mb-1 max-w-[80ch] text-[16.5px] leading-snug font-bold text-ink-strong">{intel.plan.question}</p>
+        <p className="mb-1 max-w-[80ch] text-[16.5px] leading-snug font-bold text-ink-strong">{twin(intel.plan, "question", lang)}</p>
         {intel.plan.source && (
           <p className="mb-4 text-[13px] text-ink-soft">
             {t({ id: "Disusun oleh", en: "Written by" })}{" "}
@@ -194,9 +196,10 @@ export function IntelSections({ intel }: { intel: Intel }) {
           </p>
         )}
         <ol className="m-0 grid max-w-[920px] list-none divide-y divide-rule-soft p-0">
-          {intel.plan.hypotheses.map((h, i) => {
+          {hypotheses.map((h, i) => {
             const v = verdicts[i];
             const code = v ? verdictCode(v.verdict_code, v.verdict) : undefined;
+            const reason = v ? twin(v, "reason", lang) : null;
             const [label, text] = hypothesisText(h, i);
             return (
               <li key={i} className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-3 py-3 first:pt-0 last:pb-0">
@@ -208,7 +211,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
                       {code ? t(VERDICT_WORD[code]) : v?.verdict ? v.verdict : t({ id: "belum dinilai", en: "not assessed" })}
                     </Chip>
                   </div>
-                  {v?.reason && <p className="mt-1 text-[13.5px] text-ink-soft">{v.reason}</p>}
+                  {reason && <p className="mt-1 text-[13.5px] text-ink-soft">{reason}</p>}
                   <Citations ids={v?.signal_ids ?? []} signals={signals} />
                 </div>
               </li>
@@ -234,7 +237,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
                         {status === "idle" && s.status ? <StatusWord status="idle"><code className="font-mono text-[12px]">{s.status}</code></StatusWord> : status !== "idle" && <StatusWord status={status} />}
                       </span>
                     </div>
-                    {s.why && <p className="mt-1 text-[14.5px]">{s.why}</p>}
+                    {s.why && <p className="mt-1 text-[14.5px]">{twin(s, "why", lang)}</p>}
                     {s.summary && (
                       <p className="mt-1 flex items-start gap-1.5 text-[13.5px] text-ink-soft">
                         <CornerDownRight aria-hidden className="mt-[3px] size-3.5 flex-none text-ink-faint" strokeWidth={2.2} />
@@ -330,9 +333,9 @@ export function IntelSections({ intel }: { intel: Intel }) {
           <div className="grid items-start gap-x-8 gap-y-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))]">
             {intel.synthesis.findings.map((f, i) => (
               <article key={i} className="grid content-start gap-1.5 border-t border-rule-soft pt-3.5">
-                <h4 className="text-[15.5px]">{f.title}</h4>
-                <p className="text-[15px]">{f.interpretation}</p>
-                <p className="text-[13.5px] text-ink-soft"><span className="font-medium text-ink">{t({ id: "Batas bukti. ", en: "Evidence limit. " })}</span>{f.caveat}</p>
+                <h4 className="text-[15.5px]">{twin(f, "title", lang)}</h4>
+                <p className="text-[15px]">{twin(f, "interpretation", lang)}</p>
+                <p className="text-[13.5px] text-ink-soft"><span className="font-medium text-ink">{t({ id: "Batas bukti. ", en: "Evidence limit. " })}</span>{twin(f, "caveat", lang)}</p>
                 <Citations ids={f.signal_ids} signals={signals} />
               </article>
             ))}
