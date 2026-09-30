@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import gallery, outputs, progress, trace_view
+from . import exhibit_ids, gallery, outputs, progress, trace_view
 from .jobs import text
 
 GATES = ((0, "Model bisnis"), (1, "Kelayakan data"), (2, "Struktur kepemilikan"),
@@ -87,8 +87,7 @@ def gate_rows(verdict: dict | None) -> list[dict]:
 
 
 def _chain_rows(doc):
-    exhibit = next((e for e in doc.get("exhibits") or []
-                    if isinstance(e, dict) and e.get("judul") == "Rantai metode valuasi"), None)
+    exhibit = exhibit_ids.find(doc.get("exhibits"), exhibit_ids.METHOD_CHAIN)
     for row in ((exhibit or {}).get("data") or {}).get("rows") or []:
         if isinstance(row, list) and len(row) >= 3:
             yield {"method": re.sub(r"^\S+\.\s*", "", str(row[0])).replace(" (utama)", ""),

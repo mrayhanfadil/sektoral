@@ -1,9 +1,17 @@
-"""Format angka Indonesia: 1.234,5. Nol em-dash, nol emoji di output."""
+"""Format angka per bahasa laporan: Indonesia 1.234,5, English 1,234.5.
+
+Nol em-dash, nol emoji di output. Every formatter takes ``lang`` ("id", the
+default, or "en"); currency stays "Rp" and a missing figure stays "n.a." in
+both languages.
+"""
 import math
 import re
 
+LANGS = ("id", "en")
 
-def _id(x, dec=1):
+
+def num(x, dec=1, lang="id"):
+    """A figure with thousands grouping in the report language."""
     if x is None:
         return "n.a."
     try:
@@ -13,7 +21,31 @@ def _id(x, dec=1):
     s = f"{val:,.{dec}f}"
     if s.startswith("-") and not any(c in "123456789" for c in s):
         s = s[1:]  # a value that rounds to zero is 0, not -0
+    if lang == "en":
+        return s
     return s.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def _id(x, dec=1):
+    return num(x, dec)
+
+
+# A figure the report document already holds in Indonesian form: grouped
+# thousands with an optional decimal comma (1.234,5), or a decimal comma alone
+# (0,9). Stage Check ids (S2.9), versions (1.3.0) and ranges (2024-2025) do not
+# match.
+_ID_FIGURE = re.compile(r"(?<![\d.,])(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+,\d+)(?![.,]?\d)")
+
+
+def localize(text, lang="id"):
+    """Figures in `text`, formatted in Indonesian, rewritten for `lang`.
+
+    Run it once, on Indonesian text: English text read as Indonesian would
+    turn 1,234 into 1.234."""
+    if lang != "en" or not isinstance(text, str):
+        return text
+    return _ID_FIGURE.sub(
+        lambda m: m.group(0).replace(".", "_").replace(",", ".").replace("_", ","), text)
 
 
 # IDX price fractions (fraksi harga): tick size by price band.
@@ -32,7 +64,7 @@ def tick(v):
     return int(math.copysign(units * step, v)) if units else 0
 
 
-def rp(v):
+def rp(v, lang="id"):
     """Harga / per saham: tanpa desimal."""
     if v is None:
         return "n.a."
@@ -40,35 +72,35 @@ def rp(v):
         val = float(v)
     except (ValueError, TypeError):
         return "n.a."
-    return _id(val, 0)
+    return num(val, 0, lang)
 
 
-def miliar(v):
-    """Nilai besar dalam Rp miliar, 1 desimal."""
+def miliar(v, lang="id"):
+    """Nilai besar dalam Rp miliar (Rp bn), 1 desimal."""
     if v is None:
         return "n.a."
     try:
         val = float(v)
     except (ValueError, TypeError):
         return "n.a."
-    return _id(val / 1e9, 1)
+    return num(val / 1e9, 1, lang)
 
 
-def pct(v, dec=1):
+def pct(v, dec=1, lang="id"):
     if v is None:
         return "n.a."
     try:
         val = float(v)
     except (ValueError, TypeError):
         return "n.a."
-    return _id(val * 100, dec) + "%"
+    return num(val * 100, dec, lang) + "%"
 
 
 # Above this a P/E or P/B says only that the base (earnings, equity) is tiny.
 MULT_CAP = 100
 
 
-def mult(v, dec=1, cap=None):
+def mult(v, dec=1, cap=None, lang="id"):
     """``cap``: values above it read "n.m." (not meaningful), e.g. a 9.141,7x P/E."""
     if v is None:
         return "n.a."
@@ -78,7 +110,7 @@ def mult(v, dec=1, cap=None):
         return "n.a."
     if cap is not None and val > cap:
         return "n.m."
-    return _id(val, dec) + "x"
+    return num(val, dec, lang) + "x"
 
 
 def words(s):
@@ -88,7 +120,7 @@ def words(s):
 DEFAULT_SOURCE = "Source: Sectors (market and financial data), issuer disclosures; Sektoral analysis and estimates."
 
 
-def pe(v, dec=1):
+def pe(v, dec=1, lang="id"):
     """P/E ratio: nilai <= 0 atau > 200 menghasilkan 'n.m.' (not meaningful).
 
     House format guard: rasio P/E negatif atau ekstrem (> 200) tidak bermakna
@@ -102,26 +134,26 @@ def pe(v, dec=1):
         return "n.a."
     if val <= 0 or val > 200:
         return "n.m."
-    return mult(val, dec)
+    return mult(val, dec, lang=lang)
 
 
 # Explicit alias
 fmt_pe = pe
 
 
-def margin(v, dec=1):
-    """Marjin laba/rugi dalam notasi persentase Indonesia: koma desimal, persen."""
+def margin(v, dec=1, lang="id"):
+    """Marjin laba/rugi dalam notasi persentase: koma desimal (id), titik (en)."""
     if v is None:
         return "n.a."
     try:
         val = float(v)
     except (ValueError, TypeError):
         return "n.a."
-    return pct(val, dec)
+    return pct(val, dec, lang)
 
 
-def revenue_idr(v, dec=1, in_miliar=True):
-    """Pendapatan dalam format standar Indonesia: pemisah ribuan titik, desimal koma."""
+def revenue_idr(v, dec=1, in_miliar=True, lang="id"):
+    """Pendapatan: pemisah ribuan titik dan desimal koma (id), sebaliknya (en)."""
     if v is None:
         return "n.a."
     try:
@@ -129,8 +161,8 @@ def revenue_idr(v, dec=1, in_miliar=True):
     except (ValueError, TypeError):
         return "n.a."
     if in_miliar:
-        return miliar(val)
-    return _id(val, dec)
+        return miliar(val, lang)
+    return num(val, dec, lang)
 
 
 def source_citation(note: str = "") -> str:
@@ -166,17 +198,19 @@ def house_source_line(note) -> str:
 
 
 _NEG_MONEY = re.compile(r"(?<![\w(])((?:Rp|US\$)\s?)[-−]\s?(\d[\d.,]*(?:\s?(?:triliun|miliar|juta|ribu)\b)?)")
+# English scale suffixes follow the figure directly (Rp39.8bn).
+_NEG_MONEY_EN = re.compile(r"(?<![\w(])((?:Rp|US\$)\s?)[-−]\s?(\d[\d.,]*(?:tn|bn|mn|k)?\b)")
 _NEG_CELL = re.compile(r"^[-−]\s?(\d[\d.,]*)(%|x|\s?pp|\s?bps)?$")
 
 
-def bracket_negatives(text: str, whole: bool = False) -> str:
+def bracket_negatives(text: str, whole: bool = False, lang: str = "id") -> str:
     """Spec §5.5: negative figures in brackets. Money written inline
-    ("Rp-39,8 miliar") becomes "(Rp39,8 miliar)" anywhere in `text`; with
-    `whole`, a bare negative figure ("-4,1%", "-12") filling the text does too.
-    Ranges ("2024-2025", "8-10x") are left alone."""
+    ("Rp-39,8 miliar", "Rp-39.8bn") becomes "(Rp39,8 miliar)" anywhere in
+    `text`; with `whole`, a bare negative figure ("-4,1%", "-12") filling the
+    text does too. Ranges ("2024-2025", "8-10x") are left alone."""
     if not isinstance(text, str):
         return text
-    out = _NEG_MONEY.sub(r"(\1\2)", text)
+    out = (_NEG_MONEY_EN if lang == "en" else _NEG_MONEY).sub(r"(\1\2)", text)
     if whole:
         out = _NEG_CELL.sub(lambda m: f"({m.group(1)}{m.group(2) or ''})", out.strip())
     return out

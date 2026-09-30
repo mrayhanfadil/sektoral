@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from . import fmt, release_policy
+from . import exhibit_ids, fmt, release_policy
 
 BUY, SELL = 0.15, -0.10
 # A linear reading beyond this many tested steps leaves the tested range too far
@@ -152,7 +152,7 @@ def build(doc, intake, fc, va):
     catalyst = None
     for page in doc.get("bagian") or []:
         for exhibit in page.get("exhibit") or []:
-            if exhibit.get("judul") == "Katalis, risiko, dan indikator pemantauan":
+            if exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS):
                 data = (exhibit.get("data") or {}).get("rows") or []
                 # The next catalyst is one still ahead: skip rows marked completed.
                 ahead = [r for r in data if not any(word in str(r[1]).lower()

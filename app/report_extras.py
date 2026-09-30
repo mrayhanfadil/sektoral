@@ -19,7 +19,7 @@ from agents.estimator import tools as local_data
 
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
                mineops, rate_benchmarks, scenario_value, share_basis)
-from . import consensus, peer_groups
+from . import consensus, exhibit_ids, peer_groups
 from . import lom as lom_mod
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
@@ -138,8 +138,9 @@ def method_chain_exhibit(va):
         proposed = (chain.get("proposed_order") or [None])[0]
         source += f"; Usulan sistem: {proposed}; dipilih analis: {override}."
     # Brand constant: Sectoral (keputusan branding fase ini).
-    return _exhibit("Rantai metode valuasi",
-                    ["Metode", "Keputusan", "Nilai/saham", "Alasan"], rows, source)
+    return exhibit_ids.tag(_exhibit("Rantai metode valuasi",
+                                    ["Metode", "Keputusan", "Nilai/saham", "Alasan"], rows, source),
+                           exhibit_ids.METHOD_CHAIN)
 
 
 def holding_sotp_exhibit(va):
@@ -1959,7 +1960,7 @@ def mining_catalysts(doc, intake):
                      "Capex pengembangan menekan arus kas bebas; nilai aset baru masuk setelah LoM tersedia.",
                      "Dua arah"])
     for exhibit in doc["exhibits"]:
-        if exhibit["judul"] == "Katalis, risiko, dan indikator pemantauan" and rows:
+        if exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS) and rows:
             exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
                                         "Driver dan jalur dampak", "Arah"], "rows": rows}
             exhibit["catatan_sumber"] = (
@@ -2127,8 +2128,7 @@ def renumber(doc):
     follow page order."""
     chart = next((e for e in doc["exhibits"] if e.get("tipe") == "price_chart"), None)
     others = [e for e in doc["exhibits"] if e is not chart]
-    cover = next((e for e in others if e.get("judul") == "Key Financials"),
-                 others[0] if others else None)
+    cover = exhibit_ids.find(others, exhibit_ids.KEY_FINANCIALS) or (others[0] if others else None)
     ordered = [e for e in (chart, cover) if e is not None]
     for page in doc["bagian"]:
         for exhibit in page.get("exhibit") or []:
@@ -2142,7 +2142,7 @@ def renumber(doc):
 def trim_key_financials(doc, actual_years=2, forecast_years=DISPLAY_FORECAST_YEARS):
     """Spec §5.4 and the template: two actual and three forecast periods on the
     cover; the model's later years stay in the valuation exhibits."""
-    cover = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
+    cover = exhibit_ids.find(doc["exhibits"], exhibit_ids.KEY_FINANCIALS)
     if not cover:
         return
     cols = cover["data"]["cols"]
@@ -2176,7 +2176,7 @@ def shape_key_financials(doc, intake, fc=None, va=None, statements=None):
     close of that year. A cell that cannot be derived reads n.m. and the note
     says why.
     """
-    kf = next((e for e in doc["exhibits"] if e.get("judul") == "Key Financials"), None)
+    kf = exhibit_ids.find(doc["exhibits"], exhibit_ids.KEY_FINANCIALS)
     if not kf:
         return
     if statements is None:
@@ -2867,6 +2867,9 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
                  "data": {"cols": cols, "series": [panel]}, "narasi": note,
                  "catatan_sumber": source + (panel.pop("source_note", None) or "")}
                 for title, panel, cols, note in panels]
+    for exhibit in exhibits:
+        if exhibit["judul"] == revenue_title:
+            exhibit_ids.tag(exhibit, exhibit_ids.REVENUE_PANEL)
     return _page("Kinerja keuangan dan profitabilitas",
                  [f"Empat grafik berikut memakai periode {span} yang sama dengan Key Financials; "
                   "forecast hanya tampil bila skenario tervalidasi."], exhibits)
@@ -3105,7 +3108,7 @@ def attach_risks(doc, intake, page):
     if not risks:
         return
     page["risks"] = risks
-    page["risks_after"] = 1 if any(e["judul"] == "Katalis, risiko, dan indikator pemantauan"
+    page["risks_after"] = 1 if any(exhibit_ids.is_exhibit(e, exhibit_ids.CATALYSTS)
                                    for e in page["exhibit"]) else 0
     paragraphs = (doc.get("cover") or {}).get("paragraf") or []
     if paragraphs and isinstance(paragraphs[-1], dict):
@@ -3314,8 +3317,7 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
                  sensitivity_page(valuation_inputs),
                  peer_page(intake, valuation_inputs),
                  driver_value_page(doc, intake), investability_page(doc, intake)]
-    catalyst = next((e for p in pages for e in p["exhibit"]
-                     if e["judul"] == "Katalis, risiko, dan indikator pemantauan"), None)
+    catalyst = exhibit_ids.find((e for p in pages for e in p["exhibit"]), exhibit_ids.CATALYSTS)
     owner_exhibits, owner_paragraphs = ownership_exhibits(intake)
     risk_page = _page(
         "Katalis, risiko, dan kepemilikan",
@@ -3414,7 +3416,7 @@ def link_catalysts(doc, intake):
         f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}" for b in bounds)
     for page in doc.get("bagian") or []:
         for exhibit in page.get("exhibit") or []:
-            if exhibit.get("judul") != CATALYST_TITLE:
+            if not exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS):
                 continue
             data = exhibit.get("data") or {}
             if "Driver model" in (data.get("cols") or []):
@@ -3465,7 +3467,7 @@ def attach_consensus(pages, intake, va, *, released_value=None):
     for page in pages:
         exhibits = page.get("exhibit") or []
         at = next((i for i, e in enumerate(exhibits)
-                   if e.get("judul") == METHOD_CHAIN_TITLE), None)
+                   if exhibit_ids.is_exhibit(e, exhibit_ids.METHOD_CHAIN)), None)
         if at is None:
             continue
         if not any(e.get("judul") == consensus.TITLE for e in exhibits):
