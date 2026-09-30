@@ -84,6 +84,38 @@ describe("derive", () => {
     expect([news.event, news.resultEvent]).toEqual(["tool_start", "tool_empty"]);
   });
 
+  it("shows the server's English twins to an English reader and reads the kinds from the Indonesian", () => {
+    const TWINS: JobEvent[] = [
+      ev("memory", "Membaca memori riset", "ok", 0.1, { label_en: "Reading Run Memory", detail: "riset terakhir 2026-09-25", detail_en: "last run 2026-09-25" }),
+      ev("plan", "Rencana siap", "ok", 1, { detail: "Apakah margin bertahan?", detail_en: "Will margins hold?" }),
+      ev("plan", "Hipotesis 1", "ok", 1, { tool: "hypothesis", detail: "Margin di atas peer", detail_en: "Margins above peers", data: { index: "1" } }),
+      ev("tool", "Menjalankan find_peers", "run", 2, { tool: "find_peers", label_en: "Running find_peers", detail: "bandingkan peer", detail_en: "compare peers" }),
+      ev("tool", "find_peers selesai", "ok", 3, { tool: "find_peers", label_en: "find_peers done", detail: "5 emiten", detail_en: "5 issuers" }),
+      ev("research", "Agent riset membaca data", "run", 4, { label_en: "Research agent reads the data" }),
+      ev("research", "Agent riset membaca data", "ok", 5, { label_en: "  " }),
+      ev("gate", "Siklus & tahap operasi", "ok", 6, { agent: "gerbang", tool: "gate_3", detail: "siklus dan tahap operasi",
+        detail_en: "cycle and operating stage", data: { gate: "3", verdict: "lolos" } }),
+      ev("gate", "PER FY skenario", "ok", 7, { agent: "gerbang", tool: "chain_step", label_en: "FY scenario PER",
+        detail: "peer PER valid kurang dari tiga", detail_en: "fewer than three valid peer PERs", data: { decision: "Silang cek", value: "Rp3.150" } }),
+    ];
+    const en = derive(TWINS, { lang: "en" });
+    expect(en.steps[0]).toMatchObject({ title: "Reading Run Memory", resultDetail: "last run 2026-09-25" });
+    expect(en.plan).toEqual({ question: "Will margins hold?", hypotheses: [{ index: 1, text: "Margins above peers" }] });
+    const peers = en.steps.find((x) => x.tool === "find_peers")!;
+    expect(peers).toMatchObject({ title: "Running find_peers", reason: "compare peers", result: "find_peers done",
+      resultDetail: "5 issuers", event: "tool_start", resultEvent: "tool_done" });
+    // The same Indonesian label opens and closes the step: no separate result, whatever the twins say.
+    expect(en.steps.find((x) => x.stage === "research")!.result).toBeUndefined();
+    expect(en.gates[3]).toMatchObject({ code: "pass", detail: "cycle and operating stage" });
+    expect(en.chain[0]).toMatchObject({ method: "FY scenario PER", code: "cross_check", reason: "fewer than three valid peer PERs" });
+
+    const id = derive(TWINS, { lang: "id" });
+    expect(id.steps[0]).toMatchObject({ title: "Membaca memori riset", resultDetail: "riset terakhir 2026-09-25" });
+    expect(id.gates[3].detail).toBe("siklus dan tahap operasi");
+    expect(id.chain[0].method).toBe("PER FY skenario");
+    expect(derive(TWINS)).toEqual(id);
+  });
+
   it("keeps the running agent and phase while the run is live, and closes them when finished", () => {
     const live = derive(RUN);
     expect(live.agents.laporan.status).toBe("run");

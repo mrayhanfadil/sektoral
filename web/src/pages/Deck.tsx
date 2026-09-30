@@ -4,14 +4,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CircleX, FileDown, FileText, Route, SquareTerminal } from "lucide-react";
-import { AGENTS, derive, PHASES, planIn, releaseFigures, type DeckState } from "../lib/agents";
+import { AGENTS, derive, eventText, PHASES, planIn, releaseFigures, type DeckState } from "../lib/agents";
 import {
   api, ApiError, readerFiles, reportFiles, type Intel, type Job, type JobEvent, type ReportItem, type RunReplay,
 } from "../lib/api";
 import { primaryMethodOf, str } from "../lib/codes";
 import { pct, rp } from "../lib/format";
 import { useRunIntel } from "../lib/useRunIntel";
-import { useLang, type Bi, type Lang } from "../lib/i18n";
+import { twin, useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone } from "../lib/labels";
 import { useReplay } from "../lib/replay";
 import { useJob } from "../lib/useJob";
@@ -112,7 +112,7 @@ function fromReport(report: ReportItem, state: DeckState, lang: Lang): ResultDat
     tp: report.published && report.tp !== null ? `Rp${rp(report.tp, lang)}` : WITHHELD[lang],
     upside: report.published ? signed(report.upside, lang) : "-",
     price: report.price !== null ? `Rp${rp(report.price, lang)}` : undefined,
-    method: report.method || methodOf(state),
+    method: twin(report, "method", lang) || methodOf(state),
     release: words(str(state.release?.status), lang) ?? (report.published ? undefined : words("draft_non_distributable", lang)),
   };
 }
@@ -196,7 +196,7 @@ export function DeckJob() {
   const events = job?.events ?? NO_EVENTS;
   const finished = job?.state === "completed" || job?.state === "error";
   const failed = job?.state === "error";
-  const derived = useMemo(() => derive(events, { finished, failed }), [events, finished, failed]);
+  const derived = useMemo(() => derive(events, { finished, failed, lang }), [events, finished, failed, lang]);
   // The finished job's analyst result carries the plan's English twins.
   const state = useMemo(() => withPlan(derived, job?.intel, lang), [derived, job?.intel, lang]);
 
@@ -232,6 +232,7 @@ export function DeckJob() {
   const links: Links = { report: job.report_url, trace: job.trace_url, pdf: job.pdf_url };
   const result = fromRelease(state, lang);
   const lastError = [...events].reverse().find((e) => e.status === "error");
+  const errorText = lastError && eventText(lastError, lang);
   const phase = PHASES[Math.max(0, state.phaseAt)];
 
   return (
@@ -253,7 +254,7 @@ export function DeckJob() {
             <strong className="font-bold">
               {t({ id: `Riset ${job.ticker} berhenti di fase ${phase.title.id}.`, en: `The ${job.ticker} research stopped in the ${phase.title.en} phase.` })}
             </strong>{" "}
-            {lastError ? `${lastError.label}${lastError.detail ? ` (${lastError.detail})` : ""}. ` : ""}
+            {errorText ? `${errorText.label}${errorText.detail ? ` (${errorText.detail})` : ""}. ` : ""}
             {t({ id: "Jalankan ulang riset; jika berhenti lagi, periksa log server lokal.", en: "Rerun the research; if it stops again, check the local server log." })}
           </Notice>
         ) : done && job.quality === "partial" ? (
@@ -293,7 +294,7 @@ export function DeckReplay() {
   const run = load.run;
   const events = run?.events ?? NO_EVENTS;
   const replay = useReplay(events, { speed: 4, autoplay: true });
-  const derived = useMemo(() => derive(replay.shown, { finished: replay.finished }), [replay.shown, replay.finished]);
+  const derived = useMemo(() => derive(replay.shown, { finished: replay.finished, lang }), [replay.shown, replay.finished, lang]);
   const intel = useRunIntel(load.run ? T : undefined, lang);
   const state = useMemo(() => withPlan(derived, intel, lang), [derived, intel, lang]);
 

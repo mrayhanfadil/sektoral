@@ -123,6 +123,7 @@ export type Step = {
   kind: StepKind;
   stage: string;
   tool?: string;
+  /** The opening event's label; this and the texts below read in the language `derive` was given. */
   title: string;
   /** What the opening event reports (lib/codes.ts `eventKind`), when it is one the Deck reads. */
   event?: EventKind;
@@ -186,13 +187,27 @@ export function agentOf(e: Pick<JobEvent, "agent" | "stage">): { agent: AgentId;
 const RANK: Record<Status, number> = { idle: 0, ok: 1, run: 2, warn: 3, error: 4 };
 
 /**
- * Read a run's events. ``finished`` closes steps that never reported back
- * (``failed`` marks them as errors instead).
+ * An event's label and detail in the reader's language: the server's
+ * `label_en`/`detail_en` twins for an English reader where it sent them, the
+ * Indonesian otherwise.
  */
-export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: boolean } = {}): DeckState {
+export function eventText(e: Pick<JobEvent, "label" | "label_en" | "detail" | "detail_en">, lang: Lang = getLang()): { label: string; detail?: string } {
+  return { label: twin(e, "label", lang), detail: twin(e, "detail", lang) ?? undefined };
+}
+
+/**
+ * Read a run's events. ``finished`` closes steps that never reported back
+ * (``failed`` marks them as errors instead). Step titles, reasons, results,
+ * gate details, chain rows and the plan read in ``lang`` (`eventText`); what
+ * each event reports is still read from its Indonesian label.
+ */
+export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: boolean; lang?: Lang } = {}): DeckState {
+  const lang = opts.lang ?? "id";
   const steps: Step[] = [];
   const byId = new Map<number, Step>();
   const open: Step[] = [];
+  // The Indonesian label that opened each step: a closing event with the same label adds no result.
+  const opened = new Map<number, string>();
   const plan: DeckState["plan"] = { hypotheses: [] };
   const gates: GateState[] = GATES.map((g) => ({ ...g, status: "idle" }));
   const chain: ChainState[] = [];
@@ -217,17 +232,18 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
   events.forEach((e, i) => {
     const { agent, sub } = agentOf(e);
     const kind = kindOf(e);
+    const { label, detail } = eventText(e, lang);
     lastEvent[agent] = i;
     phaseAt = Math.max(phaseAt, PHASE_OF[e.stage] ?? 0);
 
     if (kind === "hypothesis") {
       const index = Number(e.data?.index ?? plan.hypotheses.length + 1);
-      plan.hypotheses.push({ index, text: e.detail ?? e.label });
+      plan.hypotheses.push({ index, text: detail ?? label });
     } else if (kind === "verdict") {
       const index = Number(e.data?.index);
       const h = plan.hypotheses.find((x) => x.index === index);
       const verdict = str(e.data?.verdict) ?? e.label;
-      if (h) Object.assign(h, { verdict, code: verdictCode(e.data?.verdict_code, verdict), reason: e.detail });
+      if (h) Object.assign(h, { verdict, code: verdictCode(e.data?.verdict_code, verdict), reason: detail });
     } else if (kind === "gate") {
       const n = Number(e.data?.gate ?? (e.tool ?? "").slice(5));
       const g = gates.find((x) => x.n === n);
@@ -236,22 +252,23 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
         const code = gateCode(e.data?.verdict_code, verdict);
         Object.assign(g, {
           status: code === "not_applicable" ? "skip" : e.status === "ok" ? "ok" : "warn",
-          verdict, code, detail: e.detail,
+          verdict, code, detail,
         });
       }
     } else if (kind === "chain") {
       const decision = str(e.data?.decision) ?? "";
-      chain.push({ method: e.label, decision, code: decisionCode(e.data?.decision_code, decision),
-        value: str(e.data?.value) ?? "-", reason: e.detail, order: chain.length });
+      chain.push({ method: label, decision, code: decisionCode(e.data?.decision_code, decision),
+        value: str(e.data?.value) ?? "-", reason: detail, order: chain.length });
     } else if (kind === "release") {
       release = e.data;
     }
 
     if (e.status === "run") {
       const parent = enclosing(agent, sub) ?? (agent === "gerbang" ? enclosing("laporan") : undefined);
-      const step: Step = { id: i, agent, sub, kind, stage: e.stage, tool: e.tool, title: e.label, event: eventKind(e), reason: e.detail,
+      const step: Step = { id: i, agent, sub, kind, stage: e.stage, tool: e.tool, title: label, event: eventKind(e), reason: detail,
         status: "run", t0: e.t, data: e.data, parent: parent?.id, children: [] };
       add(step);
+      opened.set(i, e.label);
       open.push(step);
       return;
     }
@@ -265,14 +282,14 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
     if (match >= 0) {
       const s = open[match];
       open.splice(match, 1);
-      Object.assign(s, { status: e.status, t1: e.t, result: e.label !== s.title ? e.label : undefined,
-        resultEvent: eventKind(e), resultDetail: e.detail, data: { ...s.data, ...e.data } });
-      if (s.stage === "plan" && e.detail && !plan.question) plan.question = e.detail;
+      Object.assign(s, { status: e.status, t1: e.t, result: e.label !== opened.get(s.id) ? label : undefined,
+        resultEvent: eventKind(e), resultDetail: detail, data: { ...s.data, ...e.data } });
+      if (s.stage === "plan" && detail && !plan.question) plan.question = detail;
       return;
     }
-    if (e.stage === "plan" && e.detail && !plan.question && kind === "note") plan.question = e.detail;
+    if (e.stage === "plan" && detail && !plan.question && kind === "note") plan.question = detail;
     const parent = enclosing(agent, sub) ?? (agent === "gerbang" ? enclosing("laporan") : undefined);
-    add({ id: i, agent, sub, kind, stage: e.stage, tool: e.tool, title: e.label, event: eventKind(e), resultDetail: e.detail,
+    add({ id: i, agent, sub, kind, stage: e.stage, tool: e.tool, title: label, event: eventKind(e), resultDetail: detail,
       status: e.status, t0: e.t, t1: e.t, data: e.data, parent: parent?.id, children: [] });
   });
 
