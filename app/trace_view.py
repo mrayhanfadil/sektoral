@@ -3,11 +3,17 @@
 The trace on disk keeps everything the run saw. The browser gets the same
 fields the standalone trace HTML shows (see ``research._trace_html``), each
 typed and length-bounded; nothing else leaves the server.
+
+Indonesian text the host wrote gets an English twin, ``<field>_en`` (#34),
+also for traces stored before twins existed (``app.host_lang``); source data
+(news titles, search queries, article text) and agent prose without its own
+twin stay Indonesian.
 """
 from __future__ import annotations
 
 import re
 
+from . import host_lang
 from .jobs import http_url, public_intel, text
 
 
@@ -35,6 +41,20 @@ def problem_notes(problems) -> list[dict]:
     return notes
 
 
+def _english_list(values, limit, count) -> list:
+    """The English of each host-written string, parallel to the Indonesian list
+    (``text(value, limit)`` of its first `count` strings); None where there is none."""
+    return [text(host_lang.english(v), limit)
+            for v in (values if isinstance(values, list) else [])[:count] if isinstance(v, str)]
+
+
+def _english_notes(notes) -> list:
+    """Problem notes with the English of each message (``message_en``)."""
+    return [{**note, "message_en": text(note.get("message_en")
+                                        or host_lang.english(note.get("message")), 300)}
+            if isinstance(note, dict) else note for note in notes]
+
+
 def _status(report: dict) -> dict:
     published = str(report.get("status") or "").startswith("distributable")
     return {
@@ -44,6 +64,8 @@ def _status(report: dict) -> dict:
         "target_price": report.get("target_price") if published and isinstance(
             report.get("target_price"), (int, float)) else None,
         "method": text(str(report.get("target_method") or "").split(" [")[0], 200) if published else None,
+        "method_en": text(host_lang.english(str(report.get("target_method") or "").split(" [")[0]), 200)
+        if published else None,
         "as_of": text(report.get("as_of"), 20),
         "market_price_date": text(report.get("market_price_date"), 20),
     }
@@ -52,8 +74,11 @@ def _status(report: dict) -> dict:
 def _research(research: dict) -> dict:
     brief = research.get("document") if isinstance(research.get("document"), dict) else {}
     agent = brief.get("agent_trace") or research.get("agent_trace") or {}
+    limitations = [x for x in (brief.get("limitations") or [])[:10] if isinstance(x, str)]
     return {
         "summary": text(brief.get("summary"), 1200),
+        # Host sentences of the brief: English in data/source_text_en/research.json.
+        "summary_en": text(host_lang.english(brief.get("summary")), 1200),
         "endpoints": [text(e, 120) for e in (agent.get("selected_cache_endpoints") or [])[:40]
                       if isinstance(e, str)],
         "insights": [{
@@ -69,7 +94,9 @@ def _research(research: dict) -> dict:
             "citations": [{"endpoint": text(c.get("endpoint"), 120), "field_path": text(c.get("field_path"), 160),
                            "value": text(c.get("value"), 180)} for c in _list(i.get("citations"))[:12]],
         } for i in _list(brief.get("insights"))[:8]],
-        "limitations": [text(x, 400) for x in (brief.get("limitations") or [])[:10] if isinstance(x, str)],
+        "limitations": [text(x, 400) for x in limitations],
+        "limitations_en": ([text(host_lang.english(x), 400) for x in limitations]
+                           if any(host_lang.english(x) for x in limitations) else None),
     }
 
 
@@ -101,6 +128,7 @@ def _forecast(result: dict) -> dict:
     return {
         "status": text(result.get("status"), 60),
         "problems": [text(p, 300) for p in (result.get("problems") or [])[:8] if isinstance(p, str)],
+        "problems_en": _english_list(result.get("problems"), 300, 8),
         "news_effects": [{
             "driver": text(e.get("driver"), 80), "change": text(e.get("change"), 80),
             "years": [text(y, 8) for y in (e.get("years") or [])[:6]],
@@ -246,12 +274,13 @@ def build(audit: dict | None) -> dict | None:
         "report": _status(audit.get("report") if isinstance(audit.get("report"), dict) else {}),
         "analyst": public_intel(analyst),
         "analyst_problems": [text(p, 300) for p in (analyst.get("problems") or [])[:6] if isinstance(p, str)],
+        "analyst_problems_en": _english_list(analyst.get("problems"), 300, 6),
         # The analyst records structured notes since #34; older runs are parsed.
-        "analyst_problem_notes": (analyst["problem_notes"]
-                                  if isinstance(analyst.get("problem_notes"), list)
-                                  and len(analyst["problem_notes"])
-                                  == sum(isinstance(p, str) for p in analyst.get("problems") or [])
-                                  else problem_notes(analyst.get("problems"))),
+        "analyst_problem_notes": _english_notes(
+            analyst["problem_notes"] if isinstance(analyst.get("problem_notes"), list)
+            and len(analyst["problem_notes"])
+            == sum(isinstance(p, str) for p in analyst.get("problems") or [])
+            else problem_notes(analyst.get("problems"))),
         "research": _research(audit.get("research") if isinstance(audit.get("research"), dict) else {}),
         "news": _news(audit.get("news_sources") if isinstance(audit.get("news_sources"), dict) else {}),
         "forecast": _forecast(audit.get("forecast_assumptions")

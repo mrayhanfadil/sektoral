@@ -97,6 +97,17 @@ def test_analyst_validator_notes_split_out_the_words_to_remove():
     ]
     view = build({"ticker": "TEST", "analyst": {"problems": problems}})
     assert view["analyst_problems"] == problems[:4]  # the strings stay as they are
+    assert view["analyst_problems_en"] == [
+        "synthesis rejected: prose contains investment-advice wording; remove the words: beli, "
+        "akumulasi; write in Indonesian only; remove: 中文",
+        "synthesis rejected: prose may not contain figures (figures are shown from the cited "
+        "signals); remove: 12, 3.5%, Rp1,234",
+        "synthesis: non-Indonesian tokens removed: 公司, 利润", "synthesis: JSONDecodeError: bad"]
+    assert [n.pop("message_en") for n in view["analyst_problem_notes"]] == [
+        "synthesis rejected: prose contains investment-advice wording; write in Indonesian only",
+        "synthesis rejected: prose may not contain figures (figures are shown from the cited signals)",
+        "synthesis: non-Indonesian tokens removed",
+        "synthesis: JSONDecodeError: bad"]
     assert view["analyst_problem_notes"] == [
         {"message": "sintesis ditolak: prosa memuat bahasa rekomendasi investasi; "
                     "tulis dalam bahasa Indonesia saja", "removed": ["beli", "akumulasi", "中文"]},
@@ -111,7 +122,8 @@ def test_analyst_validator_notes_split_out_the_words_to_remove():
 def test_analyst_notes_recorded_by_the_run_are_used_as_they_are():
     notes = [{"message": "sintesis: teks Inggris dibuang, bahasa Indonesia dipakai", "removed": []}]
     view = build({"ticker": "TEST", "analyst": {"problems": ["x; hapus: 1"], "problem_notes": notes}})
-    assert view["analyst_problem_notes"] == notes
+    assert view["analyst_problem_notes"] == [
+        {**notes[0], "message_en": "synthesis: English text dropped, Indonesian kept"}]
 
 
 def test_trace_view_passes_the_forecast_english_twins_through():
@@ -125,3 +137,97 @@ def test_trace_view_passes_the_forecast_english_twins_through():
     assert view["news_effects"][0]["uncertainty_en"] is None
     assert view["interim"]["rationale_en"] == "Interim EN."
     assert view["outyears"][0]["rationale_en"] == "Later."
+
+
+# An analyst result stored before English twins, with the host fallback synthesis.
+OLD_ANALYST = {
+    "ticker": "AMMN", "status": "partial",
+    "plan": {"question": "Apakah leverage AMMN masih tertinggi?", "source": "agent",
+             "hypotheses": ["Leverage tetap tertinggi."]},
+    "steps": [{"tool": "find_peers", "why": "Bangun grup peer.", "status": "ok",
+               "summary": "6 emiten · peer dipilih menurut model bisnis; alasan tiap peer dan yang "
+                          "dikeluarkan ada di paket grup"},
+              {"tool": "quarterly_financials", "why": "Cek laba.", "status": "ok",
+               "summary": "2 sinyal, 2 bertanda: lonjakan, berbalik ke laba"}],
+    "signals": [
+        {"id": "quarter.revenue_yoy", "kind": "change", "label": "Pendapatan kuartal terakhir, yoy",
+         "display": "38.858,7%", "flag": "lonjakan", "period": "2026-03-31 vs 2025-03-31",
+         "note": "basis pembanding tahun lalu sangat kecil; persentase tidak informatif"},
+        {"id": "peer.net_margin", "kind": "peer", "label": "Margin laba bersih", "display": "13,5%",
+         "note": "peringkat 4 dari 6 (1 = lebih tinggi)", "median_display": "20,1%", "rank": 4, "n": 6,
+         "peers": [{"symbol": "PSAB", "display": "65,2%"}]},
+        {"id": "flow.net_20d", "kind": "flow", "label": "Arus bersih asing, 20 sesi terakhir",
+         "display": "Rp1.234 miliar", "period": "2026-08-14 s.d. 2026-09-11"}],
+    "peers": {"basis": "peer dipilih menurut model bisnis; alasan tiap peer dan yang dikeluarkan ada "
+                       "di paket grup", "group": "Penambang tembaga dan emas di BEI"},
+    "synthesis": {"headline": "Ringkasan sinyal yang ditandai host", "source": "host_fallback",
+                  "findings": [{"title": "Pendapatan kuartal terakhir, yoy: lonjakan",
+                                "interpretation": "Sinyal ini ditandai aturan host; belum ada tafsir agent.",
+                                "caveat": "Perlu dibaca bersama konteks usaha emiten.",
+                                "signal_ids": ["quarter.revenue_yoy"]}],
+                  "hypotheses": [{"index": 0, "verdict": "belum terjawab", "signal_ids": [],
+                                  "reason": "Agent tidak menyelesaikan penilaian hipotesis."}],
+                  "next_checks": []},
+    "changes": {"first_run": False, "items": [
+        {"kind": "rank", "text": "Margin laba bersih: peringkat 7 → 4 dari 6"},
+        {"kind": "cleared_flag", "text": "Sinyal Liabilitas / ekuitas (tertinggi di grup) tidak lagi muncul"},
+        {"kind": "news", "text": "Berita baru: AS Kerek Impor Tembaga dari Kongo"}]},
+}
+
+
+def test_an_old_analyst_result_gets_english_for_host_text():
+    view = build({"ticker": "AMMN", "analyst": OLD_ANALYST})["analyst"]
+    revenue, margin, flow = view["signals"]
+    assert revenue["label"] == "Pendapatan kuartal terakhir, yoy"  # the Indonesian is unchanged
+    assert revenue["label_en"] == "Latest quarter revenue, yoy" and revenue["flag_en"] == "surge"
+    assert revenue["note_en"] == ("the year-earlier base is very small; the percentage is not "
+                                  "informative")
+    assert revenue["display"] == "38.858,7%" and revenue["display_en"] == "38,858.7%"
+    assert revenue["period_en"] is None  # the same in both languages
+    assert margin["label_en"] == "Net profit margin" and margin["note_en"] == "rank 4 of 6 (1 = higher)"
+    assert margin["median_display_en"] == "20.1%" and margin["peers"][0]["display_en"] == "65.2%"
+    assert flow["display_en"] == "Rp1,234bn" and flow["period_en"] == "2026-08-14 to 2026-09-11"
+    assert [s["summary_en"] for s in view["steps"]] == [
+        "6 issuers · peers chosen by business model; the reason for each peer, and for those left "
+        "out, is in the group pack", "2 signals, 2 flagged: surge, back to profit"]
+    assert [s["why_en"] for s in view["steps"]] == [None, None]  # agent prose without a twin
+    assert view["plan"]["question_en"] is None and view["plan"]["hypotheses_en"] is None
+    assert view["peers"]["basis_en"].startswith("peers chosen by business model")
+    assert view["peers"]["group_en"] == "IDX-listed copper and gold miners"
+    synthesis = view["synthesis"]
+    assert synthesis["headline_en"] == "Summary of the signals the host flagged"
+    finding = synthesis["findings"][0]
+    assert finding["title_en"] == "Latest quarter revenue, yoy: surge"
+    assert finding["interpretation_en"] == ("The host rules flagged this signal; there is no agent "
+                                            "interpretation yet.")
+    assert finding["caveat_en"] == "Read it together with the issuer's business context."
+    assert synthesis["hypotheses"][0]["reason_en"] == "The agent did not finish assessing the hypothesis."
+    assert [i["text_en"] for i in view["changes"]["items"]] == [
+        "Net profit margin: rank 7 → 4 of 6",
+        "The Liabilities / equity signal (highest in the group) no longer appears",
+        "New article: AS Kerek Impor Tembaga dari Kongo"]
+
+
+def test_the_trace_gives_the_method_and_research_brief_their_english():
+    view = build({"ticker": "BBRI",
+                  "report": {"status": "distributable_assumption_led",
+                             "target_method": "DDM dividen skenario FY26F-FY30F + terminal Gordon "
+                                              "(CoE, bukan WACC) [fallback: PER]"},
+                  "research": {"document": {
+                      "summary": "Brief ini merangkum temuan cache yang lolos validasi.",
+                      "limitations": ["Snapshot perusahaan hanya menggambarkan data pada tanggal "
+                                      "laporan.", "Catatan agen yang lain."]}}})
+    assert view["report"]["method_en"] == ("DDM on scenario dividends FY26F-FY30F + Gordon terminal "
+                                           "(CoE, not WACC)")
+    research = view["research"]
+    assert research["summary"] == "Brief ini merangkum temuan cache yang lolos validasi."
+    assert research["summary_en"] == "This brief summarizes the cache findings that passed validation."
+    assert research["limitations_en"] == [
+        "The company snapshot describes data as of the report date only.", None]
+    empty = build({"ticker": "BBRI"})
+    assert empty["research"]["summary_en"] is None and empty["research"]["limitations_en"] is None
+    assert empty["report"]["method_en"] is None
+    # Forecast validator notes are English already: a parallel list without twins.
+    forecast = build({"ticker": "BBRI", "forecast_assumptions": {
+        "problems": ["news_effects[1] years are invalid"]}})["forecast"]
+    assert forecast["problems_en"] == [None] and empty["forecast"]["problems_en"] == []
