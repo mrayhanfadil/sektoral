@@ -75,6 +75,8 @@ def test_english_view_does_not_count_notes_the_renderer_translates():
     en = _doc("Profit rose.", notes=(note,))
     en["cover"]["headline"] = "Profit rose"
     en["cover"]["bullets"] = ["Revenue Rp1.234,5 miliar."]
+    en["bagian"][0]["cards"][0]["title"] = "Card"
+    en["risks"][0]["judul"] = "Price"
     attach(doc, en)
     _, fallback = english_view(doc)
     assert fallback == 0
