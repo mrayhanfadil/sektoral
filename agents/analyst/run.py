@@ -157,7 +157,7 @@ def _english_note(text, id_text=None, *, signal_ids=None, label_numbers=frozense
     if _FOREIGN_SCRIPT.search(text):
         return _removal("tulis dalam bahasa Inggris saja", "hapus",
                         _FOREIGN_SCRIPT.findall(text)[:5])
-    if prose_lang.mixed(text):
+    if not prose_lang.reads_english(text):
         return "teks bahasa Inggris masih memuat kalimat bahasa Indonesia"
     return None
 
