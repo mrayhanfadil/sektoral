@@ -21,6 +21,7 @@ from . import cache as cache_mod
 from . import exhibit_ids
 from . import fmt
 from . import idx_history
+from . import prose_lang
 from . import report_lang
 
 FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
@@ -1748,23 +1749,26 @@ def render(doc, lang=report_lang.DEFAULT):
     """The Company Update HTML of `doc` in `lang` ("id" or "en")."""
     token = _NOTES.set([])
     lang_token = _LANG.set(report_lang.check(lang))
+    fallback = 0
+    if lang == "en":
+        doc, fallback = prose_lang.english_view(doc)
     try:
-        return _render(doc)
+        return _render(doc, prose_fallback=fallback)
     finally:
         _LANG.reset(lang_token)
         _NOTES.reset(token)
 
 
-# The English edition still carries Indonesian narrative (agent and templated
-# prose, #33/#34). This note says so under the cover header; delete it, its
-# style and its one call in _render once the prose is translated.
+# Prose the English edition could not translate (a report stored before
+# English prose existed, or agent prose, #34) stays Indonesian; this note
+# under the cover header says so, and only then.
 _PROSE_NOTE_CSS = (".prose-lang-note{font-size:6.7pt;font-style:italic;color:" + MUT + ";"
                    "margin:1.2mm 0 0}")
 _PROSE_NOTE = ("<p class='prose-lang-note'>English edition: labels, tables and figures are in "
-               "English; narrative paragraphs are still in Bahasa Indonesia.</p>")
+               "English; some narrative paragraphs are still in Bahasa Indonesia.</p>")
 
 
-def _render(doc):
+def _render(doc, prose_fallback=0):
     m, cov = doc["meta"], doc["cover"]
     english = _english()
     css = (CSS.replace("Geser tabel untuk kolom lainnya →", "Scroll the table for more columns →")
@@ -1773,7 +1777,7 @@ def _render(doc):
     h = [f"{opening}<head><meta charset='utf-8'><style>{css}{_running_header(m)}</style></head><body>"]
     h.append(_report_header(m["tanggal"], m))
     h.append(_draft_banner(m))
-    if english:
+    if english and prose_fallback:
         h.append(_PROSE_NOTE)
     draft = m.get("status") == "draft_non_distributable"
     rating_word = m.get("rating") or ("Draft" if draft else "Analisis")
@@ -1899,7 +1903,9 @@ def _render(doc):
              f"<p class='small'>{html.escape(disclosure)}</p>"
              f"<h3 class='sub'>{_say('Catatan metodologi', 'Methodology notes')}</h3><ul>")
     for c in doc["catatan_metodologi"]:
-        h.append(f"<li class='small'>{html.escape(report_lang.note(c, lang))}</li>")
+        # English prose from the builder is final; only Indonesian notes are looked up.
+        note = c if isinstance(c, prose_lang.Translated) else report_lang.note(c, lang)
+        h.append(f"<li class='small'>{html.escape(note)}</li>")
     h.append("</ul></div></body></html>")
     out = "\n".join(h)
     return out.replace("—", " - ").replace("–", "-")
