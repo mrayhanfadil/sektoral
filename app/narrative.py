@@ -3107,42 +3107,77 @@ def _lom_exhibits(intake, va, detail):
     down = lom_res["per_share_down"]
     last_pit = max((f["year"] for f in flows if f["asset"] == "bh" and "pit" in f["kinds"]),
                    default=inp["pit_end"])
-    text = (
-        f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai SOTP/LoM, metode utama tambang: "
-        f"NAV Batu Hijau US${fmt._id(nav_bh / 1e9, 1)} miliar (pit sampai {last_pit}, lalu "
-        f"stockpile"
-        + (f"; izin ekspor konsentrat berakhir {inp.get('export_permit_expired')}, sehingga "
-           "umpan pabrik dibatasi kapasitas smelter"
-           if not inp.get("export_base", True) else "")
-        + f"), NAV Elang US${fmt._id(nav_el / 1e9, 1)} miliar dikali probabilitas "
-        f"pengembangan {fmt.pct(risk)} karena proyek belum FID, dan persediaan "
-        f"US${usd(inp['inventory_usd'])} "
-        "juta, dikurangi PV overhead, utang bersih dan minoritas. Arus kas didiskonto WACC US$ "
-        f"{fmt.pct(inp['discount'])} (UST 10Y {fmt.pct(rate.get('rf'))} + CRP "
-        f"{fmt.pct(rate.get('crp'))} + beta x ERP, biaya utang {fmt.pct(rate.get('kd_pretax'))}) "
-        f"sampai {int(inp['licence_end'])} tanpa nilai "
-        f"terminal. Dek harga rata-rata 12 bulan kalender terakhir (sumber di tabel "
-        f"sensitivitas) dibuat datar; pada harga cadangan JORC emiten nilainya "
-        f"Rp{fmt.rp(fmt.tick(grid[(inp['discount'], 'reserve')]))}, "
-        + ("bila izin ekspor konsentrat diperpanjang " if not inp.get("export_base", True)
-           else "tanpa izin ekspor konsentrat ")
-        + f"Rp{fmt.rp(fmt.tick(lom_res['other_export']))}, dan pada diskonto "
-        f"{fmt.pct(inp['discount'] + 0.02)} Rp{fmt.rp(fmt.tick(down))}. Capex Elang belum "
-        "diungkapkan emiten; angka dari riset broker adalah asumsi analis.")
+    text = _t(
+        (f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai SOTP/LoM, metode utama tambang: "
+         f"NAV Batu Hijau US${fmt._id(nav_bh / 1e9, 1)} miliar (pit sampai {last_pit}, lalu "
+         f"stockpile"
+         + (f"; izin ekspor konsentrat berakhir {inp.get('export_permit_expired')}, sehingga "
+            "umpan pabrik dibatasi kapasitas smelter"
+            if not inp.get("export_base", True) else "")
+         + f"), NAV Elang US${fmt._id(nav_el / 1e9, 1)} miliar dikali probabilitas "
+         f"pengembangan {fmt.pct(risk)} karena proyek belum FID, dan persediaan "
+         f"US${usd(inp['inventory_usd'])} "
+         "juta, dikurangi PV overhead, utang bersih dan minoritas. Arus kas didiskonto WACC US$ "
+         f"{fmt.pct(inp['discount'])} (UST 10Y {fmt.pct(rate.get('rf'))} + CRP "
+         f"{fmt.pct(rate.get('crp'))} + beta x ERP, biaya utang {fmt.pct(rate.get('kd_pretax'))}) "
+         f"sampai {int(inp['licence_end'])} tanpa nilai "
+         f"terminal. Dek harga rata-rata 12 bulan kalender terakhir (sumber di tabel "
+         f"sensitivitas) dibuat datar; pada harga cadangan JORC emiten nilainya "
+         f"Rp{fmt.rp(fmt.tick(grid[(inp['discount'], 'reserve')]))}, "
+         + ("bila izin ekspor konsentrat diperpanjang " if not inp.get("export_base", True)
+            else "tanpa izin ekspor konsentrat ")
+         + f"Rp{fmt.rp(fmt.tick(lom_res['other_export']))}, dan pada diskonto "
+         f"{fmt.pct(inp['discount'] + 0.02)} Rp{fmt.rp(fmt.tick(down))}. Capex Elang belum "
+         "diungkapkan emiten; angka dari riset broker adalah asumsi analis."),
+        (f"We set our target at Rp{fmt.rp(va['tp'])} using SOTP/LoM, the Primary Method for "
+         f"miners: Batu Hijau NAV of US${fmt._id(nav_bh / 1e9, 1)} miliar (pit to {last_pit}, "
+         f"then stockpile"
+         + (f"; the concentrate export permit expired on {inp.get('export_permit_expired')}, so "
+            "plant feed is capped by smelter capacity"
+            if not inp.get("export_base", True) else "")
+         + f"), Elang NAV of US${fmt._id(nav_el / 1e9, 1)} miliar times a development "
+         f"probability of {fmt.pct(risk)} as the project is pre-FID, and inventory of "
+         f"US${usd(inp['inventory_usd'])} "
+         "juta, less PV of overhead, net debt and minorities. Cash flows are discounted at a US$ "
+         f"WACC of {fmt.pct(inp['discount'])} (UST 10Y {fmt.pct(rate.get('rf'))} + CRP "
+         f"{fmt.pct(rate.get('crp'))} + beta x ERP, cost of debt "
+         f"{fmt.pct(rate.get('kd_pretax'))}) to {int(inp['licence_end'])} with no terminal "
+         f"value. The price deck, the average of the last 12 calendar months (sources in the "
+         f"sensitivity table), is held flat; at the issuer's JORC reserve prices the value is "
+         f"Rp{fmt.rp(fmt.tick(grid[(inp['discount'], 'reserve')]))}, "
+         + ("with the concentrate export permit extended " if not inp.get("export_base", True)
+            else "without a concentrate export permit ")
+         + f"Rp{fmt.rp(fmt.tick(lom_res['other_export']))}, and at a discount rate of "
+         f"{fmt.pct(inp['discount'] + 0.02)} Rp{fmt.rp(fmt.tick(down))}. The issuer has not "
+         "disclosed Elang capex; the broker research figure is an analyst assumption."))
     notes = [
-        "Rating dan target harga memakai SOTP/LoM, metode utama tambang: NAV per aset dari "
-        "rantai fisik (cadangan, umpan, recovery, smelter, harga, biaya, royalti, pajak, capex) "
-        "tanpa nilai terminal perpetual.",
-        "Input fisik dan biaya dari rilis resmi 1H26, laporan keuangan dan regulasi; recovery "
-        "tersirat dari logam dalam konsentrat dibagi logam terkandung umpan 1H26.",
-        "Capex Elang, probabilitas pengembangan Elang, rehandle stockpile dan ekspor konsentrat "
-        "adalah asumsi analis berlabel; capex Elang dari riset broker, bukan data emiten. "
-        "Tingkat diskonto adalah WACC US$ dari UST 10Y bertanggal + CRP + beta x ERP (parameter "
-        "kebijakan analis), sama dengan model US$ lain.",
-        "Dek harga rata-rata 12 bulan kalender terakhir dibuat datar (Sectors bila datanya "
-        "segar, selain itu seri Yahoo Finance bertanggal); harga cadangan JORC dan guncangan "
-        "+/-20% ada di tabel sensitivitas.",
-        "EV/EBITDA FY26F 8x menjadi cross-check di rantai metode, tidak dirata-rata.",
+        _t("Rating dan target harga memakai SOTP/LoM, metode utama tambang: NAV per aset dari "
+           "rantai fisik (cadangan, umpan, recovery, smelter, harga, biaya, royalti, pajak, capex) "
+           "tanpa nilai terminal perpetual.",
+           "Rating and Target Price use SOTP/LoM, the Primary Method for miners: NAV per asset "
+           "from the physical chain (reserves, feed, recovery, smelter, price, costs, royalty, "
+           "tax, capex) with no perpetual terminal value."),
+        _t("Input fisik dan biaya dari rilis resmi 1H26, laporan keuangan dan regulasi; recovery "
+           "tersirat dari logam dalam konsentrat dibagi logam terkandung umpan 1H26.",
+           "Physical and cost inputs come from the official 1H26 release, financial statements "
+           "and regulation; recovery is implied from metal in concentrate divided by contained "
+           "metal in 1H26 feed."),
+        _t("Capex Elang, probabilitas pengembangan Elang, rehandle stockpile dan ekspor konsentrat "
+           "adalah asumsi analis berlabel; capex Elang dari riset broker, bukan data emiten. "
+           "Tingkat diskonto adalah WACC US$ dari UST 10Y bertanggal + CRP + beta x ERP (parameter "
+           "kebijakan analis), sama dengan model US$ lain.",
+           "Elang capex, the Elang development probability, stockpile rehandle and concentrate "
+           "exports are labelled analyst assumptions; Elang capex comes from broker research, not "
+           "issuer data. The discount rate is a US$ WACC from a dated UST 10Y + CRP + beta x ERP "
+           "(analyst policy parameters), as in other US$ models."),
+        _t("Dek harga rata-rata 12 bulan kalender terakhir dibuat datar (Sectors bila datanya "
+           "segar, selain itu seri Yahoo Finance bertanggal); harga cadangan JORC dan guncangan "
+           "+/-20% ada di tabel sensitivitas.",
+           "The price deck, the average of the last 12 calendar months, is held flat (Sectors when "
+           "its data is fresh, otherwise a dated Yahoo Finance series); JORC reserve prices and "
+           "+/-20% shocks are in the sensitivity table."),
+        _t("EV/EBITDA FY26F 8x menjadi cross-check di rantai metode, tidak dirata-rata.",
+           "FY26F EV/EBITDA of 8x is a cross-check in the Method Chain, not averaged."),
         _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
     ]
     walk = _lom_reconciliation(intake, lom_res)
@@ -3226,40 +3261,66 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
     doc["log_gate"]["release"] = va["release"]
     profit_change = _scenario_profit_change(intake, scenario.get("full_year") or {})
     doc["cover"]["headline"] = _earnings_headline(forecast_label, profit_change)
-    doc["cover"]["bullets"][2] = (
-        f"Target Rp{fmt.rp(va['tp'])} memberi {fmt.pct(va['upside'])} terhadap "
-        f"penutupan Rp{fmt.rp(intake['price'])} pada {intake['price_date']}; "
-        "basis 8x EV/EBITDA adalah asumsi analis.")
+    doc["cover"]["bullets"][2] = _t(
+        (f"Target Rp{fmt.rp(va['tp'])} memberi {fmt.pct(va['upside'])} terhadap "
+         f"penutupan Rp{fmt.rp(intake['price'])} pada {intake['price_date']}; "
+         "basis 8x EV/EBITDA adalah asumsi analis."),
+        (f"Target Rp{fmt.rp(va['tp'])} implies {fmt.pct(va['upside'])} against the "
+         f"Rp{fmt.rp(intake['price'])} close on {intake['price_date']}; "
+         "the 8x EV/EBITDA basis is an analyst assumption."))
     if lom_page:
         doc["cover"]["headline"] = _earnings_headline(forecast_label, profit_change)
-        doc["cover"]["bullets"][2] = _trim(
+        doc["cover"]["bullets"][2] = _trim(_t(
             f"{va['rating']}: target Rp{fmt.rp(va['tp'])} ({fmt.pct(va['upside'])}) dari "
-            "SOTP/LoM Batu Hijau dan Elang, tanpa nilai terminal.", 30)
+            "SOTP/LoM Batu Hijau dan Elang, tanpa nilai terminal.",
+            f"{va['rating']}: target Rp{fmt.rp(va['tp'])} ({fmt.pct(va['upside'])}) from a "
+            "Batu Hijau and Elang SOTP/LoM, with no terminal value."), 30)
     doc["cover"]["paragraf"][2] = {
         "judul": "Target harga berbasis hasil FY",
-        "isi": (f"EBITDA {forecast_label} US${fmt._id(value['ebitda_usd']/1e6, 1)} "
-                "juta berasal dari realisasi interim dan asumsi semester berikutnya. "
-                "Kelipatan 8x dipilih di bawah kelipatan implisit harga pasar "
-                f"{fmt.mult((intake['price'] * value['shares'] / value['fx']['rate'] + value['net_debt_usd'] + value['minority_interest_usd']) / value['ebitda_usd'], 1)} "
-                "untuk mencerminkan ketidakpastian LoM dan capex. Nilai ekuitas "
-                "dihitung setelah utang bersih dan "
-                "kepentingan nonpengendali. LoM/SOTP per aset belum tersedia; "
-                "karena itu risiko umur tambang, capex, dan harga komoditas material.")}
+        "isi": _t(
+            (f"EBITDA {forecast_label} US${fmt._id(value['ebitda_usd']/1e6, 1)} "
+             "juta berasal dari realisasi interim dan asumsi semester berikutnya. "
+             "Kelipatan 8x dipilih di bawah kelipatan implisit harga pasar "
+             f"{fmt.mult((intake['price'] * value['shares'] / value['fx']['rate'] + value['net_debt_usd'] + value['minority_interest_usd']) / value['ebitda_usd'], 1)} "
+             "untuk mencerminkan ketidakpastian LoM dan capex. Nilai ekuitas "
+             "dihitung setelah utang bersih dan "
+             "kepentingan nonpengendali. LoM/SOTP per aset belum tersedia; "
+             "karena itu risiko umur tambang, capex, dan harga komoditas material."),
+            (f"{forecast_label} EBITDA of US${fmt._id(value['ebitda_usd']/1e6, 1)} "
+             "juta comes from interim actuals and assumptions for the next half. "
+             "The 8x multiple is set below the market-implied multiple of "
+             f"{fmt.mult((intake['price'] * value['shares'] / value['fx']['rate'] + value['net_debt_usd'] + value['minority_interest_usd']) / value['ebitda_usd'], 1)} "
+             "to reflect LoM and capex uncertainty. Equity value is "
+             "calculated after net debt and non-controlling interests. A per-asset LoM/SOTP "
+             "is not yet available, so mine-life, capex and commodity-price risks are "
+             "material."))}
     if lom_page:
         doc["cover"]["paragraf"][2] = {"judul": "Target harga berbasis SOTP/LoM",
                                        "isi": lom_page["text"]}
     doc["catatan_metodologi"] = [
-        "Rating dan target harga memakai FY forecast berbasis hasil interim resmi serta "
-        "multiple 8x EV/EBITDA sebagai asumsi analis, bukan multiple peer terverifikasi.",
-        "Skenario 6x/8x/10x menunjukkan sensitivitas; 8x adalah basis target harga.",
-        f"Harga penutupan {intake['price_date']} bersumber dari "
-        f"{(intake.get('market_quote') or {}).get('source_url', 'data pasar bertanggal')}. "
-        + (f"ADTV 90 hari memakai {rail['adtv_count']} observasi lokal sampai "
-           f"{rail['adtv_end']}. " if rail.get("adtv") is not None else "")
-        + ("Porsi Public adalah kategori kepemilikan dari snapshot cache, bukan free float terverifikasi."
-           if rail.get("public_ownership") is not None else ""),
-        "LoM/SOTP per aset, capex masa depan, dan perubahan kas/utang setelah neraca "
-        "interim belum dimodelkan; audit gate SOTP tetap ada dalam trace.",
+        _t("Rating dan target harga memakai FY forecast berbasis hasil interim resmi serta "
+           "multiple 8x EV/EBITDA sebagai asumsi analis, bukan multiple peer terverifikasi.",
+           "Rating and Target Price use an FY forecast built on official interim results and "
+           "an 8x EV/EBITDA multiple as an analyst assumption, not a verified peer multiple."),
+        _t("Skenario 6x/8x/10x menunjukkan sensitivitas; 8x adalah basis target harga.",
+           "The 6x/8x/10x scenarios show sensitivity; 8x is the Target Price basis."),
+        _t(f"Harga penutupan {intake['price_date']} bersumber dari "
+           f"{(intake.get('market_quote') or {}).get('source_url', 'data pasar bertanggal')}. "
+           + (f"ADTV 90 hari memakai {rail['adtv_count']} observasi lokal sampai "
+              f"{rail['adtv_end']}. " if rail.get("adtv") is not None else "")
+           + ("Porsi Public adalah kategori kepemilikan dari snapshot cache, bukan free float terverifikasi."
+              if rail.get("public_ownership") is not None else ""),
+           f"The {intake['price_date']} close is sourced from "
+           f"{(intake.get('market_quote') or {}).get('source_url', 'dated market data')}. "
+           + (f"The 90-day ADTV uses {rail['adtv_count']} local observations to "
+              f"{rail['adtv_end']}. " if rail.get("adtv") is not None else "")
+           + ("The Public share is an ownership category from the cached snapshot, not a "
+              "verified free float."
+              if rail.get("public_ownership") is not None else "")),
+        _t("LoM/SOTP per aset, capex masa depan, dan perubahan kas/utang setelah neraca "
+           "interim belum dimodelkan; audit gate SOTP tetap ada dalam trace.",
+           "Per-asset LoM/SOTP, future capex and changes in cash/debt after the interim balance "
+           "sheet are not yet modelled; the SOTP gate audit remains in the trace."),
         _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
     ]
     if lom_page:
@@ -3329,37 +3390,56 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             "judul": ("Jadwal LoM FY27F-FY30F" if lom_schedule else "Skenario laba FY27F-FY30F"),
             "layout": "stack",
             "paragraf": [
-                "Tahun sesudah FY26F diambil dari jadwal LoM yang juga menjadi dasar target: "
-                "umpan pabrik, logam yang dilebur, dek harga, biaya unit, royalti dan pajak. "
-                "Laba bersih mengurangkan D&A jadwal, bunga dua kali beban keuangan 1H26, "
-                "serta pajak dan PNBP pada tarif efektif 1H26. Perusahaan tidak memberi "
-                "jadwal tahunan; ini estimasi Sektoral." if lom_schedule else
-                "Estimasi di bawah memperpanjang FY26F memakai pertumbuhan dan "
-                "margin asumsi analis yang diturunkan dari rilis resmi dan konteks "
-                "operasi. Perusahaan belum memberi jadwal tahunan produksi, harga, "
-                "biaya dan capex untuk periode ini; angka ini adalah skenario laba, "
-                "bukan forecast fisik tambang atau SOTP."],
+                _t("Tahun sesudah FY26F diambil dari jadwal LoM yang juga menjadi dasar target: "
+                   "umpan pabrik, logam yang dilebur, dek harga, biaya unit, royalti dan pajak. "
+                   "Laba bersih mengurangkan D&A jadwal, bunga dua kali beban keuangan 1H26, "
+                   "serta pajak dan PNBP pada tarif efektif 1H26. Perusahaan tidak memberi "
+                   "jadwal tahunan; ini estimasi Sektoral.",
+                   "Years after FY26F come from the LoM schedule that also underlies the target: "
+                   "plant feed, smelted metal, price deck, unit costs, royalty and tax. Net "
+                   "profit deducts scheduled D&A, interest at twice 1H26 finance costs, and tax "
+                   "and PNBP at 1H26 effective rates. The company gives no annual schedule; this "
+                   "is a Sektoral estimate.") if lom_schedule else
+                _t("Estimasi di bawah memperpanjang FY26F memakai pertumbuhan dan "
+                   "margin asumsi analis yang diturunkan dari rilis resmi dan konteks "
+                   "operasi. Perusahaan belum memberi jadwal tahunan produksi, harga, "
+                   "biaya dan capex untuk periode ini; angka ini adalah skenario laba, "
+                   "bukan forecast fisik tambang atau SOTP.",
+                   "The estimates below extend FY26F using analyst-assumed growth and margins "
+                   "derived from the official release and operating context. The company has "
+                   "not given an annual schedule of production, prices, costs and capex for "
+                   "this period; these figures are an earnings scenario, not a physical mine "
+                   "forecast or SOTP.")],
             "exhibit": [assumptions_exhibit],
         })
     for page in doc["bagian"]:
         if page["judul"] == "Skenario FY26 dari rilis terbaru":
             page["judul"] = f"Forecast {forecast_label} dari rilis terbaru"
-            page["paragraf"] = [
+            page["paragraf"] = [_t(
                 "Hasil interim resmi menjadi basis semester pertama. Semester kedua "
                 "mengikuti rasio pendapatan dan margin asumsi analis pada exhibit di bawah. "
-                "Nilai setahun penuh adalah skenario model, bukan panduan emiten."]
+                "Nilai setahun penuh adalah skenario model, bukan panduan emiten.",
+                "Official interim results form the first-half basis. The second half follows "
+                "the analyst-assumed revenue ratio and margins in the exhibit below. The "
+                "full-year figure is a model scenario, not issuer guidance.")]
         elif page["judul"] == "Cross-check nilai FY26 dari hasil terbaru" and lom_page:
             page["judul"] = f"Cross-check {forecast_label} EV/EBITDA"
-            page["paragraf"] = [
+            page["paragraf"] = [_t(
                 f"EBITDA {forecast_label} diuji pada multiple 6x, 8x dan 10x sebagai cross-check "
-                "relatif terhadap SOTP/LoM; nilai ini bukan target harga."]
+                "relatif terhadap SOTP/LoM; nilai ini bukan target harga.",
+                f"{forecast_label} EBITDA is tested at 6x, 8x and 10x multiples as a relative "
+                "cross-check to SOTP/LoM; these values are not the Target Price.")]
         elif page["judul"] == "Cross-check nilai FY26 dari hasil terbaru":
             page["judul"] = f"Target harga {forecast_label} EV/EBITDA"
-            page["paragraf"] = [
+            page["paragraf"] = [_t(
                 f"Target Rp{fmt.rp(va['tp'])} memakai EBITDA {forecast_label} "
                 "dan multiple 8x. Rentang 6x-10x memperlihatkan sensitivitas "
                 "terhadap asumsi valuasi; seluruh nilai memakai utang, minoritas, "
-                "jumlah saham, dan kurs yang ditampilkan."]
+                "jumlah saham, dan kurs yang ditampilkan.",
+                f"The Rp{fmt.rp(va['tp'])} target uses {forecast_label} EBITDA "
+                "and an 8x multiple. The 6x-10x range shows sensitivity to valuation "
+                "assumptions; all values use the debt, minorities, share count and "
+                "exchange rate shown.")]
         elif page["judul"] == "Valuasi dan kelengkapan bukti" and lom_page:
             page["judul"] = "Target harga berbasis SOTP/LoM"
             page["paragraf"] = [lom_page["text"]]
@@ -3371,12 +3451,17 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             doc["exhibits"].extend(lom_page["exhibits"])
         elif page["judul"] == "Valuasi dan kelengkapan bukti":
             page["judul"] = "Valuasi dan batasan model"
-            page["paragraf"] = [
+            page["paragraf"] = [_t(
                 "Metode utama adalah FY forecast EV/EBITDA 8x dengan asumsi analis. "
                 "Status rilis distributable_assumption_led berlaku melalui jalur opt-in analyst-target; "
                 "pemeriksaan jembatan operasi dan SOTP aset tetap belum lolos. "
                 "LoM/SOTP tetap belum lengkap; daftar di bawah menunjukkan bukti "
-                "yang diperlukan untuk menguji ulang nilai aset dan capex."]
+                "yang diperlukan untuk menguji ulang nilai aset dan capex.",
+                "The Primary Method is an FY forecast EV/EBITDA of 8x on analyst assumptions. "
+                "The distributable_assumption_led release status applies through the opt-in "
+                "analyst-target path; the operating bridge and asset SOTP checks have still not "
+                "passed. LoM/SOTP remains incomplete; the list below shows the evidence needed "
+                "to retest asset value and capex.")]
         page["halaman"] = doc["bagian"].index(page) + 2
     bridge = _mining_sales_bridge(intake, scenario)
     new_pages = []
@@ -3429,17 +3514,24 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
         gold_sellthrough_h1 = (
             gold_row["h1_sold"] / gold_row["h1_production"]
             if gold_row and gold_row["h1_production"] else None)
-        bridge_paragraph = (
+        bridge_paragraph = (_t(
             f"Pada volume dasar dan basis harga H2 yang memakai estimasi harga Q2 untuk katoda/emas serta net realized H1 untuk konsentrat, produk membentuk revenue H2 US$ {fmt._id(bridge['base_sum']/1e6, 1)} juta, "
-            f"di bawah skenario top-down US$ {fmt._id(bridge['h2_topdown']/1e6, 1)} juta; selisih US$ {fmt._id(bridge['residual']/1e6, 1)} juta belum dijelaskan. "
+            f"di bawah skenario top-down US$ {fmt._id(bridge['h2_topdown']/1e6, 1)} juta; selisih US$ {fmt._id(bridge['residual']/1e6, 1)} juta belum dijelaskan. ",
+            f"At base volumes and the H2 price basis, which uses estimated Q2 prices for cathode/gold and H1 net realized prices for concentrate, the products make up H2 revenue of US$ {fmt._id(bridge['base_sum']/1e6, 1)} juta, "
+            f"below the top-down scenario of US$ {fmt._id(bridge['h2_topdown']/1e6, 1)} juta; a gap of US$ {fmt._id(bridge['residual']/1e6, 1)} juta is unexplained. ")
             if bridge["residual"] is not None else "")
         if gold_row and bridge["gold_required"] is not None:
-            bridge_paragraph += (
+            bridge_paragraph += _t(
                 f"Jika seluruh selisih ditutup lewat penjualan emas murni pada implied net realized price Q2, volume H2 perlu "
                 f"{_volume_text(bridge['gold_required'], gold_row['unit'])}, atau "
                 f"{fmt.pct(bridge['gold_required_sellthrough'])} dari output H2 tersirat. "
                 f"Rasio penjualan/output H1 adalah {fmt.pct(gold_sellthrough_h1)}. "
-                "Volume rekonsiliasi adalah kebutuhan matematis, bukan guidance atau forecast penjualan independen.")
+                "Volume rekonsiliasi adalah kebutuhan matematis, bukan guidance atau forecast penjualan independen.",
+                f"If the whole gap were closed through refined gold sales at the implied Q2 net realized price, H2 volume would need to be "
+                f"{_volume_text(bridge['gold_required'], gold_row['unit'])}, or "
+                f"{fmt.pct(bridge['gold_required_sellthrough'])} of implied H2 output. "
+                f"The H1 sales/output ratio is {fmt.pct(gold_sellthrough_h1)}. "
+                "The reconciling volume is an arithmetic requirement, not guidance or an independent sales forecast.")
         q2_conc = next((row for row in
                         (((intake.get("official_evidence") or {}).get("quarterly_actuals") or {})
                          .get("q2_2026_derived") or {}).get("sales_production_bridge") or []
@@ -3454,11 +3546,15 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             q2_conc_value = q2_conc.get("revenue_per_sold_unit_proxy")
             conditional_revenue = conditional_volume * q2_conc_value if q2_conc_value else None
             if conditional_revenue is not None:
-                bridge_paragraph += (
+                bridge_paragraph += _t(
                     f"Sebagai uji bersyarat, penjualan konsentrat { _volume_text(conditional_volume, 'dmt')} "
                     f"pada proxy revenue Q2 US$ {fmt._id(q2_conc_value, 0)}/dmt memberi sekitar "
                     f"US$ {fmt._id(conditional_revenue/1e6, 1)} juta. Nilai itu hampir menutup gap, "
-                    "tetapi bukan realized netback dan bergantung pada izin/kanal serta kontrak yang belum dibuktikan.")
+                    "tetapi bukan realized netback dan bergantung pada izin/kanal serta kontrak yang belum dibuktikan.",
+                    f"As a conditional test, concentrate sales of {_volume_text(conditional_volume, 'dmt')} "
+                    f"at the Q2 revenue proxy of US$ {fmt._id(q2_conc_value, 0)}/dmt give about "
+                    f"US$ {fmt._id(conditional_revenue/1e6, 1)} juta. That nearly closes the gap, "
+                    "but it is not a realized netback and depends on permits/channels and contracts not yet evidenced.")
         delivery_commitment = ((intake.get("official_evidence") or {}).get(
             "customer_delivery_commitment") or {})
         if delivery_commitment:
@@ -3466,27 +3562,43 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             opening_advance = advance.get("balance_2025_12_31")
             received_advance = advance.get("received_2026_04")
             closing_advance = advance.get("balance_2026_06_30")
-            commitment_text = (
+            from . import prose_lang
+            commitment_text = _t(
                 "Kontrak Glencore mendukung keberadaan kanal penjualan katoda: komitmen pengiriman "
                 f"berlaku sampai {delivery_commitment.get('delivery_commitment_until')}; "
                 "uang muka dikurangkan proporsional dari pengiriman bulanan dan kegagalan memenuhi "
-                "komitmen mewajibkan pembayaran kembali uang muka terkait beserta bunga. "
+                "komitmen mewajibkan pembayaran kembali uang muka terkait beserta bunga. ",
+                "The Glencore contract supports the existence of a cathode sales channel: the "
+                "delivery commitment runs to "
+                f"{prose_lang.source(delivery_commitment.get('delivery_commitment_until'))}; "
+                "the advance is deducted pro rata from monthly deliveries, and failure to meet the "
+                "commitment requires repayment of the related advance with interest. "
             )
             if all(value is not None for value in
                    (opening_advance, received_advance, closing_advance)):
                 net_change = closing_advance - opening_advance
-                commitment_text += (
+                commitment_text += _t(
                     f"Catatan mencatat penerimaan uang muka US$ {fmt._id(received_advance/1000, 1)} juta "
                     f"pada April, saldo US$ {fmt._id(opening_advance/1000, 1)} juta pada akhir 2025, "
                     f"dan US$ {fmt._id(closing_advance/1000, 1)} juta pada akhir Juni "
-                    f"(perubahan bersih +US$ {fmt._id(net_change/1000, 1)} juta). "
+                    f"(perubahan bersih +US$ {fmt._id(net_change/1000, 1)} juta). ",
+                    f"The notes record an advance of US$ {fmt._id(received_advance/1000, 1)} juta "
+                    f"received in April, a balance of US$ {fmt._id(opening_advance/1000, 1)} juta at "
+                    f"end-2025 and US$ {fmt._id(closing_advance/1000, 1)} juta at end-June "
+                    f"(net change +US$ {fmt._id(net_change/1000, 1)} juta). "
                 )
-            commitment_text += (
+            commitment_text += _t(
                 "Namun volume kontrak dan sisa kewajiban per kuartal, formula harga, serta rekonsiliasi "
                 "penerimaan uang muka dengan potongan atas pengiriman tidak diungkap. Karena itu kontrak "
                 "tidak membuktikan asumsi penjualan katoda H2 pada tabel. Sumber: "
                 f"{delivery_commitment.get('source_title')}, hlm. {delivery_commitment.get('source_page')}; "
-                f"{delivery_commitment.get('source_url')}."
+                f"{delivery_commitment.get('source_url')}.",
+                "However, contract volumes and remaining obligations by quarter, the price formula, "
+                "and the reconciliation of advances received with deductions on deliveries are not "
+                "disclosed. The contract therefore does not prove the H2 cathode sales assumption in "
+                "the table. Source: "
+                f"{prose_lang.source(delivery_commitment.get('source_title'))}, p. "
+                f"{delivery_commitment.get('source_page')}; {delivery_commitment.get('source_url')}."
             )
             bridge_paragraph += " " + commitment_text
         new_pages.append({
@@ -3537,8 +3649,9 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             new_pages.append({
                 "halaman": 0, "judul": "Rekonstruksi aktual Q2 2026",
                 "layout": "stack",
-                "paragraf": [
-                    "Rekonstruksi ini mempersempit data aktual terbaru menjadi Q2. Revenue per unit hanya proxy dari revenue segmen dibagi unit terjual; rilis tidak memberi realized price Q2 yang terpisah. Angka ini membantu mengkalibrasi skenario H2, tetapi tidak memvalidasi penjualan atau harga H2."],
+                "paragraf": [_t(
+                    "Rekonstruksi ini mempersempit data aktual terbaru menjadi Q2. Revenue per unit hanya proxy dari revenue segmen dibagi unit terjual; rilis tidak memberi realized price Q2 yang terpisah. Angka ini membantu mengkalibrasi skenario H2, tetapi tidak memvalidasi penjualan atau harga H2.",
+                    "This reconstruction narrows the latest actuals down to Q2. Revenue per unit is only a proxy, segment revenue divided by units sold; the release gives no separate Q2 realized price. These figures help calibrate the H2 scenario but do not validate H2 sales or prices.")],
                 "exhibit": [q2_exhibit]})
 
         output_sales_rows = []
@@ -3573,9 +3686,12 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             new_pages.append({
                 "halaman": 0, "judul": "Output dan penjualan H2",
                 "layout": "stack",
-                "paragraf": [
+                "paragraf": [_t(
                     "Tabel membedakan sisa output dari volume penjualan yang diasumsikan. Rasio penjualan/output "
-                    "bukan roll-forward persediaan; perubahan stockpile dan umpan internal belum tersedia."],
+                    "bukan roll-forward persediaan; perubahan stockpile dan umpan internal belum tersedia.",
+                    "The table separates remaining output from assumed sales volumes. The sales/output "
+                    "ratio is not an inventory roll-forward; stockpile changes and internal feed are not "
+                    "yet available.")],
                 "exhibit": [output_sales_exhibit]})
 
         price_detail_rows = []
@@ -3628,8 +3744,9 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             new_pages.append({
                 "halaman": 0, "judul": "Net realized price dan volume logam",
                 "layout": "stack",
-                "paragraf": [
-                    "Harga aktual H1 dipakai sebagai basis nilai H2, bukan dianggap sebagai forward price. Konsentrat dihitung dari Cu dan Au terjual serta net realized price masing-masing; pemisahan ini menjaga kontribusi logam tetap terlihat."],
+                "paragraf": [_t(
+                    "Harga aktual H1 dipakai sebagai basis nilai H2, bukan dianggap sebagai forward price. Konsentrat dihitung dari Cu dan Au terjual serta net realized price masing-masing; pemisahan ini menjaga kontribusi logam tetap terlihat.",
+                    "Actual H1 prices are used as the basis for H2 value, not treated as a forward price. Concentrate is built from Cu and Au sold and the net realized price of each; this split keeps each metal's contribution visible.")],
                 "exhibit": [price_detail_exhibit]})
 
         price_rows = []
@@ -3670,8 +3787,9 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
         new_pages.append({
             "halaman": 0, "judul": "Harga komoditas dan asumsi realisasi",
             "layout": "stack",
-            "paragraf": [
-                "Model menahan nilai penjualan per unit H1 untuk skenario H2. Benchmark spot memberi konteks harga, tetapi belum menggantikan harga kontrak, premium katoda, payability, TC-RC, dan timing pengakuan penjualan."
+            "paragraf": [_t(
+                "Model menahan nilai penjualan per unit H1 untuk skenario H2. Benchmark spot memberi konteks harga, tetapi belum menggantikan harga kontrak, premium katoda, payability, TC-RC, dan timing pengakuan penjualan.",
+                "The model holds H1 sales value per unit for the H2 scenario. Spot benchmarks give price context but do not replace contract prices, cathode premiums, payability, TC-RC and the timing of sales recognition.")
             ],
             "exhibit": [price_exhibit]})
 
@@ -3709,8 +3827,9 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             new_pages.append({
                 "halaman": 0, "judul": "Estimasi FY26 dan pembanding",
                 "layout": "stack",
-                "paragraf": [
-                    "Skenario Sektoral berada di atas estimasi BRIDS untuk metrik laba utama, sementara target berbasis multiple belum memasukkan nilai aset Batu Hijau dan Elang melalui SOTP lengkap. Perbedaan ini menyorot dua hal: monetisasi H2 perlu direkonsiliasi ke volume dan harga, sedangkan nilai aset belum masuk ke target."
+                "paragraf": [_t(
+                    "Skenario Sektoral berada di atas estimasi BRIDS untuk metrik laba utama, sementara target berbasis multiple belum memasukkan nilai aset Batu Hijau dan Elang melalui SOTP lengkap. Perbedaan ini menyorot dua hal: monetisasi H2 perlu direkonsiliasi ke volume dan harga, sedangkan nilai aset belum masuk ke target.",
+                    "The Sektoral scenario sits above the BRIDS estimates on the main earnings metrics, while the multiple-based target does not yet capture Batu Hijau and Elang asset value through a full SOTP. The difference highlights two points: H2 monetisation must be reconciled to volumes and prices, and asset value is not yet in the target.")
                 ],
                 "exhibit": [comparison_exhibit]})
     forecast_index = next((i for i, page in enumerate(doc["bagian"])
@@ -3845,8 +3964,10 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             f"memakai harga {intake['price_date']} dan kurs {value['fx']['date']}; "
             "EV/EBITDA memakai harga kini, neraca interim, dan kurs tersebut. "
             "DPS/yield dan PBV forecast tidak dihitung tanpa asumsi dividen dan ekuitas.")
+    # The SOTP/LoM valuation paragraph (lom_page["text"]), found by its wording.
+    lom_marker = _t("memakai SOTP/LoM", "using SOTP/LoM, the Primary Method for miners")
     paragraph = next((p for p in doc["cover"].get("paragraf") or []
-                      if "memakai SOTP/LoM" in str(p.get("isi") or "")), None)
+                      if lom_marker in str(p.get("isi") or "")), None)
     rows_fc = [{"year": scenario["year"], **scenario["full_year"]}] + (forward or {}).get("rows", [])
     if paragraph and len(rows_fc) >= 3 and value.get("fx", {}).get("rate"):
         first, third = rows_fc[0], rows_fc[2]
@@ -3862,21 +3983,34 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
         from . import report_extras
         band = ((report_extras._band_data(intake) or {}).get("multiples") or {}).get("P/E")
         band_mean = band["mean"] if band and band["mean"] <= fmt.MULT_CAP else None
-        compare = " dan ".join(
-            ([f"median peer {fmt.mult(intake['peer_median_pe'], 1)}"]
+        compare = _t(" dan ", " and ").join(
+            ([_t(f"median peer {fmt.mult(intake['peer_median_pe'], 1)}",
+                 f"a peer median of {fmt.mult(intake['peer_median_pe'], 1)}")]
              if intake.get("peer_median_pe") else [])
-            + ([f"rata-rata band P/E historis {fmt.mult(band_mean, 1)}"] if band_mean else []))
+            + ([_t(f"rata-rata band P/E historis {fmt.mult(band_mean, 1)}",
+                   f"a historical P/E band mean of {fmt.mult(band_mean, 1)}")]
+               if band_mean else []))
         extra = ""
         if cagr("ebitda") is not None:
-            extra += (f" Target ini mengimplikasikan pertumbuhan EBITDA CAGR {forecast_label}-"
-                      f"{third['label']} {fmt.pct(cagr('ebitda'))}"
-                      + (f", didorong pendapatan CAGR {fmt.pct(cagr('revenue'))} dari jadwal "
-                         "LoM (umpan, logam dan dek harga)" if cagr("revenue") is not None else "")
-                      + ".")
+            extra += _t(
+                (f" Target ini mengimplikasikan pertumbuhan EBITDA CAGR {forecast_label}-"
+                 f"{third['label']} {fmt.pct(cagr('ebitda'))}"
+                 + (f", didorong pendapatan CAGR {fmt.pct(cagr('revenue'))} dari jadwal "
+                    "LoM (umpan, logam dan dek harga)" if cagr("revenue") is not None else "")
+                 + "."),
+                (f" The target implies an EBITDA CAGR over {forecast_label}-"
+                 f"{third['label']} of {fmt.pct(cagr('ebitda'))}"
+                 + (f", driven by a revenue CAGR of {fmt.pct(cagr('revenue'))} from the LoM "
+                    "schedule (feed, metal and price deck)" if cagr("revenue") is not None else "")
+                 + "."))
         if pe_tp:
-            extra += (f" Pada target harga, saham diperdagangkan pada PER {forecast_label} "
-                      f"{fmt.mult(pe_tp, 1, cap=fmt.MULT_CAP)}"
-                      + (f", dibanding {compare}" if compare else "") + ".")
+            extra += _t(
+                (f" Pada target harga, saham diperdagangkan pada PER {forecast_label} "
+                 f"{fmt.mult(pe_tp, 1, cap=fmt.MULT_CAP)}"
+                 + (f", dibanding {compare}" if compare else "") + "."),
+                (f" At the Target Price, the stock trades on a {forecast_label} PER of "
+                 f"{fmt.mult(pe_tp, 1, cap=fmt.MULT_CAP)}"
+                 + (f", versus {compare}" if compare else "") + "."))
         paragraph["isi"] = paragraph["isi"].rstrip() + extra
     doc["fy26"] = {
         "Pendapatan": fmt._id(scenario["full_year"]["revenue"] * value["fx"]["rate"] / 1e9, 0),
@@ -3901,16 +4035,21 @@ def _bank_ddm_summary(detail):
         return None
     per_share = detail.get("per_share")
     method = "DDM skenario" if per_share is not None else "DDM Gordon"
+    method_en = "Scenario DDM" if per_share is not None else "Gordon DDM"
     per_share = per_share if per_share is not None else detail.get("tp_gordon")
     if not isinstance(per_share, (int, float)):
         return None
-    text = (f"{method} memberi Rp{fmt.rp(fmt.tick(per_share))}/saham; "
-            f"{_ddm_payout_summary(detail)}.")
+    text = _t(f"{method} memberi Rp{fmt.rp(fmt.tick(per_share))}/saham; "
+              f"{_ddm_payout_summary(detail)}.",
+              f"{method_en} gives Rp{fmt.rp(fmt.tick(per_share))}/share; "
+              f"{_ddm_payout_summary(detail)}.")
     inverse = detail.get("per_share_inverse", detail.get("tp_inverse"))
     if isinstance(inverse, (int, float)):
-        text += (f" Silang cek Inverse CoE Rp{fmt.rp(fmt.tick(inverse))}/saham"
-                 + (f" (P/BV wajar {fmt.mult(detail['fair_pbv'], 2)})"
-                    if isinstance(detail.get("fair_pbv"), (int, float)) else "") + ".")
+        fair = isinstance(detail.get("fair_pbv"), (int, float))
+        text += _t(f" Silang cek Inverse CoE Rp{fmt.rp(fmt.tick(inverse))}/saham"
+                   + (f" (P/BV wajar {fmt.mult(detail['fair_pbv'], 2)})" if fair else "") + ".",
+                   f" Inverse CoE cross-check Rp{fmt.rp(fmt.tick(inverse))}/share"
+                   + (f" (fair P/BV {fmt.mult(detail['fair_pbv'], 2)})" if fair else "") + ".")
     return text
 
 
@@ -3923,13 +4062,15 @@ def _ddm_payout_summary(detail):
         payout = detail.get("payout_used")
     if payouts:
         years = "-".join((lines[0].get("label", "FY"), lines[-1].get("label", "FY")))
-        text = f"payout skenario {years} " + "/".join(fmt.pct(value) for value in payouts)
+        text = (_t(f"payout skenario {years} ", f"scenario payout {years} ")
+                + "/".join(fmt.pct(value) for value in payouts))
     elif payout is not None:
         text = f"payout {fmt.pct(payout)}"
     else:
-        text = "payout skenario"
+        text = _t("payout skenario", "scenario payout")
     if detail.get("terminal_payout") is not None:
-        text += f"; payout terminal {fmt.pct(detail['terminal_payout'])}"
+        text += _t(f"; payout terminal {fmt.pct(detail['terminal_payout'])}",
+                   f"; terminal payout {fmt.pct(detail['terminal_payout'])}")
     return text
 
 
@@ -3956,9 +4097,13 @@ def _scenario_profit_change(intake, forecast):
 def _earnings_headline(label, profit_change):
     """Describe the FY scenario against the latest annual actual, without a call."""
     if profit_change is None:
-        return f"Skenario laba {label} dibanding hasil tahunan terakhir"
+        return _t(f"Skenario laba {label} dibanding hasil tahunan terakhir",
+                  f"{label} earnings scenario against the latest annual result")
     direction = "naik" if profit_change > 0.02 else "turun" if profit_change < -0.02 else "sejalan"
-    return f"Skenario laba {label} {direction} dari aktual tahunan terakhir"
+    direction_en = ("above" if profit_change > 0.02 else "below" if profit_change < -0.02
+                    else "in line with")
+    return _t(f"Skenario laba {label} {direction} dari aktual tahunan terakhir",
+              f"{label} earnings scenario {direction_en} the latest annual actual")
 
 
 def _card_title(text, cap=7):
@@ -4009,8 +4154,10 @@ def _thesis_cards_page(intake, thesis, fy, va, label, usd, to_idr, titles=None):
         cards.append({"title": title, "text": point,
                       "metric": metric, "metric_label": metric_label})
     return {"halaman": 0, "judul": "Tesis investasi", "layout": "cards",
-            "paragraf": ["Pandangan kami tentang driver laba ke depan; angka di kanan "
-                         "adalah hasil model yang digerakkan oleh tiap tesis."],
+            "paragraf": [_t("Pandangan kami tentang driver laba ke depan; angka di kanan "
+                            "adalah hasil model yang digerakkan oleh tiap tesis.",
+                            "Our view of the forward earnings drivers; the figure on the right "
+                            "is the model output each thesis moves.")],
             "cards": cards, "exhibit": []}
 
 
@@ -4321,97 +4468,195 @@ def _dcf_bridge_sentence(dcf_s):
     if dcf_s.get("currency") == "USD":
         m = scenario_value.native_view(dcf_s)
         usd = lambda v: fmt._id(v / 1e6, 1)  # noqa: E731
-        return (f"Dalam US$, mata uang pelaporan: EV US${usd(m['ev'])} juta ditambah kas "
-                f"US${usd(m['cash'])} juta, dikurangi utang US${usd(m['debt'])} juta dan porsi "
-                f"minoritas, memberi ekuitas US${usd(m['equity'])} juta, dikonversi ke rupiah pada "
-                f"kurs Rp{fmt._id(dcf_s['fx'], 0)}/US$. ")
+        return _t(
+            f"Dalam US$, mata uang pelaporan: EV US${usd(m['ev'])} juta ditambah kas "
+            f"US${usd(m['cash'])} juta, dikurangi utang US${usd(m['debt'])} juta dan porsi "
+            f"minoritas, memberi ekuitas US${usd(m['equity'])} juta, dikonversi ke rupiah pada "
+            f"kurs Rp{fmt._id(dcf_s['fx'], 0)}/US$. ",
+            f"In US$, the reporting currency: EV of US${usd(m['ev'])} juta plus cash of "
+            f"US${usd(m['cash'])} juta, less debt of US${usd(m['debt'])} juta and minorities, "
+            f"gives equity of US${usd(m['equity'])} juta, converted to rupiah at "
+            f"Rp{fmt._id(dcf_s['fx'], 0)}/US$. ")
     bn = lambda v: fmt._id(v / 1e9, 1)  # noqa: E731
-    return (f"EV Rp{bn(dcf_s['ev'])} miliar ditambah kas Rp{bn(dcf_s['cash'])} miliar, dikurangi "
-            f"utang Rp{bn(dcf_s['debt'])} miliar dan porsi minoritas, memberi ekuitas "
-            f"Rp{bn(dcf_s['equity'])} miliar. ")
+    return _t(
+        f"EV Rp{bn(dcf_s['ev'])} miliar ditambah kas Rp{bn(dcf_s['cash'])} miliar, dikurangi "
+        f"utang Rp{bn(dcf_s['debt'])} miliar dan porsi minoritas, memberi ekuitas "
+        f"Rp{bn(dcf_s['equity'])} miliar. ",
+        f"EV of Rp{bn(dcf_s['ev'])} miliar plus cash of Rp{bn(dcf_s['cash'])} miliar, less "
+        f"debt of Rp{bn(dcf_s['debt'])} miliar and minorities, gives equity of "
+        f"Rp{bn(dcf_s['equity'])} miliar. ")
+
+
+def _peer_source_en(text):
+    """``method_chain.peer_ev_sources`` in English ('data Sectors dan Yahoo Finance')."""
+    for id_text, en_text in (("data Sectors", "Sectors data"), (" dan ", " and "),
+                             ("sumber tidak tercatat", "unrecorded sources"),
+                             ("tanpa peer", "no peers")):
+        text = str(text).replace(id_text, en_text)
+    return text
 
 
 def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_price=None):
+    from . import prose_lang
+    src = prose_lang.source
     last = forward[-1]["label"] if forward else label
     if ev_s:
         return [
-            "Rating dan target harga memakai EV/EBITDA peer forward, metode untuk aset yang masih "
-            "ramping atau riwayat singkat: EV = median EV/EBITDA "
-            f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} x EBITDA {label} "
-            "skenario analis (aktual 1H resmi + margin EBITDA asumsi agen).",
-            f"EV/EBITDA tiap peer dihitung dari {ev_s['peer_source']}: kapitalisasi pasar "
-            "ditambah utang dikurangi kas dan EBITDA terakhir dari laporan peer "
-            "(laporan Sectors FY bila di-cache, selain itu snapshot Yahoo Finance bertanggal, "
-            "12 bulan terakhir bila empat kuartal tersedia); "
-            "peer dianggap sebanding. Peer tanpa laporan di kedua sumber tidak masuk median.",
-            f"Ekuitas = EV + kas ({ev_s.get('cash_basis') or '-'}) - utang "
-            f"({ev_s.get('debt_basis') or '-'}) - minoritas, dibagi saham "
-            f"{ev_s.get('shares_basis') or '-'}; tanggal valuasi {ev_s['valuation_date']}. "
-            "Kuartil bawah dan atas peer menjadi sensitivitas.",
-            "PER FY skenario menjadi langkah berikutnya di rantai metode, tidak dirata-rata "
-            "dengan target. DCF menunggu tiga tahun kondisi stabil.",
-            "Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi.",
+            _t("Rating dan target harga memakai EV/EBITDA peer forward, metode untuk aset yang masih "
+               "ramping atau riwayat singkat: EV = median EV/EBITDA "
+               f"{ev_s['peer_count']} peer {fmt.mult(ev_s['median_ev_ebitda'], 1)} x EBITDA {label} "
+               "skenario analis (aktual 1H resmi + margin EBITDA asumsi agen).",
+               "Rating and Target Price use forward peer EV/EBITDA, the method for assets still "
+               "ramping up or with a short history: EV = median EV/EBITDA of "
+               f"{ev_s['peer_count']} peers {fmt.mult(ev_s['median_ev_ebitda'], 1)} x {label} "
+               "EBITDA from the Analyst Scenario (official 1H actuals + agent-assumed EBITDA "
+               "margin)."),
+            _t(f"EV/EBITDA tiap peer dihitung dari {ev_s['peer_source']}: kapitalisasi pasar "
+               "ditambah utang dikurangi kas dan EBITDA terakhir dari laporan peer "
+               "(laporan Sectors FY bila di-cache, selain itu snapshot Yahoo Finance bertanggal, "
+               "12 bulan terakhir bila empat kuartal tersedia); "
+               "peer dianggap sebanding. Peer tanpa laporan di kedua sumber tidak masuk median.",
+               f"Each peer's EV/EBITDA is calculated from {_peer_source_en(ev_s['peer_source'])}: "
+               "market cap plus debt less cash, and the latest EBITDA from the peer's reports "
+               "(Sectors FY reports when cached, otherwise a dated Yahoo Finance snapshot, the "
+               "last 12 months when four quarters are available); peers are taken as comparable. "
+               "Peers without reports in either source are left out of the median."),
+            _t(f"Ekuitas = EV + kas ({ev_s.get('cash_basis') or '-'}) - utang "
+               f"({ev_s.get('debt_basis') or '-'}) - minoritas, dibagi saham "
+               f"{ev_s.get('shares_basis') or '-'}; tanggal valuasi {ev_s['valuation_date']}. "
+               "Kuartil bawah dan atas peer menjadi sensitivitas.",
+               f"Equity = EV + cash ({src(ev_s.get('cash_basis') or '-')}) - debt "
+               f"({src(ev_s.get('debt_basis') or '-')}) - minorities, divided by shares "
+               f"({src(ev_s.get('shares_basis') or '-')}); valuation date "
+               f"{ev_s['valuation_date']}. The lower and upper peer quartiles are the "
+               "sensitivity."),
+            _t("PER FY skenario menjadi langkah berikutnya di rantai metode, tidak dirata-rata "
+               "dengan target. DCF menunggu tiga tahun kondisi stabil.",
+               "Scenario FY PER is the next step in the Method Chain, not averaged into the "
+               "target. DCF waits for three years of steady state."),
+            _t("Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi.",
+               "The scenario is not a reconciled driver forecast; its status is Assumption-Led."),
             _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
         ]
     if ddm_s:
+        bank_drivers = ddm_s.get("profit_basis") == "bank_driver_scenario"
+        implied = bool(ddm_s.get("implied_coe") and intake_price)
         return [
-            "Rating dan target harga memakai DDM, metode utama bank: DPS = laba pemilik induk "
-            f"skenario analis {label}-{last}; {_ddm_payout_summary(ddm_s)} "
-            f"(basis {ddm_s['payout_basis']}), didiskonto dengan Cost of Equity, terminal Gordon.",
-            (f"Laba {label} dari aktual 1H resmi dan H2 model driver bank; tahun sesudahnya "
-             "dari driver bank tahunan asumsi analis (kredit, NIM, pendapatan non-bunga, rasio "
-             "biaya, biaya kredit), dengan neraca, pendanaan dan modal pada rasio historis "
-             "emiten (screening). Skenario ini bukan forecast driver yang sudah direkonsiliasi, "
-             "sehingga statusnya berbasis asumsi."
-             if ddm_s.get("profit_basis") == "bank_driver_scenario" else
-             f"Laba {label} dari aktual 1H resmi dan asumsi H2; tahun sesudahnya asumsi analis "
-             "tahunan. Skenario ini bukan forecast driver yang sudah direkonsiliasi, sehingga "
-             "statusnya berbasis asumsi."),
-            f"CoE {fmt.pct(ddm_s['coe'])} dari CAPM (rf IDR house policy, beta dan ERP 4% kebijakan "
-            f"analis); g {fmt.pct(ddm_s['g'])}. Tanggal valuasi {ddm_s['valuation_date']}; "
-            "dividen diterima satu kuartal sesudah tahun buku."
-            + (f" Pada harga Rp{fmt.rp(intake_price)}, jalur dividen yang sama menyiratkan CoE "
-               f"{fmt.pct(ddm_s['implied_coe'])}; target mengandaikan pasar menerima CoE "
-               f"kebijakan {fmt.pct(ddm_s['coe'])}."
-               if ddm_s.get("implied_coe") and intake_price else ""),
-            "P/BV-ROE FY dan PER FY skenario menjadi cross-check di rantai metode, tidak "
-            "dirata-rata dengan target.",
+            _t("Rating dan target harga memakai DDM, metode utama bank: DPS = laba pemilik induk "
+               f"skenario analis {label}-{last}; {_ddm_payout_summary(ddm_s)} "
+               f"(basis {ddm_s['payout_basis']}), didiskonto dengan Cost of Equity, terminal Gordon.",
+               "Rating and Target Price use DDM, the Primary Method for banks: DPS = parent "
+               f"profit in the Analyst Scenario {label}-{last}; {_ddm_payout_summary(ddm_s)} "
+               f"(basis {src(ddm_s['payout_basis'])}), discounted at the Cost of Equity, Gordon "
+               "terminal."),
+            (_t(f"Laba {label} dari aktual 1H resmi dan H2 model driver bank; tahun sesudahnya "
+                "dari driver bank tahunan asumsi analis (kredit, NIM, pendapatan non-bunga, rasio "
+                "biaya, biaya kredit), dengan neraca, pendanaan dan modal pada rasio historis "
+                "emiten (screening). Skenario ini bukan forecast driver yang sudah direkonsiliasi, "
+                "sehingga statusnya berbasis asumsi.",
+                f"{label} profit comes from official 1H actuals and an H2 bank driver model; later "
+                "years from analyst-assumed annual bank drivers (loans, NIM, non-interest income, "
+                "cost ratio, cost of credit), with the balance sheet, funding and capital at the "
+                "issuer's historical ratios (screening). This scenario is not a reconciled driver "
+                "forecast, so its status is Assumption-Led.")
+             if bank_drivers else
+             _t(f"Laba {label} dari aktual 1H resmi dan asumsi H2; tahun sesudahnya asumsi analis "
+                "tahunan. Skenario ini bukan forecast driver yang sudah direkonsiliasi, sehingga "
+                "statusnya berbasis asumsi.",
+                f"{label} profit comes from official 1H actuals and H2 assumptions; later years "
+                "from annual analyst assumptions. This scenario is not a reconciled driver "
+                "forecast, so its status is Assumption-Led.")),
+            _t(f"CoE {fmt.pct(ddm_s['coe'])} dari CAPM (rf IDR house policy, beta dan ERP 4% kebijakan "
+               f"analis); g {fmt.pct(ddm_s['g'])}. Tanggal valuasi {ddm_s['valuation_date']}; "
+               "dividen diterima satu kuartal sesudah tahun buku."
+               + (f" Pada harga Rp{fmt.rp(intake_price)}, jalur dividen yang sama menyiratkan CoE "
+                  f"{fmt.pct(ddm_s['implied_coe'])}; target mengandaikan pasar menerima CoE "
+                  f"kebijakan {fmt.pct(ddm_s['coe'])}."
+                  if implied else ""),
+               f"CoE of {fmt.pct(ddm_s['coe'])} from CAPM (IDR rf per house policy, beta and a 4% "
+               f"ERP as analyst policy); g {fmt.pct(ddm_s['g'])}. Valuation date "
+               f"{ddm_s['valuation_date']}; dividends are received one quarter after the "
+               "financial year."
+               + (f" At the Rp{fmt.rp(intake_price)} price, the same dividend path implies a CoE "
+                  f"of {fmt.pct(ddm_s['implied_coe'])}; the target assumes the market accepts "
+                  f"the policy CoE of {fmt.pct(ddm_s['coe'])}."
+                  if implied else "")),
+            _t("P/BV-ROE FY dan PER FY skenario menjadi cross-check di rantai metode, tidak "
+               "dirata-rata dengan target.",
+               "Scenario FY P/BV-ROE and FY PER are cross-checks in the Method Chain, not "
+               "averaged into the target."),
             _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
         ]
     operating = dcf_s.get("operating_model")
+    usd_model = dcf_s.get("currency") == "USD"
+    implied = bool(dcf_s.get("implied_wacc") and dcf_s.get("implied_coe") and intake_price)
     return [
-        ("Rating dan target harga memakai DCF FCFF, metode utama going concern, atas model "
-         f"operasional {label}-{last}: volume x harga per segmen, biaya per unit dan tetap, "
-         "penyusutan atas aset tetap, capex, modal kerja dan utang dari berkas driver bersumber; "
-         "terminal Gordon pada imbal hasil modal baru yang konsisten."
+        (_t("Rating dan target harga memakai DCF FCFF, metode utama going concern, atas model "
+            f"operasional {label}-{last}: volume x harga per segmen, biaya per unit dan tetap, "
+            "penyusutan atas aset tetap, capex, modal kerja dan utang dari berkas driver bersumber; "
+            "terminal Gordon pada imbal hasil modal baru yang konsisten.",
+            "Rating and Target Price use FCFF DCF, the going-concern Primary Method, on the "
+            f"Operating Model {label}-{last}: volume x price by segment, unit and fixed costs, "
+            "depreciation on fixed assets, capex, working capital and debt from the sourced "
+            "driver file; Gordon terminal at a consistent return on new capital.")
          if operating else
-         "Rating dan target harga memakai DCF FCFF, metode utama going concern, atas skenario "
-         f"analis {label}-{last}: pendapatan, margin EBITDA dan capex dari agen, terminal Gordon."),
-        f"FCFF = EBIT x (1 - pajak efektif) + D&A - capex - kenaikan modal kerja; D&A "
-        f"{dcf_s['da_basis']}; pajak {dcf_s['tax_basis']}; {dcf_s['nwc_basis']}.",
-        (f"Model dalam US$, mata uang pelaporan: WACC US$ {fmt.pct(dcf_s['wacc'])} dari CAPM (UST "
-         f"10Y {fmt.pct(dcf_s['rf'])} + CRP {fmt.pct(dcf_s['crp'])} + beta x ERP) dan biaya utang "
-         f"US$ {fmt.pct(dcf_s['kd_pretax'])} sebelum pajak, bobot nilai pasar; nilai per saham "
-         f"dikonversi ke rupiah pada kurs Rp{fmt._id(dcf_s['fx'], 0)}/US$. "
-         if dcf_s.get("currency") == "USD" else
-         f"WACC {fmt.pct(dcf_s['wacc'])} dari CAPM dan biaya utang "
-         f"{fmt.pct(dcf_s['kd_pretax'], 0)} sebelum pajak, bobot nilai pasar. ")
-        + f"Tanggal valuasi {dcf_s['valuation_date']}"
-        + (f" ({dcf_s['anchor_reason']})" if dcf_s.get("anchor_reason") else "")
-        + f"; arus kas {label} dihitung sesudah tanggal itu; konvensi mid-period; nilai "
-        "terminal di akhir tahun eksplisit terakhir."
-        + (f" Pada harga Rp{fmt.rp(intake_price)}, arus kas yang sama menyiratkan WACC "
-           f"{fmt.pct(dcf_s['implied_wacc'])} (CoE {fmt.pct(dcf_s['implied_coe'])}); target "
-           f"mengandaikan pasar menerima WACC kebijakan {fmt.pct(dcf_s['wacc'])}."
-           if dcf_s.get("implied_wacc") and dcf_s.get("implied_coe") and intake_price else ""),
-        ("Exit EV/EBITDA historis emiten tampil sebagai cross-check; selisih dengan Gordon "
-         "diungkapkan, tidak dirata-rata."
+         _t("Rating dan target harga memakai DCF FCFF, metode utama going concern, atas skenario "
+            f"analis {label}-{last}: pendapatan, margin EBITDA dan capex dari agen, terminal Gordon.",
+            "Rating and Target Price use FCFF DCF, the going-concern Primary Method, on the "
+            f"Analyst Scenario {label}-{last}: revenue, EBITDA margin and capex from the agent, "
+            "Gordon terminal.")),
+        _t(f"FCFF = EBIT x (1 - pajak efektif) + D&A - capex - kenaikan modal kerja; D&A "
+           f"{dcf_s['da_basis']}; pajak {dcf_s['tax_basis']}; {dcf_s['nwc_basis']}.",
+           f"FCFF = EBIT x (1 - effective tax) + D&A - capex - increase in working capital; D&A "
+           f"{src(dcf_s['da_basis'])}; tax {src(dcf_s['tax_basis'])}; "
+           f"{src(dcf_s['nwc_basis'])}."),
+        _t((f"Model dalam US$, mata uang pelaporan: WACC US$ {fmt.pct(dcf_s['wacc'])} dari CAPM (UST "
+            f"10Y {fmt.pct(dcf_s['rf'])} + CRP {fmt.pct(dcf_s['crp'])} + beta x ERP) dan biaya utang "
+            f"US$ {fmt.pct(dcf_s['kd_pretax'])} sebelum pajak, bobot nilai pasar; nilai per saham "
+            f"dikonversi ke rupiah pada kurs Rp{fmt._id(dcf_s['fx'], 0)}/US$. "
+            if usd_model else
+            f"WACC {fmt.pct(dcf_s['wacc'])} dari CAPM dan biaya utang "
+            f"{fmt.pct(dcf_s['kd_pretax'], 0)} sebelum pajak, bobot nilai pasar. ")
+           + f"Tanggal valuasi {dcf_s['valuation_date']}"
+           + (f" ({dcf_s['anchor_reason']})" if dcf_s.get("anchor_reason") else "")
+           + f"; arus kas {label} dihitung sesudah tanggal itu; konvensi mid-period; nilai "
+           "terminal di akhir tahun eksplisit terakhir."
+           + (f" Pada harga Rp{fmt.rp(intake_price)}, arus kas yang sama menyiratkan WACC "
+              f"{fmt.pct(dcf_s['implied_wacc'])} (CoE {fmt.pct(dcf_s['implied_coe'])}); target "
+              f"mengandaikan pasar menerima WACC kebijakan {fmt.pct(dcf_s['wacc'])}."
+              if implied else ""),
+           (f"The model is in US$, the reporting currency: a US$ WACC of "
+            f"{fmt.pct(dcf_s['wacc'])} from CAPM (UST 10Y {fmt.pct(dcf_s['rf'])} + CRP "
+            f"{fmt.pct(dcf_s['crp'])} + beta x ERP) and a pre-tax US$ cost of debt of "
+            f"{fmt.pct(dcf_s['kd_pretax'])}, market-value weights; value per share is converted "
+            f"to rupiah at Rp{fmt._id(dcf_s['fx'], 0)}/US$. "
+            if usd_model else
+            f"WACC of {fmt.pct(dcf_s['wacc'])} from CAPM and a pre-tax cost of debt of "
+            f"{fmt.pct(dcf_s['kd_pretax'], 0)}, market-value weights. ")
+           + f"Valuation date {dcf_s['valuation_date']}"
+           + (f" ({src(dcf_s['anchor_reason'])})" if dcf_s.get("anchor_reason") else "")
+           + f"; {label} cash flows are counted after that date; mid-period convention; "
+           "terminal value at the end of the last explicit year."
+           + (f" At the Rp{fmt.rp(intake_price)} price, the same cash flows imply a WACC of "
+              f"{fmt.pct(dcf_s['implied_wacc'])} (CoE {fmt.pct(dcf_s['implied_coe'])}); the "
+              f"target assumes the market accepts the policy WACC of {fmt.pct(dcf_s['wacc'])}."
+              if implied else "")),
+        (_t("Exit EV/EBITDA historis emiten tampil sebagai cross-check; selisih dengan Gordon "
+            "diungkapkan, tidak dirata-rata.",
+            "The issuer's historical exit EV/EBITDA is shown as a cross-check; the gap to Gordon "
+            "is disclosed, not averaged.")
          if dcf_s.get("exit_multiple") is not None else
-         "Cross-check Exit EV/EBITDA tidak dihitung karena titik historis yang sebanding belum cukup."),
-        ("Model operasional direkonsiliasi (FCFF, neraca dan likuiditas setiap tahun) dan "
-         "dihitung ulang secara independen; driver ke depan yang berupa asumsi analis diberi label."
+         _t("Cross-check Exit EV/EBITDA tidak dihitung karena titik historis yang sebanding belum cukup.",
+            "The exit EV/EBITDA cross-check is not computed: too few comparable historical "
+            "points.")),
+        (_t("Model operasional direkonsiliasi (FCFF, neraca dan likuiditas setiap tahun) dan "
+            "dihitung ulang secara independen; driver ke depan yang berupa asumsi analis diberi label.",
+            "The Operating Model is reconciled (FCFF, balance sheet and liquidity each year) and "
+            "recomputed independently; forward drivers that are analyst assumptions are "
+            "labelled.")
          if operating else
-         "Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi."),
+         _t("Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi.",
+            "The scenario is not a reconciled driver forecast; its status is Assumption-Led.")),
         _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
     ]
 
@@ -4432,34 +4677,67 @@ def _extreme_stop_overlay(doc, intake, va):
     checks = [t for t in chain.get("trace") or [] if t.get("decision") == "cross_check"]
     checks += [x for x in chain.get("cross_checks") or [] if x.get("status") == "sufficient"]
     exit_value = (sel.get("detail") or {}).get("per_share_exit")
+    from . import prose_lang, report_lang
+    short_en = lambda text: report_lang.label(text, "en")  # noqa: E731
     sides = {True: [], False: []}
+    sides_en = {True: [], False: []}
     if exit_value and price:
         sides[exit_value > price].append("exit EV/EBITDA historis")
+        sides_en[exit_value > price].append("historical exit EV/EBITDA")
     for t in checks:
         if t.get("per_share") and price:
             sides[t["per_share"] > price].append(t["short"])
+            sides_en[t["per_share"] > price].append(short_en(t["short"]))
+    scenario_basis = (sel.get("detail") or {}).get("basis") == "scenario"
+    earnings_basis = sel["key"] in ("pe_fy_scenario", "pbv_roe_fy")
     basis = ("skenario analis tervalidasi (aktual 1H resmi, asumsi H2 dan empat tahun "
-             "lanjutan)" if (sel.get("detail") or {}).get("basis") == "scenario" else
+             "lanjutan)" if scenario_basis else
              "skenario laba analis tervalidasi (aktual 1H resmi dan asumsi H2)"
-             if sel["key"] in ("pe_fy_scenario", "pbv_roe_fy") else "input yang tersedia")
+             if earnings_basis else "input yang tersedia")
+    basis_en = ("the validated Analyst Scenario (official 1H actuals, H2 assumptions and four "
+                "further years)" if scenario_basis else
+                "the validated analyst earnings scenario (official 1H actuals and H2 assumptions)"
+                if earnings_basis else "the inputs available")
     direction = ("di atas +100%" if above else "di bawah -50%")
+    direction_en = ("more than +100%" if above else "worse than -50%")
     skipped = [f"{t['short']} ({method_chain.reader_reason(t['reasons'][0])})"
                for t in chain.get("trace") or []
                if t.get("decision") == "skipped" and t.get("reasons")]
+    # method_chain.reader_reason is Indonesian text from another module: quoted as source.
+    skipped_en = [f"{short_en(t['short'])} "
+                  f"({prose_lang.source(method_chain.reader_reason(t['reasons'][0]))})"
+                  for t in chain.get("trace") or []
+                  if t.get("decision") == "skipped" and t.get("reasons")]
     role = ("metode utama rantai" if sel.get("role") == "primary" else
             "metode terpilih sesudah " + "; ".join(skipped) + " dilewati" if skipped else
             "metode terpilih rantai")
-    text = (f"{sel['short']}, {role}, dihitung atas {basis}; nilainya {direction} "
-            "dari harga penutupan, sehingga Method Gate 5 framework menghentikan rantai dan menandai "
-            "Review Required. "
-            + (f"Cross-check di atas harga: {', '.join(sides[True])}. " if sides[True] else "")
-            + (f"Cross-check di bawah harga: {', '.join(sides[False])}. " if sides[False] else "")
-            + "Nilai per saham ditahan sampai tesis fundamental bersumber dan validasi analis "
-              "menjelaskan selisih dengan harga pasar.")
-    cover["headline"] = "Hasil Valuasi Ekstrem Menunggu Tesis Fundamental"
+    role_en = ("the chain's Primary Method" if sel.get("role") == "primary" else
+               "the method selected after " + "; ".join(skipped_en) + " were skipped"
+               if skipped_en else "the chain's selected method")
+    text = _t(
+        (f"{sel['short']}, {role}, dihitung atas {basis}; nilainya {direction} "
+         "dari harga penutupan, sehingga Method Gate 5 framework menghentikan rantai dan menandai "
+         "Review Required. "
+         + (f"Cross-check di atas harga: {', '.join(sides[True])}. " if sides[True] else "")
+         + (f"Cross-check di bawah harga: {', '.join(sides[False])}. " if sides[False] else "")
+         + "Nilai per saham ditahan sampai tesis fundamental bersumber dan validasi analis "
+           "menjelaskan selisih dengan harga pasar."),
+        (f"{short_en(sel['short'])}, {role_en}, calculated on {basis_en}; its value is "
+         f"{direction_en} from the closing price, so framework Method Gate 5 stops the chain "
+         "and flags Review Required. "
+         + (f"Cross-checks above the price: {', '.join(sides_en[True])}. "
+            if sides_en[True] else "")
+         + (f"Cross-checks below the price: {', '.join(sides_en[False])}. "
+            if sides_en[False] else "")
+         + "The value per share is held until a sourced fundamental thesis and analyst "
+           "validation explain the gap to the market price."))
+    cover["headline"] = _t("Hasil Valuasi Ekstrem Menunggu Tesis Fundamental",
+                           "Extreme Valuation Result Awaits a Fundamental Thesis")
     if len(cover.get("bullets") or []) >= 3:
-        cover["bullets"][2] = _trim(
-            f"Review Required: {sel['short']} {direction} dari harga; rating ditahan.", 30)
+        cover["bullets"][2] = _trim(_t(
+            f"Review Required: {sel['short']} {direction} dari harga; rating ditahan.",
+            f"Review Required: {short_en(sel['short'])} {direction_en} from the price; rating "
+            "held."), 30)
     cover["paragraf"][-1] = {"judul": "Valuasi: hasil ekstrem ditahan", "isi": text}
     doc["method"] = f"{sel['short']} (ekstrem; Review Required)"
 
@@ -4510,18 +4788,30 @@ def _bank_driver_text(model, label, money, unit, eps_of, cite, a, forward_rows=(
     pct = lambda v: fmt.pct(v / 100) if isinstance(v, (int, float)) else "n.m."
     requested_loan = d.get("loan_growth_pct")
     effective_loan = first.get("loan_growth")
+    capped = (isinstance(effective_loan, (int, float)) and
+              isinstance(requested_loan, (int, float)) and
+              abs(effective_loan * 100 - requested_loan) > 0.05)
     loan_text = (f"input pertumbuhan kredit bruto {pct(requested_loan)}; setelah batas model "
                  f"pertumbuhan FY {fmt.pct(effective_loan)}"
-                 if isinstance(effective_loan, (int, float)) and
-                 isinstance(requested_loan, (int, float)) and
-                 abs(effective_loan * 100 - requested_loan) > 0.05 else
+                 if capped else
                  f"pertumbuhan kredit bruto {pct(requested_loan)} setahun")
-    h2_text = (f"Asumsi semester kedua: kredit bruto tumbuh "
-               f"{loan_text}, NIM H2 {pct(d['nim_pct'])}, pendapatan "
-               f"non-bunga {pct(d['non_ii_to_nii_pct'])} dari NII, rasio biaya terhadap "
-               f"pendapatan {pct(d['cost_to_income_pct'])} dan biaya kredit "
-               f"{pct(d['cost_of_credit_pct'])}; model menurunkan NII, provisi, laba, ekuitas dan "
-               "CAR dari driver tersebut. Semua angka merupakan asumsi analis, bukan panduan emiten.")
+    loan_text_en = (f"gross loans at input growth of {pct(requested_loan)}, FY growth of "
+                    f"{fmt.pct(effective_loan)} after the model cap"
+                    if capped else
+                    f"gross loan growth of {pct(requested_loan)} for the year")
+    h2_text = _t(
+        f"Asumsi semester kedua: kredit bruto tumbuh "
+        f"{loan_text}, NIM H2 {pct(d['nim_pct'])}, pendapatan "
+        f"non-bunga {pct(d['non_ii_to_nii_pct'])} dari NII, rasio biaya terhadap "
+        f"pendapatan {pct(d['cost_to_income_pct'])} dan biaya kredit "
+        f"{pct(d['cost_of_credit_pct'])}; model menurunkan NII, provisi, laba, ekuitas dan "
+        "CAR dari driver tersebut. Semua angka merupakan asumsi analis, bukan panduan emiten.",
+        f"Second-half assumptions: "
+        f"{loan_text_en}, H2 NIM {pct(d['nim_pct'])}, non-interest income "
+        f"{pct(d['non_ii_to_nii_pct'])} of NII, cost-to-income ratio "
+        f"{pct(d['cost_to_income_pct'])} and cost of credit "
+        f"{pct(d['cost_of_credit_pct'])}; the model derives NII, provisions, profit, equity and "
+        "CAR from these drivers. All figures are analyst assumptions, not issuer guidance.")
     fy_lines = (("Pendapatan bunga bersih", "net_interest_income", "net_interest_income"),
                 ("Pendapatan non-bunga", "non_interest_income", "non_interest_income"),
                 ("Beban operasional", "operating_expense", "operating_expense"),
@@ -4602,11 +4892,16 @@ def _bank_driver_text(model, label, money, unit, eps_of, cite, a, forward_rows=(
                 + ("" if not model["checks"]["warnings"] else
                    " " + " ".join(model["checks"]["warnings"])))}
     last = rows[-1]
-    path = (f" Model driver bank membawa laba bersih ke Rp{money(last['earnings'])} miliar pada "
-            f"{last['label']} dengan NIM {fmt.pct(last['net_interest_margin'])}, biaya kredit "
-            f"{fmt.pct(last['cost_of_credit'])} dan ROE {fmt.pct(last['roe'])}"
-            + (f"; CAR screening {fmt.pct(last['capital_adequacy_ratio'])}"
-               if last.get("capital_adequacy_ratio") is not None else "") + ".")
+    car = last.get("capital_adequacy_ratio") is not None
+    path = _t(
+        f" Model driver bank membawa laba bersih ke Rp{money(last['earnings'])} miliar pada "
+        f"{last['label']} dengan NIM {fmt.pct(last['net_interest_margin'])}, biaya kredit "
+        f"{fmt.pct(last['cost_of_credit'])} dan ROE {fmt.pct(last['roe'])}"
+        + (f"; CAR screening {fmt.pct(last['capital_adequacy_ratio'])}" if car else "") + ".",
+        f" The bank driver model takes net profit to Rp{money(last['earnings'])} miliar in "
+        f"{last['label']} with NIM of {fmt.pct(last['net_interest_margin'])}, cost of credit of "
+        f"{fmt.pct(last['cost_of_credit'])} and ROE of {fmt.pct(last['roe'])}"
+        + (f"; screening CAR {fmt.pct(last['capital_adequacy_ratio'])}" if car else "") + ".")
     return h2_text, bridge, forward, path
 
 
