@@ -134,7 +134,7 @@ def english_problems(id_text, en_text):
     if en_clean.strip() == id_clean.strip():
         return ["repeats the Indonesian instead of translating it"]
     problems = []
-    if _CJK.search(en_text) or prose_lang.mixed(en_text):
+    if _CJK.search(en_text) or not prose_lang.reads_english(en_text):
         problems.append("must be English only")
     if prose_lang.figures(en_clean) != prose_lang.figures(id_clean):
         problems.append("must state exactly the Indonesian figures, written as in the "

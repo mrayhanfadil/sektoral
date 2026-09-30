@@ -215,7 +215,7 @@ The rating when upside exceeds +100% or downside is worse than -50%; it needs a 
 ### Publication
 
 **Publication Bundle**:
-The frozen Company Update, Audit Trace, manifest, rendered files, and analyst attestation identified by one publication ID.
+The frozen Company Update, Audit Trace, manifest, rendered files, and analyst attestation identified by one publication ID; the English edition belongs to it only when its run manifest lists it, and is published only with it (ADR 0015).
 
 **Publication State**:
 Whether a Publication Bundle is built, analytically eligible, awaiting review, approved, published, superseded, or withdrawn; it is separate from Release Status.

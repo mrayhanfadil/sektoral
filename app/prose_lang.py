@@ -146,6 +146,21 @@ def mixed(text) -> bool:
     return isinstance(text, str) and len({w.lower() for w in _INDONESIAN.findall(text)}) >= 2
 
 
+_ENGLISH = re.compile(
+    r"\b(the|a|an|of|to|in|on|for|and|or|with|from|by|at|as|is|are|was|were|be|been|not|no|"
+    r"its|their|this|that|these|than|into|over|under|while|after|before|could|may|might|would|"
+    r"will|can|has|have|had|does|do|if|but|more|less)\b", re.I)
+
+
+def reads_english(text) -> bool:
+    """True when agent-written text reads as English, for the checks on an agent's
+    English twin (stricter than ``mixed``, which template English passes): an
+    Indonesian function word must stand beside an English one."""
+    if not isinstance(text, str) or not text.strip() or mixed(text):
+        return False
+    return not _INDONESIAN.search(text) or bool(_ENGLISH.search(text))
+
+
 def _pair(id_text, en_text):
     """The English twin of one prose string, or None when it may not be attached."""
     if not isinstance(id_text, str) or not isinstance(en_text, str) or not en_text.strip():

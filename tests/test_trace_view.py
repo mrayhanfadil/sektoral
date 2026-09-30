@@ -106,3 +106,9 @@ def test_analyst_validator_notes_split_out_the_words_to_remove():
         {"message": "sintesis: JSONDecodeError: bad", "removed": []},
     ]
     assert build({"ticker": "TEST"})["analyst_problem_notes"] == []
+
+
+def test_analyst_notes_recorded_by_the_run_are_used_as_they_are():
+    notes = [{"message": "sintesis: teks Inggris dibuang, bahasa Indonesia dipakai", "removed": []}]
+    view = build({"ticker": "TEST", "analyst": {"problems": ["x; hapus: 1"], "problem_notes": notes}})
+    assert view["analyst_problem_notes"] == notes
