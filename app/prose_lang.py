@@ -191,6 +191,8 @@ def _attach_items(id_items, en_items, keys):
 
 _CARD_KEYS = ("title", "text", "observation", "implication", "caveat")
 _RISK_KEYS = ("judul", "isi")
+# The research page's cards (``research_cards``): the agent's insight prose.
+_RESEARCH_KEYS = ("title", "observation", "implication", "caveat")
 
 
 def _attach_exhibits(id_exhibits, en_exhibits):
@@ -216,6 +218,7 @@ def attach(doc: dict, doc_en: dict) -> dict:
                 continue
             _attach_paragraphs(page, page_en)
             _attach_items(page.get("cards"), page_en.get("cards"), _CARD_KEYS)
+            _attach_items(page.get("research_cards"), page_en.get("research_cards"), _RESEARCH_KEYS)
             _attach_items(page.get("risks"), page_en.get("risks"), _RISK_KEYS)
             _attach_exhibits(page.get("exhibit"), page_en.get("exhibit"))
     _attach_items(doc.get("risks"), doc_en.get("risks"), _RISK_KEYS)
@@ -306,6 +309,7 @@ def english_view(doc: dict, missing: list | None = None) -> tuple[dict, int]:
         if isinstance(page, dict):
             v.paragraphs(page)
             v.items(page.get("cards"), _CARD_KEYS)
+            v.items(page.get("research_cards"), _RESEARCH_KEYS)
             v.items(page.get("risks"), _RISK_KEYS)
             v.exhibits(page.get("exhibit"))
     v.items(view.get("risks"), _RISK_KEYS)

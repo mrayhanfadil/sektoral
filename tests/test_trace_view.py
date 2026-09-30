@@ -67,3 +67,15 @@ def test_trace_view_projects_bundle_identity_and_hashes_without_local_paths():
     assert "changed_files" not in manifest["working_tree"]
     assert "/secret/private.py" not in str(manifest)
     assert "private_key" not in str(manifest)
+
+
+def test_trace_view_passes_the_research_english_twins_through():
+    card = {"title": "Pendapatan", "observation": "Cache mencatat pendapatan.",
+            "implication": "Konteks usaha.", "caveat": "Satu catatan saja.",
+            "title_en": "Revenue", "observation_en": "The cache records revenue.",
+            "citations": []}
+    view = build({"ticker": "TEST", "research": {"document": {"insights": [card]}}})
+    shown = view["research"]["insights"][0]
+    assert shown["title"] == "Pendapatan" and shown["title_en"] == "Revenue"
+    assert shown["observation_en"] == "The cache records revenue."
+    assert shown["caveat_en"] is None  # an old brief, or a dropped twin
