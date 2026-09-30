@@ -22,6 +22,7 @@ def test_trace_view_projects_bundle_identity_and_hashes_without_local_paths():
         "model": {"forecast_agent": "test-model", "agent_effort": "high",
                   "schema_version": 1},
         "spec_sha256": "spec-sha", "evidence_register_sha256": "evidence-sha",
+        "source_text_en_sha256": "translation-sha",
         "release_policy": {"policy": {"version": "1.0.0", "effective_date": "2026-09-26",
                                         "status": "documented_baseline_not_enforced",
                                         "ambiguities": [{"id": "issuer_actual_calendar"}]},
@@ -45,7 +46,8 @@ def test_trace_view_projects_bundle_identity_and_hashes_without_local_paths():
         "source_pack_sha256": {"data/issuer_evidence/TEST.json": "source-sha"},
         "cache_snapshot_sha256": {"/company/report/TEST/": {
             "cache_key": "/company/report/TEST/", "content_sha256": "cache-sha"}},
-        "artifacts": {"pdf": {"file": "TEST.pdf", "sha256": "pdf-sha"}},
+        "artifacts": {"pdf": {"file": "TEST.pdf", "sha256": "pdf-sha"},
+                      "html_en": {"file": "TEST.en.html", "sha256": "english-sha"}},
         "missing_artifacts": ["trace_html"],
         "private_key": "must not appear",
     }}
@@ -55,6 +57,8 @@ def test_trace_view_projects_bundle_identity_and_hashes_without_local_paths():
     manifest = result["run_manifest"]
     assert manifest["publication_id"] == "publication-sha"
     assert manifest["artifacts"]["pdf"]["sha256"] == "pdf-sha"
+    assert manifest["artifacts"]["html_en"] == {"file": "TEST.en.html", "sha256": "english-sha"}
+    assert manifest["source_text_en_sha256"] == "translation-sha"
     assert manifest["release_policy"]["version"] == "1.0.0"
     assert manifest["release_policy"]["sha256"] == "policy-sha"
     assert manifest["release_policy"]["ambiguities"] == ["issuer_actual_calendar"]

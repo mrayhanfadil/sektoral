@@ -130,8 +130,12 @@ def test_run_manifest_has_contract_fields():
                 "tavily", "selected_news_urls", "assumption_plan_hash",
                 "profile", "release_status", "blockers", "source_tree_sha256",
                 "working_tree", "source_pack_sha256", "cache_snapshot_sha256",
-                "evidence_register_sha256", "release_policy"):
+                "evidence_register_sha256", "release_policy", "source_text_en_sha256"):
         assert key in manifest
+    # The English source-text translations the build quotes are part of its identity.
+    from app import prose_lang
+    assert manifest["source_text_en_sha256"] == prose_lang.source_text_sha256()
+    assert run_manifest.re_full_sha(manifest["source_text_en_sha256"])
     assert manifest["release_policy"]["sha256"]
     assert manifest["release_policy"]["policy"]["status"] == "mixed_enforcement_and_documentation"
     assert manifest["house_assumptions"]["sha256"]
@@ -412,6 +416,15 @@ def test_finalized_manifest_binds_final_artifact_bytes(tmp_path):
     assert first["artifacts"]["pdf"]["sha256"] != second["artifacts"]["pdf"]["sha256"]
     assert first["publication_id"] != second["publication_id"]
     assert first["market_inputs_sha256"] == run_manifest.content_hash(base["market_inputs"])
+    # The English edition is optional: absent, it is neither listed nor missing.
+    assert set(first["artifacts"]) == {"html", "pdf", "trace_html"}
+    (tmp_path / "TEST.en.html").write_bytes(b"english-v1")
+    third = run_manifest.finalize_manifest(base, tmp_path, "TEST")
+    assert third["missing_artifacts"] == []
+    assert third["artifacts"]["html_en"] == {
+        "file": "TEST.en.html", "sha256": run_manifest.file_sha256(tmp_path / "TEST.en.html")}
+    assert "pdf_en" not in third["artifacts"]
+    assert third["publication_id"] != second["publication_id"]
 
 
 def test_build_manifest_records_forecast_status_and_final_release(tmp_path):

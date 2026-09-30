@@ -85,7 +85,7 @@ def _approve(*args, **kwargs):
     return R.approve(*args, **kwargs)
 
 
-def _stored(folder, ticker="UJIA", status="distributable_assumption_led"):
+def _stored(folder, ticker="UJIA", status="distributable_assumption_led", english=False):
     evidence_register = _test_register(ticker)
     outputs.save(outputs.REPORT, folder, ticker, {"meta": {"ticker": ticker,
                                                             "tanggal": "2026-09-24",
@@ -97,6 +97,9 @@ def _stored(folder, ticker="UJIA", status="distributable_assumption_led"):
     Path(folder, f"{ticker}.html").write_text("<html>company update</html>")
     Path(folder, f"{ticker}.pdf").write_bytes(b"%PDF-1.4 company update")
     Path(folder, f"{ticker}-trace.html").write_text("<html>audit trace</html>")
+    if english:
+        Path(folder, f"{ticker}.en.html").write_text("<html lang='en'>company update</html>")
+        Path(folder, f"{ticker}.en.pdf").write_bytes(b"%PDF-1.4 english company update")
     manifest = run_manifest.finalize_manifest({
         "ticker": ticker, "code_revision": "test", "source_tree_sha256": "a" * 64,
         "spec_sha256": "b" * 64,
@@ -321,6 +324,48 @@ def test_changed_rendered_artifact_makes_approval_stale(tmp_path, artifact):
     state = R.status(tmp_path, "UJIA")
     assert state["state"] == "pending"
     assert state["stale_record"] is not None
+
+
+def test_english_beside_a_bundle_finalized_without_it_leaves_the_approval_unchanged(tmp_path):
+    _stored(tmp_path)
+    record = _approve(tmp_path, "UJIA", "Analis Satu", attestation=_attestation())
+    (tmp_path / "UJIA.en.html").write_text("<html lang='en'>written later</html>")
+    (tmp_path / "UJIA.en.pdf").write_bytes(b"%PDF-1.4 written later")
+
+    state = R.status(tmp_path, "UJIA")
+    assert state["state"] == "approved" and state["review_sha"] == record["review_sha"]
+    assert set(state["artifact_hashes"]) == {"html", "pdf", "trace_html"}
+    assert state["manifest_errors"] == []
+
+
+def test_an_approval_covers_the_english_edition_its_manifest_lists(tmp_path):
+    _stored(tmp_path, english=True)
+    manifest = outputs.load(outputs.MANIFEST, tmp_path, "UJIA")
+    assert set(manifest["artifacts"]) == {"html", "pdf", "trace_html", "html_en", "pdf_en"}
+    record = _approve(tmp_path, "UJIA", "Analis Satu", attestation=_attestation())
+    assert record["artifact_hashes"]["html_en"] == manifest["artifacts"]["html_en"]["sha256"]
+    assert record["artifact_hashes"]["pdf_en"] == manifest["artifacts"]["pdf_en"]["sha256"]
+    assert R.status(tmp_path, "UJIA")["state"] == "approved"
+
+
+@pytest.mark.parametrize("kind,artifact", [("html_en", "UJIA.en.html"),
+                                           ("pdf_en", "UJIA.en.pdf")])
+def test_changed_or_removed_english_edition_makes_approval_stale(tmp_path, kind, artifact):
+    _stored(tmp_path, english=True)
+    _approve(tmp_path, "UJIA", "Analis Satu", attestation=_attestation())
+    path = tmp_path / artifact
+    path.write_bytes(path.read_bytes() + b" changed")
+
+    state = R.status(tmp_path, "UJIA")
+    assert state["state"] == "pending" and state["stale_record"] is not None
+    assert (f"publication manifest {kind} hash does not match current artifact"
+            in state["manifest_errors"])
+    with pytest.raises(R.ReviewError, match="manifest wajib belum valid"):
+        _approve(tmp_path, "UJIA", "Analis Satu", attestation=_attestation())
+
+    path.unlink()
+    state = R.status(tmp_path, "UJIA")
+    assert state["state"] == "pending" and kind not in state["artifact_hashes"]
 
 
 def test_publishable_report_cannot_be_approved_without_required_artifacts(tmp_path):
