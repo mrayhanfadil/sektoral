@@ -24,6 +24,54 @@ PEER_METRICS = {
 }
 DEFAULT_PEER_METRICS = ("roe", "net_margin", "leverage", "pe", "pb")
 
+# English for the signal labels and flags below, keyed by signal id and by the
+# Indonesian flag, for the English twin of the agent's prose. Numbers in a
+# label stay the same in both languages.
+LABELS_EN = {
+    "peer.market_cap": "Market capitalisation", "peer.roe": "ROE",
+    "peer.net_margin": "Net profit margin", "peer.roa": "ROA",
+    "peer.leverage": "Liabilities / equity", "peer.pe": "P/E", "peer.pb": "P/B",
+    "peer.mcap_change_1y": "1-year change in market capitalisation",
+    "quarter.revenue_yoy": "Latest quarter revenue, yoy",
+    "quarter.earnings_yoy": "Latest quarter net profit, yoy",
+    "price.return_window": "Share price return over the data window",
+    "price.vs_ihsg": "Return gap vs IHSG",
+    "price.volume_ratio": "Volume over the last 10 days vs the earlier average",
+    "flow.net_20d": "Net foreign flow, last 20 sessions",
+    "flow.net_window": "Net foreign flow, whole data window",
+    "flow.streak": "Consecutive sessions with the same foreign direction",
+    "valuation.pe_vs_history": "Current P/E vs the average of earlier years",
+    "valuation.pe_vs_peer_avg": "P/E vs the peer average P/E (Sectors)",
+    "cross.flow_vs_price": "Foreign flow direction vs price direction",
+    "news.count": "Dated news mentioning the issuer",
+}
+FLAGS_EN = {
+    "tertinggi di grup": "highest in the group", "terendah di grup": "lowest in the group",
+    "berbalik ke laba": "back to profit", "lonjakan": "surge", "penurunan tajam": "sharp fall",
+    "jauh mengungguli IHSG": "far ahead of IHSG", "jauh tertinggal dari IHSG": "far behind IHSG",
+    "volume melonjak": "volume surge", "volume mengering": "volume drying up",
+    "arah asing berbalik": "foreign direction reversed", "beruntun": "streak",
+    "jauh di bawah rata-rata historis": "far below the historical average",
+    "jauh di atas rata-rata historis": "far above the historical average",
+    "premi besar ke peer": "large premium to peers", "diskon besar ke peer": "large discount to peers",
+    "divergensi asing vs harga": "foreign flow diverges from price",
+}
+
+
+def label_en(signal):
+    """The English label of a signal, or None when there is none."""
+    if not isinstance(signal, dict):
+        return None
+    if signal.get("kind") == "web":
+        # A web signal's label is the article title, which has no English form.
+        domain = str(signal.get("display") or "").rpartition("· ")[2].strip()
+        return f"web article ({domain})" if domain else "web article"
+    return LABELS_EN.get(signal.get("id"))
+
+
+def flag_en(flag):
+    return FLAGS_EN.get(flag) if isinstance(flag, str) else None
+
 
 def display(value, unit):
     if value is None:
