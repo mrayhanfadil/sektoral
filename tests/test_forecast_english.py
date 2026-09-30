@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from agents.forecast_assumptions import run as agent  # noqa: E402
-from app import build as B, prose_lang, scrub, stage, store  # noqa: E402
+from app import build as B, outputs, prose_lang, rebuild, scrub, stage, store  # noqa: E402
 from test_forecast_bank_agent import (NEWS, STAGE, _earnings, _intake, _outyears,  # noqa: E402
                                       _scripted)
 from test_forecast_earnings_agent import _source as fcff_source  # noqa: E402
@@ -468,3 +468,72 @@ def test_the_english_report_quotes_the_risk_and_catalyst_twins(tmp_path):
         p["isi"] for p in doc["cover"]["paragraf"] if isinstance(p, dict))
     # A stored plan without twins still builds; its risks have no English of their own.
     assert all("judul_en" not in r for r in old["risks"])
+
+
+# --- app.rebuild --translate-assumptions ----------------------------------
+
+
+VOLATILE = {"run_manifest", "generated_at", "built_at", "created_at"}
+
+
+def _indonesian_doc(doc):
+    def strip(value):
+        if isinstance(value, dict):
+            return {k: strip(v) for k, v in value.items()
+                    if k not in VOLATILE and not k.endswith("_en")}
+        if isinstance(value, list):
+            return [strip(v) for v in value]
+        return value
+    return strip(doc)
+
+
+def test_rebuild_translate_assumptions_adds_english_and_keeps_the_indonesian(tmp_path,
+                                                                            monkeypatch, capsys):
+    """A stored BBRI run whose Forecast Plan predates the translation step:
+    ``--translate-assumptions`` rebuilds the same Indonesian report as a plain
+    rebuild, and the English edition gains the plan's twins."""
+    stored = json.loads((FIXTURES / "bbri_scenario_plan.json").read_text())
+    english = _twins(json.loads((FIXTURES / "bbri_scenario_plan_en.json").read_text())["plan"])
+    source = tmp_path / "src"
+    B.build("BBRI", source, as_of=AS_OF, assumption_plan=copy.deepcopy(stored["plan"]),
+            assumption_status=stored["status"])
+    outputs.save(outputs.TRACE, source, "BBRI", {
+        "ticker": "BBRI", "report": {"as_of": AS_OF},
+        "forecast_assumptions": {"status": stored["status"], "plan": stored["plan"]}})
+    chat, calls = _translator(english)
+    monkeypatch.setattr(agent, "_chat", chat)
+
+    assert rebuild.main(["--from", str(source), "--out", str(tmp_path / "plain"), "BBRI"]) == 0
+    assert calls == []                                       # a plain rebuild calls no model
+    assert rebuild.main(["--from", str(source), "--out", str(tmp_path / "en"),
+                         "--translate-assumptions", "BBRI"]) == 0
+    assert calls                                             # the translation ran
+    assert "terjemahan: partial" in capsys.readouterr().out
+
+    plain = outputs.load(outputs.REPORT, tmp_path / "plain", "BBRI")
+    translated = outputs.load(outputs.REPORT, tmp_path / "en", "BBRI")
+    assert _indonesian_doc(translated) == _indonesian_doc(plain)
+    assert translated["meta"]["rating"] == plain["meta"]["rating"]
+    assert translated["meta"]["tp"] == plain["meta"]["tp"]
+    risks = translated["risks"]
+    assert [r.get("judul_en") for r in risks] == [
+        english[f"earnings_scenario.key_risks[{i}].headline"] for i in range(len(risks))]
+    assert all("judul_en" not in r for r in plain["risks"])
+    # The rebuilt trace stores the translated plan and the notes.
+    fa = outputs.load(outputs.TRACE, tmp_path / "en", "BBRI")["forecast_assumptions"]
+    agent_plan = fa.get("agent_plan_raw", fa["plan"])
+    assert _without_english(agent_plan) == stored["plan"]
+    assert _twins(agent_plan) == {path: scrub.normalize_prose(text, english=True)
+                                  for path, text in english.items()}
+    assert fa["translation"]["status"] == "partial"          # the fixture lacks some twins
+    manifest = outputs.load(outputs.MANIFEST, tmp_path / "en", "BBRI")
+    assert manifest["rebuild"]["translated_assumptions"] is True
+
+
+def test_translate_assumptions_needs_named_tickers(tmp_path):
+    with pytest.raises(SystemExit):
+        rebuild.main(["--from", str(tmp_path / "src"), "--out", str(tmp_path / "out"),
+                      "--translate-assumptions"])
+    with pytest.raises(SystemExit):
+        rebuild.main(["--from", str(tmp_path / "src"), "--out", str(tmp_path / "out"),
+                      "--translate-assumptions", "--refresh-assumptions", "BBRI"])
