@@ -10,11 +10,13 @@ An event is ``{stage, label, status, t}`` plus optional ``detail`` (why a step
 started or what it found), ``tool`` (the tool or kind of step, e.g.
 ``find_peers``, ``cache_get``, ``gate_3``), ``agent`` (the emitter when the
 stage does not name it, e.g. ``riset`` or ``forecast.news``) and ``data`` (a
-few short structured fields such as a gate verdict).
+few short structured fields such as a gate verdict; strings, except the raw
+numbers in ``NUMBERS``).
 """
 from __future__ import annotations
 
 import contextvars
+import math
 import re
 import time
 from contextlib import contextmanager
@@ -25,6 +27,12 @@ STAGES = ("memory", "plan", "tool", "signals", "synthesis", "research", "news",
 STATUSES = ("ok", "warn", "error", "run")
 _AGENT = re.compile(r"^[a-z]{2,12}(\.[a-z_]{2,20})?$")
 _KEY = re.compile(r"^[a-z_]{1,20}$")
+# data keys kept as numbers (the web formats them); every other value is a short string.
+NUMBERS = frozenset({"tp_value", "upside_pct"})
+
+
+def _finite(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def event(stage: str, label: str, detail=None, *, status: str = "ok", tool=None,
@@ -40,8 +48,9 @@ def event(stage: str, label: str, detail=None, *, status: str = "ok", tool=None,
     if agent and _AGENT.fullmatch(str(agent)):
         out["agent"] = str(agent)
     if isinstance(data, dict):
-        clean = {k: str(v)[:120] for k, v in list(data.items())[:8]
-                 if isinstance(k, str) and _KEY.fullmatch(k) and v is not None and str(v) != ""}
+        clean = {k: v if k in NUMBERS else str(v)[:120] for k, v in list(data.items())[:8]
+                 if isinstance(k, str) and _KEY.fullmatch(k) and v is not None and str(v) != ""
+                 and (_finite(v) or k not in NUMBERS)}
         if clean:
             out["data"] = clean
     return out
