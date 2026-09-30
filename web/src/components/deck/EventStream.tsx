@@ -4,10 +4,14 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, TriangleAlert } from "lucide-react";
-import { AGENT, AGENTS, duration, type AgentId, type DeckState, type Step } from "../../lib/agents";
-import { useLang, type Lang } from "../../lib/i18n";
+import { AGENT, AGENTS, duration, releaseFigures, type AgentId, type DeckState, type Step } from "../../lib/agents";
+import type { EventData } from "../../lib/api";
+import { decisionCode, gateCode, primaryMethodOf, str, type EventKind } from "../../lib/codes";
+import { pick, useLang, type Bi, type Lang } from "../../lib/i18n";
 import { EngineTag, Glyph, Hold, Sweep } from "./kit";
-import { SPRING, clock, useChangeCount, verdictGlyph, verdictTone, words } from "./read";
+import {
+  SPRING, clock, decisionWord, gateWord, useChangeCount, verdictGlyph, verdictOf, verdictTone, verdictWord, words,
+} from "./read";
 
 /** Whether rows mounting in this render are new arrivals (animate) or a jump (don't). */
 const Enter = createContext(false);
@@ -195,12 +199,43 @@ function Data({ text }: { text: string }) {
   return <>{parts.map((p, i) => (i % 2 ? <code key={i} className="font-mono text-[.92em] text-ink-strong">{p}</code> : p))}</>;
 }
 
-function resultParts(step: Step, lang: Lang): { label?: string; detail?: string } {
-  let label = step.result;
-  if (label && step.tool) {
-    if (label === `${step.tool} selesai`) label = undefined;
-    else if (label.startsWith(`${step.tool}: `)) label = label.slice(step.tool.length + 2);
+/**
+ * Tool outcomes the pipeline labels "<tool>: …". Indonesian readers keep the
+ * pipeline's own words after the prefix; these are the words for the others.
+ */
+const TOOL_OUTCOME: Record<"tool_error" | "tool_empty", Bi> = {
+  tool_error: { id: "data tidak tersedia", en: "Data not available" },
+  tool_empty: { id: "data tidak tersedia", en: "No data available" },
+};
+
+/** The closing label of a step, cut to what it adds and in the reader's words where the Deck knows it. */
+function resultLabel(step: Step, lang: Lang): string | undefined {
+  const label = step.result;
+  const kind = step.resultEvent;
+  if (!label) return undefined;
+  if (step.tool && kind === "tool_done") return undefined;
+  if (step.tool && (kind === "tool_error" || kind === "tool_empty")) {
+    const prefix = `${step.tool}: `;
+    return lang === "id" && label.startsWith(prefix) ? label.slice(prefix.length) : pick(TOOL_OUTCOME[kind], lang);
   }
+  return valuationLabel(label, kind, step.data, lang);
+}
+
+/** The gate agent's closing labels, in the reader's words; any other label passes through. */
+function valuationLabel(label: string, kind: EventKind | undefined, data: EventData | undefined, lang: Lang): string {
+  if (kind === "primary_method") {
+    const method = primaryMethodOf({ label, data }) ?? "";
+    return pick({ id: label, en: `Primary method ${method}`.trim() }, lang);
+  }
+  if (kind === "chain_done") return pick({ id: label, en: "Method Chain done" }, lang);
+  if (kind === "release" && data?.status) {
+    return pick({ id: label, en: `Release status: ${words(str(data.status), "en")}` }, lang);
+  }
+  return label;
+}
+
+function resultParts(step: Step, lang: Lang): { label?: string; detail?: string } {
+  let label = resultLabel(step, lang);
   const path = step.title.match(/(\/\S+)/)?.[1];
   if (label && path && label.startsWith(path)) label = label.slice(path.length).trim();
   if (label) label = label.charAt(0).toUpperCase() + label.slice(1);
@@ -249,7 +284,8 @@ function ResultLine({ step, clampLines = false }: { step: Step; clampLines?: boo
 function CallCard({ step, showAgent }: { step: Step; showAgent: boolean }) {
   const { t } = useLang();
   const tool = step.tool ?? "";
-  const reason = step.reason ?? (step.title !== `Menjalankan ${tool}` ? step.title : undefined);
+  // The opening "running <tool>" label repeats the tool name; any other title says why.
+  const reason = step.reason ?? (step.event !== "tool_start" ? step.title : undefined);
   return (
     <div className="relative px-4 py-2.5 max-sm:px-3">
       <div className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-x-3">
@@ -311,7 +347,7 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
   const { t, lang } = useLang();
   const d = step.data ?? {};
   let lead: ReactNode = null;
-  let text: ReactNode = step.title;
+  let text: ReactNode = valuationLabel(step.title, step.event, step.data, lang);
   let side: ReactNode = null;
   let sub: string | undefined = words(step.resultDetail, lang);
   let glyph = step.status;
@@ -321,18 +357,21 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
     text = (step.resultDetail ?? step.title).replace(/^H\d+:\s*/, "");
     sub = undefined;
   } else if (step.kind === "verdict") {
+    const v = verdictOf(d);
     lead = `H${d.index ?? ""}`;
-    text = <span className={`pill ${verdictTone(d.verdict)} px-2 py-0 text-[12.5px]`}>{words(d.verdict, lang) ?? step.title}</span>;
+    text = <span className={`pill ${verdictTone(v)} px-2 py-0 text-[12.5px]`}>{verdictWord(v, lang) ?? step.title}</span>;
     // An unanswered hypothesis is not a finished test: it carries the warning mark.
-    if (step.status !== "run" && verdictGlyph(d.verdict) === "warn") glyph = "warn";
+    if (step.status !== "run" && verdictGlyph(v) === "warn") glyph = "warn";
   } else if (step.kind === "gate") {
+    const g = { verdict: str(d.verdict), code: gateCode(d.verdict_code, d.verdict) };
     lead = `G${d.gate ?? ""}`;
-    text = <>{step.title} <span className={`text-[12.5px] font-medium ${step.status === "ok" ? "text-done" : d.verdict === "tidak berlaku" ? "text-ink-soft" : "text-warn-ink"}`}>{words(d.verdict, lang)}</span></>;
+    text = <>{step.title} <span className={`text-[12.5px] font-medium ${step.status === "ok" ? "text-done" : g.code === "not_applicable" ? "text-ink-soft" : "text-warn-ink"}`}>{gateWord(g, lang)}</span></>;
   } else if (step.kind === "chain") {
-    text = <><code className="font-mono text-[13px] font-semibold text-ink-strong">{step.title}</code> <span className={d.decision === "Terpilih" ? "font-bold text-brand-ink" : "text-ink-soft"}>{words(d.decision, lang)}</span></>;
+    const c = { decision: str(d.decision) ?? "", code: decisionCode(d.decision_code, d.decision) };
+    text = <><code className="font-mono text-[13px] font-semibold text-ink-strong">{step.title}</code> <span className={c.code === "selected" ? "font-bold text-brand-ink" : "text-ink-soft"}>{decisionWord(c, lang)}</span></>;
     side = <span className="data text-ink-strong">{d.value}</span>;
   } else if (step.kind === "release") {
-    side = d.rating ? <span className="data text-ink-strong">{d.rating} {d.tp}</span> : null;
+    side = d.rating ? <span className="data text-ink-strong">{d.rating} {releaseFigures(d, lang).tp}</span> : null;
   }
 
   return (

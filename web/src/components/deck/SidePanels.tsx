@@ -5,7 +5,9 @@ import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useSpri
 import { GATES, type DeckState, type GateState, type Hypothesis } from "../../lib/agents";
 import { useLang, type Bi } from "../../lib/i18n";
 import { Clamp, Glyph, Hold, HoldLight, RegionHead } from "./kit";
-import { GATE_SETTLE, SPRING, SPRING_SOFT, isJudged, useChangeCount, verdictGlyph, verdictStatus, verdictTone, words } from "./read";
+import {
+  GATE_SETTLE, SPRING, SPRING_SOFT, decisionWord, gateWord, isJudged, useChangeCount, verdictGlyph, verdictStatus, verdictTone, verdictWord,
+} from "./read";
 
 const REGION = "border-b border-rule px-5 py-4 max-sm:px-4";
 
@@ -16,8 +18,8 @@ function Empty({ children }: { children: ReactNode }) {
 export function PlanPanel({ state, loading }: { state: DeckState; loading?: boolean }) {
   const { t } = useLang();
   const { question, hypotheses } = state.plan;
-  // Only a real verdict counts; "belum terjawab" was tried but not answered.
-  const judged = hypotheses.filter((h) => isJudged(h.verdict)).length;
+  // Only a real verdict counts; "unanswered" was tried but not answered.
+  const judged = hypotheses.filter(isJudged).length;
   return (
     <section aria-labelledby="plan-title" className={REGION}>
       <RegionHead id="plan-title" title={t({ id: "Rencana riset", en: "Research plan" })}
@@ -50,18 +52,18 @@ function HypothesisRow({ h }: { h: Hypothesis }) {
   return (
     <motion.li initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} transition={{ height: SPRING, opacity: { duration: 0.3 } }}
       className="relative isolate overflow-hidden">
-      <HoldLight n={changed} tone={verdictStatus(h.verdict)} />
+      <HoldLight n={changed} tone={verdictStatus(h)} />
       <div className="grid grid-cols-[26px_minmax(0,1fr)] gap-x-2 py-2.5 pl-2">
         <span className="data pt-[2px] text-ink-soft">H{h.index}</span>
         <div className="min-w-0">
           <p className="line-clamp-3 text-[13.5px] leading-snug text-ink" title={text}>{text}</p>
           <div className="mt-1.5 flex min-h-[22px] flex-wrap items-center gap-2">
-            <Glyph status={verdictGlyph(h.verdict)} />
+            <Glyph status={verdictGlyph(h)} />
             <AnimatePresence mode="popLayout" initial={false}>
               {h.verdict ? (
                 <motion.span key={h.verdict} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-                  transition={SPRING_SOFT} className={`pill ${verdictTone(h.verdict)} px-2 py-0 text-[12.5px]`} title={h.reason}>
-                  {words(h.verdict, lang)}
+                  transition={SPRING_SOFT} className={`pill ${verdictTone(h)} px-2 py-0 text-[12.5px]`} title={h.reason}>
+                  {verdictWord(h, lang)}
                 </motion.span>
               ) : (
                 <motion.span key="wait" exit={{ opacity: 0 }} className="text-[12.5px] text-ink-faint">{t({ id: "menunggu uji", en: "awaiting test" })}</motion.span>
@@ -78,11 +80,10 @@ function HypothesisRow({ h }: { h: Hypothesis }) {
 type Reading = "idle" | "pass" | "fail" | "unknown" | "skip";
 function reading(g: GateState): Reading {
   if (g.status === "idle") return "idle";
-  const v = (g.verdict ?? "").toLowerCase();
-  if (v === "lolos") return "pass";
-  if (v === "gagal") return "fail";
-  if (v === "tidak berlaku" || g.status === "skip") return "skip";
-  if (v === "tidak dapat dinilai") return "unknown";
+  if (g.code === "pass") return "pass";
+  if (g.code === "fail") return "fail";
+  if (g.code === "not_applicable" || g.status === "skip") return "skip";
+  if (g.code === "not_assessable") return "unknown";
   return g.status === "ok" ? "pass" : "fail";
 }
 const READING_INK: Record<Reading, string> = {
@@ -123,7 +124,7 @@ function Gate({ g }: { g: GateState }) {
   const r = reading(g);
   const changed = useChangeCount(r);
   const tone = r === "pass" || r === "skip" ? "ok" : r === "idle" ? "idle" : "warn";
-  const word = r === "idle" || !g.verdict ? t(READING_WORD[r]) : words(g.verdict, lang);
+  const word = r === "idle" || !g.verdict ? t(READING_WORD[r]) : gateWord(g, lang);
   const name = t(g.name);
   return (
     <li className="relative isolate min-w-0 bg-surface px-1.5 pt-2 pb-2" title={`Gate ${g.n}, ${name}: ${word}${g.detail ? `. ${g.detail}` : ""}`}>
@@ -220,15 +221,16 @@ export function ChainTable({ state }: { state: DeckState }) {
           <tbody>
             <AnimatePresence initial={false}>
               {chain.map((c) => {
-                const picked = c.decision === "Terpilih";
-                const skipped = c.value === "-" || /tidak/i.test(c.decision);
+                const picked = c.code === "selected";
+                // Without a code, a "tidak …" label (not run, not needed) reads as skipped.
+                const skipped = c.value === "-" || (c.code ? c.code === "not_needed" : /tidak/i.test(c.decision));
                 return (
                   <motion.tr key={`${c.order}-${c.method}`} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={SPRING_SOFT}
                     title={c.reason} className={`border-b border-rule-soft last:border-0 ${picked ? "bg-brand-50" : ""}`}>
                     <td className={`py-2 pr-3 pl-2 align-top font-mono text-[13px] font-semibold ${picked ? "text-brand-ink" : skipped ? "text-ink-soft" : "text-ink-strong"}`}>
                       {c.method}
                     </td>
-                    <td className={`py-2 pr-3 align-top ${picked ? "font-bold text-brand-ink" : skipped ? "text-ink-soft" : "text-ink"}`}>{words(c.decision, lang)}</td>
+                    <td className={`py-2 pr-3 align-top ${picked ? "font-bold text-brand-ink" : skipped ? "text-ink-soft" : "text-ink"}`}>{decisionWord(c, lang)}</td>
                     <td className={`py-2 pr-2 text-right align-top font-mono tabular-nums ${picked ? "font-bold text-brand-ink" : skipped ? "text-ink-soft" : "text-ink"}`}>{c.value}</td>
                   </motion.tr>
                 );

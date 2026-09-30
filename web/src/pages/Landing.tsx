@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Play } from "lucide-react";
 import { api } from "../lib/api";
 import { derive } from "../lib/agents";
+import { str } from "../lib/codes";
 import { featuredReport } from "../lib/labels";
 import { useLoad } from "../components/State";
 import { Launcher } from "../components/landing/Launcher";
@@ -197,7 +198,7 @@ export default function Landing() {
               id: "Harness rilis menentukan apakah company update boleh memuat rating dan target harga.",
               en: "The release harness decides whether a company update may carry a rating and target price.",
             })}>
-            <ReleaseStatuses current={final?.release?.status} ticker={ticker} />
+            <ReleaseStatuses current={str(final?.release?.status)} ticker={ticker} />
           </Ledger>
           {items.length > 0 && (
             <Ledger title="Review Required"

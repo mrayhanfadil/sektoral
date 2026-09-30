@@ -4,9 +4,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CircleX, FileDown, FileText, Route, SquareTerminal } from "lucide-react";
-import { AGENTS, derive, PHASES, type DeckState } from "../lib/agents";
-import { api, ApiError, type Job, type JobEvent, type ReportItem, type RunReplay } from "../lib/api";
+import { AGENTS, derive, PHASES, planIn, releaseFigures, type DeckState } from "../lib/agents";
+import {
+  api, ApiError, readerFiles, reportFiles, type Intel, type Job, type JobEvent, type ReportItem, type RunReplay,
+} from "../lib/api";
+import { primaryMethodOf, str } from "../lib/codes";
 import { pct, rp } from "../lib/format";
+import { useRunIntel } from "../lib/useRunIntel";
 import { useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone } from "../lib/labels";
 import { useReplay } from "../lib/replay";
@@ -24,6 +28,12 @@ import { launch } from "../lib/launch";
 
 const NO_EVENTS: JobEvent[] = [];
 const IDLE = derive([]);
+
+/** The run's state with its plan in the reader's language (lib/agents.ts `planIn`). */
+function withPlan(state: DeckState, intel: Intel | null | undefined, lang: Lang): DeckState {
+  const plan = planIn(state.plan, intel, lang);
+  return plan === state.plan ? state : { ...state, plan };
+}
 
 function Page({ children }: { children: ReactNode }) {
   return <div className="wrap py-4 max-sm:py-3">{children}</div>;
@@ -72,8 +82,9 @@ function IdleLegend() {
 
 /** The analyst's chosen method: the gate agent's closing line, else the selected chain step. */
 function methodOf(state: DeckState): string | undefined {
-  const closing = state.steps.find((s) => s.agent === "gerbang" && s.kind === "task" && s.result?.startsWith("Metode utama "));
-  return closing?.result?.slice("Metode utama ".length) ?? state.chain.find((c) => c.decision === "Terpilih")?.method;
+  const closing = state.steps.find((s) => s.agent === "gerbang" && s.kind === "task" && s.resultEvent === "primary_method");
+  return (closing && primaryMethodOf({ label: closing.result, data: closing.data }))
+    ?? state.chain.find((c) => c.code === "selected")?.method;
 }
 
 function signed(value: number | null | undefined, lang: Lang) {
@@ -86,12 +97,12 @@ const WITHHELD: Bi = { id: "ditahan", en: "withheld" };
 function fromRelease(state: DeckState, lang: Lang): ResultData | undefined {
   const release = state.release;
   if (!release) return undefined;
-  const heldByGate5 = state.gates[5]?.verdict === "gagal";
-  const item = { rating: release.rating ?? null, held_reason: heldByGate5 ? "Method Gate 5" : "" };
+  const item = { rating: str(release.rating) ?? null, review_required: state.gates[5]?.code === "fail" };
+  const { tp, upside } = releaseFigures(release, lang);
   return {
     rating: ratingLabel(item), tone: ratingTone(item),
-    tp: release.tp ?? WITHHELD[lang], upside: release.upside ?? "-",
-    method: methodOf(state), release: words(release.status, lang),
+    tp: tp ?? WITHHELD[lang], upside: upside ?? "-",
+    method: methodOf(state), release: words(str(release.status), lang),
   };
 }
 
@@ -102,7 +113,7 @@ function fromReport(report: ReportItem, state: DeckState, lang: Lang): ResultDat
     upside: report.published ? signed(report.upside, lang) : "-",
     price: report.price !== null ? `Rp${rp(report.price, lang)}` : undefined,
     method: report.method || methodOf(state),
-    release: words(state.release?.status, lang) ?? (report.published ? undefined : words("draft_non_distributable", lang)),
+    release: words(str(state.release?.status), lang) ?? (report.published ? undefined : words("draft_non_distributable", lang)),
   };
 }
 
@@ -185,7 +196,9 @@ export function DeckJob() {
   const events = job?.events ?? NO_EVENTS;
   const finished = job?.state === "completed" || job?.state === "error";
   const failed = job?.state === "error";
-  const state = useMemo(() => derive(events, { finished, failed }), [events, finished, failed]);
+  const derived = useMemo(() => derive(events, { finished, failed }), [events, finished, failed]);
+  // The finished job's analyst result carries the plan's English twins.
+  const state = useMemo(() => withPlan(derived, job?.intel, lang), [derived, job?.intel, lang]);
 
   if (!job) {
     if (missing) {
@@ -280,7 +293,9 @@ export function DeckReplay() {
   const run = load.run;
   const events = run?.events ?? NO_EVENTS;
   const replay = useReplay(events, { speed: 4, autoplay: true });
-  const state = useMemo(() => derive(replay.shown, { finished: replay.finished }), [replay.shown, replay.finished]);
+  const derived = useMemo(() => derive(replay.shown, { finished: replay.finished }), [replay.shown, replay.finished]);
+  const intel = useRunIntel(load.run ? T : undefined, lang);
+  const state = useMemo(() => withPlan(derived, intel, lang), [derived, intel, lang]);
 
   if (load.error) {
     const missing = load.error instanceof ApiError && load.error.status === 404;
@@ -317,10 +332,11 @@ export function DeckReplay() {
   const result = state.release && report ? fromReport(report, state, lang)
     : state.release ? fromRelease(state, lang)
     : finished && report ? fromReport(report, state, lang) : undefined;
+  const files = report ? readerFiles(report, lang) : reportFiles(T);
   const links: Links = {
-    report: !report || report.files.html ? `/files/reports/${T}.html` : undefined,
+    report: !report || report.files.html ? files.html : undefined,
     trace: `/laporan/${T}/jejak`,
-    pdf: report?.files.pdf ? `/files/reports/${T}.pdf` : undefined,
+    pdf: report?.files.pdf ? files.pdf : undefined,
   };
 
   return (

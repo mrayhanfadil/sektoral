@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { JobEvent } from "./api";
-import { derive, duration } from "./agents";
+import type { Intel, JobEvent } from "./api";
+import { derive, duration, planIn, releaseFigures } from "./agents";
 import { playbackTimes } from "./replay";
 
 const ev = (stage: string, label: string, status: JobEvent["status"], t: number, extra: Partial<JobEvent> = {}): JobEvent =>
@@ -50,11 +50,38 @@ describe("derive", () => {
   it("reads the plan, hypotheses, gates and method chain", () => {
     const s = derive(RUN);
     expect(s.plan.question).toBe("Apakah margin bertahan?");
-    expect(s.plan.hypotheses).toEqual([{ index: 1, text: "Margin di atas peer", verdict: "didukung", reason: undefined }]);
+    expect(s.plan.hypotheses).toEqual([{ index: 1, text: "Margin di atas peer", verdict: "didukung", code: "supported", reason: undefined }]);
     expect(s.gates[0].status).toBe("ok");
+    expect(s.gates[0].code).toBe("pass");
     expect(s.gates[1].status).toBe("skip");
     expect(s.gates[5].status).toBe("idle");
-    expect(s.chain).toEqual([{ method: "DDM", decision: "Terpilih", value: "Rp5.075", reason: undefined, order: 0 }]);
+    expect(s.chain).toEqual([{ method: "DDM", decision: "Terpilih", code: "selected", value: "Rp5.075", reason: undefined, order: 0 }]);
+  });
+
+  it("reads the step kinds from the labels of a run without codes", () => {
+    const s = derive(RUN);
+    const peers = s.steps.find((x) => x.tool === "find_peers")!;
+    expect([peers.event, peers.resultEvent]).toEqual(["tool_start", "tool_done"]);
+    expect(s.steps.find((x) => x.tool === "foreign_flow")!.resultEvent).toBe("tool_error");
+    expect(s.steps.find((x) => x.title === "Gerbang metode menilai emiten")!.resultEvent).toBe("primary_method");
+  });
+
+  it("reads codes and kinds a newer server sends, whatever its labels say", () => {
+    const s = derive([
+      ev("synthesis", "Hipotesis 1", "ok", 1, { tool: "hypothesis", detail: "Margin", data: { kind: "hypothesis", index: "1" } }),
+      ev("synthesis", "H1 x", "ok", 2, { tool: "verdict", data: { kind: "hypothesis", index: "1", verdict: "x", verdict_code: "not_supported" } }),
+      ev("gate", "Kewajaran hasil", "warn", 3, { agent: "gerbang", tool: "gate_5", data: { kind: "gate", gate: "5", verdict: "x", verdict_code: "fail" } }),
+      ev("gate", "Kelayakan data", "ok", 4, { agent: "gerbang", tool: "gate_1", data: { kind: "gate", gate: "1", verdict: "x", verdict_code: "not_applicable" } }),
+      ev("gate", "P/BV", "ok", 5, { agent: "gerbang", tool: "chain_step", data: { kind: "chain_row", decision: "x", decision_code: "cross_check", value: "-" } }),
+      ev("tool", "Running news", "run", 6, { tool: "news", data: { kind: "tool_start" } }),
+      ev("tool", "news: none", "warn", 7, { tool: "news", data: { kind: "tool_empty" } }),
+    ]);
+    expect(s.plan.hypotheses[0].code).toBe("not_supported");
+    expect(s.gates[5].code).toBe("fail");
+    expect(s.gates[1].status).toBe("skip");
+    expect(s.chain[0].code).toBe("cross_check");
+    const news = s.steps.find((x) => x.tool === "news")!;
+    expect([news.event, news.resultEvent]).toEqual(["tool_start", "tool_empty"]);
   });
 
   it("keeps the running agent and phase while the run is live, and closes them when finished", () => {
@@ -67,6 +94,44 @@ describe("derive", () => {
     expect(done.agents.laporan.status).toBe("ok");
     expect(done.phases.every((p) => p.status !== "run")).toBe(true);
     expect(done.active).toBeUndefined();
+  });
+});
+
+describe("release figures", () => {
+  it("formats the raw numbers in the reader's language", () => {
+    const release = { status: "production_ready", rating: "Sell", tp: "Rp4.125", upside: "−20,9%", tp_value: 4125, upside_pct: -20.9 };
+    expect(releaseFigures(release, "en")).toEqual({ tp: "Rp4,125", upside: "−20.9%", down: true });
+    expect(releaseFigures(release, "id")).toEqual({ tp: "Rp4.125", upside: "−20,9%", down: true });
+    expect(releaseFigures({ tp_value: "12500", upside_pct: "12.3" }, "en")).toEqual({ tp: "Rp12,500", upside: "+12.3%", down: false });
+  });
+  it("keeps an older event's Indonesian strings", () => {
+    expect(releaseFigures({ tp: "Rp5.075", upside: "+61,6%" }, "en")).toEqual({ tp: "Rp5.075", upside: "+61,6%", down: false });
+    expect(releaseFigures({ status: "draft_non_distributable" }, "en")).toEqual({ tp: undefined, upside: undefined, down: false });
+    expect(releaseFigures(undefined, "en").tp).toBeUndefined();
+  });
+});
+
+describe("plan in the reader's language", () => {
+  const intel = {
+    plan: { question: "Apakah margin bertahan?", question_en: "Will margins hold?", source: "agent",
+      hypotheses: ["Margin di atas peer", "Utang turun"], hypotheses_en: ["Margins above peers", null] },
+    synthesis: { hypotheses: [{ index: 0, verdict: "didukung", reason: "ROE tinggi", reason_en: "High ROE", signal_ids: [] }] },
+  } as unknown as Intel;
+  const plan = {
+    question: "Apakah margin bertahan?",
+    hypotheses: [{ index: 1, text: "Margin di atas peer", verdict: "didukung", reason: "ROE tinggi" }, { index: 2, text: "Utang turun" }],
+  };
+  it("takes the English twins for an English reader", () => {
+    expect(planIn(plan, intel, "en")).toEqual({
+      question: "Will margins hold?",
+      hypotheses: [{ index: 1, text: "Margins above peers", verdict: "didukung", reason: "High ROE" }, { index: 2, text: "Utang turun" }],
+    });
+  });
+  it("keeps the Indonesian for Indonesian readers, without a result, or when the text is not the same run's", () => {
+    expect(planIn(plan, intel, "id")).toBe(plan);
+    expect(planIn(plan, null, "en")).toBe(plan);
+    const other = { question: "Pertanyaan lain", hypotheses: [{ index: 1, text: "Hipotesis lain" }] };
+    expect(planIn(other, intel, "en")).toEqual(other);
   });
 });
 

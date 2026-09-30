@@ -3,7 +3,11 @@
 
 import { pick } from "./i18n";
 
-export type ChainStep = { step: string; decision: string; value: string };
+/** One Method Chain row; `decision` is the Indonesian label, `decision_code` its stable code (#34). */
+export type ChainStep = { step: string; decision: string; decision_code?: string; value: string };
+
+/** Report languages: Bahasa Indonesia always, English once it is part of the published bundle. */
+export type ReportLang = "id" | "en";
 
 export type ReportItem = {
   ticker: string;
@@ -29,7 +33,9 @@ export type ReportItem = {
   held_reason: string;
   /** Release policy freshness: a stale view stays visible with its reason. */
   freshness?: { state: "current" | "stale" | "withdrawal_due"; reason?: string | null; triggers?: string[] } | null;
-  files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean };
+  /** Public languages of the report (`[]` when unpublished); older servers omit it and publish Indonesian only. */
+  languages?: ReportLang[];
+  files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean; html_en?: boolean; pdf_en?: boolean };
   review?: { state: ReviewState; reviewer: string | null; reviewed_at: string | null; decision: string | null; edits: number };
 };
 
@@ -40,8 +46,9 @@ export type ArchivedPublication = {
   publication_id: string;
   archived_at: string | null;
   review_sha: string | null;
-  artifact_hashes: { html: string | null; pdf: string | null; trace_html: string | null };
-  files: { html: string | null; pdf: string | null; trace: string | null };
+  artifact_hashes: { html: string | null; pdf: string | null; trace_html: string | null;
+    html_en?: string | null; pdf_en?: string | null };
+  files: { html: string | null; pdf: string | null; trace: string | null; html_en?: string | null; pdf_en?: string | null };
 };
 
 export type ReviewState = "approved" | "pending" | "no_plan";
@@ -168,22 +175,29 @@ export type Signal = {
   peers?: { symbol: string | null; display: string | null }[];
 };
 
+// Agent text fields may carry an English twin `<field>_en` (#34); lib/i18n.ts
+// `twin` picks it for English readers and falls back to the Indonesian.
 export type Intel = {
   ticker: string | null;
   name: string | null;
   market_date: string | null;
   status: string | null;
-  plan: { question: string | null; source: string | null; hypotheses: (string | null)[] };
-  steps: { tool: string | null; why: string | null; summary: string | null; status: string | null; origin: string | null }[];
+  plan: { question: string | null; question_en?: string | null; source: string | null;
+    hypotheses: (string | null)[]; hypotheses_en?: (string | null)[] };
+  steps: { tool: string | null; why: string | null; why_en?: string | null; summary: string | null; status: string | null; origin: string | null }[];
   signals: Signal[];
   peers: { basis: string | null; group: string | null };
   web_news: { window: string | null; items: { title: string | null; url: string | null; domain: string | null; date: string | null }[] };
   synthesis: {
     headline: string | null;
+    headline_en?: string | null;
     source: string | null;
-    findings: { title: string | null; interpretation: string | null; caveat: string | null; signal_ids: string[] }[];
-    hypotheses: { index: number | null; verdict: string | null; reason: string | null; signal_ids: string[] }[];
+    findings: { title: string | null; title_en?: string | null; interpretation: string | null; interpretation_en?: string | null;
+      caveat: string | null; caveat_en?: string | null; signal_ids: string[] }[];
+    hypotheses: { index: number | null; verdict: string | null; verdict_code?: string | null;
+      reason: string | null; reason_en?: string | null; signal_ids: string[] }[];
     next_checks: (string | null)[];
+    next_checks_en?: (string | null)[];
   };
   changes: {
     first_run: boolean;
@@ -208,8 +222,15 @@ export type JobEvent = {
   detail?: string;
   tool?: string;
   agent?: string;
-  data?: Record<string, string>;
+  data?: EventData;
 };
+
+/**
+ * Short structured fields of an event. Mostly strings; the release event's
+ * `tp_value` and `upside_pct` are numbers (#34). Read them with lib/codes.ts
+ * `str` and `num`.
+ */
+export type EventData = Record<string, string | number>;
 
 /** A stored run to play back: recorded events, or events derived from its audit trace. */
 export type RunReplay = {
@@ -233,6 +254,9 @@ export type Job = {
   report_status?: string;
   intel?: Intel;
 };
+
+/** A validator note: its message and the tokens it asked the model to remove. */
+export type ProblemNote = { message: string; removed: string[] };
 
 export type TraceView = {
   ticker: string;
@@ -267,6 +291,8 @@ export type TraceView = {
     cache_snapshot_sha256: Record<string, { cache_key: string | null; content_sha256: string | null }>;
     artifacts: Record<string, { file: string | null; sha256: string | null }>;
     missing_artifacts: string[];
+    /** Hash of the English source-text translations the report prose loaded (#34); older manifests lack it. */
+    source_text_en_sha256?: string | null;
   } | null;
   /** Gallery reports only: whether an analyst approved the Forecast Plan. */
   review_state?: ReviewState;
@@ -284,10 +310,13 @@ export type TraceView = {
   };
   analyst: Intel | null;
   analyst_problems: string[];
+  /** The same notes parsed server-side (#34); older traces carry only `analyst_problems`. */
+  analyst_problem_notes?: ProblemNote[];
   research: {
     summary: string | null;
     endpoints: string[];
-    insights: { title: string | null; observation: string | null; implication: string | null; caveat: string | null;
+    insights: { title: string | null; title_en?: string | null; observation: string | null; observation_en?: string | null;
+      implication: string | null; implication_en?: string | null; caveat: string | null; caveat_en?: string | null;
       citations: { endpoint: string | null; field_path: string | null; value: string | null }[] }[];
     limitations: string[];
   };
@@ -300,15 +329,17 @@ export type TraceView = {
   forecast: {
     status: string | null;
     problems: string[];
-    news_effects: { driver: string | null; change: string | null; years: string[]; rationale: string | null; date: string | null;
-      url: string | null; factual_basis: string | null; mechanism: string | null; uncertainty: string | null }[];
-    interim: { rationale: string | null; published_at: string | null; url: string | null } | null;
+    news_effects: { driver: string | null; change: string | null; years: string[]; rationale: string | null; rationale_en?: string | null;
+      date: string | null; url: string | null; factual_basis: string | null; factual_basis_en?: string | null;
+      mechanism: string | null; mechanism_en?: string | null; uncertainty: string | null; uncertainty_en?: string | null }[];
+    interim: { rationale: string | null; rationale_en?: string | null; published_at: string | null; url: string | null } | null;
     outyears: { year: string | null; revenue_growth_pct: number | null; ebitda_margin_pct: number | null;
-      net_income_margin_pct: number | null; capex_to_revenue_pct: number | null; rationale: string | null; source_ids: string[] }[];
+      net_income_margin_pct: number | null; capex_to_revenue_pct: number | null; rationale: string | null; rationale_en?: string | null;
+      source_ids: string[] }[];
     /** Bank Driver Scenario: the interim year's H2 drivers, then the out-years (percent). */
     bank_drivers?: { year: string | null; loan_growth_pct: number | null; nim_pct: number | null; non_ii_to_nii_pct: number | null;
       cost_to_income_pct: number | null; cost_of_credit_pct: number | null; deposit_growth_pct: number | null;
-      rationale: string | null; source_ids: string[] }[];
+      rationale: string | null; rationale_en?: string | null; source_ids: string[] }[];
   };
   deepdive: { title: string | null; date: string | null; url: string | null; status: string | null; length: number; preview: string | null }[];
 };
@@ -368,7 +399,7 @@ export const api = {
     request<TraceView>(`/api/reports/${encodeURIComponent(ticker)}/trace/preview`, {
       headers: { "X-Review-Token": token },
     }),
-  reviewArtifact: (ticker: string, token: string, kind: "pdf" | "html" | "trace") =>
+  reviewArtifact: (ticker: string, token: string, kind: PreviewKind) =>
     requestBlob(`/api/reports/${encodeURIComponent(ticker)}/artifact-preview/${kind}`, token),
   review: (ticker: string, token?: string) => request<ReviewView>(
     `/api/reports/${encodeURIComponent(ticker)}/review`,
@@ -391,10 +422,30 @@ export const api = {
     }).then((r) => r.id),
 };
 
-/** Where a report's files live on the server. */
-export const reportFiles = (t: string) => ({
-  pdf: `/files/reports/${t}.pdf`,
-  html: `/files/reports/${t}.html`,
-  traceHtml: `/files/reports/${t}-trace.html`,
-  cover: `/files/reports/${t}/cover.png`,
-});
+/** The bundle files a reviewer can preview before publication. */
+export type PreviewKind = "pdf" | "html" | "trace" | "html_en" | "pdf_en";
+
+/** Whether the report is published in English: `languages` from the server, else its English file flags. */
+export function hasEnglish(item: Pick<ReportItem, "languages" | "files"> | null | undefined): boolean {
+  if (!item) return false;
+  return item.languages ? item.languages.includes("en") : Boolean(item.files.html_en || item.files.pdf_en);
+}
+
+/**
+ * Where a report's files live on the server. `html` and `pdf` follow the
+ * reader: the English files when ``lang`` is English and ``english`` says the
+ * report is published in English, else the Indonesian ones.
+ */
+export const reportFiles = (t: string, lang: ReportLang = "id", english = false) => {
+  const suffix = lang === "en" && english ? ".en" : "";
+  return {
+    pdf: `/files/reports/${t}${suffix}.pdf`,
+    html: `/files/reports/${t}${suffix}.html`,
+    traceHtml: `/files/reports/${t}-trace.html`,
+    cover: `/files/reports/${t}/cover.png`,
+  };
+};
+
+/** A report's files in the reader's language, as far as its item says English is published. */
+export const readerFiles = (item: Pick<ReportItem, "ticker" | "languages" | "files">, lang: ReportLang) =>
+  reportFiles(item.ticker, lang, hasEnglish(item));
