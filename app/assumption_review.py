@@ -63,6 +63,17 @@ LABELS = {
     "cost_of_credit_pct": ("Biaya kredit", "%"),
     "deposit_growth_pct": ("Pertumbuhan DPK", "%"),
 }
+# The same labels in English, for the web app's English view (``label_en``).
+LABELS_EN = {
+    "h2_revenue_to_h1": "H2 / H1 revenue", "h2_ebitda_margin_pct": "H2 EBITDA margin",
+    "h2_net_margin_pct": "H2 net profit margin", "h2_capex_to_h1": "H2 / H1 capex",
+    "fy_ebitda_margin_pct": "FY EBITDA margin", "fy_capex_to_revenue_pct": "FY capex / revenue",
+    "revenue_growth_pct": "Revenue growth", "ebitda_margin_pct": "EBITDA margin",
+    "net_income_margin_pct": "Net profit margin", "capex_to_revenue_pct": "Capex / revenue",
+    "loan_growth_pct": "Loan growth", "nim_pct": "NIM",
+    "non_ii_to_nii_pct": "Non-interest income / NII", "cost_to_income_pct": "Cost-to-income ratio",
+    "cost_of_credit_pct": "Cost of credit", "deposit_growth_pct": "Third-party deposit growth",
+}
 # A reviewer's value outside these bounds is a typo, not a view.
 BOUNDS = {"%": (-100.0, 300.0), "x": (0.0, 10.0)}
 PATH = re.compile(r"^(?P<section>[a-z_]+)(?:\[(?P<index>\d+)\])?(?:\.(?P<sub>[a-z_]+))?"
@@ -594,16 +605,22 @@ def _number(value):
 
 
 def fields(plan) -> list[dict]:
-    """Every editable numeric driver: path, label, unit, year, value, rationale."""
+    """Every editable numeric driver: path, label, unit, year, value, rationale,
+    with ``label_en`` and the agent's English ``rationale_en`` (None without one)."""
     out = []
 
-    def add(path, row, key, year, rationale):
+    def add(path, row, key, year, rationale, rationale_en):
         value = _number(row.get(key))
         if value is None or key not in LABELS:
             return
         label, unit = LABELS[key]
-        out.append({"path": path, "field": key, "label": label, "unit": unit, "year": year,
-                    "value": value, "rationale": rationale})
+        out.append({"path": path, "field": key, "label": label, "label_en": LABELS_EN.get(key),
+                    "unit": unit, "year": year, "value": value, "rationale": rationale,
+                    "rationale_en": rationale_en})
+
+    def english(row):
+        text = row.get("rationale_en")
+        return str(text)[:600] if isinstance(text, str) and text.strip() else None
 
     for section in SECTIONS:
         block = (plan or {}).get(section)
@@ -615,12 +632,13 @@ def fields(plan) -> list[dict]:
             year = row.get("year")
             rationale = str(row.get("rationale") or "")[:600]
             for key in row:
-                add(f"{base}.{key}", row, key, year, rationale)
+                add(f"{base}.{key}", row, key, year, rationale, english(row))
             drivers = row.get("bank_drivers")
             if isinstance(drivers, dict):
+                own = drivers.get("rationale")
                 for key in drivers:
                     add(f"{base}.bank_drivers.{key}", drivers, key, drivers.get("year"),
-                        str(drivers.get("rationale") or rationale)[:600])
+                        str(own or rationale)[:600], english(drivers) if own else english(row))
     return out
 
 
@@ -897,7 +915,9 @@ def plan_edits(rec) -> list[dict]:
         if entry.get("plan_sha") != rec.get("plan_sha"):
             continue
         for edit in entry.get("edits") or []:
-            out.append({**edit, "reviewer": entry.get("reviewer"),
+            found = PATH.match(str((edit or {}).get("path") or ""))
+            out.append({**edit, "label_en": LABELS_EN.get(found["field"]) if found else None,
+                        "reviewer": entry.get("reviewer"),
                         "reviewed_at": entry.get("reviewed_at")})
     return out
 

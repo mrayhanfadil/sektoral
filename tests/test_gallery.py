@@ -88,6 +88,48 @@ def test_summaries_hold_drafts_and_read_the_method_chain(tmp_path):
     assert held["publication_state"] == "built" and not held["analytically_eligible"]
 
 
+def test_summaries_carry_english_beside_the_indonesian(tmp_path):
+    _report(tmp_path, "AAAA")
+    _report(tmp_path, "BBBB", published=False)
+    first, held = gallery.load(tmp_path)
+    # A report stored before its English prose: host labels still have theirs.
+    assert first["method"] == "FY26F PER median peer x EPS skenario analis"
+    assert first["method_en"] == "FY26F median peer PER x Analyst Scenario EPS"
+    assert first["profile"] == "Korporasi" and first["profile_en"] == "Corporate"
+    assert [s["step"] for s in first["chain"]] == ["DCF FCFF", "PER FY skenario", "P/BV buku"]
+    assert [s["step_en"] for s in first["chain"]] == [None, "Scenario FY PER", "Book P/BV"]
+    assert first["headline"] == "Laba naik" and first["headline_en"] is None
+    assert first["risks_en"] is None
+    assert first["held_reason"] == "" and first["held_reason_en"] is None
+    assert held["held_reason"] == "laporan belum tersedia untuk umum"
+    assert held["held_reason_en"] == "the report is not yet public"
+    assert held["method_en"] is None and held["headline_en"] is None
+    # The report's own English prose.
+    doc = outputs.load(outputs.REPORT, tmp_path, "AAAA")
+    doc["cover"]["headline_en"] = "Profit rises"
+    doc["risks"] = [{"judul": "Harga tembaga", "judul_en": "Copper price"}, {"judul": "Regulasi"}]
+    outputs.save(outputs.REPORT, tmp_path, "AAAA", doc)
+    first = gallery.load(tmp_path)[0]
+    assert first["headline"] == "Laba naik" and first["headline_en"] == "Profit rises"
+    assert first["risks"] == ["Harga tembaga", "Regulasi"]
+    assert first["risks_en"] == ["Copper price", None]
+
+
+def test_a_stale_label_carries_its_english(tmp_path, monkeypatch):
+    from app import publication_monitor
+    monkeypatch.setattr(publication_monitor, "assess", lambda folder, ticker: {
+        "state": "stale",
+        "reason": "Pemicu pembaruan terbuka sejak 2026-10-30; laporan tetap tampil dengan label "
+                  "stale sampai ditinjau.",
+        "triggers": [{"detail": "Rilis resmi 9M26 terbit 2026-10-30; laporan memakai 1H26."}]})
+    freshness = gallery._freshness(tmp_path, "AAAA")
+    assert freshness["reason"].startswith("Pemicu pembaruan")
+    assert freshness["reason_en"] == ("An update trigger has been open since 2026-10-30; the report "
+                                      "stays visible, labelled stale, until it is reviewed.")
+    assert freshness["triggers_en"] == [
+        "The official 9M26 release came out on 2026-10-30; the report uses 1H26."]
+
+
 def test_a_passing_report_is_a_draft_until_an_analyst_approves_its_plan(tmp_path, monkeypatch):
     monkeypatch.setenv("SECTORAL_AUTO_PUBLISH", "0")  # review-gated publication
     _report(tmp_path, "AAAA", reviewed=False)

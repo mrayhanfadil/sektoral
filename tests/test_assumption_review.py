@@ -119,6 +119,20 @@ def test_fields_list_only_the_numeric_drivers_with_labels():
     assert paths["outyear_scenario[0].revenue_growth_pct"]["year"] == 2027
 
 
+def test_fields_carry_english_labels_and_the_agents_english_rationale():
+    plan = {**PLAN, "outyear_scenario": [{**PLAN["outyear_scenario"][0],
+                                          "rationale_en": "Track record."}]}
+    paths = {f["path"]: f for f in R.fields(plan)}
+    growth = paths["outyear_scenario[0].revenue_growth_pct"]
+    assert growth["label"] == "Pertumbuhan pendapatan" and growth["label_en"] == "Revenue growth"
+    assert growth["rationale"] == "Rekam jejak." and growth["rationale_en"] == "Track record."
+    # A plan written before the agent's English twins has none.
+    nim = paths["earnings_scenario.bank_drivers.nim_pct"]
+    assert nim["rationale"] == "NIM 1H26 resmi." and nim["rationale_en"] is None
+    assert paths["earnings_scenario.h2_net_margin_pct"]["label_en"] == "H2 net profit margin"
+    assert set(R.LABELS_EN) == set(R.LABELS)
+
+
 @pytest.mark.parametrize("edit, message", [
     ({"path": "news_effects[0].change", "value": 1, "reason": "alasan cukup panjang"}, "tidak dapat diedit"),
     ({"path": "outyear_scenario[0].revenue_growth_pct", "value": "x", "reason": "alasan cukup panjang"}, "angka"),

@@ -11,6 +11,10 @@ view, and a cover thumbnail rendered from the PDF.
 The English edition (``{T}.en.html``/``.en.pdf``) is public only as part of the
 published bundle (ADR 0015): its kind must be in the bundle and the file on
 disk must still carry the bundle's SHA-256.
+
+A summary's Indonesian fields keep their English beside them as
+``<field>_en`` (#34): the report's own English prose (``cover.headline_en``,
+``risks[].judul_en``) and, for the labels the host writes, ``app.host_lang``.
 """
 from __future__ import annotations
 
@@ -19,8 +23,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import (assumption_review, exhibit_ids, outputs, publication_archive, publication_monitor,
-               release_policy, report_extras, run_manifest)
+from . import (assumption_review, exhibit_ids, host_lang, outputs, publication_archive,
+               publication_monitor, release_policy, report_extras, run_manifest)
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
@@ -50,8 +54,10 @@ def _freshness(folder, ticker) -> dict | None:
         return None
     if decision.get("state") not in {"stale", "withdrawal_due"}:
         return {"state": "current"}
+    triggers = [t.get("detail") for t in decision.get("triggers") or []]
     return {"state": decision["state"], "reason": decision.get("reason"),
-            "triggers": [t.get("detail") for t in decision.get("triggers") or []]}
+            "reason_en": host_lang.english(decision.get("reason")), "triggers": triggers,
+            "triggers_en": [host_lang.english(t) for t in triggers]}
 
 def _chain(doc):
     """Method-chain rows as (step, decision, decision_code, value) from the report exhibit."""
@@ -61,7 +67,7 @@ def _chain(doc):
     for row in rows:
         if len(row) >= 3:
             step = re.sub(r"^\S+\.\s*", "", str(row[0])).replace(" (utama)", "")
-            out.append({"step": step, "decision": str(row[1]),
+            out.append({"step": step, "step_en": host_lang.english(step), "decision": str(row[1]),
                         "decision_code": report_extras.decision_code(row[1]), "value": str(row[2])})
     return out
 
@@ -154,7 +160,18 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
     review = publication["review"]
     published = publication["published"]
     reviewed = review.get("record") or {}
-    method = str(doc.get("method") or "")
+    method = str(doc.get("method") or "").split(" [")[0]
+    profile = PROFILE_LABEL.get(str(meta.get("model_profile")
+                                    or (doc.get("run_manifest") or {}).get("profile") or ""), "Emiten")
+    cover = doc.get("cover") if isinstance(doc.get("cover"), dict) else {}
+    headline = str(cover.get("headline") or "")
+    risks = [r for r in doc.get("risks") or [] if isinstance(r, dict)][:3]
+    held_reason = ("" if published else
+                   "publikasi ini ditarik" if publication["publication_state"] == "withdrawn" else
+                   "riwayat publikasi tidak valid" if publication["publication_state"] == "history_invalid" else
+                   "publikasi ini telah digantikan" if publication["publication_state"] == "superseded" else
+                   "menunggu review publikasi oleh reviewer" if releasable else
+                   "laporan belum tersedia untuk umum")
     bundle = publication.get("bundle") or {}
     files = {**{kind: published and (folder / pattern.format(t=ticker)).is_file()
                 for kind, (pattern, _) in FILES.items()},
@@ -178,24 +195,27 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
         "rating_status": meta.get("rating_status"),
         "tp": meta.get("tp") if published else None,
         "upside": meta.get("upside_persen") if published else None,
-        "method": method.split(" [")[0] if published else "",
+        "method": method if published else "",
+        "method_en": host_lang.english(method) if published else None,
         # Drafts carry no model_profile in meta; the run manifest still records it.
-        "profile": PROFILE_LABEL.get(str(meta.get("model_profile")
-                                         or (doc.get("run_manifest") or {}).get("profile") or ""), "Emiten"),
-        "headline": str((doc.get("cover") or {}).get("headline") or "") if published else "",
-        "risks": ([str(r.get("judul")) for r in doc.get("risks") or [] if isinstance(r, dict)][:3]
-                  if published else []),
+        "profile": profile,
+        "profile_en": host_lang.PROFILES.get(profile),
+        "headline": headline if published else "",
+        "headline_en": ((cover.get("headline_en") if isinstance(cover.get("headline_en"), str)
+                         else host_lang.english(headline)) if published else None),
+        "risks": [str(r.get("judul")) for r in risks] if published else [],
+        # The report's English risk titles, a parallel list; None when it has none.
+        "risks_en": ([r.get("judul_en") if isinstance(r.get("judul_en"), str) else None
+                      for r in risks]
+                     if published and any(isinstance(r.get("judul_en"), str) for r in risks)
+                     else None),
         # Unapproved method choices, blockers and thesis text stay on the
         # authenticated preview; the public gallery only says review is pending.
         "chain": _chain(doc) if published else [],
         "blockers": (len((doc.get("harness") or {}).get("blockers") or [])
                      if published else None),
-        "held_reason": ("" if published else
-                        "publikasi ini ditarik" if publication["publication_state"] == "withdrawn" else
-                        "riwayat publikasi tidak valid" if publication["publication_state"] == "history_invalid" else
-                        "publikasi ini telah digantikan" if publication["publication_state"] == "superseded" else
-                        "menunggu review publikasi oleh reviewer" if releasable else
-                        "laporan belum tersedia untuk umum"),
+        "held_reason": held_reason,
+        "held_reason_en": host_lang.english(held_reason),
         # Release policy 1.2.0: a published view stays visible but is labelled
         # stale once a newer official period is due or has been published.
         "freshness": (_freshness(folder, ticker) if published else None),
