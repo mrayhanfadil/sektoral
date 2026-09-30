@@ -4,6 +4,8 @@ import { motion } from "motion/react";
 import { Search, Workflow } from "lucide-react";
 import { Logo } from "./Brand";
 import { ThemeToggle } from "./Theme";
+import { LangToggle } from "./Lang";
+import { useLang } from "../lib/i18n";
 import { PaletteProvider, usePalette } from "./CommandPalette";
 
 function useScrollToHash() {
@@ -29,9 +31,9 @@ function useScrollToHash() {
 
 /** Function-key tabs of the deck; F1–F3 also work from the keyboard. */
 const KEYS = [
-  { key: "F1", label: "Riset", to: "/research", match: (p: string) => p === "/research" || p.startsWith("/jobs/") || p.endsWith("/putar") },
-  { key: "F2", label: "Laporan", to: "/laporan", match: (p: string) => p === "/laporan" || p.endsWith("/jejak") },
-  { key: "F3", label: "Cara kerja", to: "/#cara-kerja", match: () => false },
+  { key: "F1", label: { id: "Riset", en: "Research" }, to: "/research", match: (p: string) => p === "/research" || p.startsWith("/jobs/") || p.endsWith("/putar") },
+  { key: "F2", label: { id: "Laporan", en: "Reports" }, to: "/laporan", match: (p: string) => p === "/laporan" || p.endsWith("/jejak") },
+  { key: "F3", label: { id: "Cara kerja", en: "How it works" }, to: "/#cara-kerja", match: () => false },
 ];
 
 function useFunctionKeys() {
@@ -54,14 +56,15 @@ function useFunctionKeys() {
 
 /** Jakarta wall clock, the deck's time reference. */
 function Clock() {
+  const { t, locale } = useLang();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000 * 15);
     return () => window.clearInterval(id);
   }, []);
-  const time = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).format(now);
+  const time = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).format(now);
   return (
-    <time dateTime={now.toISOString()} className="data text-ink-soft max-lg:hidden" title="Waktu Jakarta">
+    <time dateTime={now.toISOString()} className="data text-ink-soft max-lg:hidden" title={t({ id: "Waktu Jakarta", en: "Jakarta time" })}>
       {time} WIB
     </time>
   );
@@ -70,17 +73,18 @@ function Clock() {
 function DeckBar() {
   const { pathname } = useLocation();
   const palette = usePalette();
+  const { t } = useLang();
   return (
     <>
       <a href="#konten" className="absolute -top-12 left-4 z-[100] rounded-b-md bg-brand px-3.5 py-2 font-bold text-white no-underline focus:top-0">
-        Lewati ke konten utama
+        {t({ id: "Lewati ke konten utama", en: "Skip to main content" })}
       </a>
       <header className="sticky top-0 z-50 border-b border-rule bg-surface">
         <div className="wrap flex h-[52px] items-center gap-5 max-sm:gap-2">
-          <Link to="/" aria-label="Sektoral, beranda" className="flex-none">
+          <Link to="/" aria-label={t({ id: "Sektoral, beranda", en: "Sektoral, home" })} className="flex-none">
             <Logo className="h-[22px] max-sm:h-[19px]" />
           </Link>
-          <nav aria-label="Navigasi utama" className="flex h-full items-stretch gap-1 max-sm:ml-auto max-sm:gap-0">
+          <nav aria-label={t({ id: "Navigasi utama", en: "Main navigation" })} className="flex h-full items-stretch gap-1 max-sm:ml-auto max-sm:gap-0">
             {KEYS.map((k) => {
               const active = k.match(pathname);
               return (
@@ -92,9 +96,9 @@ function DeckBar() {
                   {k.key === "F3" ? (
                     <>
                       <Workflow aria-hidden className="size-[18px] flex-none sm:hidden" strokeWidth={2.2} />
-                      <span className="max-sm:sr-only">{k.label}</span>
+                      <span className="max-sm:sr-only">{t(k.label)}</span>
                     </>
-                  ) : k.label}
+                  ) : t(k.label)}
                   {active && (
                     <motion.span layoutId="deck-tab" aria-hidden className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-brand-ink"
                       transition={{ type: "spring", stiffness: 500, damping: 40 }} />
@@ -107,10 +111,11 @@ function DeckBar() {
             <button type="button" onClick={() => palette.open()}
               className="group flex h-9 cursor-pointer items-center gap-2.5 rounded-md border border-rule bg-raised pr-1.5 pl-3 text-[14px] text-ink-soft transition-colors hover:border-rule-strong hover:text-ink-strong max-sm:size-9 max-sm:justify-center max-sm:p-0">
               <Search aria-hidden className="size-4" strokeWidth={2.2} />
-              <span className="max-sm:sr-only">Cari emiten</span>
+              <span className="max-sm:sr-only">{t({ id: "Cari emiten", en: "Search issuers" })}</span>
               <kbd className="kbd max-sm:hidden">⌘K</kbd>
             </button>
             <Clock />
+            <LangToggle />
             <ThemeToggle />
           </div>
         </div>
@@ -120,23 +125,26 @@ function DeckBar() {
 }
 
 function SiteFooter() {
+  const { t } = useLang();
   return (
     <footer className="mt-auto border-t border-rule bg-surface">
       <div className="wrap grid gap-4 pt-6 pb-7">
         <p className="max-w-[88ch] text-[13.5px] text-ink-soft">
-          <strong className="text-ink">Bukan rekomendasi investasi.</strong> Sektoral menyajikan informasi dan analisis untuk mendukung kerja
-          analis. Rating dan target harga hanya muncul setelah pemeriksaan data, forecast, dan valuasi lolos. Sektoral
-          tidak terhubung ke broker dan tidak mengeksekusi transaksi. Keputusan investasi tetap tanggung jawab pembaca.
+          <strong className="text-ink">{t({ id: "Bukan rekomendasi investasi.", en: "Not investment advice." })}</strong>{" "}
+          {t({
+            id: "Sektoral menyajikan informasi dan analisis untuk mendukung kerja analis. Rating dan target harga hanya muncul setelah pemeriksaan data, forecast, dan valuasi lolos. Sektoral tidak terhubung ke broker dan tidak mengeksekusi transaksi. Keputusan investasi tetap tanggung jawab pembaca.",
+            en: "Sektoral provides information and analysis to support analysts' work. A rating and target price appear only after the data, forecast and valuation checks pass. Sektoral is not connected to any broker and does not execute trades. Investment decisions remain the reader's responsibility.",
+          })}
         </p>
         <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-ink-soft">
           <Logo className="h-[18px]" />
-          <nav aria-label="Tautan footer" className="flex flex-wrap gap-4 [&>a]:text-ink-soft [&>a]:no-underline [&>a:hover]:text-brand-ink">
-            <Link to="/research">Riset</Link>
-            <Link to="/laporan">Laporan</Link>
-            <Link to="/#cara-kerja">Cara kerja</Link>
-            <Link to="/#batasan">Batasan</Link>
+          <nav aria-label={t({ id: "Tautan footer", en: "Footer links" })} className="flex flex-wrap gap-4 [&>a]:text-ink-soft [&>a]:no-underline [&>a:hover]:text-brand-ink">
+            <Link to="/research">{t({ id: "Riset", en: "Research" })}</Link>
+            <Link to="/laporan">{t({ id: "Laporan", en: "Reports" })}</Link>
+            <Link to="/#cara-kerja">{t({ id: "Cara kerja", en: "How it works" })}</Link>
+            <Link to="/#batasan">{t({ id: "Batasan", en: "Limits" })}</Link>
           </nav>
-          <span>© 2026 Sektoral, dibuat untuk Sectors Hackathon 2026</span>
+          <span>{t({ id: "© 2026 Sektoral, dibuat untuk Sectors Hackathon 2026", en: "© 2026 Sektoral, built for Sectors Hackathon 2026" })}</span>
         </div>
       </div>
     </footer>

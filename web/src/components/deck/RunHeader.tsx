@@ -3,13 +3,20 @@
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { DeckState, Status } from "../../lib/agents";
+import { useLang, type Bi } from "../../lib/i18n";
 import { LiveMark } from "../Mark";
 import { STATUS_INK } from "./read";
 import { IssuerLogo } from "../IssuerLogo";
 
 export type RunPhase = "pending" | "running" | "completed" | "error" | "paused";
 
-const STATE_WORD: Record<RunPhase, string> = { pending: "Antri", running: "Jalan", completed: "Selesai", error: "Gagal", paused: "Jeda" };
+const STATE_WORD: Record<RunPhase, Bi> = {
+  pending: { id: "Antri", en: "Queued" },
+  running: { id: "Jalan", en: "Running" },
+  completed: { id: "Selesai", en: "Done" },
+  error: { id: "Gagal", en: "Failed" },
+  paused: { id: "Jeda", en: "Paused" },
+};
 const STATE_STATUS: Record<RunPhase, Status> = { pending: "idle", running: "run", completed: "ok", error: "error", paused: "idle" };
 const STATE_CHIP: Record<RunPhase, string> = {
   pending: "border-rule bg-raised",
@@ -37,6 +44,7 @@ type Props = {
 };
 
 export function RunHeader({ ticker, name, phase, clock, clockNote, counts, badges, action, controls, loading }: Props) {
+  const { t } = useLang();
   const status = STATE_STATUS[phase];
   return (
     <header className="border-b border-rule">
@@ -48,21 +56,21 @@ export function RunHeader({ ticker, name, phase, clock, clockNote, counts, badge
           </h1>
           <div className="min-w-0 flex-1">
             {loading ? <span className="block h-3.5 w-56 max-w-full animate-pulse rounded bg-raised" />
-              : <p className="truncate text-[15px] leading-tight font-medium text-ink max-sm:text-[13.5px]">{name ?? "Emiten BEI"}</p>}
+              : <p className="truncate text-[15px] leading-tight font-medium text-ink max-sm:text-[13.5px]">{name ?? t({ id: "Emiten BEI", en: "IDX issuer" })}</p>}
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <span className={`inline-flex h-6 items-center gap-1.5 rounded-[5px] border px-2 font-mono text-[12px] font-semibold tracking-[.08em] uppercase ${STATE_CHIP[phase]} ${STATUS_INK[status]}`}>
                 <LiveMark status={phase === "paused" ? "idle" : status} className="h-2.5 w-3" />
-                {STATE_WORD[phase]}
+                {t(STATE_WORD[phase])}
               </span>
               {badges}
             </div>
           </div>
         </div>
         <dl className="flex items-stretch divide-x divide-rule-soft max-sm:w-full max-sm:justify-between max-sm:divide-x-0">
-          <Reading label="Waktu run" note={clockNote} wide>{clock}</Reading>
-          <Reading label="Tool call">{counts.calls}</Reading>
-          <Reading label="Langkah LLM">{counts.llmSteps}</Reading>
-          <Reading label="Catatan" warn={counts.warnings > 0}>{counts.warnings}</Reading>
+          <Reading label={t({ id: "Waktu run", en: "Run time" })} note={clockNote} wide>{clock}</Reading>
+          <Reading label={t({ id: "Tool call", en: "Tool calls" })}>{counts.calls}</Reading>
+          <Reading label={t({ id: "Langkah LLM", en: "LLM steps" })}>{counts.llmSteps}</Reading>
+          <Reading label={t({ id: "Catatan", en: "Notes" })} warn={counts.warnings > 0}>{counts.warnings}</Reading>
         </dl>
         <AnimatePresence initial={false}>
           {action && (

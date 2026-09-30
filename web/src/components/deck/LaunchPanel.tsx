@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight, CircleAlert, Play, Search } from "lucide-react";
 import { api, type ReportItem } from "../../lib/api";
 import { rp } from "../../lib/format";
+import { useLang } from "../../lib/i18n";
 import { ratingLabel, ratingTone } from "../../lib/labels";
 import { useLoad } from "../State";
 import { usePalette } from "../CommandPalette";
@@ -24,6 +25,7 @@ export function LaunchPanel() {
 }
 
 function CommandLine() {
+  const { t } = useLang();
   const navigate = useNavigate();
   const palette = usePalette();
   const input = useRef<HTMLInputElement>(null);
@@ -38,7 +40,9 @@ function CommandLine() {
   async function start(event: FormEvent) {
     event.preventDefault();
     if (!TICKER.test(value)) {
-      setError(value ? `"${value}" bukan kode emiten yang valid. Pakai huruf dan angka, misalnya AMMN.` : "Ketik kode emiten dulu, misalnya AMMN.");
+      setError(value
+        ? t({ id: `"${value}" bukan kode emiten yang valid. Pakai huruf dan angka, misalnya AMMN.`, en: `"${value}" is not a valid ticker. Use letters and digits, for example AMMN.` })
+        : t({ id: "Ketik kode emiten dulu, misalnya AMMN.", en: "Type a ticker first, for example AMMN." }));
       input.current?.focus();
       return;
     }
@@ -47,37 +51,43 @@ function CommandLine() {
     try {
       navigate((await launch(value)).path);
     } catch (e) {
-      setError((e as Error).message || "Riset belum bisa dimulai. Coba lagi sebentar lagi.");
+      setError((e as Error).message || t({ id: "Riset belum bisa dimulai. Coba lagi sebentar lagi.", en: "Research could not start. Try again in a moment." }));
       setBusy(false);
     }
   }
 
   return (
     <section aria-labelledby="launch-title" className="px-5 py-5 max-sm:px-4 max-sm:py-4 min-[1100px]:col-span-7 min-[1100px]:border-r min-[1100px]:border-rule">
-      <h1 id="launch-title" className="text-[20px] font-bold">Jalankan riset emiten</h1>
+      <h1 id="launch-title" className="text-[20px] font-bold">{t({ id: "Jalankan riset emiten", en: "Run issuer research" })}</h1>
       <p className="mt-1 max-w-[62ch] text-[14px] text-ink-soft">
-        Agent menyusun rencana, memanggil tool data Sectors, lalu gerbang metode memilih valuasi. Semua langkahnya tampil di deck di bawah.
-        {mode === "token" && " Di situs ini, emiten yang sudah diriset diputar ulang dari jejak auditnya, langkah demi langkah, tanpa memanggil model lagi."}
+        {t({
+          id: "Agent menyusun rencana, memanggil tool data Sectors, lalu gerbang metode memilih valuasi. Semua langkahnya tampil di deck di bawah.",
+          en: "Agents draw up a plan and call Sectors data tools, then the Method Gates choose the valuation. Every step shows in the deck below.",
+        })}
+        {mode === "token" && t({
+          id: " Di situs ini, emiten yang sudah diriset diputar ulang dari jejak auditnya, langkah demi langkah, tanpa memanggil model lagi.",
+          en: " On this site, issuers already researched are replayed from their Audit Trace, step by step, without calling the model again.",
+        })}
       </p>
       <form onSubmit={start} noValidate className="mt-4">
-        <label htmlFor="deck-ticker" className="sr-only">Kode emiten BEI</label>
+        <label htmlFor="deck-ticker" className="sr-only">{t({ id: "Kode emiten BEI", en: "IDX ticker" })}</label>
         <div className="flex gap-2 max-sm:flex-col">
           <div className={`group flex h-14 min-w-0 flex-1 items-center gap-2 rounded-md border bg-raised pr-2 pl-3 transition-[border-color,box-shadow] duration-200 focus-within:border-brand-ink focus-within:shadow-[0_0_0_3px_var(--color-brand-100)] ${
             error ? "border-err-ink" : "border-rule-strong hover:border-ink-faint"}`}>
             <ChevronRight aria-hidden className="size-5 flex-none text-brand-ink" strokeWidth={2.4} />
             <input ref={input} id="deck-ticker" name="ticker" value={ticker} maxLength={10} autoComplete="off" spellCheck={false}
-              placeholder="Kode emiten, misalnya AMMN" aria-invalid={error ? true : undefined} aria-describedby={error ? "deck-ticker-error" : undefined}
+              placeholder={t({ id: "Kode emiten, misalnya AMMN", en: "Ticker, for example AMMN" })} aria-invalid={error ? true : undefined} aria-describedby={error ? "deck-ticker-error" : undefined}
               onChange={(e) => { setTicker(e.target.value); setError(null); }}
               className="h-full w-full min-w-0 flex-1 bg-transparent font-mono text-[22px] font-semibold tracking-[.06em] text-ink-strong uppercase outline-none placeholder:font-sans placeholder:text-[15px] placeholder:font-normal placeholder:tracking-normal placeholder:normal-case placeholder:text-ink-faint focus-visible:outline-none" />
             <button type="button" onClick={() => palette.open(value)}
               className="flex h-9 flex-none cursor-pointer items-center gap-2 rounded-[5px] px-2 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-surface hover:text-ink-strong max-sm:px-1.5">
               <Search aria-hidden className="size-4" strokeWidth={2.2} />
-              <span className="max-sm:sr-only">Cari cepat</span>
+              <span className="max-sm:sr-only">{t({ id: "Cari cepat", en: "Quick search" })}</span>
               <kbd className="kbd max-sm:hidden">⌘K</kbd>
             </button>
           </div>
           <button type="submit" disabled={busy} className="btn btn-primary h-14 px-6 text-[15.5px] max-sm:w-full">
-            {busy ? "Memulai…" : "Jalankan riset"}
+            {busy ? t({ id: "Memulai…", en: "Starting…" }) : t({ id: "Jalankan riset", en: "Run research" })}
           </button>
         </div>
         {error && (
@@ -87,7 +97,7 @@ function CommandLine() {
         )}
       </form>
       <div className="mt-4">
-        <p id="picks-title" className="text-[13px] text-ink-soft">Emiten yang sudah diriset</p>
+        <p id="picks-title" className="text-[13px] text-ink-soft">{t({ id: "Emiten yang sudah diriset", en: "Issuers already researched" })}</p>
         <div role="group" aria-labelledby="picks-title" className="mt-2 flex flex-wrap gap-1.5">
           {loading && Array.from({ length: 10 }, (_, i) => <span key={i} aria-hidden className="h-8 w-14 animate-pulse rounded-md bg-raised" />)}
           {tickers.map((t) => (
@@ -101,15 +111,18 @@ function CommandLine() {
       </div>
       {mode === "token" && (
         <details className="mt-4 text-[13.5px]">
-          <summary className="cursor-pointer text-ink-soft">Riset langsung dengan token pemilik</summary>
+          <summary className="cursor-pointer text-ink-soft">{t({ id: "Riset langsung dengan token pemilik", en: "Live research with the owner's token" })}</summary>
           <div className="mt-2 flex max-w-[420px] gap-2">
-            <label htmlFor="run-token" className="sr-only">Token riset</label>
+            <label htmlFor="run-token" className="sr-only">{t({ id: "Token riset", en: "Run token" })}</label>
             <input id="run-token" type="password" value={runToken} autoComplete="off"
               onChange={(e) => { setRunToken(e.target.value); keepRunToken(e.target.value.trim()); }}
-              placeholder="Token riset"
+              placeholder={t({ id: "Token riset", en: "Run token" })}
               className="h-9 min-w-0 flex-1 rounded-md border border-rule bg-raised px-3 text-[14px] text-ink-strong placeholder:text-ink-faint focus:border-brand-ink" />
           </div>
-          <p className="mt-1.5 text-ink-faint">Dengan token, emiten apa pun dijalankan langsung oleh agent dan memakai kredit API.</p>
+          <p className="mt-1.5 text-ink-faint">{t({
+            id: "Dengan token, emiten apa pun dijalankan langsung oleh agent dan memakai kredit API.",
+            en: "With the token, any issuer runs live through the agents and uses API credits.",
+          })}</p>
         </details>
       )}
     </section>
@@ -117,16 +130,20 @@ function CommandLine() {
 }
 
 function StoredRuns() {
+  const { t } = useLang();
   const { data: reports = [], loading, error } = useLoad(api.reports);
   return (
     <section aria-labelledby="stored-title" className="px-5 py-5 max-sm:px-4 max-sm:py-4 min-[1100px]:col-span-5 max-[1099px]:border-t max-[1099px]:border-rule">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 id="stored-title" className="text-[16px] font-bold">Putar ulang run tersimpan</h2>
-        {reports.length > 0 && <span className="data text-ink-soft">{reports.length} run</span>}
+        <h2 id="stored-title" className="text-[16px] font-bold">{t({ id: "Putar ulang run tersimpan", en: "Replay a stored run" })}</h2>
+        {reports.length > 0 && <span className="data text-ink-soft">{t({ id: `${reports.length} run`, en: `${reports.length} ${reports.length === 1 ? "run" : "runs"}` })}</span>}
       </div>
-      <p className="mt-1 text-[13.5px] text-ink-soft">Tonton ulang run yang sudah menghasilkan company update, tanpa memanggil model.</p>
-      {error && <p role="alert" className="mt-3 text-[14px] text-err-ink">Daftar run belum bisa dimuat. Muat ulang halaman untuk mencoba lagi.</p>}
-      {!error && !loading && reports.length === 0 && <p className="mt-3 text-[14px] text-ink-soft">Belum ada run tersimpan. Jalankan riset pertama di sebelah kiri.</p>}
+      <p className="mt-1 text-[13.5px] text-ink-soft">{t({
+        id: "Tonton ulang run yang sudah menghasilkan company update, tanpa memanggil model.",
+        en: "Watch again the runs that produced a Company Update, without calling the model.",
+      })}</p>
+      {error && <p role="alert" className="mt-3 text-[14px] text-err-ink">{t({ id: "Daftar run belum bisa dimuat. Muat ulang halaman untuk mencoba lagi.", en: "The run list could not load. Reload the page to try again." })}</p>}
+      {!error && !loading && reports.length === 0 && <p className="mt-3 text-[14px] text-ink-soft">{t({ id: "Belum ada run tersimpan. Jalankan riset pertama di sebelah kiri.", en: "No stored runs yet. Run the first research on the left." })}</p>}
       <ul className="m-0 mt-3 grid list-none border-t border-rule-soft p-0">
         {loading && Array.from({ length: 5 }, (_, i) => (
           <li key={i} aria-hidden className="flex items-center gap-3 border-b border-rule-soft py-2.5">
@@ -140,10 +157,11 @@ function StoredRuns() {
 }
 
 function StoredRun({ r }: { r: ReportItem }) {
+  const { t } = useLang();
   const rating = ratingLabel(r);
   return (
     <li className="border-b border-rule-soft">
-      <Link to={`/laporan/${r.ticker}/putar`} aria-label={`Putar ulang run ${r.ticker}, ${r.name}`}
+      <Link to={`/laporan/${r.ticker}/putar`} aria-label={t({ id: `Putar ulang run ${r.ticker}, ${r.name}`, en: `Replay the ${r.ticker} run, ${r.name}` })}
         className="group grid grid-cols-[58px_minmax(0,1fr)_auto_18px] items-center gap-3 rounded-[4px] py-2 pr-1 pl-1 text-ink no-underline transition-colors hover:bg-raised">
         <span className="font-mono text-[14px] font-bold text-ink-strong">{r.ticker}</span>
         <span className="flex min-w-0 items-center gap-2.5">

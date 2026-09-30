@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import "./index.css";
 import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
+import { useLang, type Bi } from "./lib/i18n";
 
 // Each page loads on first visit, so the landing does not ship the Deck's
 // motion-heavy console and the Deck does not ship the landing's reel.
@@ -19,29 +20,35 @@ const JobTrace = page(() => import("./pages/Trace"), (m) => m.JobTrace);
 
 /** A quiet placeholder while a page's code arrives (usually a few frames). */
 function PageLoading() {
+  const { t } = useLang();
   return (
     <div role="status" className="wrap py-10">
-      <span className="sr-only">Memuat halaman…</span>
+      <span className="sr-only">{t({ id: "Memuat halaman…", en: "Loading page…" })}</span>
       <span aria-hidden className="block h-9 w-64 animate-pulse rounded bg-raised" />
     </div>
   );
 }
 const suspend = (node: React.ReactNode) => <Suspense fallback={<PageLoading />}>{node}</Suspense>;
 
-const TITLES: [RegExp, string][] = [
-  [/^\/$/, "Sektoral: company update emiten BEI dengan metode valuasi berbasis gerbang"],
-  [/^\/research$/, "Deck riset | Sektoral"],
-  [/\/putar$/, "Putar ulang riset | Sektoral"],
-  [/^\/laporan$/, "Laporan | Sektoral"],
-  [/\/jejak$/, "Jejak riset | Sektoral"],
-  [/^\/jobs\//, "Riset emiten | Sektoral"],
+const TITLES: [RegExp, Bi][] = [
+  [/^\/$/, {
+    id: "Sektoral: company update emiten BEI dengan metode valuasi berbasis gerbang",
+    en: "Sektoral: company updates on IDX issuers with gate-selected valuation methods",
+  }],
+  [/^\/research$/, { id: "Deck riset | Sektoral", en: "Research deck | Sektoral" }],
+  [/\/putar$/, { id: "Putar ulang riset | Sektoral", en: "Research replay | Sektoral" }],
+  [/^\/laporan$/, { id: "Laporan | Sektoral", en: "Reports | Sektoral" }],
+  [/\/jejak$/, { id: "Jejak riset | Sektoral", en: "Research trace | Sektoral" }],
+  [/^\/jobs\//, { id: "Riset emiten | Sektoral", en: "Issuer research | Sektoral" }],
 ];
 
 function DocumentTitle() {
   const { pathname } = useLocation();
+  const { t } = useLang();
   useEffect(() => {
-    document.title = TITLES.find(([re]) => re.test(pathname))?.[1] ?? "Sektoral";
-  }, [pathname]);
+    const title = TITLES.find(([re]) => re.test(pathname))?.[1];
+    document.title = title ? t(title) : "Sektoral";
+  }, [pathname, t]);
   return null;
 }
 

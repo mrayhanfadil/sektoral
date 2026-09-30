@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import { CircleCheck, ClipboardCheck, Eye, KeyRound, TriangleAlert } from "lucide-react";
 import { api, ApiError, type ReviewAttestation, type ReviewField, type ReviewView } from "../lib/api";
+import { getLang, LOCALE, useLang, type Bi, type Lang } from "../lib/i18n";
 import { Chip } from "./Intel";
 import { CHECK_LABELS, ReviewAttestationForm } from "./ReviewAttestationForm";
 import { useLoad } from "./State";
 
 const TOKEN_KEY = "sectoral.review-token";
-const two = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-const show = (value: number, unit: string) => `${two.format(value).replace("-", "−")}${unit === "%" ? "%" : "x"}`;
+const twoFormat = (locale: string) => new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const two: Bi<Intl.NumberFormat> = { id: twoFormat(LOCALE.id), en: twoFormat(LOCALE.en) };
+const show = (value: number, unit: string, lang: Lang = getLang()) =>
+  `${two[lang].format(value).replace("-", "−")}${unit === "%" ? "%" : "x"}`;
 
 export function readReviewToken(): string {
   try { return sessionStorage.getItem(TOKEN_KEY) ?? ""; } catch { return ""; }
@@ -17,17 +20,22 @@ export function keepReviewToken(token: string) {
 }
 
 type Draft = Record<string, { value: string; reason: string }>;
-const PUBLIC_DISCLOSURE_LABELS: Record<string, string> = {
-  author_role: "Peran penulis", issuer_relationship: "Hubungan dengan emiten",
-  economic_or_ownership_conflicts: "Konflik ekonomi atau kepemilikan",
-  scope_limitations: "Cakupan dan batasan review",
-  rating_or_scenario_policy: "Kebijakan rating atau label skenario",
+const PUBLIC_DISCLOSURE_LABELS: Record<string, Bi> = {
+  author_role: { id: "Peran penulis", en: "Author role" },
+  issuer_relationship: { id: "Hubungan dengan emiten", en: "Relationship with the issuer" },
+  economic_or_ownership_conflicts: { id: "Konflik ekonomi atau kepemilikan", en: "Economic or ownership conflicts" },
+  scope_limitations: { id: "Cakupan dan batasan review", en: "Review scope and limitations" },
+  rating_or_scenario_policy: { id: "Kebijakan rating atau label skenario", en: "Rating or scenario-label policy" },
 };
+
+/** "1 perubahan" / "1 change", "3 changes". */
+const changes = (n: number): Bi => ({ id: `${n} perubahan`, en: `${n} ${n === 1 ? "change" : "changes"}` });
 
 /** The analyst review of a report's Forecast Plan: who approved it, what they changed, or the form to do so. */
 export function ReviewPanel({ ticker, reviewToken, onApproved }: {
   ticker: string; reviewToken?: string; onApproved: () => void;
 }) {
+  const { t } = useLang();
   const state = useLoad(() => api.review(ticker, reviewToken), [ticker, reviewToken]);
   const view = state.data;
   if (state.loading && !view) {
@@ -40,18 +48,23 @@ export function ReviewPanel({ ticker, reviewToken, onApproved }: {
         <div className="flex min-w-0 items-start gap-3">
           <ClipboardCheck aria-hidden className="mt-1 size-4.5 flex-none text-brand-ink" strokeWidth={2.2} />
           <div className="min-w-0">
-            <h2 id="review-title" className="text-[20px]">Review dan attestation publikasi</h2>
+            <h2 id="review-title" className="text-[20px]">{t({ id: "Review dan attestation publikasi", en: "Publication review and attestation" })}</h2>
             <p className="text-[14px] text-ink-soft">
-              Publication Bundle hanya dapat diterbitkan sesudah reviewer menguji bukti, model, sensitivitas, dan disclosure untuk versi yang dibekukan.
+              {t({
+                id: "Publication Bundle hanya dapat diterbitkan sesudah reviewer menguji bukti, model, sensitivitas, dan disclosure untuk versi yang dibekukan.",
+                en: "A Publication Bundle can be published only after a reviewer has tested the evidence, model, sensitivities and disclosures for the frozen version.",
+              })}
             </p>
           </div>
         </div>
         {view.state === "approved" ? (
           <Chip tone="ok"><CircleCheck aria-hidden className="size-3.5" strokeWidth={2.4} />
-            {view.edits.length ? `Disetujui, ${view.edits.length} perubahan` : "Disetujui"}
+            {view.edits.length
+              ? `${t({ id: "Disetujui", en: "Approved" })}, ${t(changes(view.edits.length))}`
+              : t({ id: "Disetujui", en: "Approved" })}
           </Chip>
         ) : (
-          <Chip tone="warn"><TriangleAlert aria-hidden className="size-3.5" strokeWidth={2.4} />Menunggu review</Chip>
+          <Chip tone="warn"><TriangleAlert aria-hidden className="size-3.5" strokeWidth={2.4} />{t({ id: "Menunggu review", en: "Awaiting review" })}</Chip>
         )}
       </header>
       {view.state === "approved" ? <Approved view={view} /> : (
@@ -61,10 +74,11 @@ export function ReviewPanel({ ticker, reviewToken, onApproved }: {
   );
 }
 
-const stamp = (at: string | null | undefined) => at ? new Date(at).toLocaleString("id-ID", {
+const stamp = (at: string | null | undefined, lang: Lang = getLang()) => at ? new Date(at).toLocaleString(LOCALE[lang], {
   dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }) + " WIB" : "—";
 
 function Approved({ view }: { view: ReviewView }) {
+  const { t } = useLang();
   const when = stamp(view.reviewed_at).replace(/ WIB$/, "");
   const history = view.history ?? [];
   const attestation = view.attestation;
@@ -72,30 +86,32 @@ function Approved({ view }: { view: ReviewView }) {
   return (
     <div className="grid gap-4 border-t border-rule px-6 py-5 max-sm:px-4">
       <p className="text-[14.5px] text-ink">
-        Disetujui oleh <strong className="text-ink-strong">{view.reviewer}</strong>
+        {t({ id: "Disetujui oleh", en: "Approved by" })} <strong className="text-ink-strong">{view.reviewer}</strong>
         {view.reviewer_role ? ` · ${view.reviewer_role}` : ""}, {when} WIB.
-        {view.identity_source === "authenticated_registry" ? " Identitas diverifikasi oleh registry reviewer." : " Identitas ini belum terverifikasi untuk publikasi."}
-        {view.note && <> Catatan: {view.note}</>}
+        {view.identity_source === "authenticated_registry"
+          ? t({ id: " Identitas diverifikasi oleh registry reviewer.", en: " Identity verified by the reviewer registry." })
+          : t({ id: " Identitas ini belum terverifikasi untuk publikasi.", en: " This identity is not yet verified for publication." })}
+        {view.note && <> {t({ id: "Catatan", en: "Note" })}: {view.note}</>}
       </p>
       {attestation && (
         <details className="rounded-md border border-rule bg-raised/40">
           <summary className="cursor-pointer px-4 py-3 text-[14px] font-medium text-ink-strong">
-            Cakupan review · {Object.keys(checklist).length} area · publication {view.publication_id?.slice(0, 10) ?? "—"}
+            {t({ id: "Cakupan review", en: "Review scope" })} · {Object.keys(checklist).length} {t({ id: "area", en: "areas" })} · publication {view.publication_id?.slice(0, 10) ?? "—"}
           </summary>
           <div className="grid gap-4 border-t border-rule p-4">
             <div className="grid gap-2">
               {Object.entries(checklist).map(([key, item]) => (
                 <div key={key} className="grid gap-0.5 border-b border-rule-soft pb-2 last:border-0">
                   <p className="m-0 text-[13.5px] font-medium text-ink-strong">
-                    {CHECK_LABELS[key] ?? key} · {item.status}
+                    {CHECK_LABELS[key] ? t(CHECK_LABELS[key]) : key} · {item.status}
                     {item.period ? ` · ${item.period}` : ""}
                   </p>
                   <p className="m-0 text-[13px] text-ink">{item.note}</p>
-                  {item.source_ids.length > 0 && <p className="m-0 text-[12px] text-ink-soft">Sumber: {item.source_ids.join(", ")}</p>}
+                  {item.source_ids.length > 0 && <p className="m-0 text-[12px] text-ink-soft">{t({ id: "Sumber", en: "Sources" })}: {item.source_ids.join(", ")}</p>}
                   {item.items && <ol className="m-0 grid gap-1.5 pl-5 text-[13px] text-ink">
                     {item.items.map((assumption) => <li key={assumption.assumption_id}>
                       <strong>{assumption.description}</strong> {assumption.value_sensitivity}
-                      {assumption.source_ids.length > 0 && <span className="block text-[12px] text-ink-soft">Sumber: {assumption.source_ids.join(", ")}</span>}
+                      {assumption.source_ids.length > 0 && <span className="block text-[12px] text-ink-soft">{t({ id: "Sumber", en: "Sources" })}: {assumption.source_ids.join(", ")}</span>}
                     </li>)}
                   </ol>}
                 </div>
@@ -105,13 +121,13 @@ function Approved({ view }: { view: ReviewView }) {
               {Object.entries(attestation.disclosures).filter(([key]) => key !== "reviewer_role").map(([key, value]) => {
                 const display = typeof value === "string" ? value : `${value.status}: ${value.details}`;
                 return <div key={key} className="rounded-md border border-rule-soft bg-surface px-3 py-2">
-                  <p className="m-0 text-[12px] text-ink-soft">{PUBLIC_DISCLOSURE_LABELS[key] ?? key}</p>
+                  <p className="m-0 text-[12px] text-ink-soft">{PUBLIC_DISCLOSURE_LABELS[key] ? t(PUBLIC_DISCLOSURE_LABELS[key]) : key}</p>
                   <p className="m-0 mt-0.5 text-[13px] text-ink">{display}</p>
                 </div>;
               })}
             </div>
             {attestation.objections.length > 0 && <div>
-              <p className="m-0 mb-1 text-[13px] font-medium text-ink-strong">Keberatan dan disposisi</p>
+              <p className="m-0 mb-1 text-[13px] font-medium text-ink-strong">{t({ id: "Keberatan dan disposisi", en: "Objections and dispositions" })}</p>
               <ul className="m-0 grid gap-1 pl-5 text-[13px] text-ink">
                 {attestation.objections.map((item, index) => <li key={index}>
                   {item.objection} · {item.disposition}: {item.response}
@@ -133,18 +149,18 @@ function Approved({ view }: { view: ReviewView }) {
             <thead>
               <tr className="border-b border-rule text-left text-[12.5px] text-ink-soft">
                 <th scope="col" className="py-2 pr-4 font-medium">Driver</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Tahun</th>
+                <th scope="col" className="py-2 pr-4 font-medium">{t({ id: "Tahun", en: "Year" })}</th>
                 <th scope="col" className="py-2 pr-4 text-right font-medium">Agent</th>
-                <th scope="col" className="py-2 pr-4 text-right font-medium">Analis</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Alasan</th>
-                <th scope="col" className="py-2 font-medium">Diubah oleh</th>
+                <th scope="col" className="py-2 pr-4 text-right font-medium">{t({ id: "Analis", en: "Analyst" })}</th>
+                <th scope="col" className="py-2 pr-4 font-medium">{t({ id: "Alasan", en: "Reason" })}</th>
+                <th scope="col" className="py-2 font-medium">{t({ id: "Diubah oleh", en: "Changed by" })}</th>
               </tr>
             </thead>
             <tbody>
               {view.edits.map((e) => (
                 <tr key={e.path} className="border-b border-rule-soft align-top">
                   <td className="py-2 pr-4 text-ink-strong">{e.label}</td>
-                  <td className="data py-2 pr-4 text-ink-soft">{e.year ?? "berjalan"}</td>
+                  <td className="data py-2 pr-4 text-ink-soft">{e.year ?? t({ id: "berjalan", en: "current" })}</td>
                   <td className="data py-2 pr-4 text-right text-ink-soft line-through decoration-ink-faint">{show(e.from, e.unit)}</td>
                   <td className="data py-2 pr-4 text-right font-semibold text-ink-strong">{show(e.to, e.unit)}</td>
                   <td className="py-2 pr-4 text-ink">{e.reason}</td>
@@ -157,12 +173,14 @@ function Approved({ view }: { view: ReviewView }) {
       )}
       {history.length > 0 && (
         <details className="text-[14px]">
-          <summary className="cursor-pointer text-ink-soft">Persetujuan sebelumnya <span className="data">{history.length}</span></summary>
+          <summary className="cursor-pointer text-ink-soft">{t({ id: "Persetujuan sebelumnya", en: "Earlier approvals" })} <span className="data">{history.length}</span></summary>
           <ol className="m-0 mt-2 grid list-none gap-1.5 border-l border-rule pl-4">
             {history.map((h, i) => (
               <li key={`${h.reviewed_at}-${i}`} className="text-ink-soft">
                 <span className="text-ink-strong">{h.reviewer ?? "—"}</span>, {stamp(h.reviewed_at)}:{" "}
-                {h.edits ? `disetujui dengan ${h.edits} perubahan` : "disetujui tanpa perubahan"}
+                {h.edits
+                  ? `${t({ id: "disetujui dengan", en: "approved with" })} ${t(changes(h.edits))}`
+                  : t({ id: "disetujui tanpa perubahan", en: "approved without changes" })}
                 {h.note && <>. {h.note}</>}
               </li>
             ))}
@@ -174,6 +192,7 @@ function Approved({ view }: { view: ReviewView }) {
 }
 
 function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView; onDone: () => void }) {
+  const { t, lang } = useLang();
   const [draft, setDraft] = useState<Draft>({});
   const [note, setNote] = useState("");
   const [attestation, setAttestation] = useState<ReviewAttestation | null>(null);
@@ -224,7 +243,7 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
       });
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError || err instanceof Error ? err.message : "Persetujuan gagal disimpan.");
+      setError(err instanceof ApiError || err instanceof Error ? err.message : t({ id: "Persetujuan gagal disimpan.", en: "The approval could not be saved." }));
     } finally {
       setBusy(false);
     }
@@ -234,7 +253,7 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
     if (!token || previewBusy) return;
     const popup = window.open("about:blank", "_blank");
     if (!popup) {
-      setPreviewError("Izinkan tab pratinjau dibuka oleh browser, lalu coba lagi.");
+      setPreviewError(t({ id: "Izinkan tab pratinjau dibuka oleh browser, lalu coba lagi.", en: "Allow the browser to open the preview tab, then try again." }));
       return;
     }
     setPreviewBusy(kind);
@@ -247,7 +266,7 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
       window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
     } catch (err) {
       popup.close();
-      setPreviewError(err instanceof Error ? err.message : "Pratinjau tidak bisa dibuka.");
+      setPreviewError(err instanceof Error ? err.message : t({ id: "Pratinjau tidak bisa dibuka.", en: "The preview could not be opened." }));
     } finally {
       setPreviewBusy(null);
     }
@@ -259,31 +278,39 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
     <form onSubmit={submit} className="grid gap-5 border-t border-rule px-6 py-5 max-sm:px-4 [&>*]:min-w-0">
       {view.stale && (
         <p className="rounded-md border border-warn-rule/50 bg-warn-bg/50 px-4 py-2.5 text-[14px] text-warn-ink">
-          Persetujuan sebelumnya berlaku untuk rencana lama; run baru mengganti Forecast Plan sehingga perlu direview lagi.
+          {t({
+            id: "Persetujuan sebelumnya berlaku untuk rencana lama; run baru mengganti Forecast Plan sehingga perlu direview lagi.",
+            en: "The earlier approval covers an older plan; a new run replaced the Forecast Plan, so it needs review again.",
+          })}
         </p>
       )}
       {missingArtifacts.length > 0 && (
         <p role="alert" className="rounded-md border border-warn-rule/50 bg-warn-bg/50 px-4 py-2.5 text-[14px] text-warn-ink">
-          Bundle belum lengkap untuk review: {missingArtifacts.join(", ")}. Bangun HTML, PDF, dan jejak HTML dari run yang sama, lalu muat ulang halaman ini.
+          {t({
+            id: `Bundle belum lengkap untuk review: ${missingArtifacts.join(", ")}. Bangun HTML, PDF, dan jejak HTML dari run yang sama, lalu muat ulang halaman ini.`,
+            en: `The bundle is incomplete for review: ${missingArtifacts.join(", ")}. Build the HTML, PDF and HTML trace from the same run, then reload this page.`,
+          })}
         </p>
       )}
       {manifestErrors.length > 0 && (
         <div role="alert" className="rounded-md border border-warn-rule/50 bg-warn-bg/50 px-4 py-2.5 text-[14px] text-warn-ink">
-          <p className="m-0 font-medium">Manifest publikasi belum valid.</p>
+          <p className="m-0 font-medium">{t({ id: "Manifest publikasi belum valid.", en: "The publication manifest is not valid yet." })}</p>
           <ul className="mb-0 mt-1 pl-5">{manifestErrors.map((problem) => <li key={problem}>{problem}</li>)}</ul>
         </div>
       )}
       {evidenceRegisterErrors.length > 0 && (
         <div role="alert" className="rounded-md border border-warn-rule/50 bg-warn-bg/50 px-4 py-2.5 text-[14px] text-warn-ink">
-          <p className="m-0 font-medium">Evidence Register belum terikat ke manifest.</p>
+          <p className="m-0 font-medium">{t({ id: "Evidence Register belum terikat ke manifest.", en: "The Evidence Register is not yet bound to the manifest." })}</p>
           <ul className="mb-0 mt-1 pl-5">{evidenceRegisterErrors.map((problem) => <li key={problem}>{problem}</li>)}</ul>
         </div>
       )}
       <details className="group rounded-md border border-rule">
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3 text-[14.5px] font-medium text-ink-strong">
-          <span>Driver Forecast Plan <span className="data text-ink-soft">{fields.length}</span></span>
+          <span>{t({ id: "Driver Forecast Plan", en: "Forecast Plan drivers" })} <span className="data text-ink-soft">{fields.length}</span></span>
           <span className="text-[13px] font-normal text-ink-soft">
-            {changed.length ? `${changed.length} diubah` : "Ubah nilai bila perlu; kosong berarti setuju"}
+            {changed.length
+              ? t({ id: `${changed.length} diubah`, en: `${changed.length} changed` })
+              : t({ id: "Ubah nilai bila perlu; kosong berarti setuju", en: "Change values if needed; blank means you agree" })}
           </span>
         </summary>
         <div className="overflow-x-auto border-t border-rule">
@@ -292,31 +319,31 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
               <tr className="border-b border-rule text-left text-[12.5px] text-ink-soft">
                 <th scope="col" className="px-4 py-2 font-medium">Driver</th>
                 <th scope="col" className="px-4 py-2 text-right font-medium">Agent</th>
-                <th scope="col" className="w-32 px-4 py-2 font-medium">Nilai analis</th>
-                <th scope="col" className="px-4 py-2 font-medium">Alasan perubahan</th>
+                <th scope="col" className="w-32 px-4 py-2 font-medium">{t({ id: "Nilai analis", en: "Analyst value" })}</th>
+                <th scope="col" className="px-4 py-2 font-medium">{t({ id: "Alasan perubahan", en: "Reason for change" })}</th>
               </tr>
             </thead>
             {years.map(([year, rows]) => (
               <tbody key={year}>
-                <tr className="bg-raised"><th scope="rowgroup" colSpan={4} className="data px-4 py-1.5 text-left text-ink-soft">{year === "—" ? "Tahun berjalan (1H aktual + H2)" : `FY${year.slice(-2)}F`}</th></tr>
+                <tr className="bg-raised"><th scope="rowgroup" colSpan={4} className="data px-4 py-1.5 text-left text-ink-soft">{year === "—" ? t({ id: "Tahun berjalan (1H aktual + H2)", en: "Current year (1H actual + H2)" }) : `FY${year.slice(-2)}F`}</th></tr>
                 {rows.map((f) => {
                   const d = draft[f.path];
                   const edited = changed.includes(f);
-                  const when = year === "—" ? "tahun berjalan" : year;
+                  const when = year === "—" ? t({ id: "tahun berjalan", en: "current year" }) : year;
                   return (
                     <tr key={f.path} className="border-b border-rule-soft align-top">
                       <td className="px-4 py-2 text-ink-strong" title={f.rationale || undefined}>{f.label}</td>
                       <td className="data px-4 py-2 text-right text-ink">{show(f.value, f.unit)}</td>
                       <td className="px-4 py-1.5">
-                        <input aria-label={`${f.label} ${when}, nilai analis`} inputMode="decimal"
-                          value={d?.value ?? ""} placeholder={two.format(f.value)}
+                        <input aria-label={`${f.label} ${when}, ${t({ id: "nilai analis", en: "analyst value" })}`} inputMode="decimal"
+                          value={d?.value ?? ""} placeholder={two[lang].format(f.value)}
                           onChange={(e) => set(f.path, "value", e.target.value)}
                           className={`${input} h-9 font-mono tabular-nums ${edited ? "border-brand-ink" : ""}`} />
                       </td>
                       <td className="px-4 py-1.5">
                         {edited ? (
-                          <input aria-label={`Alasan perubahan ${f.label} ${when}`} value={d?.reason ?? ""}
-                            onChange={(e) => set(f.path, "reason", e.target.value)} placeholder="Wajib, minimal 10 karakter"
+                          <input aria-label={t({ id: `Alasan perubahan ${f.label} ${when}`, en: `Reason for changing ${f.label} ${when}` })} value={d?.reason ?? ""}
+                            onChange={(e) => set(f.path, "reason", e.target.value)} placeholder={t({ id: "Wajib, minimal 10 karakter", en: "Required, at least 10 characters" })}
                             className={`${input} h-9 ${(d?.reason ?? "").trim().length < 10 ? "border-warn-rule" : ""}`} />
                         ) : <span className="text-[13px] text-ink-faint">—</span>}
                       </td>
@@ -330,15 +357,15 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
       </details>
 
       <div className="grid gap-2 rounded-md border border-rule bg-raised px-4 py-3">
-        <p className="m-0 text-[13.5px] font-medium text-ink-strong">Pratinjau bundle yang akan diterbitkan</p>
+        <p className="m-0 text-[13.5px] font-medium text-ink-strong">{t({ id: "Pratinjau bundle yang akan diterbitkan", en: "Preview the bundle to be published" })}</p>
         <div className="flex flex-wrap gap-2">
-          {([["pdf", "Buka PDF", "pdf"], ["html", "Buka HTML", "html"],
-             ["trace", "Buka jejak HTML", "trace_html"]] as const).map(([kind, label, artifact]) => (
+          {([["pdf", { id: "Buka PDF", en: "Open PDF" }, "pdf"], ["html", { id: "Buka HTML", en: "Open HTML" }, "html"],
+             ["trace", { id: "Buka jejak HTML", en: "Open HTML trace" }, "trace_html"]] as const).map(([kind, label, artifact]) => (
             <button key={kind} type="button" onClick={() => openArtifact(kind)}
               disabled={!token || previewBusy !== null || missingArtifacts.includes(artifact)}
               className="btn btn-sm btn-ghost disabled:cursor-not-allowed">
               <Eye aria-hidden className="size-3.5" strokeWidth={2.1} />
-              {previewBusy === kind ? "Membuka…" : label}
+              {previewBusy === kind ? t({ id: "Membuka…", en: "Opening…" }) : t(label)}
             </button>
           ))}
         </div>
@@ -351,42 +378,54 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
           onChange={setAttestation} />
       ) : (
         <p className="rounded-md border border-warn-rule/50 bg-warn-bg/50 px-4 py-2.5 text-[14px] text-warn-ink">
-          Checklist attestation belum tersedia. Autentikasikan reviewer yang terdaftar, lalu muat ulang halaman.
+          {t({
+            id: "Checklist attestation belum tersedia. Autentikasikan reviewer yang terdaftar, lalu muat ulang halaman.",
+            en: "The attestation checklist is not available yet. Authenticate a registered reviewer, then reload the page.",
+          })}
         </p>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label htmlFor="review-token" className={label}><KeyRound aria-hidden className="mr-1 inline size-3.5" strokeWidth={2.2} />Token reviewer</label>
+          <label htmlFor="review-token" className={label}><KeyRound aria-hidden className="mr-1 inline size-3.5" strokeWidth={2.2} />{t({ id: "Token reviewer", en: "Reviewer token" })}</label>
           <input id="review-token" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" className={input} />
           {view.current_reviewer && <p className="m-0 mt-1.5 text-[12.5px] text-ink-soft">
-            Terautentikasi sebagai {view.current_reviewer.name} · {view.current_reviewer.role}.
+            {t({ id: "Terautentikasi sebagai", en: "Authenticated as" })} {view.current_reviewer.name} · {view.current_reviewer.role}.
           </p>}
         </div>
         <div className="sm:col-span-2">
-          <label htmlFor="review-note" className={label}>Catatan (opsional)</label>
+          <label htmlFor="review-note" className={label}>{t({ id: "Catatan (opsional)", en: "Note (optional)" })}</label>
           <input id="review-note" value={note} onChange={(e) => setNote(e.target.value)} className={input}
-            placeholder="Misalnya: driver sesuai rilis 1H dan panduan emiten" />
+            placeholder={t({ id: "Misalnya: driver sesuai rilis 1H dan panduan emiten", en: "For example: drivers match the 1H release and issuer guidance" })} />
         </div>
       </div>
 
       {!view.enabled && (
-        <p className="text-[14px] text-ink-soft">Approval belum aktif. Konfigurasikan <code className="font-mono text-[13px]">SECTORAL_REVIEWERS</code> dengan token hash dan peran reviewer.</p>
+        <p className="text-[14px] text-ink-soft">{t({
+          id: <>Approval belum aktif. Konfigurasikan <code className="font-mono text-[13px]">SECTORAL_REVIEWERS</code> dengan token hash dan peran reviewer.</>,
+          en: <>Approval is not enabled. Configure <code className="font-mono text-[13px]">SECTORAL_REVIEWERS</code> with token hashes and reviewer roles.</>,
+        })}</p>
       )}
       {view.enabled && reviewerRole !== "reviewer" && reviewerRole !== "compliance" && (
-        <p role="alert" className="text-[14px] text-warn-ink">Token ini tidak memiliki peran reviewer atau compliance untuk menyetujui publikasi.</p>
+        <p role="alert" className="text-[14px] text-warn-ink">{t({
+          id: "Token ini tidak memiliki peran reviewer atau compliance untuk menyetujui publikasi.",
+          en: "This token does not carry a reviewer or compliance role, so it cannot approve publication.",
+        })}</p>
       )}
       {missingReason.length > 0 && (
-        <p className="text-[14px] text-warn-ink">Isi alasan untuk {missingReason.map((f) => f.label).join(", ")}.</p>
+        <p className="text-[14px] text-warn-ink">{t({ id: "Isi alasan untuk", en: "Give a reason for" })} {missingReason.map((f) => f.label).join(", ")}.</p>
       )}
       {error && <p role="alert" className="text-[14px] text-err-ink">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={!canSubmit} className="btn btn-primary disabled:cursor-not-allowed">
-          {busy ? (changed.length ? "Membangun ulang laporan…" : "Menyimpan…")
-            : changed.length ? `Bangun ulang dengan ${changed.length} perubahan` : "Setujui bundle publikasi"}
+          {busy ? t(changed.length ? { id: "Membangun ulang laporan…", en: "Rebuilding the report…" } : { id: "Menyimpan…", en: "Saving…" })
+            : changed.length ? `${t({ id: "Bangun ulang dengan", en: "Rebuild with" })} ${t(changes(changed.length))}`
+            : t({ id: "Setujui bundle publikasi", en: "Approve the Publication Bundle" })}
         </button>
         <span className="text-[13px] text-ink-soft">
-          {changed.length ? "Perubahan membangun ulang laporan dan mengembalikannya ke review pending." : "Persetujuan mengikat attestation, plan, manifest, dan file yang dirender."}
+          {changed.length
+            ? t({ id: "Perubahan membangun ulang laporan dan mengembalikannya ke review pending.", en: "Changes rebuild the report and return it to pending review." })
+            : t({ id: "Persetujuan mengikat attestation, plan, manifest, dan file yang dirender.", en: "Approval binds the attestation, plan, manifest and rendered files." })}
         </span>
       </div>
     </form>

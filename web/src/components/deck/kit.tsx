@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { animate, useReducedMotion } from "motion/react";
 import { CircleAlert, CircleCheck, CircleX } from "lucide-react";
 import type { Status } from "../../lib/agents";
+import { useLang } from "../../lib/i18n";
 import { LiveMark } from "../Mark";
 import { EXPO, clock } from "./read";
 
@@ -58,8 +59,11 @@ export function Glyph({ status, className = "" }: { status: Status; className?: 
 
 /** "LLM": a model decides. "host": deterministic code the model cannot change. */
 export function EngineTag({ engine }: { engine: "llm" | "host" }) {
+  const { t } = useLang();
   return (
-    <span title={engine === "llm" ? "Model bahasa memutuskan langkah ini" : "Kode host yang deterministik"}
+    <span title={engine === "llm"
+      ? t({ id: "Model bahasa memutuskan langkah ini", en: "A language model decides this step" })
+      : t({ id: "Kode host yang deterministik", en: "Deterministic host code" })}
       className={`inline-flex h-[18px] flex-none items-center rounded-[4px] px-1.5 font-mono text-[10.5px] leading-none font-semibold ${
         engine === "llm" ? "bg-brand-50 text-brand-ink" : "border border-rule-soft text-ink-soft"}`}>
       {engine === "llm" ? "LLM" : "host"}
@@ -115,6 +119,7 @@ export function LiveClock({ lastT, running }: { lastT: number; running: boolean 
 
 /** Text clamped to a few lines, with a toggle only when it actually overflows. */
 export function Clamp({ lines, className = "", children, title }: { lines: 2 | 3 | 4; className?: string; children: ReactNode; title?: string }) {
+  const { t } = useLang();
   const ref = useRef<HTMLParagraphElement>(null);
   const [open, setOpen] = useState(false);
   const [overflows, setOverflows] = useState(false);
@@ -134,7 +139,7 @@ export function Clamp({ lines, className = "", children, title }: { lines: 2 | 3
       {(overflows || open) && (
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
           className="mt-0.5 cursor-pointer rounded-sm text-[12.5px] font-medium text-brand-ink hover:underline">
-          {open ? "Ringkas" : "Selengkapnya"}
+          {open ? t({ id: "Ringkas", en: "Show less" }) : t({ id: "Selengkapnya", en: "Show more" })}
         </button>
       )}
     </>

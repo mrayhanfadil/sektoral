@@ -1,6 +1,7 @@
 // Pure helpers of the Deck: motion constants, formats and word maps.
 import { useState } from "react";
 import type { Status } from "../../lib/agents";
+import { getLang, type Bi, type Lang } from "../../lib/i18n";
 
 /** Damped springs: the deck never bounces. */
 export const SPRING = { type: "spring", stiffness: 420, damping: 40, mass: 0.8 } as const;
@@ -63,14 +64,37 @@ export function verdictStatus(verdict?: string): Status {
   return !verdict ? "idle" : tone === "pill-ok" ? "ok" : tone === "pill-err" ? "error" : "warn";
 }
 
-/** Status codes the pipeline puts in a detail, in the deck's words. */
-const CODE_WORDS: Record<string, string> = {
-  distributable: "dapat didistribusikan",
-  distributable_assumption_led: "dapat didistribusikan, berbasis asumsi analis",
-  draft_non_distributable: "draft, tidak didistribusikan",
-  partial: "parsial",
-  complete: "lengkap",
-  searched: "pencarian selesai",
-  validated: "tervalidasi",
-};
-export const words = (text?: string) => (text && CODE_WORDS[text]) ?? text;
+/**
+ * Codes and fixed labels the pipeline sends (release status codes in a
+ * detail, hypothesis and gate verdicts, method-chain decisions), in the
+ * deck's words. The logic keeps matching on the pipeline's own value; only
+ * the shown word changes with the language. Anything else is free text and
+ * passes through.
+ */
+const CODE_WORDS = new Map<string, Bi>(Object.entries({
+  distributable: { id: "dapat didistribusikan", en: "distributable" },
+  distributable_assumption_led: { id: "dapat didistribusikan, berbasis asumsi analis", en: "distributable, assumption-led" },
+  draft_non_distributable: { id: "draft, tidak didistribusikan", en: "draft, not distributable" },
+  partial: { id: "parsial", en: "partial" },
+  complete: { id: "lengkap", en: "complete" },
+  searched: { id: "pencarian selesai", en: "search done" },
+  validated: { id: "tervalidasi", en: "validated" },
+  // Hypothesis verdicts.
+  didukung: { id: "didukung", en: "supported" },
+  "tidak didukung": { id: "tidak didukung", en: "not supported" },
+  "sebagian didukung": { id: "sebagian didukung", en: "partly supported" },
+  [UNANSWERED]: { id: UNANSWERED, en: "unanswered" },
+  // Method Gate verdicts.
+  lolos: { id: "lolos", en: "pass" },
+  gagal: { id: "gagal", en: "fail" },
+  "tidak berlaku": { id: "tidak berlaku", en: "not applicable" },
+  "tidak dapat dinilai": { id: "tidak dapat dinilai", en: "cannot be assessed" },
+  // Method Chain decisions (app/report_extras.py).
+  Terpilih: { id: "Terpilih", en: "Selected" },
+  "Terpilih, ekstrem (rantai berhenti)": { id: "Terpilih, ekstrem (rantai berhenti)", en: "Selected, extreme (chain stops)" },
+  Dilewati: { id: "Dilewati", en: "Skipped" },
+  "Silang cek": { id: "Silang cek", en: "Cross-check" },
+  "Tidak dijalankan": { id: "Tidak dijalankan", en: "Not run" },
+  "Belum tersedia": { id: "Belum tersedia", en: "Not yet available" },
+}));
+export const words = (text?: string, lang: Lang = getLang()) => (text && CODE_WORDS.get(text)?.[lang]) || text;
