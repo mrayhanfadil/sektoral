@@ -15,6 +15,7 @@ from . import method_chain
 from . import exhibit_ids
 from . import methodnote
 from . import rnav
+from .prose_lang import t as _t
 from . import scrub
 from . import valtables
 from . import scenario_value
@@ -2643,7 +2644,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
         "DRAFT NON-DISTRIBUTABLE: rating dan target harga belum disajikan.",
         f"Hasil interim {actual.get('period', 'terbaru')} memakai sumber resmi "
         "bila tersedia; forecast tidak diturunkan otomatis dari CAGR historis.",
-        "Tanda '-' berarti angka tidak tersedia atau belum tervalidasi, bukan nol.",
+        _t("Tanda '-' berarti angka tidak tersedia atau belum tervalidasi, bukan nol.",
+           "A dash (-) means the figure is not available or not yet validated, not zero."),
     ]
     if market_rail.get("adtv") is not None:
         catatan.append(
@@ -2928,7 +2930,7 @@ def _lom_exhibits(intake, va, detail):
         "segar, selain itu seri Yahoo Finance bertanggal); harga cadangan JORC dan guncangan "
         "+/-20% ada di tabel sensitivitas.",
         "EV/EBITDA FY26F 8x menjadi cross-check di rantai metode, tidak dirata-rata.",
-        "Tanda '-' berarti angka tidak tersedia, bukan nol.",
+        _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
     ]
     walk = _lom_reconciliation(intake, lom_res)
     return {"exhibits": [sotp_table, schedule, rate_table, sensitivity, tests]
@@ -3045,7 +3047,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
            if rail.get("public_ownership") is not None else ""),
         "LoM/SOTP per aset, capex masa depan, dan perubahan kas/utang setelah neraca "
         "interim belum dimodelkan; audit gate SOTP tetap ada dalam trace.",
-        "Tanda '-' berarti angka tidak tersedia, bukan nol.",
+        _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
     ]
     if lom_page:
         doc["catatan_metodologi"] = lom_page["notes"]
@@ -4136,7 +4138,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
             "PER FY skenario menjadi langkah berikutnya di rantai metode, tidak dirata-rata "
             "dengan target. DCF menunggu tiga tahun kondisi stabil.",
             "Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi.",
-            "Tanda '-' berarti angka tidak tersedia, bukan nol.",
+            _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
         ]
     if ddm_s:
         return [
@@ -4161,7 +4163,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
                if ddm_s.get("implied_coe") and intake_price else ""),
             "P/BV-ROE FY dan PER FY skenario menjadi cross-check di rantai metode, tidak "
             "dirata-rata dengan target.",
-            "Tanda '-' berarti angka tidak tersedia, bukan nol.",
+            _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
         ]
     operating = dcf_s.get("operating_model")
     return [
@@ -4197,7 +4199,7 @@ def _scenario_primary_notes(ddm_s, dcf_s, label, forward, ev_s=None, intake_pric
          "dihitung ulang secara independen; driver ke depan yang berupa asumsi analis diberi label."
          if operating else
          "Skenario bukan forecast driver yang sudah direkonsiliasi; statusnya berbasis asumsi."),
-        "Tanda '-' berarti angka tidak tersedia, bukan nol.",
+        _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
     ]
 
 
@@ -5009,7 +5011,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
              "diskon holding 20-30% hanya sensitivitas."),
             "DCF konsolidasi atas skenario analis menjadi referensi di rantai metode; PER FY "
             "skenario menjadi langkah terakhir.",
-            "Tanda '-' berarti angka tidak tersedia, bukan nol.",
+            _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
         ]
         return doc
     if primary:
@@ -5032,7 +5034,7 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
         "dan kuartil bawah/atas menjadi sensitivitas.",
         "Skenario tahun lanjutan adalah asumsi analis tahunan dan tidak mengubah tahun dasar target.",
         "Arus kas, capex dan neraca sesudah periode interim belum dimodelkan.",
-        "Tanda '-' berarti angka tidak tersedia, bukan nol.",
+        _t("Tanda '-' berarti angka tidak tersedia, bukan nol.", "A dash (-) means the figure is not available, not zero."),
     ]
     return doc
 
@@ -6025,17 +6027,18 @@ def _client_prose(text):
 
 def _clean_prose_segment(text):
     text = re.sub(r"\(news:\s*\d+(?:\s*,\s*news:\s*\d+)*\)",
-                  "(berita bertanggal)", text, flags=re.I)
-    text = re.sub(r"\(sectors_annuals\)", "(data tahunan Sectors)", text, flags=re.I)
-    text = re.sub(r"\(pola BBTN\)", "(pola rentang CoE)", text, flags=re.I)
+                  _t("(berita bertanggal)", "(dated news)"), text, flags=re.I)
+    text = re.sub(r"\(sectors_annuals\)", _t("(data tahunan Sectors)", "(Sectors annual data)"),
+                  text, flags=re.I)
+    text = re.sub(r"\(pola BBTN\)", _t("(pola rentang CoE)", "(CoE range pattern)"), text, flags=re.I)
     # A code in its own parentheses is dropped; a bare code is named in words.
     code = r"(?:spesifikasi|spec|framework|Method Gates?\s*\d+|S\d+(?:\.\d+)+|§\s*\d+(?:\.\d+[a-z]?)?)"
     text = re.sub(rf"\s*\((?:\s*{code}\s*[,;]?)+\)", "", text, flags=re.I)
-    text = re.sub(r"Method Gates?\s*\d+(?:\s*[-–/]\s*\d+)?", "pemeriksaan metode",
+    text = re.sub(r"Method Gates?\s*\d+(?:\s*[-–/]\s*\d+)?", _t("pemeriksaan metode", "method checks"),
                   text, flags=re.I)
-    text = re.sub(r"\bS\d+(?:\.\d+)+\b", "pemeriksaan model", text)
+    text = re.sub(r"\bS\d+(?:\.\d+)+\b", _t("pemeriksaan model", "model checks"), text)
     text = re.sub(r"§\s*\d+(?:\.\d+[a-z]?)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?",
-                  "panduan metodologi", text, flags=re.I)
+                  _t("panduan metodologi", "methodology guide"), text, flags=re.I)
     return text
 
 
