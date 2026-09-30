@@ -6,7 +6,7 @@ from pathlib import Path
 
 from . import (assumption_review, driver_value, earnings_quality, forecast_ledger, investability, evidence as evidence_mod, forecast, intake,
                narrative, outputs, publication_archive, publication_monitor, render,
-               report_contract, report_extras, run_manifest, scrub, valuation)
+               report_contract, report_extras, report_lang, run_manifest, scrub, valuation)
 
 PDF_OK = True
 try:
@@ -15,6 +15,29 @@ except Exception:
     pdf_mod = None
 
 OUT = Path(__file__).resolve().parent.parent / "out"
+
+
+def render_english(doc, outdir, ticker):
+    """Write ``TICKER.en.html`` beside the Indonesian file; returns its path.
+
+    The Indonesian Company Update never depends on it: a failed English
+    render is reported and leaves no English file behind."""
+    path = Path(outdir) / report_lang.file_name(ticker, "en")
+    try:
+        path.write_text(render.render(doc, lang="en"))
+    except Exception as e:  # noqa: BLE001 - the Indonesian report still stands
+        path.unlink(missing_ok=True)
+        print(f"  english: render gagal ({e}); hanya Bahasa Indonesia", flush=True)
+        return None
+    return path
+
+
+def print_pdfs(ticker, outdir):
+    """PDF of each rendered language; returns the Indonesian PDF path."""
+    pdf = pdf_mod.to_pdf(ticker, outdir)
+    if (Path(outdir) / report_lang.file_name(ticker, "en")).is_file():
+        pdf_mod.to_pdf(ticker, outdir, lang="en")
+    return pdf
 
 
 def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
@@ -170,10 +193,12 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # A direct build does not render a trace HTML. Remove an earlier run's
     # trace/PDF so neither can be mistaken for an artifact of this run. The
     # research/rebuild callers write their fresh trace and optional PDF later.
-    for stale in (outdir / f"{t}.pdf", outdir / f"{t}-trace.html"):
+    for stale in (outdir / f"{t}.pdf", outdir / f"{t}-trace.html",
+                  outdir / report_lang.file_name(t, "en", "pdf")):
         stale.unlink(missing_ok=True)
     outputs.save(outputs.REPORT, outdir, t, doc)
     (outdir / f"{t}.html").write_text(render.render(doc))
+    render_english(doc, outdir, t)
     gates = {"S1": s1["S1"], "S2": fc["s2"], "S3": va["s3"]}
     print(f"{t} {doc['meta'].get('status', 'analysis')} "
           f"({len(doc.get('exhibits') or [])} exhibits)")
@@ -193,7 +218,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
         if pdf_mod is None:
             print("  pdf: Playwright tidak tersedia, HTML saja")
         else:
-            print(f"  pdf: {pdf_mod.to_pdf(t, outdir)}")
+            print(f"  pdf: {print_pdfs(t, outdir)}")
     try:
         publication_manifest = run_manifest.finalize_manifest(
             doc.get("run_manifest"), outdir, t)

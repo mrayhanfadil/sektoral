@@ -2,6 +2,8 @@
 import base64
 from pathlib import Path
 
+from .report_lang import file_name
+
 OUT = Path(__file__).resolve().parent.parent / "out"
 
 # A4 content width with the design's 8.5 mm side margins (render.PAGE_NUM).
@@ -43,11 +45,11 @@ def _repeat_cover_header(pg):
         "@page:first{@top-center{content:none;background:none}}"))
 
 
-def to_pdf(ticker, outdir=OUT):
+def to_pdf(ticker, outdir=OUT, lang="id"):
+    """Print ``TICKER.html`` to ``TICKER.pdf`` (``TICKER.en.*`` for English)."""
     from playwright.sync_api import sync_playwright
-    t = ticker.upper()
-    html = (outdir / f"{t}.html").read_text()
-    pdf = outdir / f"{t}.pdf"
+    html = (outdir / file_name(ticker, lang, "html")).read_text()
+    pdf = outdir / file_name(ticker, lang, "pdf")
     with sync_playwright() as p:
         b = p.chromium.launch()
         pg = b.new_page(viewport={"width": round(CONTENT_WIDTH_MM * PX_PER_MM), "height": 1123},
