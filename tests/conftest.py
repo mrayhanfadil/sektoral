@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agents.analyst import run as analyst_run  # noqa: E402
+from agents.forecast_assumptions import run as forecast_run  # noqa: E402
 from app import store, tavily  # noqa: E402
 
 
@@ -23,6 +24,8 @@ def _no_llm(_messages, **_kwargs):
 @pytest.fixture(autouse=True)
 def isolate_analyst(monkeypatch, tmp_path):
     monkeypatch.setattr(analyst_run, "_chat", _no_llm)
+    # The forecast agent's subagents and its plan translation alike.
+    monkeypatch.setattr(forecast_run, "_chat", _no_llm)
     # Agent memory, forecast plans, news and peer caches all live in the app
     # database; each test gets its own under tmp_path.
     monkeypatch.setattr(store, "DEFAULT_DB", tmp_path / "sectoral.db")
