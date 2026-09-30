@@ -79,3 +79,26 @@ def test_trace_view_passes_the_research_english_twins_through():
     assert shown["title"] == "Pendapatan" and shown["title_en"] == "Revenue"
     assert shown["observation_en"] == "The cache records revenue."
     assert shown["caveat_en"] is None  # an old brief, or a dropped twin
+
+
+def test_analyst_validator_notes_split_out_the_words_to_remove():
+    problems = [
+        "sintesis ditolak: prosa memuat bahasa rekomendasi investasi; hapus kata: beli, akumulasi; "
+        "tulis dalam bahasa Indonesia saja; hapus: 中文",
+        "sintesis ditolak: prosa tidak boleh memuat angka (angka ditampilkan dari sinyal yang dicite); "
+        "hapus: 12, 3,5%, Rp1.234",
+        "sintesis: token non-Indonesia dihapus: 公司, 利润",
+        "sintesis: JSONDecodeError: bad",
+        {"not": "a string"},
+    ]
+    view = build({"ticker": "TEST", "analyst": {"problems": problems}})
+    assert view["analyst_problems"] == problems[:4]  # the strings stay as they are
+    assert view["analyst_problem_notes"] == [
+        {"message": "sintesis ditolak: prosa memuat bahasa rekomendasi investasi; "
+                    "tulis dalam bahasa Indonesia saja", "removed": ["beli", "akumulasi", "中文"]},
+        {"message": "sintesis ditolak: prosa tidak boleh memuat angka (angka ditampilkan dari sinyal "
+                    "yang dicite)", "removed": ["12", "3,5%", "Rp1.234"]},
+        {"message": "sintesis: token non-Indonesia dihapus", "removed": ["公司", "利润"]},
+        {"message": "sintesis: JSONDecodeError: bad", "removed": []},
+    ]
+    assert build({"ticker": "TEST"})["analyst_problem_notes"] == []

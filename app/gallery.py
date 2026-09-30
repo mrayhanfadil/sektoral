@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 from . import (assumption_review, exhibit_ids, outputs, publication_archive, publication_monitor,
-               release_policy)
+               release_policy, report_extras)
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
@@ -51,33 +51,16 @@ def _freshness(folder, ticker) -> dict | None:
             "triggers": [t.get("detail") for t in decision.get("triggers") or []]}
 
 def _chain(doc):
-    """Method-chain rows as (step, decision, value) from the report exhibit."""
+    """Method-chain rows as (step, decision, decision_code, value) from the report exhibit."""
     exhibit = exhibit_ids.find(doc.get("exhibits"), exhibit_ids.METHOD_CHAIN)
     rows = ((exhibit or {}).get("data") or {}).get("rows") or []
     out = []
     for row in rows:
         if len(row) >= 3:
             step = re.sub(r"^\S+\.\s*", "", str(row[0])).replace(" (utama)", "")
-            out.append({"step": step, "decision": str(row[1]), "value": str(row[2])})
+            out.append({"step": step, "decision": str(row[1]),
+                        "decision_code": report_extras.decision_code(row[1]), "value": str(row[2])})
     return out
-
-
-def _held_reason(blockers) -> str:
-    """Short reader label for why a draft holds its rating."""
-    text = " ".join(str(b) for b in blockers).lower()
-    if "extreme" in text:
-        return "Method Gate 5, hasil ekstrem (Review Required)"
-    if "peer" in text and "fewer than three" in text:
-        return "peer valid kurang dari tiga"
-    if "forecast" in text or "s2.9" in text:
-        return "forecast belum tervalidasi"
-    if "interim" in text or "s1" in text:
-        return "rilis resmi terbaru belum lengkap"
-    if "t4.discount_rate_currency" in text:
-        return "discount rate belum sesuai mata uang pelaporan"
-    if any(str(b).startswith("T.") for b in blockers):
-        return "pemeriksaan format laporan belum lolos"
-    return "bukti belum lengkap"
 
 
 def _publication(doc, folder: Path, stored_ticker: str, db=None) -> dict:
