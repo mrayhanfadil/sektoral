@@ -35,6 +35,8 @@ def _row(year, **kw):
     row = {"year": year, "loan_growth_pct": 8.0, "nim_pct": 5.6, "non_ii_to_nii_pct": 33.0,
            "cost_to_income_pct": 33.0, "cost_of_credit_pct": 0.4, "deposit_growth_pct": None,
            "rationale": "Kredit tumbuh sejalan rekam jejak; NIM dekat 1H26 karena biaya dana stabil.",
+           "rationale_en": "Loans grow in line with the record; NIM stays near 1H26 as funding "
+                           "costs stay stable.",
            "source_ids": ["official"]}
     row.update(kw)
     if "uncertainty_ranges" not in kw:
@@ -59,26 +61,45 @@ def _thesis():
         "thesis_points": [
             "Kredit tumbuh sekitar 8% menopang NII walau NIM tertahan di kisaran 5,6%.",
             "Biaya kredit rendah 0,4% menjaga laba bersih dan ROE di atas 20%."],
+        "thesis_points_en": [
+            "Loan growth of about 8% supports NII even as NIM stays around 5,6%.",
+            "A low 0,4% cost of credit keeps net profit and ROE above 20%."],
         "thesis_titles": ["Kredit menopang NII", "Biaya kredit tetap rendah"],
+        "thesis_titles_en": ["Loans support NII", "Cost of credit stays low"],
         "catalysts_risks": [
             {"item": "Penurunan suku bunga", "timing": "Semester II 2026",
              "driver_path": "Suku bunga turun -> yield kredit turun lebih cepat dari biaya dana -> NIM dan NII tertekan.",
+             "item_en": "Interest rate cuts", "timing_en": "Second half of 2026",
+             "driver_path_en": "Lower rates -> loan yields fall faster than funding costs -> "
+                               "NIM and NII under pressure.",
              "direction": "Negatif", "source_ids": ["news:0"]},
             {"item": "Permintaan kredit korporasi", "timing": "Sepanjang 2026",
              "driver_path": "Kredit korporasi naik -> aset produktif bertambah -> NII dan laba naik.",
+             "item_en": "Corporate loan demand", "timing_en": "Throughout 2026",
+             "driver_path_en": "Corporate loans rise -> earning assets grow -> NII and profit rise.",
              "direction": "Positif", "source_ids": ["official"]}],
         "key_risks": [
             {"category": "Pendanaan", "headline": "Biaya dana saat likuiditas ketat",
              "explanation": "CASA 84% menopang biaya dana 1,1%; kenaikan biaya dana 20bp menekan NIM "
                             "dan laba bersih bila deposito tumbuh lebih cepat dari giro dan tabungan.",
+             "headline_en": "Funding costs in tight liquidity",
+             "explanation_en": "CASA of 84% supports a 1,1% cost of funds; a 20bp rise in funding "
+                               "costs would squeeze NIM and net profit if time deposits grow faster "
+                               "than current and savings accounts.",
              "source_ids": ["official"]},
             {"category": "Operasi", "headline": "Kualitas aset kredit konsumer",
              "explanation": "Biaya kredit 0,4% berada di dekat titik terendah; kenaikan ke 0,8% "
                             "memangkas laba sebelum pajak sekitar Rp4 triliun per tahun.",
+             "headline_en": "Consumer loan asset quality",
+             "explanation_en": "Cost of credit of 0,4% sits near its low; a rise to 0,8% would cut "
+                               "pre-tax profit by about Rp4 trillion a year.",
              "source_ids": ["official"]},
             {"category": "Regulasi", "headline": "Batas suku bunga dan biaya layanan",
              "explanation": "Pendapatan non-bunga setara 33% NII; aturan biaya transaksi yang lebih "
                             "ketat dapat mengurangi pendapatan fee dan laba bersih.",
+             "headline_en": "Caps on interest rates and service fees",
+             "explanation_en": "Non-interest income equals 33% of NII; stricter rules on "
+                               "transaction fees could reduce fee income and net profit.",
              "source_ids": ["official"]}]}
 
 
@@ -86,6 +107,8 @@ def _earnings(**drivers):
     return {"earnings_scenario": {
         "bank_drivers": _row(2026, **drivers),
         "rationale": "Laba H2 mengikuti 1H26: kredit tumbuh sejalan rekam jejak, NIM dekat run-rate 1H.",
+        "rationale_en": "H2 profit follows 1H26: loans grow in line with the record, NIM near "
+                        "the 1H run-rate.",
         "source_ids": ["official", "news:0"], **_thesis()}}
 
 
@@ -96,11 +119,14 @@ def _outyears(**drivers):
 NEWS = {"news_effects": [{
     "article_index": 0, "source_url": ARTICLE["source"], "title": ARTICLE["title"],
     "timestamp": ARTICLE["timestamp"], "driver": "none", "change": 0, "years": [],
-    "rationale": "Artikel memuat pertumbuhan kredit dan NIM; dipakai di skenario bank, bukan CoE."}]}
+    "rationale": "Artikel memuat pertumbuhan kredit dan NIM; dipakai di skenario bank, bukan CoE.",
+    "rationale_en": "The article covers loan growth and NIM; it feeds the bank scenario, not CoE."}]}
 STAGE = {"stage_classification": {
     "life_cycle_stage": "mature", "has_steady_state_3y": True, "commodity_price_driven": False,
     "dissimilar_segments": 1, "source_ids": ["official"],
-    "rationale": "Bank matang dengan laba stabil tiga tahun terakhir dari rilis resmi emiten."}}
+    "rationale": "Bank matang dengan laba stabil tiga tahun terakhir dari rilis resmi emiten.",
+    "rationale_en": "A mature bank with stable profit over the last three years in the issuer's "
+                    "official release."}}
 
 
 def _scripted(replies):
@@ -298,7 +324,7 @@ def test_plan_schema_moves_the_fingerprint():
     finally:
         agent.PLAN_SCHEMA_BY_PROFILE.clear()
         agent.PLAN_SCHEMA_BY_PROFILE.update(original)
-    assert agent.plan_schema("financial_ddm") == 6
+    assert agent.plan_schema("financial_ddm") == 7
 
 
 def test_a_bank_schema_bump_keeps_other_profiles_plans():

@@ -5177,7 +5177,8 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                     f"a {label} net profit change of {fmt.pct(fy_attr / base_attr - 1)} yoy")
     else:
         growth = None
-    driver = next((prose_lang.source(x["item"]) for x in a.get("catalysts_risks") or []
+    driver = next((prose_lang.source(x["item"], x.get("item_en"))
+                   for x in a.get("catalysts_risks") or []
                    if isinstance(x, dict) and x.get("direction") == "Positif"), None)
     band = (report_extras._band_data(intake) or {}).get("multiples", {}).get("P/E")
     pbv_lead = (_t(
@@ -5331,7 +5332,10 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
         f"quartile range of Rp{fmt.rp(va['tp_down'])} to "
         f"Rp{fmt.rp(fmt.tick(d['per_share_up']))}. ")
         if not (pbv or book or ddm_s or dcf_s or sotp_h or ev_s) else "")
-    driver_text = ((driver[:1].lower() + driver[1:] if driver[1:2].islower() else driver)
+    # Indonesian runs the item on after the colon in lower case. English keeps
+    # the item as written: it may open on a name ("Bank Indonesia rate cut").
+    driver_text = ((driver[:1].lower() + driver[1:]
+                    if driver[1:2].islower() and not prose_lang.english() else driver)
                    if driver else None)
     # The agent's first positive item is an upcoming catalyst, not evidence
     # for the growth already in the target.
@@ -5394,8 +5398,11 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
             f"{label} EBITDA margin {fy_ebitda_margin}, capex/revenue {fy_capex_ratio}. "
             "All figures are analyst assumptions, not company guidance.")
     # Spec §5.4 'Risiko utama': the agent's sourced, quantified issuer risks.
-    doc["risks"] = [{"kategori": x["category"], "judul": prose_lang.source(x["headline"].strip()),
-                     "isi": prose_lang.source(x["explanation"].strip()),
+    doc["risks"] = [{"kategori": x["category"],
+                     "judul": prose_lang.source(x["headline"].strip(),
+                                                str(x.get("headline_en") or "").strip()),
+                     "isi": prose_lang.source(x["explanation"].strip(),
+                                              str(x.get("explanation_en") or "").strip()),
                      "sumber": cite(x.get("source_ids"))}
                     for x in a.get("key_risks") or [] if isinstance(x, dict)]
     catalyst_rows = [[x["item"], f"{x['timing']}. Sumber: {cite(x.get('source_ids'))}",
