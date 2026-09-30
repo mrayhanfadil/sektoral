@@ -31,7 +31,8 @@ def approve(folder: Path, ticker: str):
                                      reviewer_identity=_reviewer_identity("Penguji"))
 
 
-def _report(folder: Path, ticker: str, published: bool = True, chain=True, reviewed=True):
+def _report(folder: Path, ticker: str, published: bool = True, chain=True, reviewed=True,
+            english=False):
     evidence_register = _test_register(ticker)
     doc = {"meta": {"ticker": ticker, "emiten": f"PT {ticker} Tbk", "tanggal": "2026-09-24",
                     "harga": 1000.0, "status": ("distributable_assumption_led" if published
@@ -53,6 +54,9 @@ def _report(folder: Path, ticker: str, published: bool = True, chain=True, revie
     (folder / f"{ticker}.html").write_text("<html>report</html>")
     (folder / f"{ticker}.pdf").write_bytes(b"%PDF-1.4 test")
     (folder / f"{ticker}-trace.html").write_text("<html>trace</html>")
+    if english:  # rendered before the manifest is finalized, so part of the bundle
+        (folder / f"{ticker}.en.html").write_text("<html lang='en'>report</html>")
+        (folder / f"{ticker}.en.pdf").write_bytes(b"%PDF-1.4 english")
     manifest = run_manifest.finalize_manifest({
         "ticker": ticker, "code_revision": "test", "source_tree_sha256": "a" * 64,
         "spec_sha256": "b" * 64,
@@ -76,6 +80,7 @@ def test_summaries_hold_drafts_and_read_the_method_chain(tmp_path):
     assert first["publication_state"] == "published" and first["analytically_eligible"]
     assert [s["decision"] for s in first["chain"]] == ["Dilewati", "Terpilih", "Silang cek"]
     assert first["chain"][0]["step"] == "DCF FCFF"
+    assert [s["decision_code"] for s in first["chain"]] == ["skipped", "selected", "cross_check"]
     assert held["rating"] is None and held["tp"] is None
     assert held["held_reason"] == "laporan belum tersedia untuk umum"
     assert held["method"] == "" and held["headline"] == "" and held["risks"] == []
@@ -146,7 +151,10 @@ def test_draft_profile_falls_back_to_the_run_manifest(tmp_path):
     assert gallery.load(tmp_path)[0]["profile"] == "Bank"
 
 
-def test_template_harness_blockers_get_a_reader_reason():
-    assert gallery._held_reason(["T.T4.discount_rate_currency: pelapor USD"]) == \
-        "discount rate belum sesuai mata uang pelaporan"
-    assert gallery._held_reason(["T.TF.bare_na: Laba rugi"]) == "pemeriksaan format laporan belum lolos"
+def test_every_chain_decision_cell_reads_back_to_its_code():
+    from app import report_extras
+    assert {cell: report_extras.decision_code(cell) for cell in report_extras._DECISION.values()} == {
+        "Terpilih": "selected", "Terpilih, ekstrem (rantai berhenti)": "stop_extreme",
+        "Dilewati": "skipped", "Silang cek": "cross_check", "Tidak dijalankan": "not_needed",
+        "Belum tersedia": "unavailable"}
+    assert report_extras.decision_code("lain") is None

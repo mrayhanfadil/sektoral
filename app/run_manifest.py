@@ -3,8 +3,8 @@
 One manifest per ticker run records code revision, as_of, latest market
 close, cache snapshot IDs, official filings + publication dates, Tavily
 query + retrieval status, selected news URLs, assumption-plan hash,
-profile, release status, and blockers. Changed data/methods never look
-like a gate regression.
+English source-text hash, profile, release status, and blockers. Changed
+data/methods never look like a gate regression.
 """
 from __future__ import annotations
 
@@ -17,6 +17,22 @@ from pathlib import Path
 from . import house_assumptions, release_policy
 
 ROOT = Path(__file__).resolve().parent.parent
+# Rendered files of a publication bundle. Every bundle has the Indonesian
+# report, its PDF and the trace view. The English edition joins the bundle
+# when its files exist at finalize time (ADR 0015); a manifest without it, as
+# every manifest before #34, verifies exactly as before.
+REQUIRED_ARTIFACTS = {"html": "{ticker}.html", "pdf": "{ticker}.pdf",
+                      "trace_html": "{ticker}-trace.html"}
+OPTIONAL_ARTIFACTS = {"html_en": "{ticker}.en.html", "pdf_en": "{ticker}.en.pdf"}
+ARTIFACT_FILES = {**REQUIRED_ARTIFACTS, **OPTIONAL_ARTIFACTS}
+
+
+def bundle_kinds(manifest) -> tuple[str, ...]:
+    """Artifact kinds a manifest's bundle holds: the required ones, plus each
+    optional kind it lists."""
+    listed = manifest.get("artifacts") if isinstance(manifest, dict) else None
+    listed = listed if isinstance(listed, dict) else {}
+    return (*REQUIRED_ARTIFACTS, *(kind for kind in OPTIONAL_ARTIFACTS if kind in listed))
 
 
 def git_revision():
@@ -60,6 +76,11 @@ def _file_hash(path: Path) -> str | None:
         return digest.hexdigest()
     except OSError:
         return None
+
+
+def file_sha256(path) -> str | None:
+    """SHA-256 of one file's bytes, or None when it cannot be read."""
+    return _file_hash(Path(path))
 
 
 def working_tree_identity():
@@ -131,6 +152,15 @@ def source_tree_hash():
                                     separators=(",", ":")).encode())
 
 
+def source_text_en_hash():
+    """Identity of the English source-text translations the build quotes."""
+    try:
+        from . import prose_lang  # lazy: keeps this module free of report imports
+        return prose_lang.source_text_sha256()
+    except Exception:
+        return None
+
+
 def cache_snapshot_ids(ticker):
     """Cache identity for one ticker: newest cache_key per endpoint naming it.
 
@@ -188,12 +218,12 @@ def finalize_manifest(manifest, folder, ticker):
         result["house_assumptions"] = house_assumptions.versioned_snapshot()
     symbol = str(ticker or "").upper()
     root = Path(folder)
-    patterns = {"html": f"{symbol}.html", "pdf": f"{symbol}.pdf",
-                "trace_html": f"{symbol}-trace.html"}
+    patterns = {kind: name.format(ticker=symbol) for kind, name in ARTIFACT_FILES.items()}
     hashes = {kind: _file_hash(root / name) for kind, name in patterns.items()}
     result["artifacts"] = {kind: {"file": patterns[kind], "sha256": digest}
                            for kind, digest in hashes.items() if digest is not None}
-    result["missing_artifacts"] = [kind for kind, digest in hashes.items() if digest is None]
+    # An absent English edition is not missing: that bundle is Indonesian only.
+    result["missing_artifacts"] = [kind for kind in REQUIRED_ARTIFACTS if hashes[kind] is None]
     if result.get("market_inputs") is not None:
         result["market_inputs_sha256"] = content_hash(result["market_inputs"])
     identity = {key: value for key, value in result.items()
@@ -262,7 +292,8 @@ def publication_manifest_errors(manifest, ticker, as_of, artifact_hashes):
     if not isinstance(expected_artifacts, dict):
         errors.append("publication manifest artifact hashes are missing")
         expected_artifacts = {}
-    for kind in ("html", "pdf", "trace_html"):
+    # English kinds are checked only where the manifest lists them.
+    for kind in bundle_kinds(manifest):
         entry = expected_artifacts.get(kind)
         current = (artifact_hashes or {}).get(kind)
         if not isinstance(entry, dict) or not re_full_sha(entry.get("sha256")):
@@ -312,6 +343,7 @@ def build_manifest(*, ticker, as_of, intake=None, forecast=None,
         "model": {"forecast_agent": os.getenv("SEKTORAL_LLM_MODEL", "MiniMax-M3"),
                   "agent_effort": "high", "schema_version": 1},
         "source_pack_sha256": issuer_source_hashes(ticker),
+        "source_text_en_sha256": source_text_en_hash(),
         "market_close": {
             "price": intake.get("price"),
             "price_date": intake.get("price_date"),

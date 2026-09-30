@@ -60,19 +60,35 @@ def normalize_periods(text):
     return _KUARTAL.sub(lambda m: f"{_ROMAN.get(m[1].upper(), m[1])}Q{m[2][2:]}", text)
 
 
-def _replace_engine(text):
+def _english(english):
+    if english is None:
+        from . import prose_lang  # prose_lang imports this module
+        return prose_lang.english()
+    return english
+
+
+def _replace_engine(text, english=None):
+    """'engine' becomes 'penggerak', or 'driver' in English text (an English
+    twin, or any prose while the English report is built)."""
+    english = _english(english)
+
     def swap(m):
         window = text[max(0, m.start() - 60):m.end() + 60]
-        return m[0] if _MECHANICAL.search(window) else "penggerak"
+        if _MECHANICAL.search(window):
+            return m[0]
+        if english:
+            return "Driver" if m[0][0].isupper() else "driver"
+        return "penggerak"
     return _ENGINE.sub(swap, text)
 
 
-def normalize_prose(text):
+def normalize_prose(text, english=None):
     """Deterministic house-style pass over LLM prose (dashes, periods,
-    pipeline word 'engine' outside a mechanical context)."""
+    pipeline word 'engine' outside a mechanical context). `english` says the
+    text is English; by default it is while the English report is built."""
     if not isinstance(text, str):
         return text
-    return _replace_engine(normalize_periods(normalize_dashes(text)))
+    return _replace_engine(normalize_periods(normalize_dashes(text)), english)
 
 
 # Analyst prose fields that reach the report body. Source titles, URLs and
@@ -83,14 +99,49 @@ PROSE_KEYS = frozenset({"rationale", "factual_basis", "mechanism", "uncertainty"
 
 
 def normalize_plan(value, key=None):
-    """Apply normalize_prose to prose fields anywhere in an agent plan."""
+    """Apply normalize_prose to prose fields anywhere in an agent plan,
+    their English twins (``<key>_en``) included."""
     if isinstance(value, dict):
         return {k: normalize_plan(v, k) for k, v in value.items()}
     if isinstance(value, list):
         return [normalize_plan(v, key) for v in value]
     if isinstance(value, str) and key in PROSE_KEYS:
-        return normalize_prose(value)
+        return normalize_prose(value, english=False)
+    if isinstance(value, str) and isinstance(key, str) and key.endswith("_en") \
+            and key[:-3] in PROSE_KEYS:
+        return normalize_prose(value, english=True)
     return value
+
+
+# Problems with an agent's English twin end with this. A twin that is still
+# wrong after the repair attempts is dropped and the Indonesian kept.
+EN_SOFT = " (en)"
+_CJK = _re.compile(r"[\u4e00-\u9fff]")
+
+
+def english_problems(id_text, en_text):
+    """Why `en_text` cannot be the English twin of the agent prose `id_text`.
+
+    The twin must read English (no CJK, no Indonesian clause), carry exactly
+    the figures of the Indonesian as written there, and use no banned term
+    the Indonesian avoids. Figures are compared after house style, which
+    rewrites periods the same way in both languages."""
+    from . import prose_lang  # prose_lang imports this module
+    if not isinstance(en_text, str) or not en_text.strip():
+        return ["is missing"]
+    id_clean = normalize_prose(str(id_text or ""), english=False)
+    en_clean = normalize_prose(en_text, english=True)
+    if en_clean.strip() == id_clean.strip():
+        return ["repeats the Indonesian instead of translating it"]
+    problems = []
+    if _CJK.search(en_text) or not prose_lang.reads_english(en_text):
+        problems.append("must be English only")
+    if prose_lang.figures(en_clean) != prose_lang.figures(id_clean):
+        problems.append("must state exactly the Indonesian figures, written as in the "
+                        "Indonesian")
+    if contains_banned(en_clean) and not contains_banned(id_clean):
+        problems.append("uses a term the report does not allow")
+    return problems
 
 
 def normalize_doc_prose(doc):
@@ -105,7 +156,8 @@ def normalize_doc_prose(doc):
     for para in cover.get("paragraf") or []:
         if isinstance(para, dict):
             para["isi"] = normalize_prose(para.get("isi"))
-            para["judul"] = normalize_prose(para.get("judul"))
+            # Titles stay Indonesian in the English build too (app.prose_lang).
+            para["judul"] = normalize_prose(para.get("judul"), english=False)
     for page in doc.get("bagian") or []:
         page["paragraf"] = [normalize_prose(p) for p in page.get("paragraf") or []]
         for card in page.get("cards") or []:

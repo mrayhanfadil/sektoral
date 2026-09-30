@@ -12,8 +12,9 @@ authenticated reviewer or compliance identity.
 
 An approval is tied to the Forecast Plan and the published result fingerprint
 (``review_sha``), including report status, model scenario label, per-share
-value, rendered HTML/PDF/trace content, and the stored trace. A new run or a
-changed artifact needs a fresh analyst review.
+value, rendered HTML/PDF/trace content (and the English HTML/PDF when the run
+manifest lists them, ADR 0015), and the stored trace. A new run or a changed
+artifact needs a fresh analyst review.
 Edits rebuild the report offline on the edited plan (``app.rebuild``, no agent
 call) and return the new bundle to review-pending; a separate attested review
 is required for distribution.
@@ -66,8 +67,7 @@ LABELS = {
 BOUNDS = {"%": (-100.0, 300.0), "x": (0.0, 10.0)}
 PATH = re.compile(r"^(?P<section>[a-z_]+)(?:\[(?P<index>\d+)\])?(?:\.(?P<sub>[a-z_]+))?"
                   r"\.(?P<field>[a-z0-9_]+)$")
-ARTIFACTS = {"html": "{ticker}.html", "pdf": "{ticker}.pdf",
-             "trace_html": "{ticker}-trace.html"}
+ARTIFACTS = run_manifest.REQUIRED_ARTIFACTS
 REQUIRED_PUBLISH_ARTIFACTS = tuple(ARTIFACTS)
 ATTESTATION_SCHEMA = "sektoral.institutional-review.v1"
 REVIEW_POLICY_VERSION = "institutional-review-2026-09-26.v1"
@@ -476,12 +476,17 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _artifact_hashes(folder, ticker) -> tuple[dict[str, str], list[str]]:
-    """Hash rendered files in this report folder; reject symlinks escaping it."""
+def _artifact_hashes(folder, ticker, manifest=None) -> tuple[dict[str, str], list[str]]:
+    """Hash rendered files in this report folder; reject symlinks escaping it.
+
+    The English edition is hashed only when the run manifest lists it (ADR
+    0015): a bundle finalized without it keeps the fingerprint it was
+    approved with, whatever English file sits beside it."""
     root = Path(folder).resolve()
     hashes = {}
     missing = []
-    for name, pattern in ARTIFACTS.items():
+    for name in run_manifest.bundle_kinds(manifest):
+        pattern = run_manifest.ARTIFACT_FILES[name]
         candidate = root / pattern.format(ticker=str(ticker).upper())
         try:
             path = candidate.resolve()
@@ -634,8 +639,8 @@ def status(folder, ticker, db=None) -> dict:
     plan = report_plan(trace)
     sha = plan_sha(plan)
     doc = outputs.load(outputs.REPORT, folder, ticker, db)
-    artifact_hashes, missing = _artifact_hashes(folder, ticker)
     publication_manifest = outputs.load(outputs.MANIFEST, folder, ticker, db)
+    artifact_hashes, missing = _artifact_hashes(folder, ticker, publication_manifest)
     manifest_errors = (run_manifest.publication_manifest_errors(
         publication_manifest, ticker, ((doc.get("meta") or {}).get("tanggal")
                                        if isinstance(doc, dict) else None), artifact_hashes)
@@ -765,8 +770,8 @@ def approve(folder, ticker, reviewer, note="", edits=None, *, db=None, want_pdf=
     reviewer = identity["reviewer"]
     if len(reviewer) < 2:
         raise ReviewError("nama reviewer wajib diisi")
-    artifact_hashes, missing = _artifact_hashes(folder, t)
     publication_manifest = outputs.load(outputs.MANIFEST, folder, t, db)
+    artifact_hashes, missing = _artifact_hashes(folder, t, publication_manifest)
     manifest_errors = (run_manifest.publication_manifest_errors(
         publication_manifest, t, (doc.get("meta") or {}).get("tanggal"), artifact_hashes)
         if _is_publishable(doc) else [])
@@ -813,8 +818,8 @@ def approve(folder, ticker, reviewer, note="", edits=None, *, db=None, want_pdf=
         outputs.save(outputs.TRACE, folder, t, trace, db)
         return rec
     rec["plan_sha"] = plan_sha(report_plan(trace))
-    artifact_hashes, missing = _artifact_hashes(folder, t)
     publication_manifest = outputs.load(outputs.MANIFEST, folder, t, db)
+    artifact_hashes, missing = _artifact_hashes(folder, t, publication_manifest)
     manifest_errors = (run_manifest.publication_manifest_errors(
         publication_manifest, t, (doc.get("meta") or {}).get("tanggal"), artifact_hashes)
         if _is_publishable(doc) else [])

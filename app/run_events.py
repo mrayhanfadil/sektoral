@@ -11,13 +11,22 @@ Two things live here:
   stored before events were recorded is rebuilt from its audit trace and report
   document (``source: "derived"``): the same steps in the same order, with
   estimated timing, and nothing the public trace view would not show.
+
+Events the web matches on carry codes beside their Indonesian words:
+``data.kind`` names the kind of step (``KINDS``), gates add ``verdict_code``
+(``GATE_CODES``), hypothesis verdicts ``verdict_code`` (``hypothesis_code``),
+chain rows ``decision_code`` (``report_extras.decision_code``), the primary
+method ``method`` and the release the raw ``tp_value``/``upside_pct``.
+Recorded runs stored before codes existed get them on replay (``coded``),
+read back from their labels and data.
 """
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 
-from . import exhibit_ids, gallery, outputs, progress, trace_view
+from . import exhibit_ids, gallery, outputs, progress, report_extras, trace_view
 from .jobs import text
 
 GATES = ((0, "Model bisnis"), (1, "Kelayakan data"), (2, "Struktur kepemilikan"),
@@ -46,8 +55,27 @@ RELEASE = {"production_ready": "siap produksi",
            "distributable_assumption_led": "dapat didistribusikan, berbasis asumsi analis",
            "draft_non_distributable": "draf, belum didistribusikan"}
 
+# data.kind of the run events the web matches on (the analyst agent's live
+# events use the same kinds; only a live run has tool_error).
+KINDS = ("tool_start", "tool_done", "tool_empty", "tool_error", "hypothesis", "primary_method",
+         "chain_done", "release", "gate", "chain_row")
+GATE_CODES = {"lolos": "pass", "gagal": "fail", "tidak berlaku": "not_applicable",
+              "tidak dapat dinilai": "not_assessable"}
+HYPOTHESIS_CODES = {"didukung": "supported", "tidak didukung": "not_supported",
+                    "belum terjawab": "unanswered"}
+VERDICT_CODES = frozenset(HYPOTHESIS_CODES.values()) | {"partly_supported"}
+
 SUBAGENTS = {"news": "Dampak berita", "interim": "Skenario interim", "earnings": "Skenario laba FY",
              "stage": "Tahap bisnis", "outyears": "Tahun lanjutan"}
+
+
+def hypothesis_code(verdict, reason=None) -> str | None:
+    """Code of an analyst hypothesis verdict. The analyst stores a partial
+    verdict as "belum terjawab" with its reason marked "Sebagian didukung: ..."."""
+    code = HYPOTHESIS_CODES.get(str(verdict or "").strip().lower())
+    if code == "unanswered" and str(reason or "").lower().startswith("sebagian didukung"):
+        return "partly_supported"
+    return code
 
 
 def _check(ids):
@@ -55,7 +83,7 @@ def _check(ids):
 
 
 def gate_rows(verdict: dict | None) -> list[dict]:
-    """Six rows {gate, name, verdict, ok, detail} from a model_profiles GateVerdict dict."""
+    """Six rows {gate, name, verdict, verdict_code, ok, detail} from a model_profiles GateVerdict dict."""
     verdict = verdict if isinstance(verdict, dict) else {}
 
     def ids(key):
@@ -82,7 +110,8 @@ def gate_rows(verdict: dict | None) -> list[dict]:
             secondary = str(verdict.get("secondary") or "")
             detail = f"metode utama {primary}" + (f", pembanding {secondary}"
                                                    if secondary and secondary != primary else "")
-        rows.append({"gate": n, "name": name, "verdict": word, "ok": ok, "detail": detail})
+        rows.append({"gate": n, "name": name, "verdict": word, "verdict_code": GATE_CODES[word],
+                     "ok": ok, "detail": detail})
     return rows
 
 
@@ -91,8 +120,15 @@ def _chain_rows(doc):
     for row in ((exhibit or {}).get("data") or {}).get("rows") or []:
         if isinstance(row, list) and len(row) >= 3:
             yield {"method": re.sub(r"^\S+\.\s*", "", str(row[0])).replace(" (utama)", ""),
-                   "decision": str(row[1]), "value": str(row[2]),
+                   "decision": str(row[1]), "decision_code": report_extras.decision_code(row[1]),
+                   "value": str(row[2]),
                    "reason": str(row[3]) if len(row) > 3 else ""}
+
+
+def _short_method(doc, method):
+    """Short name of the method the target uses: its chain row, else ``method``."""
+    return next((row["method"] for row in _chain_rows(doc)
+                 if row["decision_code"] in ("selected", "stop_extreme")), method)[:80]
 
 
 def valuation_events(doc: dict) -> list[dict]:
@@ -106,20 +142,26 @@ def valuation_events(doc: dict) -> list[dict]:
         for row in gate_rows(verdict):
             out.append(dict(stage="gate", label=row["name"], detail=row["detail"],
                             status="ok" if row["ok"] else "warn", tool=f"gate_{row['gate']}",
-                            agent="gerbang", data={"gate": row["gate"], "verdict": row["verdict"]}))
+                            agent="gerbang", data={"kind": "gate", "gate": row["gate"],
+                                                   "verdict": row["verdict"],
+                                                   "verdict_code": row["verdict_code"]}))
     for row in _chain_rows(doc):
         out.append(dict(stage="gate", label=row["method"][:80], detail=row["reason"],
                         tool="chain_step", agent="gerbang",
-                        data={"decision": row["decision"][:40], "value": row["value"][:40]}))
+                        data={"kind": "chain_row", "decision": row["decision"][:40],
+                              "decision_code": row["decision_code"], "value": row["value"][:40]}))
     method = str(doc.get("method") or "").split(" [")[0]
     out.append(dict(stage="gate", label=f"Metode utama {method}" if method else "Rantai metode selesai",
-                    status="ok", agent="gerbang"))
+                    status="ok", agent="gerbang",
+                    data=({"kind": "primary_method", "method": _short_method(doc, method)} if method
+                          else {"kind": "chain_done"})))
     meta = doc.get("meta") or {}
     status = str(meta.get("status") or "")
     published = status.startswith("distributable") or status == "production_ready"
-    data = {"status": status}
+    data = {"kind": "release", "status": status}
     if published:
-        data.update(rating=meta.get("rating"), tp=_rp(meta.get("tp")), upside=_pct(meta.get("upside_persen")))
+        data.update(rating=meta.get("rating"), tp=_rp(meta.get("tp")), upside=_pct(meta.get("upside_persen")),
+                    tp_value=_number(meta.get("tp")), upside_pct=_number(meta.get("upside_persen"), 1))
     blockers = len((doc.get("harness") or {}).get("blockers") or [])
     out.append(dict(stage="report", label="Status rilis: " + RELEASE.get(status, status or "tidak diketahui"),
                     detail=("rating dan target harga diterbitkan" if published else
@@ -133,6 +175,12 @@ def emit_valuation(doc: dict) -> None:
         progress.emit(**kwargs)
 
 
+def _number(value, digits=None):
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+        return None
+    return round(value, digits) if digits is not None else value
+
+
 def _rp(value):
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
@@ -143,6 +191,52 @@ def _pct(value):
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
     return f"{value:+.1f}%".replace(".", ",").replace("-", "−")
+
+
+def _rp_value(shown):
+    """1100 from "Rp1.100" (``_rp``), else None."""
+    found = re.fullmatch(r"Rp(\d{1,3}(?:\.\d{3})*)", str(shown or ""))
+    return int(found.group(1).replace(".", "")) if found else None
+
+
+def _pct_value(shown):
+    """-20.9 from "−20,9%" (``_pct``), else None."""
+    found = re.fullmatch(r"([+−-])(\d+),(\d)%", str(shown or ""))
+    if not found:
+        return None
+    value = float(f"{found.group(2)}.{found.group(3)}")
+    return value if found.group(1) == "+" else -value
+
+
+def coded(event: dict, doc: dict | None = None) -> dict:
+    """``event`` with the codes the web matches on, read back from its label
+    and data when it was recorded without them (runs stored before codes);
+    ``doc``, the run's report document, names the primary method's short name."""
+    label, tool, stage = str(event.get("label") or ""), str(event.get("tool") or ""), event.get("stage")
+    data = dict(event.get("data") or {})
+    add = {}
+    if tool.startswith("gate_") and data.get("verdict") in GATE_CODES:
+        add = {"kind": "gate", "verdict_code": GATE_CODES[data["verdict"]]}
+    elif tool == "chain_step":
+        add = {"kind": "chain_row", "decision_code": report_extras.decision_code(data.get("decision"))}
+    elif stage == "gate" and label.startswith("Metode utama "):
+        method = label[len("Metode utama "):]
+        add = {"kind": "primary_method",
+               "method": _short_method(doc, method) if isinstance(doc, dict) else method}
+    elif stage == "gate" and label == "Rantai metode selesai":
+        add = {"kind": "chain_done"}
+    elif tool == "release":
+        add = {"kind": "release", "tp_value": _rp_value(data.get("tp")),
+               "upside_pct": _pct_value(data.get("upside"))}
+    elif tool == "verdict":
+        add = {"kind": "hypothesis", "verdict_code": hypothesis_code(data.get("verdict"), event.get("detail"))}
+    elif tool == "hypothesis":
+        add = {"kind": "hypothesis"}
+    elif stage == "tool" and tool:
+        add = {"kind": {f"Menjalankan {tool}": "tool_start", f"{tool} selesai": "tool_done",
+                        f"{tool}: data tidak tersedia": "tool_empty"}.get(label)}
+    missing = {k: v for k, v in add.items() if v is not None and k not in data}
+    return {**event, "data": {**data, **missing}} if missing else event
 
 
 class _Clock:
@@ -179,14 +273,17 @@ def derive(audit: dict, doc: dict) -> list[dict]:
         add(8.4, "plan", "Rencana siap" if agent_plan else "Rencana standar host dipakai",
             plan.get("question"), status="ok" if agent_plan else "warn")
         for i, hypothesis in enumerate(h for h in plan.get("hypotheses") or [] if h):
-            add(0.1, "plan", f"Hipotesis {i + 1}", hypothesis, tool="hypothesis", data={"index": i + 1})
+            add(0.1, "plan", f"Hipotesis {i + 1}", hypothesis, tool="hypothesis",
+                data={"kind": "hypothesis", "index": i + 1})
         for step in analyst.get("steps") or []:
             tool = step.get("tool") or "tool"
-            add(3.6, "tool", f"Menjalankan {tool}", step.get("why"), status="run", tool=tool)
+            add(3.6, "tool", f"Menjalankan {tool}", step.get("why"), status="run", tool=tool,
+                data={"kind": "tool_start"})
             if step.get("status") == "error":
-                add(0.9, "tool", f"{tool}: data tidak tersedia", step.get("summary"), status="warn", tool=tool)
+                add(0.9, "tool", f"{tool}: data tidak tersedia", step.get("summary"), status="warn", tool=tool,
+                    data={"kind": "tool_empty"})
             else:
-                add(0.9, "tool", f"{tool} selesai", step.get("summary"), tool=tool)
+                add(0.9, "tool", f"{tool} selesai", step.get("summary"), tool=tool, data={"kind": "tool_done"})
         signals = raw_analyst.get("signals") if isinstance(raw_analyst.get("signals"), list) else []
         flagged = sum(1 for s in signals if isinstance(s, dict) and s.get("flag"))
         add(2.4, "signals", f"{len(signals)} sinyal dihitung, {flagged} bertanda")
@@ -199,7 +296,9 @@ def derive(audit: dict, doc: dict) -> list[dict]:
             if isinstance(h.get("index"), int) and h.get("verdict"):
                 number = h["index"] + 1  # synthesis indexes from 0, the plan from 1
                 add(0.1, "synthesis", f"H{number} {h['verdict']}", h.get("reason"), tool="verdict",
-                    data={"index": number, "verdict": h["verdict"]})
+                    data={"kind": "hypothesis", "index": number, "verdict": h["verdict"],
+                          "verdict_code": (h["verdict_code"] if h.get("verdict_code") in VERDICT_CODES
+                                           else hypothesis_code(h["verdict"], h.get("reason")))})
         add(0.3, "memory", "Memori riset diperbarui")
 
     research = view.get("research") or {}
@@ -270,6 +369,7 @@ def replay(folder, ticker: str) -> dict | None:
         return None
     recorded = outputs.load(outputs.EVENTS, folder, t)
     events = progress.public(recorded) if isinstance(recorded, list) and recorded else []
+    events = progress.public([coded(e, doc) for e in events])
     source = "recorded" if events else "derived"
     if not events:
         events = derive(audit, doc)

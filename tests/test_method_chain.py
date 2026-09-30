@@ -411,6 +411,7 @@ def test_skipped_method_value_is_dash_when_released():
                    role="fallback", decision="selected")]}}
     rows = R.method_chain_exhibit(va)["data"]["rows"]
     assert rows[0][2] == "-" and rows[1][2].startswith("Rp")
+    assert [R.decision_code(row[1]) for row in rows] == ["skipped", "selected"]
 
 
 def test_guidance_departure_must_cite_the_guidance_item():

@@ -6,11 +6,33 @@ typed and length-bounded; nothing else leaves the server.
 """
 from __future__ import annotations
 
+import re
+
 from .jobs import http_url, public_intel, text
 
 
 def _list(value):
     return [x for x in value if isinstance(x, dict)] if isinstance(value, list) else []
+
+
+# The analyst validator's "...; hapus kata: a, b" / "...; hapus: 12, 3,5%" and
+# "token non-Indonesia dihapus: x, y": what the model had to drop, as a list.
+_REMOVED = re.compile(r"(?:; hapus(?: kata)?|(?<= dihapus)): ([^;]*)")
+
+
+def problem_notes(problems) -> list[dict]:
+    """Analyst validator notes as {message, removed}: the note without its
+    word lists, and the words it names to remove (stored notes are strings)."""
+    notes = []
+    for problem in (problems if isinstance(problems, list) else [])[:6]:
+        if not isinstance(problem, str):
+            continue
+        removed = [word.strip() for found in _REMOVED.findall(problem)
+                   for word in found.split(", ") if word.strip()]
+        message = _REMOVED.sub("", problem).strip() or problem
+        notes.append({"message": text(message, 300),
+                      "removed": [text(word, 60) for word in removed[:12]]})
+    return notes
 
 
 def _status(report: dict) -> dict:
@@ -39,6 +61,11 @@ def _research(research: dict) -> dict:
             "observation": text(i.get("observation"), 900),
             "implication": text(i.get("implication"), 900),
             "caveat": text(i.get("caveat"), 600),
+            # English twins the agent wrote beside each field; None when absent.
+            "title_en": text(i.get("title_en"), 200),
+            "observation_en": text(i.get("observation_en"), 900),
+            "implication_en": text(i.get("implication_en"), 900),
+            "caveat_en": text(i.get("caveat_en"), 600),
             "citations": [{"endpoint": text(c.get("endpoint"), 120), "field_path": text(c.get("field_path"), 160),
                            "value": text(c.get("value"), 180)} for c in _list(i.get("citations"))[:12]],
         } for i in _list(brief.get("insights"))[:8]],
@@ -80,8 +107,14 @@ def _forecast(result: dict) -> dict:
             "rationale": text(e.get("rationale"), 600), "date": text(e.get("timestamp"), 30),
             "url": http_url(e.get("source_url")), "factual_basis": text(e.get("factual_basis"), 400),
             "mechanism": text(e.get("mechanism"), 400), "uncertainty": text(e.get("uncertainty"), 300),
+            # English twins (#34); None for plans written before them.
+            "rationale_en": text(e.get("rationale_en"), 600),
+            "factual_basis_en": text(e.get("factual_basis_en"), 400),
+            "mechanism_en": text(e.get("mechanism_en"), 400),
+            "uncertainty_en": text(e.get("uncertainty_en"), 300),
         } for e in _list(plan.get("news_effects"))[:12]],
         "interim": {"rationale": text(interim.get("rationale"), 900),
+                    "rationale_en": text(interim.get("rationale_en"), 900),
                     "published_at": text(interim.get("published_at"), 30),
                     "url": http_url(interim.get("source_url"))} if interim else None,
         "outyears": [{
@@ -91,6 +124,7 @@ def _forecast(result: dict) -> dict:
             "net_income_margin_pct": number(r.get("net_income_margin_pct")),
             "capex_to_revenue_pct": number(r.get("capex_to_revenue_pct")),
             "rationale": text(r.get("rationale"), 600),
+            "rationale_en": text(r.get("rationale_en"), 600),
             "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
         } for r in _list(plan.get("outyear_scenario"))[:6]],
         # Bank Driver Scenario (financial_ddm): the interim-year H2 drivers and
@@ -101,6 +135,7 @@ def _forecast(result: dict) -> dict:
                 "loan_growth_pct", "nim_pct", "non_ii_to_nii_pct", "cost_to_income_pct",
                 "cost_of_credit_pct", "deposit_growth_pct")},
             "rationale": text(r.get("rationale"), 600),
+            "rationale_en": text(r.get("rationale_en"), 600),
             "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
         } for r in [(plan.get("earnings_scenario") or {}).get("bank_drivers")]
             + _list(plan.get("bank_outyear_scenario"))[:4] if isinstance(r, dict)],
@@ -166,6 +201,7 @@ def _manifest(value: object) -> dict | None:
                       model.get("schema_version"), int) else None},
         "spec_sha256": text(value.get("spec_sha256"), 64),
         "evidence_register_sha256": text(value.get("evidence_register_sha256"), 64),
+        "source_text_en_sha256": text(value.get("source_text_en_sha256"), 64),
         "release_policy": {
             "version": text(policy_body.get("version"), 24),
             "effective_date": text(policy_body.get("effective_date"), 20),
@@ -210,6 +246,12 @@ def build(audit: dict | None) -> dict | None:
         "report": _status(audit.get("report") if isinstance(audit.get("report"), dict) else {}),
         "analyst": public_intel(analyst),
         "analyst_problems": [text(p, 300) for p in (analyst.get("problems") or [])[:6] if isinstance(p, str)],
+        # The analyst records structured notes since #34; older runs are parsed.
+        "analyst_problem_notes": (analyst["problem_notes"]
+                                  if isinstance(analyst.get("problem_notes"), list)
+                                  and len(analyst["problem_notes"])
+                                  == sum(isinstance(p, str) for p in analyst.get("problems") or [])
+                                  else problem_notes(analyst.get("problems"))),
         "research": _research(audit.get("research") if isinstance(audit.get("research"), dict) else {}),
         "news": _news(audit.get("news_sources") if isinstance(audit.get("news_sources"), dict) else {}),
         "forecast": _forecast(audit.get("forecast_assumptions")

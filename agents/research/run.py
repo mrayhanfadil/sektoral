@@ -316,13 +316,99 @@ def _narrative_problems(document):
                 if isinstance(insight.get(key), str):
                     parts.append((f"insights[{i}].{key}", insight[key]))
     for path, value in parts:
-        if any(ch.isdigit() for ch in value):
-            problems.append(f"{path} must not contain digits; put exact figures in citations")
-        if _INVESTMENT_ACTION.search(value):
-            problems.append(f"{path} contains prohibited investment action or target-price language")
-        if any(ch.isalpha() and "LATIN" not in unicodedata.name(ch, "") for ch in value):
-            problems.append(f"{path} must use Latin-script narrative")
+        problems.extend(_text_problems(path, value))
     return problems
+
+
+def _text_problems(path, value):
+    problems = []
+    if any(ch.isdigit() for ch in value):
+        problems.append(f"{path} must not contain digits; put exact figures in citations")
+    if _INVESTMENT_ACTION.search(value):
+        problems.append(f"{path} contains prohibited investment action or target-price language")
+    if any(ch.isalpha() and "LATIN" not in unicodedata.name(ch, "") for ch in value):
+        problems.append(f"{path} must use Latin-script narrative")
+    return problems
+
+
+# An insight's prose fields; each may carry an English twin ``<key>_en``
+# written in the same call. The twin shares the insight's citations.
+_PROSE_KEYS = ("title", "observation", "implication", "caveat")
+_PROSE_LIMITS = {"title": 240}
+
+
+def _english_problems(ticker, insight, payload_by_endpoint):
+    """Problems with one insight's English twin; [] when it has none.
+
+    A twin passes the Indonesian narrative rules (no digits, no investment
+    action, Latin script), reads English, and makes no trend, repetition,
+    flow-direction or search-coverage claim that the shared citations do not
+    support. The cross-link quality rule (naming the ticker, metric and article
+    subject) stays with the Indonesian: it checks which evidence the card is
+    about, and a faithful translation of a passing card is about the same
+    evidence, while its article-title keyword may rightly be translated away."""
+    from app import prose_lang
+    if not isinstance(insight, dict) or not any(f"{key}_en" in insight for key in _PROSE_KEYS):
+        return []
+    problems = []
+    for key in _PROSE_KEYS:
+        id_text, en_text = insight.get(key), insight.get(f"{key}_en")
+        path = f"{key}_en"
+        if not isinstance(id_text, str) or not id_text.strip():
+            continue  # _clean_english keeps no twin without its Indonesian
+        if not isinstance(en_text, str) or not en_text.strip():
+            problems.append(f"{path} missing")
+            continue
+        problems.extend(_text_problems(path, en_text))
+        if en_text.strip() == id_text.strip() or not prose_lang.reads_english(en_text):
+            problems.append(f"{path} must be an English translation, not Indonesian")
+    english = {key: insight.get(f"{key}_en") for key in _PROSE_KEYS}
+    english["citations"] = insight.get("citations") or []
+    claims = _trend_problems(english, payload_by_endpoint)
+    if _TEMPORAL_REPETITION.search(" ".join(str(english.get(key) or "") for key in _PROSE_KEYS)) and \
+            _repetition_anchor_count(english, payload_by_endpoint) < 2:
+        claims.append("repetition claim requires at least two distinct cited article or period anchors")
+    claims += _news_flow_direction_problems(ticker, english, payload_by_endpoint)
+    claims += _search_coverage_problems(english, payload_by_endpoint)
+    problems.extend(f"English {claim}" for claim in claims)
+    return problems
+
+
+def _document_english_problems(ticker, document, payload_by_endpoint):
+    """Every English-twin problem in `document`, prefixed with its insight."""
+    return [f"insights[{index}].{problem}"
+            for index, insight in enumerate(document.get("insights") or [])
+            for problem in _english_problems(ticker, insight, payload_by_endpoint)]
+
+
+def _drop_bad_english(ticker, document, payload_by_endpoint):
+    """Drop every English twin of an insight whose twin fails; return notes.
+
+    A missing or invalid twin never fails the brief: the insight keeps its
+    validated Indonesian and the report falls back to it."""
+    notes = []
+    for index, insight in enumerate(document.get("insights") or []):
+        if not isinstance(insight, dict):
+            continue
+        if not any(f"{key}_en" in insight for key in _PROSE_KEYS):
+            notes.append(f"insights[{index}] has no English twin")
+            continue
+        problems = _english_problems(ticker, insight, payload_by_endpoint)
+        if problems:
+            for key in _PROSE_KEYS:
+                insight.pop(f"{key}_en", None)
+            notes.append(f"insights[{index}] English twin dropped: " + "; ".join(problems[:3]))
+    return notes
+
+
+def _clean_english(row):
+    """The cleaned English twins of a model insight row."""
+    out = {}
+    for key in _PROSE_KEYS:
+        text = _clean_text(row.get(f"{key}_en"), _PROSE_LIMITS.get(key, 1200))
+        if text and _clean_text(row.get(key)):
+            out[f"{key}_en"] = text
+    return out
 
 
 def _host_enrich_citations(ticker, final, evidence):
@@ -770,6 +856,11 @@ def _quarter_news_context(ticker, quarterly_endpoint, news_payload, quarter_payl
         "observation": f"Cache mengaitkan {ticker} dengan artikel tentang {subject_hint}.",
         "implication": f"Catatan kuartalan {ticker} mencatat {metric_label}; ini memberi konteks untuk membaca bahasan {subject_hint}.",
         "caveat": "Artikel tidak mengukur dampak pada kinerja emiten.",
+        "title_en": "Article context and quarterly metric",
+        "observation_en": f"The cache links {ticker} to an article on the subject named in its title.",
+        "implication_en": (f"The {ticker} quarterly record states the cited metric; this gives "
+                           "context for reading the article's subject."),
+        "caveat_en": "The article does not measure the effect on the issuer's performance.",
         "citations": ([{"endpoint": "/news/", "field_path": path} for path in news_paths] +
                       [{"endpoint": quarterly_endpoint, "field_path": metric_path}]),
     }
@@ -784,14 +875,17 @@ def _quarter_news_context(ticker, quarterly_endpoint, news_payload, quarter_payl
         json.dumps(quarter_paths, ensure_ascii=False) + ". Jangan menebak atau mengubah path. Semua prose tanpa digit, "
         "tahun/periode, bahasa Buy/Sell/Hold/target, klaim arus positif/negatif, atau klaim sebab-akibat. "
         "Jangan membuat klaim arah arus kecuali dinyatakan eksplisit untuk ticker ini dalam artikel yang dicite. "
-        "Deskripsikan konteks saja.")
+        "Deskripsikan konteks saja. Field _en adalah terjemahan Inggris setia dari field Indonesia "
+        "yang sama, menyebut subjek dan metric yang sama dalam bahasa Inggris.")
     article_fields = {field: article.get(field) for field in ("title", "body", "timestamp", "source")}
     metric_value = _pointer(quarter_payload, metric_path)
     compact = [
         {"role": "system", "content": (
             "Return JSON only as {\"final\":{...}}. The selected cache facts below are the entire allowed evidence. "
             "Produce exactly one insight, cite only exact supplied pointers, and write prose without digits, "
-            "investment-action language, unsupported flow direction, or causal claims. Do not add claims or a second insight.")},
+            "investment-action language, unsupported flow direction, or causal claims. Do not add claims or a second insight. "
+            "The insight also carries title_en, observation_en, implication_en and caveat_en: a faithful English "
+            "translation of the Indonesian fields under the same rules, with no citations of its own.")},
         {"role": "user", "content": (
             "Selected relevant article fields: " + json.dumps(article_fields, ensure_ascii=False) +
             ". Selected quarterly metric: " +
@@ -1094,11 +1188,23 @@ def validate_against_cache(ticker, document, as_of=None):
                 for key in ("observation", "implication", "caveat")}
         if isinstance(insight.get("title"), str):
             item["title"] = _clean_text(insight["title"], 240)
+        item.update(_clean_english(insight))
         item["citations"] = [{"endpoint": c["endpoint"],
                               "field_path": c["field_path"],
                               "value": c["value"]}
                              for c in insight["citations"]]
         clean["insights"].append(item)
+    # English twins are checked again on the current cache; one that no longer
+    # passes is dropped, never failing the brief.
+    payload_by_endpoint = {item["endpoint"]: item["payload"] for item in evidence}
+    if any(_english_problems(ticker, insight, payload_by_endpoint) for insight in clean["insights"]):
+        notes = [note for note in _drop_bad_english(ticker, clean, payload_by_endpoint)
+                 if "dropped" in note]
+        trace = dict(clean["agent_trace"])
+        validation = dict(trace.get("validation") or {})
+        validation["english_problems"] = list(validation.get("english_problems") or []) + notes
+        trace["validation"] = validation
+        clean["agent_trace"] = trace
     return clean, []
 
 
@@ -1132,6 +1238,7 @@ def _candidate_document(ticker, final, evidence, rejected=None, repair_attempts=
                      for key in ("observation", "implication", "caveat")}
         if isinstance(row.get("title"), str):
             clean_row["title"] = _clean_text(row["title"], 240)
+        clean_row.update(_clean_english(row))
         clean_row["citations"] = [
             {"endpoint": citation.get("endpoint"),
              "field_path": citation.get("field_path"),
@@ -1162,6 +1269,13 @@ def _candidate_document(ticker, final, evidence, rejected=None, repair_attempts=
                        "repair_attempts": repair_attempts},
     }
     return doc, problems
+
+
+_ENGLISH_REPAIR = (
+    "Pertahankan title_en, observation_en, implication_en, caveat_en tiap insight sebagai "
+    "terjemahan Inggris setia dari field Indonesia yang sama, dengan aturan narasi yang sama. "
+    "Masalah yang menyebut field _en atau English hanya menyangkut terjemahan Inggris: perbaiki "
+    "terjemahannya dan pertahankan narasi Indonesia yang sudah lolos. ")
 
 
 def _useful_unread_endpoints(ticker, allowlist, seen):
@@ -1241,6 +1355,12 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
             "{\"endpoint\":\"/news/\",\"field_path\":\"/results/0/body\"}, "
             "{\"endpoint\":\"/news/\",\"field_path\":\"/results/0/timestamp\"}, "
             "{\"endpoint\":\"/news/\",\"field_path\":\"/results/0/source\"}]. "
+            "Setiap insight juga membawa bahasa Inggrisnya dalam jawaban yang sama: title_en, "
+            "observation_en, implication_en, caveat_en, masing-masing terjemahan setia dari field "
+            "Indonesia yang sama. Terjemahan Inggris mengikuti semua aturan narasi di atas (tanpa "
+            "digit, tanpa bahasa tindakan investasi, tanpa klaim perubahan waktu yang tidak didukung "
+            "citation), ditulis sepenuhnya dalam bahasa Inggris, dan tidak punya citation sendiri; "
+            "citation insight berlaku untuk kedua bahasa. "
             "Kembalikan JSON saja."
         )},
         {"role": "user", "content": (
@@ -1296,6 +1416,7 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
                     "Jangan meminta atau menjalankan tool lagi. Citation hanya endpoint dan "
                     "field_path. Buat narasi kualitatif tanpa digit, disclaimer, bahasa "
                     "penilaian investasi, atau klaim perubahan waktu. Summary boleh kosong. "
+                    "Pertahankan title_en, observation_en, implication_en, caveat_en tiap insight. "
                     "Jangan sertakan markdown, komentar, atau teks di luar JSON.")},
             ]
             repair_finish = "unknown"
@@ -1447,7 +1568,8 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
                 "\"insights\":[],\"limitations\":[]}}. This is a final-only schema repair: "
                 "do not request, include, or attempt a tool call. Use only evidence already present. "
                 "Keep narrative qualitative and without digits or investment-action language; citations "
-                "must contain endpoint and field_path only. Return JSON only.")},
+                "must contain endpoint and field_path only. Each insight keeps its English twins "
+                "title_en, observation_en, implication_en and caveat_en. Return JSON only.")},
         ]
         try:
             repair_raw, repair_finish = _response_text(_chat(schema_messages))
@@ -1486,13 +1608,18 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
         repair_attempts = 0
         all_issues = list(issues)
         repair_raw = final_raw or json.dumps(final, ensure_ascii=False)
-        while issues and repair_attempts < 2:
+        payload_by_endpoint = {item["endpoint"]: item["payload"] for item in evidence}
+        english = _document_english_problems(ticker, document, payload_by_endpoint)
+        # The latest candidate whose Indonesian passed: a repair asked for its
+        # English alone must not cost the brief when it breaks the Indonesian.
+        best = document if not issues else None
+        while (issues or english) and repair_attempts < 2:
             repair_attempts += 1
             if quarter_news_compact_messages:
                 repair_messages = quarter_news_compact_messages + [{
                     "role": "user", "content": (
                         "Previous output failed host validation: " +
-                        json.dumps(issues, ensure_ascii=False) +
+                        json.dumps(issues + english, ensure_ascii=False) +
                         ". Start over from the exact one-insight JSON skeleton and pointers above. "
                         "Preserve one insight and include all required citations; do not copy previous invalid prose.") }]
             else:
@@ -1501,7 +1628,7 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
                 {"role": "user", "content": (
                     f"Perbaiki final JSON, percobaan koreksi {repair_attempts}, berdasarkan "
                     "masalah validasi host berikut: " +
-                    json.dumps(issues, ensure_ascii=False) +
+                    json.dumps(issues + english, ensure_ascii=False) +
                     ". Gunakan hanya payload yang sudah diberikan; jangan meminta tool lagi. "
                     "Buat narasi tanpa digit, disclaimer, atau bahasa penilaian investasi. "
                     "Jangan buat klaim temporal; tulis satu snapshot kualitatif dengan caveat "
@@ -1516,7 +1643,7 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
                     "tanpa menyimpulkan dampak finansial. Citation hanya endpoint dan "
                     "field_path; host mengisi value. Summary boleh kosong karena host "
                     "menyediakan summary tetap. Kembalikan satu object "
-                    "{\"final\":{...}} lengkap sebagai JSON. " +
+                    "{\"final\":{...}} lengkap sebagai JSON. " + _ENGLISH_REPAIR +
                     quarter_news_required_context)},
                 ]
             try:
@@ -1533,6 +1660,14 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
                 ticker, repaired["final"], evidence, rejected=all_issues,
                 repair_attempts=repair_attempts)
             all_issues.extend(issues)
+            english = _document_english_problems(ticker, document, payload_by_endpoint)
+            if not issues:
+                best = document
+        if issues and best is not None:
+            best["agent_trace"]["validation"]["rejected_claims"] = all_issues[:20]
+            best["agent_trace"]["validation"]["repair_attempted"] = repair_attempts > 0
+            best["agent_trace"]["validation"]["repair_attempts"] = repair_attempts
+            document, issues = best, []
         if issues:
             if prior_valid_news_document is not None:
                 prior_valid_news_document["limitations"].append(_WITHHELD_QUARTERLY_LIMITATION)
@@ -1556,6 +1691,10 @@ def run_live(ticker, *, max_tool_calls=MAX_TOOL_CALLS, persist=True,
                     ticker, evidence,
                     f"bounded repair attempts exhausted: {json.dumps(issues, ensure_ascii=False)}",
                     repair_attempts=repair_attempts, rejected=all_issues + prior_issues)
+        if document.get("insights"):
+            notes = _drop_bad_english(ticker, document, payload_by_endpoint)
+            if notes:
+                document["agent_trace"]["validation"]["english_problems"] = notes[:20]
 
     output_path = None
     if persist:

@@ -8,8 +8,9 @@ Routes:
 
 * ``/api/...``   JSON for the React app (tickers, research history, reports,
   research jobs, audit traces). Only whitelisted fields are returned.
-* ``/files/...`` generated documents: company update HTML/PDF, the standalone
-  trace HTML and report cover thumbnails, each confined to its folder.
+* ``/files/...`` generated documents: company update HTML/PDF (the English
+  edition too when it is in the published bundle), the standalone trace HTML
+  and report cover thumbnails, each confined to its folder.
 * everything else: the built single-page app from ``web/dist``.
 """
 from __future__ import annotations
@@ -34,10 +35,17 @@ from agents.analyst import memory as agent_memory
 LOG = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "web" / "dist"
-# Indonesian files only: ``TICKER.en.html``/``.en.pdf`` are outside the
-# approved bundle and are served to reviewers alone (gallery.PREVIEW_FILES).
-_REPORT_FILE = re.compile(r"^([A-Z0-9]{2,6})(\.html|\.pdf|-trace\.html)$")
-_KIND = {".html": "html", ".pdf": "pdf", "-trace.html": "trace"}
+# ``TICKER.en.html``/``.en.pdf`` are served only while they are in the
+# published bundle, unchanged (gallery.public_artifact, ADR 0015).
+_REPORT_FILE = re.compile(r"^([A-Z0-9]{2,6})(\.en\.html|\.en\.pdf|\.html|\.pdf|-trace\.html)$")
+_KIND = {".html": "html", ".pdf": "pdf", "-trace.html": "trace",
+         ".en.html": "html_en", ".en.pdf": "pdf_en"}
+# Archived files by route kind: (archive kind, media type).
+_ARCHIVE_KINDS = {"html": ("html", "text/html; charset=utf-8"),
+                  "pdf": ("pdf", "application/pdf"),
+                  "trace": ("trace_html", "text/html; charset=utf-8"),
+                  "html_en": ("html_en", "text/html; charset=utf-8"),
+                  "pdf_en": ("pdf_en", "application/pdf")}
 _NO_STORE = {"Cache-Control": "no-store"}
 # A republish rewrites report files in place under the same URL, so a proxy or
 # browser must revalidate (ETag) before reusing a copy; Cloudflare then skips caching.
@@ -308,8 +316,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
                 jobs.reports, t, publication_id)
             publication_state = lineage.get("state")
             files = {}
-            for archive_kind, route_kind in (("html", "html"), ("pdf", "pdf"),
-                                             ("trace_html", "trace")):
+            for route_kind, (archive_kind, _) in _ARCHIVE_KINDS.items():
                 if (publication_state not in {"withdrawn", "history_invalid"}
                         and archive_kind in file_names
                         and isinstance(hashes.get(archive_kind), str)):
@@ -327,8 +334,8 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
                           "supersession_reason": lineage.get("supersession_reason"),
                           "withdrawal_reason": lineage.get("withdrawal_reason"),
                           "withdrawn_at": lineage.get("withdrawn_at"),
-                          "artifact_hashes": {key: hashes.get(key)
-                                              for key in ("html", "pdf", "trace_html")},
+                          "artifact_hashes": {key: hashes.get(key) for key in (
+                              "html", "pdf", "trace_html", "html_en", "pdf_en")},
                           "files": files})
         return data({"ticker": t, "items": items})
 
@@ -361,10 +368,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
     def archived_report_file(ticker: str, publication_id: str, kind: str):
         """Serve a hash-verified historical artifact from an approved bundle."""
         t = ticker.upper()
-        archive_kinds = {"html": ("html", "text/html; charset=utf-8"),
-                         "pdf": ("pdf", "application/pdf"),
-                         "trace": ("trace_html", "text/html; charset=utf-8")}
-        mapped = archive_kinds.get(kind)
+        mapped = _ARCHIVE_KINDS.get(kind)
         if not TICKER.fullmatch(t) or mapped is None:
             raise HTTPException(404, "Arsip laporan tidak ditemukan.")
         state = publication_archive.publication_state(jobs.reports, t, publication_id)
