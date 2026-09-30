@@ -146,8 +146,8 @@ def _attach_items(id_items, en_items, keys):
                 _set(a, key, _pair(a.get(key), b.get(key)))
 
 
-_CARD_KEYS = ("text", "observation", "implication", "caveat")
-_RISK_KEYS = ("isi",)
+_CARD_KEYS = ("title", "text", "observation", "implication", "caveat")
+_RISK_KEYS = ("judul", "isi")
 
 
 def _attach_exhibits(id_exhibits, en_exhibits):
