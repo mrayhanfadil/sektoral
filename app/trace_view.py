@@ -39,6 +39,11 @@ def _research(research: dict) -> dict:
             "observation": text(i.get("observation"), 900),
             "implication": text(i.get("implication"), 900),
             "caveat": text(i.get("caveat"), 600),
+            # English twins the agent wrote beside each field; None when absent.
+            "title_en": text(i.get("title_en"), 200),
+            "observation_en": text(i.get("observation_en"), 900),
+            "implication_en": text(i.get("implication_en"), 900),
+            "caveat_en": text(i.get("caveat_en"), 600),
             "citations": [{"endpoint": text(c.get("endpoint"), 120), "field_path": text(c.get("field_path"), 160),
                            "value": text(c.get("value"), 180)} for c in _list(i.get("citations"))[:12]],
         } for i in _list(brief.get("insights"))[:8]],

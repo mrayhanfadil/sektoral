@@ -1,4 +1,6 @@
 """Report prose in two languages (app.prose_lang)."""
+import copy
+
 from app import prose_lang
 from app.prose_lang import attach, building, english_view, t
 
@@ -105,3 +107,70 @@ def test_attach_refuses_english_that_still_reads_indonesian():
     attach(doc, en)
     assert "paragraf_en" not in doc["bagian"][0]
     assert not prose_lang.mixed("Revenue rose 12,4% from a low base in 1H25.")
+
+
+def _research_page(**twins):
+    """The research page as `narrative` builds it in the language active."""
+    from app import narrative
+    insight = {"title": "Pendapatan kuartal",
+               "observation": "Cache mencatat pendapatan perusahaan pada catatan terbaru.",
+               "implication": "Catatan ini memberi konteks untuk memahami aktivitas usaha.",
+               "caveat": "Satu catatan belum menjelaskan dampak terhadap laba atau arus kas.",
+               "citations": [{"endpoint": "/financials/quarterly/UJI/",
+                              "field_path": "/revenue", "value": 1250}], **twins}
+    brief = {"as_of": "2026-09-23", "insights": [insight],
+             "summary": "Brief ini merangkum temuan cache yang lolos validasi.",
+             "limitations": ["Angka kuartalan historis tidak membuktikan hubungan sebab-akibat "
+                             "atau kinerja mendatang.",
+                             "The quarterly cross-reference was withheld because its citation "
+                             "did not pass validation."]}
+    return {"bagian": [narrative._research_section({"research_analysis": brief})]}
+
+
+_RESEARCH_EN = {"title_en": "Quarterly revenue",
+                "observation_en": "The cache records the company's revenue in its latest record.",
+                "implication_en": "This record gives context for understanding business activity.",
+                "caveat_en": "A single record does not explain the effect on earnings or cash flow."}
+
+
+def test_research_cards_attach_the_agent_english_and_english_view_swaps_it():
+    doc = _research_page(**_RESEARCH_EN)
+    with building("en"):
+        doc_en = _research_page(**_RESEARCH_EN)
+    indonesian = copy.deepcopy(doc)
+    attach(doc, doc_en)
+    page = doc["bagian"][0]
+    card = page["research_cards"][0]
+    for key, english in _RESEARCH_EN.items():
+        assert card[key] == english
+    # Host summary and limitations come from data/source_text_en/research.json.
+    assert page["paragraf_en"][0] == "This brief summarizes the cache findings that passed validation."
+    assert page["paragraf_en"][2].startswith("Limitations: Historical quarterly figures")
+    assert page["paragraf_en"][2].endswith("did not pass validation.")
+    # The Indonesian page is untouched apart from the siblings.
+    for key in _RESEARCH_EN:
+        card.pop(key)
+    page.pop("paragraf_en")
+    assert doc == indonesian
+
+    attach(doc, doc_en)
+    view, fallback = english_view(doc)
+    assert fallback == 0
+    shown = view["bagian"][0]["research_cards"][0]
+    assert shown["observation"] == _RESEARCH_EN["observation_en"]
+    assert "observation_en" not in shown
+    assert doc["bagian"][0]["research_cards"][0]["observation"].startswith("Cache mencatat")
+
+
+def test_research_cards_without_english_fall_back_to_indonesian():
+    doc = _research_page()
+    with building("en"):
+        doc_en = _research_page()
+    attach(doc, doc_en)
+    card = doc["bagian"][0]["research_cards"][0]
+    assert not [key for key in card if key.endswith("_en")]
+    missing = []
+    view, fallback = english_view(doc, missing)
+    assert fallback == 4
+    assert view["bagian"][0]["research_cards"][0]["caveat"] == card["caveat"]
+    assert card["observation"] in missing

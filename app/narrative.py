@@ -5811,11 +5811,15 @@ def _research_section(intake, page=2):
         # Research claims without a validated cache citation are not published.
         if not citations:
             continue
-        cards.append({"title": _word_cut(prose_lang.source(item.get("title"))
+        # The agent writes each field's English twin (`<key>_en`) in the same call.
+        cards.append({"title": _word_cut(prose_lang.source(item.get("title"), item.get("title_en"))
                                          or _t("Temuan", "Finding"), 100),
-                      "observation": _word_cut(prose_lang.source(item.get("observation")) or "-", 330),
-                      "implication": _word_cut(prose_lang.source(item.get("implication")) or "-", 330),
-                      "caveat": _word_cut(prose_lang.source(item.get("caveat")) or "-", 240),
+                      "observation": _word_cut(prose_lang.source(
+                          item.get("observation"), item.get("observation_en")) or "-", 330),
+                      "implication": _word_cut(prose_lang.source(
+                          item.get("implication"), item.get("implication_en")) or "-", 330),
+                      "caveat": _word_cut(prose_lang.source(
+                          item.get("caveat"), item.get("caveat_en")) or "-", 240),
                       "citations": citations[:4]})
     if not cards:
         return None
@@ -5829,8 +5833,12 @@ def _research_section(intake, page=2):
                              f"Research summary dated {str(as_of)[:40]}."))
     limitations = brief.get("limitations")
     if isinstance(limitations, list) and limitations:
+        # Host sentences: English in data/source_text_en/research.json, but the
+        # withheld cross-reference note is already written in English.
+        from agents.research.run import _WITHHELD_QUARTERLY_LIMITATION as withheld
         paragraphs.append(_t("Batasan: ", "Limitations: ") + "; ".join(
-            _word_cut(prose_lang.source(x), 120) for x in limitations[:4]))
+            _word_cut(prose_lang.source(x, x if x == withheld else None), 120)
+            for x in limitations[:4]))
     return {"halaman": page, "judul": "Ringkasan riset berbantuan AI",
             "layout": "research_cards", "paragraf": paragraphs,
             "research_cards": cards, "exhibit": []}
