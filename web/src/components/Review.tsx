@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { CircleCheck, ClipboardCheck, Eye, KeyRound, TriangleAlert } from "lucide-react";
 import { api, ApiError, type PreviewKind, type ReviewAttestation, type ReviewField, type ReviewView } from "../lib/api";
-import { getLang, LOCALE, useLang, type Bi, type Lang } from "../lib/i18n";
+import { getLang, LOCALE, twin, useLang, type Bi, type Lang } from "../lib/i18n";
 import { Chip } from "./Intel";
 import { CHECK_LABELS, ReviewAttestationForm } from "./ReviewAttestationForm";
 import { useLoad } from "./State";
@@ -81,7 +81,7 @@ const stamp = (at: string | null | undefined, lang: Lang = getLang()) => at ? ne
   dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }) + " WIB" : "—";
 
 function Approved({ view }: { view: ReviewView }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const when = stamp(view.reviewed_at).replace(/ WIB$/, "");
   const history = view.history ?? [];
   const attestation = view.attestation;
@@ -162,7 +162,7 @@ function Approved({ view }: { view: ReviewView }) {
             <tbody>
               {view.edits.map((e) => (
                 <tr key={e.path} className="border-b border-rule-soft align-top">
-                  <td className="py-2 pr-4 text-ink-strong">{e.label}</td>
+                  <td className="py-2 pr-4 text-ink-strong">{twin(e, "label", lang)}</td>
                   <td className="data py-2 pr-4 text-ink-soft">{e.year ?? t({ id: "berjalan", en: "current" })}</td>
                   <td className="data py-2 pr-4 text-right text-ink-soft line-through decoration-ink-faint">{show(e.from, e.unit)}</td>
                   <td className="data py-2 pr-4 text-right font-semibold text-ink-strong">{show(e.to, e.unit)}</td>
@@ -364,17 +364,17 @@ function ReviewForm({ ticker, view, bundleKinds, onDone }: {
                   const when = year === "—" ? t({ id: "tahun berjalan", en: "current year" }) : year;
                   return (
                     <tr key={f.path} className="border-b border-rule-soft align-top">
-                      <td className="px-4 py-2 text-ink-strong" title={f.rationale || undefined}>{f.label}</td>
+                      <td className="px-4 py-2 text-ink-strong" title={twin(f, "rationale", lang) || undefined}>{twin(f, "label", lang)}</td>
                       <td className="data px-4 py-2 text-right text-ink">{show(f.value, f.unit)}</td>
                       <td className="px-4 py-1.5">
-                        <input aria-label={`${f.label} ${when}, ${t({ id: "nilai analis", en: "analyst value" })}`} inputMode="decimal"
+                        <input aria-label={`${twin(f, "label", lang)} ${when}, ${t({ id: "nilai analis", en: "analyst value" })}`} inputMode="decimal"
                           value={d?.value ?? ""} placeholder={two[lang].format(f.value)}
                           onChange={(e) => set(f.path, "value", e.target.value)}
                           className={`${input} h-9 font-mono tabular-nums ${edited ? "border-brand-ink" : ""}`} />
                       </td>
                       <td className="px-4 py-1.5">
                         {edited ? (
-                          <input aria-label={t({ id: `Alasan perubahan ${f.label} ${when}`, en: `Reason for changing ${f.label} ${when}` })} value={d?.reason ?? ""}
+                          <input aria-label={t({ id: `Alasan perubahan ${f.label} ${when}`, en: `Reason for changing ${twin(f, "label", lang)} ${when}` })} value={d?.reason ?? ""}
                             onChange={(e) => set(f.path, "reason", e.target.value)} placeholder={t({ id: "Wajib, minimal 10 karakter", en: "Required, at least 10 characters" })}
                             className={`${input} h-9 ${(d?.reason ?? "").trim().length < 10 ? "border-warn-rule" : ""}`} />
                         ) : <span className="text-[13px] text-ink-faint">—</span>}
@@ -444,7 +444,7 @@ function ReviewForm({ ticker, view, bundleKinds, onDone }: {
         })}</p>
       )}
       {missingReason.length > 0 && (
-        <p className="text-[14px] text-warn-ink">{t({ id: "Isi alasan untuk", en: "Give a reason for" })} {missingReason.map((f) => f.label).join(", ")}.</p>
+        <p className="text-[14px] text-warn-ink">{t({ id: "Isi alasan untuk", en: "Give a reason for" })} {missingReason.map((f) => twin(f, "label", lang)).join(", ")}.</p>
       )}
       {error && <p role="alert" className="text-[14px] text-err-ink">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">

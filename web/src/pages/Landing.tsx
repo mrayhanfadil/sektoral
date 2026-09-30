@@ -102,14 +102,14 @@ function Ledger({ title, body, children }: { title: string; body?: ReactNode; ch
 }
 
 export default function Landing() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const reports = useLoad(api.reports);
   const items = useMemo(() => reports.data ?? [], [reports.data]);
   const featured = featuredReport(items) ?? items.find((i) => i.published);
   const ticker = featured?.ticker;
   const run = useStoredRun(ticker, !reports.loading);
   // The featured run read to its end: its gate verdicts, method chain and release status.
-  const final = useMemo(() => (run.status === "ready" ? derive(run.run.events, { finished: true }) : undefined), [run]);
+  const final = useMemo(() => (run.status === "ready" ? derive(run.run.events, { finished: true, lang }) : undefined), [run, lang]);
 
   return (
     <>
