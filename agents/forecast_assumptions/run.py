@@ -1,6 +1,7 @@
 """Turn dated issuer results and ticker news into auditable scenario assumptions."""
 from __future__ import annotations
 
+import copy
 import math
 import json
 import re
@@ -15,7 +16,7 @@ from agents.analyst.run import _FLOW_PHRASES
 from agents.estimator.run import _chat, _response_text
 from app import bank_model, store
 from app.progress import emit
-from app.scrub import EN_SOFT, english_problems
+from app.scrub import english_problems, normalize_prose
 
 
 DRIVERS = {"revenue_growth_pp", "ebitda_margin_pp", "wacc_bps", "coe_bps", "none"}
@@ -29,9 +30,8 @@ PLAN_COLLECTION = "forecast_plans"
 PLAN_SCHEMA = 5
 # Schema per profile: bumping one profile's plan shape (6: bank drivers with
 # uncertainty ranges) must not discard the stored plans of the others.
-# 7 (bank) and 5 (others): English twins (<field>_en) of every prose field.
-PLAN_SCHEMA_BY_PROFILE = {"financial_ddm": 7}
-PLAN_SCHEMA_DEFAULT = 5
+PLAN_SCHEMA_BY_PROFILE = {"financial_ddm": 6}
+PLAN_SCHEMA_DEFAULT = 4
 
 
 def plan_schema(profile) -> int:
@@ -317,14 +317,15 @@ def _validate(plan, source, require_news_coverage=True):
             if not length_ok:
                 problems.append("interim_scenario needs a concise 40-1400 character rationale")
             if isinstance(rationale, str):
-                problems.extend(_interim_rationale_problems(rationale, official, length_ok))
-                if re.search(r"[一-鿿]", rationale):
-                    problems.append("interim_scenario rationale must use Indonesian text")
+                problems.extend(_interim_rationale_problems(rationale, official, length_ok,
+                                                            indonesian=True))
     return problems
 
 
-def _interim_rationale_problems(rationale, official, length_ok=True):
-    """What an interim rationale must not claim, in either language."""
+def _interim_rationale_problems(rationale, official, length_ok=True, indonesian=False):
+    """What an interim rationale must not claim, in either language. With
+    `indonesian`, also that it holds no Chinese text (its English twin has
+    its own language check, ``app.scrub.english_problems``)."""
     problems = []
     if length_ok and any(
         isinstance(row, dict) and _number(row.get("production"), 1, float("inf"))
@@ -343,6 +344,8 @@ def _interim_rationale_problems(rationale, official, length_ok=True):
                 r"(?:sebesar|sebanyak|senilai|=)\s*[~≈]?[\d])",
                 rationale, flags=re.I)):
         problems.append("interim_scenario invents ending inventory from production minus external sales")
+    if indonesian and re.search(r"[\u4e00-\u9fff]", rationale):
+        problems.append("interim_scenario rationale must use Indonesian text")
     if (not official.get("stockpile_metrics") and re.search(
             r"(?:stockpile|timbunan|penumpukan)[^.\n]{0,55}"
             r"\b\d[\d.,]*\s*(?:Mt|juta ton|dmt)\b",
@@ -822,12 +825,8 @@ def _salvage_titles(scenario):
           and all(isinstance(t, str) and 12 <= len(t.strip()) <= 60 for t in titles))
     if ok:
         scenario["thesis_titles"] = [t.strip().rstrip(".") for t in titles]
-        twins = scenario.get("thesis_titles_en")
-        if isinstance(twins, list) and all(isinstance(t, str) for t in twins):
-            scenario["thesis_titles_en"] = [t.strip().rstrip(".") for t in twins]
         return []
     scenario.pop("thesis_titles", None)
-    scenario.pop("thesis_titles_en", None)
     return ["dropped thesis_titles: must match thesis_points, 12-60 characters each"]
 
 
@@ -857,123 +856,6 @@ def _validate_key_risks(risks, allowed):
             problems.append(f"key_risks[{i}] must cite valid source_ids")
         texts += [str(headline or ""), str(explanation or "")]
     return problems, texts
-
-
-def _advice(text):
-    found = _RECOMMENDATION.search(_FLOW_PHRASES.sub(" ", text))
-    return ([f"must not contain recommendation or target-price language (found "
-             f"'{found.group(0)}')"] if found else [])
-
-
-def _capital(text):
-    return [] if text.strip()[:1].isupper() else ["must start with a capital letter"]
-
-
-def _twin_reasons(text, twin, bounds, rule):
-    """Why `twin` cannot be the English of the Indonesian prose `text`."""
-    reasons = english_problems(text, twin)
-    if reasons:
-        return reasons
-    lower, upper = bounds
-    if not lower <= len(twin.strip()) <= upper:
-        reasons.append(f"must be {lower}-{upper} characters" if upper < math.inf
-                       else f"must be at least {lower} characters")
-    return reasons + (rule(twin) if rule else [])
-
-
-def _english_problems(name, fragment, source, drop=False):
-    """The English twins (``<field>_en``) of a subagent's prose, checked by the
-    rules of their Indonesian fields plus reading English with the same figures.
-
-    Only a field whose Indonesian is present needs a twin. Every problem ends
-    with ``EN_SOFT``. With `drop`, each bad twin is removed so the report
-    quotes its Indonesian instead; a list twin goes whole, as it must stay
-    parallel to its Indonesian list."""
-    problems = []
-    if not isinstance(fragment, dict):
-        return problems
-
-    def twin(host, key, path, bounds=(1, math.inf), rule=None):
-        text = host.get(key)
-        if isinstance(text, str) and text.strip():
-            reasons = _twin_reasons(text, host.get(f"{key}_en"), bounds, rule)
-        else:
-            reasons = []
-        if reasons:
-            problems.append(f"{path}.{key}_en {'; '.join(reasons)}{EN_SOFT}")
-        if drop and (reasons or not isinstance(text, str)):
-            host.pop(f"{key}_en", None)
-
-    def twin_list(host, key, path, bounds, rule=None):
-        items, twins = host.get(key), host.get(f"{key}_en")
-        reasons = []
-        if isinstance(items, list) and items:
-            if twins is None:
-                reasons = ["is missing"]
-            elif not isinstance(twins, list) or len(twins) != len(items):
-                reasons = [f"must hold one English twin per {key} item, in the same order"]
-            else:
-                reasons = [f"[{i}] {'; '.join(found)}" for i, (text, en) in
-                           enumerate(zip(items, twins)) if isinstance(text, str)
-                           for found in [_twin_reasons(text, en, bounds, rule)] if found]
-        if reasons:
-            problems.append(f"{path}.{key}_en {'; '.join(reasons)}{EN_SOFT}")
-        if drop and (reasons or not isinstance(items, list) or not items):
-            host.pop(f"{key}_en", None)
-
-    if name == "news":
-        for i, item in enumerate(fragment.get("news_effects") or []):
-            if not isinstance(item, dict):
-                continue
-            path = f"news_effects[{i}]"
-            twin(item, "rationale", path, (20, math.inf))
-            # Fact, mechanism and uncertainty have a length rule only on a nonzero effect.
-            floor = 12 if item.get("driver") != "none" else 1
-            for key in ("factual_basis", "mechanism", "uncertainty"):
-                twin(item, key, path, (floor, math.inf))
-            twin(item, "conditions", path)
-    elif name == "interim":
-        scenario = fragment.get("interim_scenario")
-        if isinstance(scenario, dict):
-            official = source.get("official") or {}
-            twin(scenario, "rationale", "interim_scenario", (40, 1400),
-                 lambda text: _interim_rationale_problems(text, official))
-    elif name == "earnings":
-        scenario = fragment.get("earnings_scenario")
-        if isinstance(scenario, dict):
-            path = "earnings_scenario"
-            # The advice rule covers what _validate_thesis reads: rationale,
-            # thesis points, catalysts and risks.
-            twin(scenario, "rationale", path, (40, 1400), _advice)
-            twin_list(scenario, "thesis_points", path, (40, 280), _advice)
-            twin_list(scenario, "thesis_titles", path, (12, 60))
-            for i, item in enumerate(scenario.get("catalysts_risks") or []):
-                if isinstance(item, dict):
-                    for key, bounds in (("item", (8, 90)), ("timing", (4, 120)),
-                                        ("driver_path", (30, 280))):
-                        twin(item, key, f"{path}.catalysts_risks[{i}]", bounds, _advice)
-            for i, risk in enumerate(scenario.get("key_risks") or []):
-                if isinstance(risk, dict):
-                    twin(risk, "headline", f"{path}.key_risks[{i}]", (8, 70),
-                         lambda text: _capital(text) + _advice(text))
-                    twin(risk, "explanation", f"{path}.key_risks[{i}]", (80, 450), _advice)
-            if isinstance(scenario.get("bank_drivers"), dict):
-                twin(scenario["bank_drivers"], "rationale", f"{path}.bank_drivers", (40, 450))
-    elif name == "outyears":
-        key = "bank_outyear_scenario" if "bank_outyear_scenario" in fragment else "outyear_scenario"
-        for row in fragment.get(key) or []:
-            if isinstance(row, dict):
-                twin(row, "rationale", f"{key}[{row.get('year')}]", (40, 450))
-    elif name == "stage":
-        from app import stage as _stage
-        classification = fragment.get("stage_classification")
-        if isinstance(classification, dict):
-            # The same problems _validate_stage reports (app.stage owns the check).
-            found = _stage.rationale_en_problems(classification, required=True)
-            problems += found
-            if drop and found:
-                classification.pop("rationale_en", None)
-    return problems
 
 
 def _earnings_anchor(source, earnings):
@@ -1022,8 +904,7 @@ def _validate_stage(payload, source):
     if annuals:
         # The Sectors annual history is supplied and the decline rule reads it.
         allowed.add("annuals")
-    ok, errors, _ = _stage.validate(payload, annuals, allowed_sources=allowed,
-                                    require_english=True)
+    ok, errors, _ = _stage.validate(payload, annuals, allowed_sources=allowed)
     return errors
 
 
@@ -1052,12 +933,10 @@ def _bank_row(row):
     over 450 characters is cut to whole sentences (length only, as the stage
     rationale); its content is still validated."""
     out = {key: row[key] for key in ("year", *bank_model.DRIVERS, *bank_model.OPTIONAL_DRIVERS,
-                                     "uncertainty_ranges", "rationale", "rationale_en",
-                                     "source_ids")
+                                     "uncertainty_ranges", "rationale", "source_ids")
            if key in row}
-    for key in ("rationale", "rationale_en"):
-        if isinstance(out.get(key), str) and len(out[key].strip()) > 450:
-            out[key] = _trim_sentences(out[key], 450)
+    if isinstance(out.get("rationale"), str) and len(out["rationale"].strip()) > 450:
+        out["rationale"] = _trim_sentences(out["rationale"], 450)
     return out
 
 
@@ -1088,41 +967,6 @@ _BANK_ENGINE = (
     "fact; separate reported facts from judgment in the rationale.")
 
 
-# Every prose field comes back in Indonesian and in English from the same call.
-_ENGLISH_TWINS = (
-    "English twins: every prose field you write in Indonesian also gets an English version "
-    "in the same object, under the same key with the suffix _en (rationale_en, "
-    "factual_basis_en, mechanism_en, uncertainty_en, conditions_en, item_en, timing_en, "
-    "driver_path_en, headline_en, explanation_en); a list of sentences gets a parallel list of "
-    "the same length and order (thesis_points_en, thesis_titles_en). The English says the "
-    "same thing in plain English and obeys the same length and wording rules as its "
-    "Indonesian field; in English never write buy, sell, hold, overweight, underweight or "
-    "'target price', even in another sense (write 'maintain' or 'keep', not 'hold'). It "
-    "states exactly the figures of the Indonesian field, adding or dropping none, written "
-    "exactly as in the Indonesian, in Indonesian number format (12,4%, Rp1.234,5 billion, "
-    "1H26, 25 bps; never 12.4% or Rp1,234.5 billion): the report formats them for English "
-    "readers. No Indonesian clause and no source ids in the English. Codes and provenance "
-    "stay single: driver, direction, category, source_ids, source titles, URLs and "
-    "full_text_quote have no _en twin.")
-_ENGLISH_REPAIR = (
-    "Fix every English twin (<field>_en) named in the errors, or add it where it is missing: "
-    "plain English, the length rule of its Indonesian field, and exactly the Indonesian "
-    "field's figures written as in the Indonesian (Indonesian number format). Keep the "
-    "Indonesian fields unless an error names them.")
-# The thesis, catalysts and risks of both earnings roles, with their twins.
-_THESIS_SHAPE = {
-    "thesis_points": ["Indonesian sentence"],
-    "thesis_points_en": ["its English twin, same order"],
-    "thesis_titles": ["short title"], "thesis_titles_en": ["its English twin, same order"],
-    "catalysts_risks": [{"item": "text", "item_en": "English twin", "timing": "text",
-                         "timing_en": "English twin", "driver_path": "text",
-                         "driver_path_en": "English twin", "direction": "Negatif",
-                         "source_ids": ["official"]}],
-    "key_risks": [{"category": "Pendanaan", "headline": "text", "headline_en": "English twin",
-                   "explanation": "text", "explanation_en": "English twin",
-                   "source_ids": ["official"]}]}
-
-
 def _bank_earnings_role(source):
     """The Bank Driver Scenario role for the interim year (H2 drivers)."""
     year = source["bank"]["reference"]["interim_year"]
@@ -1136,7 +980,7 @@ def _bank_earnings_role(source):
         "cost_of_credit_pct (H2 provisions / average gross loans, annualised %), "
         "deposit_growth_pct (optional FY %, null keeps the historical LDR), rationale (Indonesian, "
         "40-450 characters: two or three short sentences naming the evidence behind the "
-        "drivers), rationale_en (its English twin), source_ids}. Bounds: loan and "
+        "drivers), source_ids}. Bounds: loan and "
         "deposit growth [-20,40], NIM [0.5,15], non-interest ratio [0,150], cost-to-income "
         "[10,90], cost of credit [0,10]. Also return uncertainty_ranges keyed by every numeric "
         "driver field. Each value must be {driver: the exact same canonical field name, low: "
@@ -1193,11 +1037,15 @@ def _bank_earnings_role(source):
                                         "high: finite number, unit: %}; omit deposit_growth_pct "
                                         "when its center is null"),
                                     "rationale": "Indonesian text, 40-450 characters",
-                                    "rationale_en": "its English twin",
                                     "source_ids": ["official"]},
-                   "rationale": "Indonesian text", "rationale_en": "its English twin",
-                   "source_ids": ["official"],
-                   **_THESIS_SHAPE}}}
+                   "rationale": "Indonesian text", "source_ids": ["official"],
+                   "thesis_points": ["Indonesian sentence"],
+                   "thesis_titles": ["short title"],
+                   "catalysts_risks": [{"item": "text", "timing": "text",
+                                        "driver_path": "text", "direction": "Negatif",
+                                        "source_ids": ["official"]}],
+                   "key_risks": [{"category": "Pendanaan", "headline": "text",
+                                  "explanation": "text", "source_ids": ["official"]}]}}}
     return role, payload
 
 
@@ -1213,8 +1061,7 @@ def _bank_outyear_role(source, anchor, news_effects):
         "cost_to_income_pct (operating expense / NII + non-interest income, %), "
         "cost_of_credit_pct (provisions / average gross loans, %), deposit_growth_pct "
         "(optional %, null keeps the historical LDR), rationale (Indonesian, 40-450 "
-        "characters, at most two short sentences), rationale_en (its English twin), "
-        "source_ids chosen from [\"official\", "
+        "characters, at most two short sentences), source_ids chosen from [\"official\", "
         "\"news:0\", ..., \"guidance:0\", ...] and always including \"official\". Bounds: loan "
         "and deposit growth [-20,40], NIM [0.5,15], non-interest ratio [0,150], cost-to-income "
         "[10,90], cost of credit [0,10]. Also return uncertainty_ranges keyed by every numeric "
@@ -1249,7 +1096,7 @@ def _bank_outyear_role(source, anchor, news_effects):
                        "field name, low: finite number, high: finite number, unit: %}; omit "
                        "deposit_growth_pct when its center is null"),
                    "rationale": "Indonesian text, 40-450 characters",
-                   "rationale_en": "its English twin", "source_ids": ["official"]}]}}
+                   "source_ids": ["official"]}]}}
     return role, payload
 
 
@@ -1263,7 +1110,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
         "object only, without reasoning text, recommendation, or published TP. "
         "Tulis seluruh rationale, factual_basis, mechanism, dan uncertainty "
         "dalam Bahasa Indonesia sesuai instruksi laporan; pertahankan judul "
-        "sumber persis seperti artikel asli. " + _ENGLISH_TWINS + " "
+        "sumber persis seperti artikel asli. "
         "Your figures are analyst scenario judgments, never reported facts. "
         "The supplied normalized evidence_register is the dated evidence snapshot "
         "for this run. Use only its eligible rows alongside the matching official/news "
@@ -1278,9 +1125,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "one item per supplied article, including irrelevant articles. Each item "
             "requires article_index, exact "
             "source_url, exact title, exact timestamp, driver, change, years, "
-            "factual_basis, mechanism, uncertainty, rationale, and the English "
-            "twins rationale_en, factual_basis_en, mechanism_en, uncertainty_en "
-            "(conditions_en beside conditions). Chain each nonzero "
+            "factual_basis, mechanism, uncertainty, rationale. Chain each nonzero "
             "item as published fact -> expected timing/condition -> profile driver "
             "-> annual assumption: optionally add event_date (YYYY-MM-DD expected "
             "milestone date, may be future when the announcement was already public), "
@@ -1332,8 +1177,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "reported H1 cathode or refined-gold output before describing when "
             "the smelter began operating. Do not infer a numeric stockpile from "
             "mined ore less mill throughput without a stockpile reconciliation. "
-            "Keep rationale to 4-6 short Indonesian sentences, at most 1400 characters, "
-            "and add rationale_en, its English twin. "
+            "Keep rationale to 4-6 short Indonesian sentences, at most 1400 characters. "
             "Return null if the evidence is insufficient."
         )
         payload = {"ticker": source["ticker"], "as_of": source["as_of"],
@@ -1408,8 +1252,16 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        **({"fy_ebitda_margin_pct": "number",
                            "fy_capex_to_revenue_pct": "number"}
                           if source.get("model_profile") == "going_concern_fcff" else {}),
-                       "rationale": "Indonesian text", "rationale_en": "its English twin",
-                       "source_ids": ["official"], **_THESIS_SHAPE}}}
+                       "rationale": "Indonesian text", "source_ids": ["official"],
+                       "thesis_points": ["Indonesian sentence"],
+                       "thesis_titles": ["short title"],
+                       "catalysts_risks": [{"item": "text", "timing": "text",
+                                            "driver_path": "text",
+                                            "direction": "Negatif",
+                                            "source_ids": ["official"]}],
+                       "key_risks": [{"category": "Pendanaan",
+                                      "headline": "text", "explanation": "text",
+                                      "source_ids": ["official"]}]}}}
     elif name == "stage":
         role = (
             "Role: STAGE CLASSIFIER. Return {\"stage_classification\": object}. "
@@ -1417,7 +1269,6 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "(pre_revenue | high_growth_pre_profit | mature | decline), "
             "has_steady_state_3y (boolean), commodity_price_driven (boolean, true ONLY for extractive finite-reserve: coal/nickel/CPO/oil/gold/copper; poultry/food input sensitivity is false), "
             "dissimilar_segments (int 1-10), rationale (Bahasa Indonesia 40-600 karakter), "
-            "rationale_en (its English twin, 40-600 characters), "
             "source_ids ([\"official\", \"annuals\", \"news:0\", ...]). Default konservatif mature/true/false/1; "
             "non-default wajib mengutip official atau artikel bertanggal. "
             "Decline butuh revenue annuals turun atau restrukturisasi bersumber. "
@@ -1434,7 +1285,6 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "life_cycle_stage": "mature", "has_steady_state_3y": True,
                        "commodity_price_driven": False, "dissimilar_segments": 1,
                        "rationale": "Indonesian text 40-600 chars",
-                       "rationale_en": "its English twin, 40-600 chars",
                        "source_ids": ["official"]}}}
     else:
         role = (
@@ -1443,8 +1293,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
             "Return {\"outyear_scenario\": [four rows]}. Each row requires year, "
             "revenue_growth_pct [-30,30], ebitda_margin_pct [0,85], "
             "net_income_margin_pct [-30,60], capex_to_revenue_pct [0,60], "
-            "rationale (40-450 characters in Indonesian), rationale_en (its English twin), "
-            "source_ids. Use only the supplied official release, annual "
+            "rationale (40-450 characters in Indonesian), source_ids. Use only the supplied official release, annual "
             "actuals, guidance, operations, mine-life milestones, and dated news. "
             "source_ids must be selected from [\"official\", \"news:0\", ...]. "
             "Do not invent annual production, grade, recovery, price deck, costs, "
@@ -1508,7 +1357,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                        "ebitda_margin_pct": "number", "net_income_margin_pct": "number",
                        "capex_to_revenue_pct": "number",
                        "rationale": "Indonesian text, 40-450 characters",
-                       "rationale_en": "its English twin", "source_ids": ["official"]}]}}
+                       "source_ids": ["official"]}]}}
         attempts = 3
     # Earnings carries thesis, catalysts and risks on the longest news input.
     if name not in ("outyears", "earnings"):
@@ -1552,8 +1401,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     keys = (("bank_drivers",) if bank else
                             ("h2_revenue_to_h1", "h2_net_margin_pct", *FY_DCF_FIELDS))
                     scenario = {key: scenario[key] for key in (
-                        *keys, "rationale", "rationale_en", "source_ids", "thesis_points",
-                        "thesis_points_en", "thesis_titles", "thesis_titles_en",
+                        *keys, "rationale", "source_ids", "thesis_points", "thesis_titles",
                         "catalysts_risks", "key_risks")
                                 if key in scenario}
                     if bank and isinstance(scenario.get("bank_drivers"), dict):
@@ -1607,10 +1455,9 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     sc = {k: sc[k] for k in (
                         "life_cycle_stage", "has_steady_state_3y",
                         "commodity_price_driven", "dissimilar_segments",
-                        "rationale", "rationale_en", "source_ids") if k in sc}
-                    for key in ("rationale", "rationale_en"):
-                        if isinstance(sc.get(key), str):
-                            sc[key] = _trim_sentences(sc[key], 600)
+                        "rationale", "source_ids") if k in sc}
+                    if isinstance(sc.get("rationale"), str):
+                        sc["rationale"] = _trim_sentences(sc["rationale"], 600)
                     fragment = {"stage_classification": sc}
                     problems = _validate_stage(sc, source)
             elif name == "outyears" and _bank_mode(source):
@@ -1647,8 +1494,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     if isinstance(interim, dict):
                         interim = {key: interim[key] for key in (
                             "h2_revenue_to_h1", "h2_ebitda_margin_pct",
-                            "h2_net_margin_pct", "h2_capex_to_h1", "rationale",
-                            "rationale_en")
+                            "h2_net_margin_pct", "h2_capex_to_h1", "rationale")
                                    if key in interim}
                         fragment["interim_scenario"] = interim
                         interim["source_url"] = source["official"]["source_url"]
@@ -1656,9 +1502,6 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     problems = _validate({"news_effects": [],
                                           "interim_scenario": interim}, source,
                                          require_news_coverage=False)
-            if isinstance(fragment, dict):
-                problems += [p for p in _english_problems(name, fragment, source)
-                             if p not in problems]
         if not problems:
             break
         if attempt + 1 < attempts:
@@ -1670,8 +1513,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     "validation error. Keep the same four consecutive years and preserve the "
                     "drivers unless an error names them; a driver far from the issuer's record "
                     "either moves back within the tolerance or cites the dated article or "
-                    "guidance that supports it. Rationale in Indonesian, 40-450 characters, "
-                    "with its English twin rationale_en. "
+                    "guidance that supports it. Rationale in Indonesian, 40-450 characters. "
                     "Do not invent sources. Errors: " + json.dumps(problems, ensure_ascii=False))
             elif name == "outyears":
                 repair = (
@@ -1680,8 +1522,7 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                     "rows for the same consecutive years and preserve the numeric "
                     "assumptions unless an error names them. Rewrite each rationale "
                     "in Indonesian, 40-450 characters, and remove any Chinese or other "
-                    "non-Indonesian text from it; its twin rationale_en stays English. "
-                    "Keep source_ids valid and do not add sources. Errors: " +
+                    "non-Indonesian text. Keep source_ids valid and do not add sources. Errors: " +
                     json.dumps(problems, ensure_ascii=False))
             else:
                 repair = ("Repair the candidate as ONE valid JSON object. Errors: " +
@@ -1689,19 +1530,10 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                           (". Preserve exact source URL, title, and timestamp. "
                            if name == "news" else ". Keep numerical assumptions and rationale source-grounded. ") +
                           "Do not invent sources.")
-            if any(str(p).endswith(EN_SOFT) for p in problems):
-                repair += " " + _ENGLISH_REPAIR
             messages.append({"role": "user", "content":
                              repair})
-    english_dropped = []
-    if problems and fragment and all(str(p).endswith((DCF_SOFT, EN_SOFT)) for p in problems):
-        # The Indonesian is valid: drop what is still wrong in the optional
-        # parts (DCF drivers, English twins) and keep the rest.
-        dcf = [p for p in problems if str(p).endswith(DCF_SOFT)]
-        if dcf:
-            _drop_dcf_fields(name, fragment, dcf)
-        if len(dcf) < len(problems):
-            english_dropped = _english_problems(name, fragment, source, drop=True)
+    if problems and fragment and all(str(p).endswith(DCF_SOFT) for p in problems):
+        _drop_dcf_fields(name, fragment, problems)
         problems = []
     if problems:
         return {"status": "invalid", "fragment": None, "problems": problems}
@@ -1711,12 +1543,252 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                "official_evidence_and_annuals" if name == "stage" else
                "sectors_and_tavily_news")
     fragment = _normalize_prose(fragment)
-    result = {"status": "validated", "fragment": fragment, "problems": [],
-              "provenance_binding": binding}
-    if english_dropped:
-        # The report falls back to Indonesian for these fields.
-        result["english_dropped"] = english_dropped
-    return result
+    return {"status": "validated", "fragment": fragment, "problems": [],
+            "provenance_binding": binding}
+
+
+# ---------------------------------------------------------------------------
+# English twins, translated after the plan validates.
+#
+# The subagents write Indonesian only. ``translate_plan`` then asks the model,
+# in calls of its own, for the English of every prose field of the validated
+# plan and attaches each one that passes its checks as a ``<field>_en``
+# sibling. It never changes an Indonesian value and never fails the run: a
+# twin it cannot get is left out and the English report quotes the
+# Indonesian instead.
+
+
+def _advice(text):
+    found = _RECOMMENDATION.search(_FLOW_PHRASES.sub(" ", text))
+    return ([f"must not contain recommendation or target-price language (found "
+             f"'{found.group(0)}')"] if found else [])
+
+
+def _capital(text):
+    return [] if text.strip()[:1].isupper() else ["must start with a capital letter"]
+
+
+def _twin_reasons(text, twin, bounds, rule):
+    """Why `twin` cannot be the English of the Indonesian prose `text`."""
+    reasons = english_problems(text, twin)
+    if reasons:
+        return reasons
+    lower, upper = bounds
+    if not lower <= len(twin.strip()) <= upper:
+        reasons.append(f"must be {lower}-{upper} characters" if upper < math.inf
+                       else f"must be at least {lower} characters")
+    return reasons + (rule(twin) if rule else [])
+
+
+class _Prose:
+    """One Indonesian prose value of a plan: ``host[key]``, or item ``index``
+    of the list ``host[key]``, with the length bounds and wording rule of its
+    Indonesian field."""
+
+    def __init__(self, path, host, key, index=None, bounds=(1, math.inf), rule=None):
+        self.path, self.host, self.key, self.index = path, host, key, index
+        self.bounds, self.rule = bounds, rule
+
+    @property
+    def text(self):
+        value = self.host[self.key]
+        return value[self.index] if self.index is not None else value
+
+
+def _prose_fields(plan, official=None):
+    """Every prose field of a Forecast Plan that gets an English twin, in plan order.
+
+    Codes and provenance stay single: driver, direction, category, source ids,
+    source titles, URLs and quotes have no twin."""
+    fields = []
+
+    def add(host, key, path, bounds=(1, math.inf), rule=None):
+        if isinstance(host, dict) and isinstance(host.get(key), str) and host[key].strip():
+            fields.append(_Prose(f"{path}.{key}", host, key, bounds=bounds, rule=rule))
+
+    def add_list(host, key, path, bounds, rule=None):
+        items = host.get(key)
+        if (isinstance(items, list) and items and
+                all(isinstance(item, str) and item.strip() for item in items)):
+            fields.extend(_Prose(f"{path}.{key}[{i}]", host, key, index=i, bounds=bounds,
+                                 rule=rule) for i in range(len(items)))
+
+    if not isinstance(plan, dict):
+        return fields
+    for i, item in enumerate(plan.get("news_effects") or []):
+        if isinstance(item, dict):
+            path = f"news_effects[{i}]"
+            add(item, "rationale", path, (20, math.inf))
+            # Fact, mechanism and uncertainty have a length rule only on a nonzero effect.
+            floor = 12 if item.get("driver") != "none" else 1
+            for key in ("factual_basis", "mechanism", "uncertainty"):
+                add(item, key, path, (floor, math.inf))
+            add(item, "conditions", path)
+    add(plan.get("interim_scenario"), "rationale", "interim_scenario", (40, 1400),
+        lambda en: _interim_rationale_problems(en, official or {}))
+    scenario = plan.get("earnings_scenario")
+    if isinstance(scenario, dict):
+        path = "earnings_scenario"
+        # The advice rule covers what _validate_thesis reads: rationale,
+        # thesis points, catalysts and risks.
+        add(scenario, "rationale", path, (40, 1400), _advice)
+        add_list(scenario, "thesis_points", path, (40, 280), _advice)
+        add_list(scenario, "thesis_titles", path, (12, 60))
+        for i, item in enumerate(scenario.get("catalysts_risks") or []):
+            for key, bounds in (("item", (8, 90)), ("timing", (4, 120)),
+                                ("driver_path", (30, 280))):
+                add(item, key, f"{path}.catalysts_risks[{i}]", bounds, _advice)
+        for i, risk in enumerate(scenario.get("key_risks") or []):
+            add(risk, "headline", f"{path}.key_risks[{i}]", (8, 70),
+                lambda en: _capital(en) + _advice(en))
+            add(risk, "explanation", f"{path}.key_risks[{i}]", (80, 450), _advice)
+        add(scenario.get("bank_drivers"), "rationale", f"{path}.bank_drivers", (40, 450))
+    for key in ("outyear_scenario", "bank_outyear_scenario"):
+        for i, row in enumerate(plan.get(key) or []):
+            add(row, "rationale", f"{key}[{i}]", (40, 450))
+    # app.stage checks the same rule when it reads the plan.
+    add(plan.get("stage_classification"), "rationale", "stage_classification", (40, 600))
+    return fields
+
+
+_TRANSLATOR = (
+    "Role: PLAN TRANSLATOR. You translate the Indonesian prose of a validated equity "
+    "research forecast plan into English for the English edition of the same report. The "
+    "user message is one JSON object {path: Indonesian text}. Return ONE JSON object "
+    "{path: English text} with exactly the same paths and nothing else: no reasoning text, "
+    "no other keys. Every English text says the same thing in plain English, with no "
+    "Indonesian word or clause and no source ids. It states exactly the figures of its "
+    "Indonesian, adding or dropping none, written exactly as in the Indonesian, in "
+    "Indonesian number format (12,4%, Rp1.234,5 billion, 1H26, 25 bps; never 12.4% or "
+    "Rp1,234.5 billion): the report formats them for English readers. Never write buy, sell, "
+    "hold, overweight, underweight or 'target price', even in another sense (write "
+    "'maintain' or 'keep', not 'hold'). Codes, periods and names (3Q26, FY2026, 2H26, NIM, "
+    "Bank Indonesia) stay as written; a text that is only a code or a name comes back "
+    "unchanged. A key_risks headline starts with a capital letter. Keep each text within "
+    "its character limits: ")
+# Indonesian characters per translation call: the English of one call must fit
+# the completion budget with room for the model's thinking.
+TRANSLATE_BATCH_CHARS = 6000
+
+
+def _batches(fields):
+    batch, size = [], 0
+    for field in fields:
+        if batch and size + len(field.text) > TRANSLATE_BATCH_CHARS:
+            yield batch
+            batch, size = [], 0
+        batch.append(field)
+        size += len(field.text)
+    if batch:
+        yield batch
+
+
+def _ask(chat, fields, follow_up=()):
+    """One translation call for ``fields``: ``{path: English}``, or it raises."""
+    limits = {f.path: (f"{f.bounds[0]}-{f.bounds[1]}" if f.bounds[1] < math.inf
+                       else f"at least {f.bounds[0]}") for f in fields}
+    messages = [{"role": "system", "content": _TRANSLATOR + json.dumps(limits)},
+                {"role": "user", "content": json.dumps({f.path: f.text for f in fields},
+                                                       ensure_ascii=False)},
+                *follow_up]
+    raw, finish_reason = _response_text(chat(messages, max_tokens=16384,
+                                             reasoning_effort="low"))
+    if finish_reason == "length":
+        raise ValueError("translation cut off (finish_reason=length)")
+    answer = _decode_response(raw)
+    if not isinstance(answer, dict):
+        raise ValueError("translation is not an object")
+    return answer
+
+
+def translate_plan(plan, chat=None, official=None):
+    """The English twins of a validated Forecast Plan, from calls of their own.
+
+    Returns ``(plan_with_twins, notes)``. Every prose field (``_prose_fields``)
+    goes out as ``{path: Indonesian}`` in as few calls as fit
+    ``TRANSLATE_BATCH_CHARS`` and comes back as ``{path: English}``. Each
+    answer is checked like the Indonesian field it translates
+    (``app.scrub.english_problems``, the field's length bounds and wording
+    rule); the failing paths get one repair call, and a twin still wrong after
+    it is left out. A parallel list (``thesis_points``, ``thesis_titles``) gets
+    its twin whole or not at all. `official` is the official release the
+    interim rule reads. Twins the plan already had are replaced.
+
+    No Indonesian value changes. A failed call (an exception, a reply that is
+    not a JSON object, one cut off at ``finish_reason == "length"``) leaves its
+    fields without twins, and when nothing could be attached the plan comes
+    back unchanged. ``notes``: ``status`` (``translated``, ``partial``,
+    ``failed`` or ``nothing_to_translate``), ``fields``, ``attached``,
+    ``calls``, ``dropped`` (twins that failed their checks) and ``problems``
+    (failed calls)."""
+    chat = chat or _chat
+    out = copy.deepcopy(plan)
+    fields = _prose_fields(out, official)
+    for field in fields:
+        field.host.pop(f"{field.key}_en", None)
+    notes = {"status": "nothing_to_translate", "fields": len(fields), "attached": 0,
+             "calls": 0, "dropped": [], "problems": []}
+    if not fields:
+        return plan, notes
+    english, reasons = {}, {}
+
+    def ask(batch, follow_up=(), label=""):
+        notes["calls"] += 1
+        try:
+            answer = _ask(chat, batch, follow_up)
+        except Exception as error:  # noqa: BLE001 — the plan stands without these twins
+            notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
+                                     f"{type(error).__name__}: {str(error)[:180]}")
+            return
+        for field in batch:
+            found = _twin_reasons(field.text, answer.get(field.path), field.bounds, field.rule)
+            if found:
+                reasons[field.path] = found
+            else:
+                english[field.path] = answer[field.path]
+                reasons.pop(field.path, None)
+
+    for batch in _batches(fields):
+        ask(batch)
+    for batch in _batches([f for f in fields if f.path in reasons]):
+        errors = json.dumps({f.path: reasons[f.path] for f in batch}, ensure_ascii=False)
+        previous = json.dumps({f.path: english.get(f.path) for f in batch}, ensure_ascii=False)
+        ask(batch, ({"role": "assistant", "content": previous},
+                    {"role": "user", "content":
+                     "These English texts failed the checks. Return ONE JSON object {path: "
+                     "English text} for exactly these paths, fixing every error: " + errors}),
+            label="repair ")
+    notes["dropped"] = [f"{path}: {'; '.join(found)}" for path, found in reasons.items()]
+    lists = {}
+    for field in fields:
+        if field.index is not None:
+            lists.setdefault((id(field.host), field.key), []).append(field)
+        elif field.path in english:
+            field.host[f"{field.key}_en"] = normalize_prose(english[field.path], english=True)
+            notes["attached"] += 1
+    for items in lists.values():
+        if all(f.path in english for f in items):
+            items[0].host[f"{items[0].key}_en"] = [
+                normalize_prose(english[f.path], english=True) for f in items]
+            notes["attached"] += len(items)
+        elif any(f.path in reasons for f in items):
+            notes["dropped"].append(f"{items[0].path.rsplit('[', 1)[0]}: every item needs its "
+                                    "English, so the list stays Indonesian")
+    if not notes["attached"]:
+        notes["status"] = "failed"
+        return plan, notes
+    notes["status"] = "translated" if notes["attached"] == len(fields) else "partial"
+    return out, notes
+
+
+def _translation_event(notes):
+    if notes.get("status") in (None, "nothing_to_translate"):
+        return
+    done = notes.get("status") == "translated"
+    emit("forecast", "Terjemahan Inggris rencana forecast",
+         f"{notes.get('attached', 0)}/{notes.get('fields', 0)} teks"
+         + ("" if done else "; sisanya tetap berbahasa Indonesia"),
+         status="ok" if done else "warn", agent="forecast.translate")
 
 
 SUBAGENT_LABELS = {"news": "Dampak berita", "interim": "Skenario interim",
@@ -1849,19 +1921,26 @@ def run_live(intake):
             r["status"] == "validated" for r in results.values()) else "invalid")
         if status == "invalid":
             plan = None
-    return {"status": status, "plan": plan, "problems": problems,
-            "interim_status": (results.get("interim") or {}).get("status", "not_run"),
-            "earnings_status": (results.get("earnings") or {}).get("status", "not_run"),
-            "outyears_status": (results.get("outyears") or {}).get("status", "not_run"),
-            "stage_status": (results.get("stage") or {}).get("status", "not_run"),
-            "subagents": {name: {"status": result["status"],
-                                 "problems": result["problems"],
-                                 **({"english_dropped": result["english_dropped"]}
-                                    if result.get("english_dropped") else {})}
-                          for name, result in results.items()},
-            "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
-            "spec_sha256": spec_sha256,
-            "model_effort": "high; 16384 completion tokens per subagent"}
+    translation = None
+    if plan:
+        # The English twins come after the Indonesian validated, from calls of
+        # their own; a failure leaves the plan Indonesian only.
+        plan, translation = translate_plan(plan, official=source.get("official"))
+        _translation_event(translation)
+    outcome = {"status": status, "plan": plan, "problems": problems,
+               "interim_status": (results.get("interim") or {}).get("status", "not_run"),
+               "earnings_status": (results.get("earnings") or {}).get("status", "not_run"),
+               "outyears_status": (results.get("outyears") or {}).get("status", "not_run"),
+               "stage_status": (results.get("stage") or {}).get("status", "not_run"),
+               "subagents": {name: {"status": result["status"],
+                                    "problems": result["problems"]}
+                             for name, result in results.items()},
+               "spec_path": str(SPEC_PATH.relative_to(SPEC_PATH.parents[1])),
+               "spec_sha256": spec_sha256,
+               "model_effort": "high; 16384 completion tokens per subagent"}
+    if translation is not None:
+        outcome["translation"] = translation
+    return outcome
 
 
 def evidence_fingerprint(source, spec_sha256):
@@ -1904,6 +1983,17 @@ def run_cached(intake, refresh=False, db=None):
     if not refresh:
         stored = store.get(PLAN_COLLECTION, key, db)
         if isinstance(stored, dict) and stored.get("plan"):
+            if (stored.get("translation") or {}).get("status") in (None, "failed"):
+                # Stored before its English was translated, or the translation
+                # failed: translate now and keep the twins under the same key.
+                # The Indonesian, and so the fingerprint, stay as they are.
+                plan, translation = translate_plan(
+                    stored["plan"], official=_source_payload(intake).get("official"))
+                _translation_event(translation)
+                stored["translation"] = translation
+                if translation["status"] != "failed":
+                    stored["plan"] = plan
+                    store.put(PLAN_COLLECTION, key, stored, db)
             stored["reused"] = True
             emit("forecast", "Rencana forecast dipakai ulang", "bukti sama dengan run sebelumnya")
             for name, sub in (stored.get("subagents") or {}).items():

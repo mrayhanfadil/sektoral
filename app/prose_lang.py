@@ -161,6 +161,22 @@ def reads_english(text) -> bool:
     return not _INDONESIAN.search(text) or bool(_ENGLISH.search(text))
 
 
+# A run of letters, for telling codes and names from prose.
+_LETTERS = re.compile(r"[^\W\d_]+")
+
+
+def language_neutral(text) -> bool:
+    """True when agent-written text is the same in both languages: codes, periods,
+    figures and names ("3Q26", "FY2026", "2H26", "Bank Indonesia"), with no
+    function word of either language and no lowercase word. Its English twin may
+    repeat it; a twin repeating Indonesian prose ("Penurunan suku bunga") may not."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+    if _INDONESIAN.search(text) or _ENGLISH.search(text):
+        return False
+    return all(word[0].isupper() for word in _LETTERS.findall(text))
+
+
 def _pair(id_text, en_text):
     """The English twin of one prose string, or None when it may not be attached."""
     if not isinstance(id_text, str) or not isinstance(en_text, str) or not en_text.strip():

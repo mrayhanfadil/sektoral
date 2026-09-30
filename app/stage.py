@@ -54,7 +54,7 @@ def _latest(annuals, key):
 def rationale_en_problems(payload: dict, required=False) -> list[str]:
     """The English twin of the rationale: English, 40-600 characters, the
     Indonesian's figures. Each problem ends with ``EN_SOFT``; a missing twin
-    is one only when `required` (the agent must write it, stored plans need not)."""
+    is one only when `required` (a stored plan need not carry one)."""
     rationale = payload.get("rationale")
     if not isinstance(rationale, str) or not rationale.strip() or (
             "rationale_en" not in payload and not required):
