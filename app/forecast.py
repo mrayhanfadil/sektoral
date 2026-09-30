@@ -20,7 +20,8 @@ def _interim_scenario(intake, plan):
     actual = intake.get("latest_official_actual") or {}
     scenario_profile = intake.get("analyst_scenario") or {}
     if isinstance(scenario, dict) and scenario_profile.get("forecast_rationale"):
-        scenario = {**scenario,
+        # The curated rationale replaces the model's, so its English twin goes too.
+        scenario = {**{k: v for k, v in scenario.items() if k != "rationale_en"},
                     "rationale": scenario_profile["forecast_rationale"]}
     if not isinstance(scenario, dict) or not actual:
         return None
@@ -369,6 +370,7 @@ def build(intake, n_years=5, assumption_plan=None):
         scenario_profile = intake.get("analyst_scenario") or {}
         if scenario_profile.get("forecast_rationale"):
             interim_plan["rationale"] = scenario_profile["forecast_rationale"]
+            interim_plan.pop("rationale_en", None)
         normalized_plan["interim_scenario"] = interim_plan
     effects = normalized_plan.get("news_effects") or []
     for event in effects:
