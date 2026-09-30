@@ -34,10 +34,14 @@ describe("featured report", () => {
 
 describe("formatting matches app/fmt.py", () => {
   it("formats rupiah and percent the Indonesian way", () => {
-    expect(rp(1234567.8)).toBe("1.234.568");
-    expect(rp(null)).toBe("n.a.");
-    expect(pct(-20.886)).toBe("−20,9%");
-    expect(pct(98.214)).toBe("98,2%");
+    expect(rp(1234567.8, "id")).toBe("1.234.568");
+    expect(rp(null, "id")).toBe("n.a.");
+    expect(pct(-20.886, "id")).toBe("−20,9%");
+    expect(pct(98.214, "id")).toBe("98,2%");
+  });
+  it("formats rupiah and percent the English way", () => {
+    expect(rp(1234567.8, "en")).toBe("1,234,568");
+    expect(pct(-20.886, "en")).toBe("−20.9%");
   });
 });
 
