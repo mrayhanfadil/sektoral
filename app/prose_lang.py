@@ -89,6 +89,11 @@ def source(id_text, en_text=None):
     known = _source_text().get(id_text)
     if isinstance(known, str) and known.strip():
         return known
+    from . import source_patterns  # model text built before the prose stage
+    for pattern, template in source_patterns.PATTERNS:
+        found = pattern.fullmatch(id_text)
+        if found:
+            return template.format(*(g or "" for g in found.groups()))
     return f"{_UNTRANSLATED}{id_text}{_UNTRANSLATED}"
 
 
