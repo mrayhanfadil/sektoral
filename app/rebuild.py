@@ -491,6 +491,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     # artifacts from the previous publication attached to the new manifest.
     (out / f"{t}.pdf").unlink(missing_ok=True)
     (out / f"{t}-trace.html").unlink(missing_ok=True)
+    (out / f"{t}.en.pdf").unlink(missing_ok=True)
     doc, events, text, used, seen = _build_once(t, out, kwargs, pins)
     last_built = doc
     if log:
@@ -525,6 +526,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     outputs.save(outputs.REPORT, out, t, doc, db)
     if doc is not last_built:  # build.build wrote the HTML of the rejected second pass
         (out / f"{t}.html").write_text(render.render(doc))
+        build.render_english(doc, out, t)
     trace = rebuilt_trace(stored_trace, doc)
     if fresh_plan is not None:
         # The trace records the plan this report was built on, as research._run does.
@@ -555,7 +557,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     if want_pdf:
         if build.pdf_mod is None:
             raise RuntimeError("PDF requested but Playwright is not available")
-        pdf_path = str(build.pdf_mod.to_pdf(t, out))
+        pdf_path = str(build.print_pdfs(t, out))
     publication_manifest = run_manifest.finalize_manifest(manifest, out, t)
     trace["run_manifest"] = publication_manifest
     outputs.save(outputs.TRACE, out, t, trace, db)

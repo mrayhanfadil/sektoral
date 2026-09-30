@@ -34,6 +34,8 @@ from agents.analyst import memory as agent_memory
 LOG = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "web" / "dist"
+# Indonesian files only: ``TICKER.en.html``/``.en.pdf`` are outside the
+# approved bundle and are served to reviewers alone (gallery.PREVIEW_FILES).
 _REPORT_FILE = re.compile(r"^([A-Z0-9]{2,6})(\.html|\.pdf|-trace\.html)$")
 _KIND = {".html": "html", ".pdf": "pdf", "-trace.html": "trace"}
 _NO_STORE = {"Cache-Control": "no-store"}
@@ -193,7 +195,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         if not review_token_ok(x_review_token):
             raise HTTPException(403, "Token reviewer tidak valid atau review belum diaktifkan.")
         t = ticker.upper()
-        if not TICKER.fullmatch(t) or kind not in gallery.FILES:
+        if not TICKER.fullmatch(t) or kind not in gallery.PREVIEW_FILES:
             raise HTTPException(404, "Pratinjau laporan tidak ditemukan.")
         found = gallery.artifact(jobs.reports, t, kind)
         if found is None:
