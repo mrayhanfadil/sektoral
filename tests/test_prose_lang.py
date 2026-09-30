@@ -60,7 +60,7 @@ def test_english_view_swaps_prose_formats_figures_and_counts_fallback():
     en["cover"]["headline"] = "Laba naik"  # not translated: falls back
     attach(doc, en)
     view, fallback = english_view(doc)
-    assert view["bagian"][0]["paragraf"][0] == "Profit rose 12.4% to Rp1,234.5 miliar."
+    assert view["bagian"][0]["paragraf"][0] == "Profit rose 12.4% to Rp1,234.5bn."
     assert isinstance(view["bagian"][0]["paragraf"][0], prose_lang.Translated)
     assert view["cover"]["headline"] == "Laba naik"
     assert fallback >= 1
@@ -91,3 +91,9 @@ def test_source_text_without_english_makes_its_field_fall_back():
     en = _doc(quoted)
     attach(doc, en)
     assert "paragraf_en" not in doc["bagian"][0]
+
+
+def test_source_text_takes_english_from_the_source_dictionary(monkeypatch):
+    monkeypatch.setattr(prose_lang, "_source_text", lambda: {"Rekor Juli.": "A July record."})
+    with building("en"):
+        assert prose_lang.source("Rekor Juli.") == "A July record."

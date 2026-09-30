@@ -25,8 +25,11 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import copy
+import functools
+import json
 import re
 from collections import Counter
+from pathlib import Path
 
 from . import fmt, report_lang, scrub
 
@@ -57,16 +60,35 @@ def t(id: str, en: str) -> str:
 _UNTRANSLATED = "\u2063"
 
 
+# English for Indonesian source text (issuer evidence, curated names), one file
+# per ticker or topic, keyed by the exact Indonesian text. It lives outside the
+# hashed source packs, so a translation never changes their evidence; when the
+# source text changes, its old translation no longer matches and the field
+# falls back to Indonesian.
+SOURCE_TEXT_DIR = Path(__file__).resolve().parent.parent / "data" / "source_text_en"
+
+
+@functools.lru_cache(maxsize=1)
+def _source_text() -> dict:
+    found = {}
+    for path in sorted(SOURCE_TEXT_DIR.glob("*.json")):
+        found.update(json.loads(path.read_text(encoding="utf-8")))
+    return found
+
+
 def source(id_text, en_text=None):
     """Free text from a data source, for quoting inside a template.
 
-    Indonesian builds get `id_text`. English builds get `en_text` when the
-    source provides one; otherwise `id_text`, marked so the field it lands in
-    stays Indonesian."""
+    Indonesian builds get `id_text`. English builds get `en_text`, or the
+    English of `id_text` in ``data/source_text_en``; failing both, `id_text`
+    marked so the field it lands in stays Indonesian."""
     if _BUILD.get() != "en" or not isinstance(id_text, str) or not id_text:
         return id_text
     if isinstance(en_text, str) and en_text.strip():
         return en_text
+    known = _source_text().get(id_text)
+    if isinstance(known, str) and known.strip():
+        return known
     return f"{_UNTRANSLATED}{id_text}{_UNTRANSLATED}"
 
 
@@ -195,7 +217,7 @@ class _View:
 
     def text(self, id_text, en_text):
         if isinstance(en_text, str):
-            return Translated(fmt.localize(en_text, "en"))
+            return Translated(report_lang.plain(en_text))
         if isinstance(id_text, str) and id_text.strip():
             self.missing.append(id_text)
         return id_text
