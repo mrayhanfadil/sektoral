@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
-import { api, ApiError, reportFiles, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
+import { api, ApiError, reportFiles, type ProblemNote, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
 import { LOCALE, useLang, type Bi } from "../lib/i18n";
-import { validatorNote } from "../lib/labels";
+import { problemNotes, validatorNote } from "../lib/labels";
 import { AGENT, derive, type AgentId, type Status } from "../lib/agents";
 import { LiveMark } from "../components/Mark";
 import {
@@ -175,7 +175,7 @@ function AgentGroup({ agent, status, chip, children }:
 }
 
 /** Validator notes (rejected drafts, failed calls) kept visible at the top of an agent's panel. */
-function Problems({ title, items }: { title: string; items: string[] }) {
+function Problems({ title, items }: { title: string; items: ProblemNote[] }) {
   const { t } = useLang();
   if (!items.length) return null;
   return (
@@ -185,8 +185,7 @@ function Problems({ title, items }: { title: string; items: string[] }) {
           <TriangleAlert aria-hidden className="size-3.5 flex-none" strokeWidth={2.2} />{title} <span className="data">{items.length}</span>
         </p>
         <ul className="mt-1.5 grid gap-1.5 pl-[22px] text-[13.5px] leading-relaxed break-words text-ink">
-          {items.map((p, i) => {
-            const { message, removed } = validatorNote(p);
+          {items.map(({ message, removed }, i) => {
             return (
               <li key={i}>
                 {message}{/[.!?]$/.test(message) ? "" : "."}
@@ -395,7 +394,8 @@ function TraceBody({ trace }: { trace: TraceView }) {
           {analyst ? (
             <>
               <div className="border-t border-rule px-6 py-5 max-sm:px-4"><IntelHeadline intel={analyst} as="p" /></div>
-              <Problems title={t({ id: "Catatan validator", en: "Validator notes" })} items={trace.analyst_problems} />
+              <Problems title={t({ id: "Catatan validator", en: "Validator notes" })}
+                items={problemNotes(trace.analyst_problem_notes, trace.analyst_problems)} />
               <IntelSections intel={analyst} />
             </>
           ) : (
@@ -574,7 +574,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
 
         <AgentGroup agent="forecast" status={fStatus}
           chip={<StatusWord status={fStatus}>{t(fLabel)}</StatusWord>}>
-          <Problems title={t({ id: "Catatan validator forecast", en: "Forecast validator notes" })} items={forecast.problems} />
+          <Problems title={t({ id: "Catatan validator forecast", en: "Forecast validator notes" })} items={forecast.problems.map(validatorNote)} />
           <Section id="asumsi" title={t(LABEL.asumsi)} count={forecast.news_effects.length || undefined}>
             {forecast.news_effects.length ? (
               <div className="grid divide-y divide-rule-soft">

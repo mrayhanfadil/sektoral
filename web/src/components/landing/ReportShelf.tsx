@@ -6,13 +6,14 @@ import { FileText, Play } from "lucide-react";
 import { reportFiles, type ReportItem } from "../../lib/api";
 import { pct, rp } from "../../lib/format";
 import { useLang } from "../../lib/i18n";
+import { selectedStep } from "../../lib/labels";
 import { RatingBadge } from "../Reports";
 
 const signed = (v: number | null) => (typeof v === "number" && v > 0 ? "+" : "") + pct(v);
 const upTone = (v: number | null) => (typeof v !== "number" ? "text-ink-faint" : v < 0 ? "text-err-ink" : "text-ok-ink");
 
 function selected(item: ReportItem) {
-  return item.chain.find((s) => s.decision === "Terpilih")?.step ?? (item.published ? item.method : "");
+  return selectedStep(item.chain)?.step ?? (item.published ? item.method : "");
 }
 
 function Actions({ item }: { item: ReportItem }) {

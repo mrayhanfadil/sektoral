@@ -3,9 +3,10 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowDown, ArrowUp, ChevronRight, FileDown, FileText, Footprints, Play } from "lucide-react";
 import { api, reportFiles, type ArchivedPublication, type ChainStep, type ReportItem } from "../lib/api";
+import { DECISION_WORD, decisionCode } from "../lib/codes";
 import { pct, rp } from "../lib/format";
 import { getLang, LOCALE, useLang, type Bi, type Lang } from "../lib/i18n";
-import { ratingLabel, ratingTone, type RatingTone } from "../lib/labels";
+import { ratingLabel, ratingTone, selectedStep, type RatingTone } from "../lib/labels";
 import { IssuerLogo } from "./IssuerLogo";
 
 /* ------------------------------------------------------------------ */
@@ -118,12 +119,14 @@ export function formatDay(iso: string | null | undefined, lang: Lang = getLang()
 
 /** The method the chain selected, short ("DDM"); the full description stays in `item.method`. */
 export function primaryMethod(item: Pick<ReportItem, "chain" | "method">): string {
-  return item.chain.find((s) => s.decision === "Terpilih")?.step ?? item.chain[0]?.step ?? item.method;
+  return selectedStep(item.chain)?.step ?? item.chain[0]?.step ?? item.method;
 }
 
 type Decision = "pick" | "cross" | "skip" | "other";
-const decisionOf = (d: string): Decision =>
-  d === "Terpilih" ? "pick" : d === "Silang cek" ? "cross" : d === "Tidak dijalankan" ? "skip" : "other";
+const decisionOf = (s: ChainStep): Decision => {
+  const code = decisionCode(s.decision_code, s.decision);
+  return code === "selected" ? "pick" : code === "cross_check" ? "cross" : code === "not_needed" ? "skip" : "other";
+};
 
 /** Labels for the decisions the chain maps; any other decision is shown as the API gave it. */
 const DECISION_LABEL: Record<Exclude<Decision, "other">, Bi> = {
@@ -153,12 +156,14 @@ function StepMark({ kind, children }: { kind: Decision; children: React.ReactNod
 export function MethodChain({ chain, className = "" }: { chain: ChainStep[]; className?: string }) {
   const { t } = useLang();
   if (!chain.length) return <span className={`text-[13px] text-ink-faint ${className}`}>{t({ id: "Rantai metode belum tercatat", en: "Method Chain not yet recorded" })}</span>;
-  const skipped = chain.filter((s) => decisionOf(s.decision) === "skip").length;
+  const skipped = chain.filter((s) => decisionOf(s) === "skip").length;
   return (
     <ol aria-label={t({ id: "Rantai metode", en: "Method Chain" })} className={`m-0 flex list-none flex-wrap items-center gap-x-1 gap-y-1.5 p-0 ${className}`}>
       {chain.map((s, i) => {
-        const kind = decisionOf(s.decision);
-        const decision = kind === "other" ? s.decision : t(DECISION_LABEL[kind]);
+        const kind = decisionOf(s);
+        const code = decisionCode(s.decision_code, s.decision);
+        // Other decisions show in the reader's words when their code is known, else as the API gave them.
+        const decision = kind !== "other" ? t(DECISION_LABEL[kind]) : code ? t(DECISION_WORD[code]) : s.decision;
         return (
           <li key={`${s.step}-${i}`} title={`${s.step}: ${decision}${hasValue(s) ? `, ${s.value}` : ""}`}
             className={`flex items-center gap-1 ${kind === "skip" ? "max-sm:hidden" : ""}`}>

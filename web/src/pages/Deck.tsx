@@ -4,8 +4,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CircleX, FileDown, FileText, Route, SquareTerminal } from "lucide-react";
-import { AGENTS, derive, PHASES, type DeckState } from "../lib/agents";
+import { AGENTS, derive, PHASES, releaseFigures, type DeckState } from "../lib/agents";
 import { api, ApiError, type Job, type JobEvent, type ReportItem, type RunReplay } from "../lib/api";
+import { primaryMethodOf, str } from "../lib/codes";
 import { pct, rp } from "../lib/format";
 import { useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone } from "../lib/labels";
@@ -72,8 +73,9 @@ function IdleLegend() {
 
 /** The analyst's chosen method: the gate agent's closing line, else the selected chain step. */
 function methodOf(state: DeckState): string | undefined {
-  const closing = state.steps.find((s) => s.agent === "gerbang" && s.kind === "task" && s.result?.startsWith("Metode utama "));
-  return closing?.result?.slice("Metode utama ".length) ?? state.chain.find((c) => c.decision === "Terpilih")?.method;
+  const closing = state.steps.find((s) => s.agent === "gerbang" && s.kind === "task" && s.resultEvent === "primary_method");
+  return (closing && primaryMethodOf({ label: closing.result, data: closing.data }))
+    ?? state.chain.find((c) => c.code === "selected")?.method;
 }
 
 function signed(value: number | null | undefined, lang: Lang) {
@@ -86,12 +88,12 @@ const WITHHELD: Bi = { id: "ditahan", en: "withheld" };
 function fromRelease(state: DeckState, lang: Lang): ResultData | undefined {
   const release = state.release;
   if (!release) return undefined;
-  const heldByGate5 = state.gates[5]?.verdict === "gagal";
-  const item = { rating: release.rating ?? null, held_reason: heldByGate5 ? "Method Gate 5" : "" };
+  const item = { rating: str(release.rating) ?? null, review_required: state.gates[5]?.code === "fail" };
+  const { tp, upside } = releaseFigures(release, lang);
   return {
     rating: ratingLabel(item), tone: ratingTone(item),
-    tp: release.tp ?? WITHHELD[lang], upside: release.upside ?? "-",
-    method: methodOf(state), release: words(release.status, lang),
+    tp: tp ?? WITHHELD[lang], upside: upside ?? "-",
+    method: methodOf(state), release: words(str(release.status), lang),
   };
 }
 
@@ -102,7 +104,7 @@ function fromReport(report: ReportItem, state: DeckState, lang: Lang): ResultDat
     upside: report.published ? signed(report.upside, lang) : "-",
     price: report.price !== null ? `Rp${rp(report.price, lang)}` : undefined,
     method: report.method || methodOf(state),
-    release: words(state.release?.status, lang) ?? (report.published ? undefined : words("draft_non_distributable", lang)),
+    release: words(str(state.release?.status), lang) ?? (report.published ? undefined : words("draft_non_distributable", lang)),
   };
 }
 

@@ -3,7 +3,8 @@
 
 import { pick } from "./i18n";
 
-export type ChainStep = { step: string; decision: string; value: string };
+/** One Method Chain row; `decision` is the Indonesian label, `decision_code` its stable code (#34). */
+export type ChainStep = { step: string; decision: string; decision_code?: string; value: string };
 
 export type ReportItem = {
   ticker: string;
@@ -182,7 +183,7 @@ export type Intel = {
     headline: string | null;
     source: string | null;
     findings: { title: string | null; interpretation: string | null; caveat: string | null; signal_ids: string[] }[];
-    hypotheses: { index: number | null; verdict: string | null; reason: string | null; signal_ids: string[] }[];
+    hypotheses: { index: number | null; verdict: string | null; verdict_code?: string | null; reason: string | null; signal_ids: string[] }[];
     next_checks: (string | null)[];
   };
   changes: {
@@ -208,8 +209,15 @@ export type JobEvent = {
   detail?: string;
   tool?: string;
   agent?: string;
-  data?: Record<string, string>;
+  data?: EventData;
 };
+
+/**
+ * Short structured fields of an event. Mostly strings; the release event's
+ * `tp_value` and `upside_pct` are numbers (#34). Read them with lib/codes.ts
+ * `str` and `num`.
+ */
+export type EventData = Record<string, string | number>;
 
 /** A stored run to play back: recorded events, or events derived from its audit trace. */
 export type RunReplay = {
@@ -233,6 +241,9 @@ export type Job = {
   report_status?: string;
   intel?: Intel;
 };
+
+/** A validator note: its message and the tokens it asked the model to remove. */
+export type ProblemNote = { message: string; removed: string[] };
 
 export type TraceView = {
   ticker: string;
@@ -284,6 +295,8 @@ export type TraceView = {
   };
   analyst: Intel | null;
   analyst_problems: string[];
+  /** The same notes parsed server-side (#34); older traces carry only `analyst_problems`. */
+  analyst_problem_notes?: ProblemNote[];
   research: {
     summary: string | null;
     endpoints: string[];
