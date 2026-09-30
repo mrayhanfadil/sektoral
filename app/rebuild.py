@@ -482,7 +482,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     review = assumption_review.status(out, t, db)
     if (review.get("state") == "approved" and
             all(kind in (review.get("artifact_hashes") or {})
-                for kind in ("html", "pdf", "trace_html"))):
+                for kind in assumption_review.REQUIRED_PUBLISH_ARTIFACTS)):
         archived = publication_archive.archive_approved_bundle(out, t, db=db)
         if archived is None:
             raise OSError(f"refusing to rebuild approved {t}: publication archive failed")
@@ -491,6 +491,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     # artifacts from the previous publication attached to the new manifest.
     (out / f"{t}.pdf").unlink(missing_ok=True)
     (out / f"{t}-trace.html").unlink(missing_ok=True)
+    (out / f"{t}.en.html").unlink(missing_ok=True)
     (out / f"{t}.en.pdf").unlink(missing_ok=True)
     doc, events, text, used, seen = _build_once(t, out, kwargs, pins)
     last_built = doc

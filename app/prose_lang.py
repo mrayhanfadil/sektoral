@@ -26,6 +26,7 @@ import contextlib
 import contextvars
 import copy
 import functools
+import hashlib
 import json
 import re
 from collections import Counter
@@ -74,6 +75,15 @@ def _source_text() -> dict:
     for path in sorted(SOURCE_TEXT_DIR.glob("*.json")):
         found.update(json.loads(path.read_text(encoding="utf-8")))
     return found
+
+
+def source_text_sha256() -> str:
+    """SHA-256 of the translations loaded from ``data/source_text_en``.
+
+    The run manifest records it (``source_text_en_sha256``), so a translation
+    edit that changes a report's English shows up as a new manifest."""
+    blob = json.dumps(_source_text(), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest()
 
 
 def source(id_text, en_text=None):
@@ -136,6 +146,21 @@ def mixed(text) -> bool:
     return isinstance(text, str) and len({w.lower() for w in _INDONESIAN.findall(text)}) >= 2
 
 
+_ENGLISH = re.compile(
+    r"\b(the|a|an|of|to|in|on|for|and|or|with|from|by|at|as|is|are|was|were|be|been|not|no|"
+    r"its|their|this|that|these|than|into|over|under|while|after|before|could|may|might|would|"
+    r"will|can|has|have|had|does|do|if|but|more|less)\b", re.I)
+
+
+def reads_english(text) -> bool:
+    """True when agent-written text reads as English, for the checks on an agent's
+    English twin (stricter than ``mixed``, which template English passes): an
+    Indonesian function word must stand beside an English one."""
+    if not isinstance(text, str) or not text.strip() or mixed(text):
+        return False
+    return not _INDONESIAN.search(text) or bool(_ENGLISH.search(text))
+
+
 def _pair(id_text, en_text):
     """The English twin of one prose string, or None when it may not be attached."""
     if not isinstance(id_text, str) or not isinstance(en_text, str) or not en_text.strip():
@@ -191,6 +216,8 @@ def _attach_items(id_items, en_items, keys):
 
 _CARD_KEYS = ("title", "text", "observation", "implication", "caveat")
 _RISK_KEYS = ("judul", "isi")
+# The research page's cards (``research_cards``): the agent's insight prose.
+_RESEARCH_KEYS = ("title", "observation", "implication", "caveat")
 
 
 def _attach_exhibits(id_exhibits, en_exhibits):
@@ -216,6 +243,7 @@ def attach(doc: dict, doc_en: dict) -> dict:
                 continue
             _attach_paragraphs(page, page_en)
             _attach_items(page.get("cards"), page_en.get("cards"), _CARD_KEYS)
+            _attach_items(page.get("research_cards"), page_en.get("research_cards"), _RESEARCH_KEYS)
             _attach_items(page.get("risks"), page_en.get("risks"), _RISK_KEYS)
             _attach_exhibits(page.get("exhibit"), page_en.get("exhibit"))
     _attach_items(doc.get("risks"), doc_en.get("risks"), _RISK_KEYS)
@@ -306,6 +334,7 @@ def english_view(doc: dict, missing: list | None = None) -> tuple[dict, int]:
         if isinstance(page, dict):
             v.paragraphs(page)
             v.items(page.get("cards"), _CARD_KEYS)
+            v.items(page.get("research_cards"), _RESEARCH_KEYS)
             v.items(page.get("risks"), _RISK_KEYS)
             v.exhibits(page.get("exhibit"))
     v.items(view.get("risks"), _RISK_KEYS)

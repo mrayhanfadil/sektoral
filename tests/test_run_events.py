@@ -50,16 +50,57 @@ def _doc(published=True):
 def test_valuation_events_carry_gates_chain_and_release():
     events = run_events.valuation_events(_doc())
     gates = [e for e in events if str(e.get("tool", "")).startswith("gate_")]
-    assert len(gates) == 6 and gates[1]["data"] == {"gate": 1, "verdict": "tidak berlaku"}
+    assert len(gates) == 6 and gates[1]["data"] == {"kind": "gate", "gate": 1, "verdict": "tidak berlaku",
+                                                     "verdict_code": "not_applicable"}
+    assert [g["data"]["verdict_code"] for g in gates] == ["pass"] + ["not_applicable"] * 4 + ["pass"]
     chain = [e for e in events if e.get("tool") == "chain_step"]
     assert [(e["label"], e["data"]["decision"], e["data"]["value"]) for e in chain] == [
         ("DDM", "Terpilih", "Rp1.100"), ("PER FY skenario", "Silang cek", "Rp900")]
+    assert [e["data"]["kind"] for e in chain] == ["chain_row"] * 2
+    assert [e["data"]["decision_code"] for e in chain] == ["selected", "cross_check"]
+    primary = events[-2]
+    assert primary["label"] == "Metode utama FY26F PER"
+    # data.method is the short name of the chain row the target uses.
+    assert primary["data"] == {"kind": "primary_method", "method": "DDM"}
+    unchained = run_events.valuation_events({**_doc(), "exhibits": []})[-2]
+    assert unchained["data"] == {"kind": "primary_method", "method": "FY26F PER"}
     release = events[-1]
     assert release["tool"] == "release" and release["data"]["tp"] == "Rp1.100"
     assert release["data"]["upside"] == "+10,0%"
+    assert release["data"]["kind"] == "release"
+    assert release["data"]["tp_value"] == 1100 and release["data"]["upside_pct"] == 10.0
     held = run_events.valuation_events(_doc(published=False))[-1]
     assert held["status"] == "warn" and "rating" not in held["data"]
+    assert held["data"] == {"kind": "release", "status": "draft_non_distributable"}
     assert held["detail"] == "2 pemeriksaan menahan rating dan target harga"
+    no_method = run_events.valuation_events({**_doc(), "method": ""})[-2]
+    assert no_method["label"] == "Rantai metode selesai" and no_method["data"] == {"kind": "chain_done"}
+
+
+def test_emitted_codes_stay_within_the_event_bounds():
+    seen = []
+    doc = _doc()
+    doc["meta"].update(tp=4125.0, upside_persen=-20.94)
+    with progress.capture(seen.append):
+        run_events.emit_valuation(doc)
+    release = seen[-1]["data"]
+    # Raw numbers stay numbers; every other value is a short string.
+    assert release == {"kind": "release", "status": "distributable_assumption_led", "rating": "Hold",
+                       "tp": "Rp4.125", "upside": "−20,9%", "tp_value": 4125.0, "upside_pct": -20.9}
+    assert seen[0].get("data") is None and seen[1]["data"]["gate"] == "0"
+    assert all(len(e.get("data") or {}) <= 8 for e in seen)
+    assert all(isinstance(v, str) and len(v) <= 120 for e in seen for k, v in (e.get("data") or {}).items()
+               if k not in progress.NUMBERS)
+    bad = progress.event("report", "x", data={"tp_value": float("nan"), "upside_pct": True, "kind": "release"})
+    assert bad["data"] == {"kind": "release"}
+
+
+def test_hypothesis_codes_read_partial_support_from_the_reason():
+    assert run_events.hypothesis_code("didukung") == "supported"
+    assert run_events.hypothesis_code("tidak didukung", "x") == "not_supported"
+    assert run_events.hypothesis_code("belum terjawab", "data kurang") == "unanswered"
+    assert run_events.hypothesis_code("belum terjawab", "Sebagian didukung: laba naik") == "partly_supported"
+    assert run_events.hypothesis_code("lain") is None
 
 
 def test_emit_is_bounded_and_drops_unknown_fields():
@@ -121,12 +162,77 @@ def test_derived_replay_follows_the_pipeline_and_stays_public():
     assert "1 artikel relevan, 1 ditolak" in labels
     verdict = next(e for e in events if e.get("tool") == "verdict")
     assert verdict["label"] == "H1 didukung" and verdict["data"]["index"] == "1"
+    assert verdict["data"]["kind"] == "hypothesis" and verdict["data"]["verdict_code"] == "supported"
+    kinds = {e["label"]: (e.get("data") or {}).get("kind") for e in events}
+    assert kinds["Hipotesis 1"] == "hypothesis"
+    assert kinds["Menjalankan find_peers"] == "tool_start" and kinds["find_peers selesai"] == "tool_done"
+    assert kinds["foreign_flow: data tidak tersedia"] == "tool_empty"
+    assert kinds["Metode utama FY26F PER"] == "primary_method"
+    assert kinds["Status rilis: dapat didistribusikan, berbasis asumsi analis"] == "release"
     agents = {e.get("agent") for e in events}
     assert {"riset", "berita", "gerbang", "forecast.news", "forecast.interim"} <= agents
     assert "forecast.secret_agent" not in agents
     times = [e["t"] for e in events]
     assert times == sorted(times)
     assert "FAKE" not in json.dumps(events)
+
+
+def test_derived_verdicts_read_partial_support_from_the_reason():
+    audit = _audit()
+    audit["analyst"]["synthesis"]["hypotheses"] = [
+        {"index": 0, "verdict": "belum terjawab", "reason": "Sebagian didukung: laba naik"},
+        {"index": 1, "verdict": "tidak didukung", "reason": "r"},
+        {"index": 2, "verdict": "belum terjawab", "reason": "data kurang"}]
+    verdicts = [e for e in run_events.derive(audit, _doc()) if e.get("tool") == "verdict"]
+    assert [e["data"]["verdict_code"] for e in verdicts] == ["partly_supported", "not_supported",
+                                                            "unanswered"]
+
+
+# Events as research.run recorded them before codes existed.
+OLD_EVENTS = [
+    {"stage": "plan", "label": "Hipotesis 1", "tool": "hypothesis", "data": {"index": "1"}, "t": 0.1},
+    {"stage": "tool", "label": "Menjalankan find_peers", "tool": "find_peers", "status": "run", "t": 1},
+    {"stage": "tool", "label": "find_peers selesai", "tool": "find_peers", "t": 2},
+    {"stage": "tool", "label": "foreign_flow: data tidak tersedia", "tool": "foreign_flow",
+     "status": "warn", "t": 3},
+    {"stage": "tool", "label": "Agent menilai bukti sudah cukup", "t": 3.5},
+    {"stage": "synthesis", "label": "H1 belum terjawab", "tool": "verdict", "t": 4,
+     "detail": "Sebagian didukung: laba naik", "data": {"index": "1", "verdict": "belum terjawab"}},
+    {"stage": "gate", "label": "Kelayakan data", "tool": "gate_1", "agent": "gerbang", "t": 5,
+     "data": {"gate": "1", "verdict": "tidak dapat dinilai"}},
+    {"stage": "gate", "label": "DDM", "tool": "chain_step", "agent": "gerbang", "t": 6,
+     "data": {"decision": "Terpilih, ekstrem (rantai berhenti)", "value": "ditahan"}},
+    {"stage": "gate", "label": "PSR", "tool": "chain_step", "agent": "gerbang", "t": 6.1,
+     "data": {"decision": "Belum tersedia", "value": "-"}},
+    {"stage": "gate", "label": "Metode utama DDM", "agent": "gerbang", "t": 7},
+    {"stage": "report", "label": "Status rilis: siap produksi", "tool": "release", "t": 8,
+     "data": {"status": "production_ready", "rating": "Sell", "tp": "Rp12.350", "upside": "−20,9%"}},
+    {"stage": "done", "label": "Selesai", "t": 9}]
+
+
+def test_old_recorded_events_get_their_codes_on_replay():
+    events = progress.public([run_events.coded(e) for e in progress.public(OLD_EVENTS)])
+    data = {e["label"]: e.get("data") for e in events}
+    assert data["Hipotesis 1"] == {"index": "1", "kind": "hypothesis"}
+    assert data["Menjalankan find_peers"] == {"kind": "tool_start"}
+    assert data["find_peers selesai"] == {"kind": "tool_done"}
+    assert data["foreign_flow: data tidak tersedia"] == {"kind": "tool_empty"}
+    assert data["Agent menilai bukti sudah cukup"] is None
+    assert data["H1 belum terjawab"]["verdict_code"] == "partly_supported"
+    assert data["Kelayakan data"] == {"gate": "1", "verdict": "tidak dapat dinilai", "kind": "gate",
+                                      "verdict_code": "not_assessable"}
+    assert data["DDM"]["decision_code"] == "stop_extreme" and data["PSR"]["decision_code"] == "unavailable"
+    assert data["Metode utama DDM"] == {"kind": "primary_method", "method": "DDM"}
+    primary = {"stage": "gate", "label": "Metode utama FY26F PER", "agent": "gerbang", "t": 7}
+    assert run_events.coded(primary, _doc())["data"] == {"kind": "primary_method", "method": "DDM"}
+    assert data["Status rilis: siap produksi"] == {
+        "status": "production_ready", "rating": "Sell", "tp": "Rp12.350", "upside": "−20,9%",
+        "kind": "release", "tp_value": 12350, "upside_pct": -20.9}
+    assert data["Selesai"] is None
+    # Codes a run recorded itself are kept as they are.
+    live = {"stage": "gate", "label": "X", "tool": "chain_step", "t": 1,
+            "data": {"kind": "chain_row", "decision": "Terpilih", "decision_code": "selected"}}
+    assert run_events.coded(live) is live
 
 
 def test_replay_endpoint_prefers_recorded_events(tmp_path):
@@ -150,6 +256,10 @@ def test_replay_endpoint_prefers_recorded_events(tmp_path):
         assert recorded["source"] == "recorded"
         assert recorded["events"] == [{"stage": "plan", "label": "Rencana siap", "status": "ok", "t": 1.2,
                                        "detail": "Q", "agent": "analis"}]
+        outputs.save(outputs.EVENTS, reports, "AAAA", OLD_EVENTS)
+        old = client.get("/api/reports/AAAA/run").json()["events"]
+        release = next(e for e in old if e.get("tool") == "release")
+        assert release["data"]["tp_value"] == 12350 and release["data"]["upside_pct"] == -20.9
         assert client.get("/api/reports/ZZZZ/run").status_code == 404
         assert client.get("/api/reports/..%2Fx/run").status_code == 404
 
