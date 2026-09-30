@@ -20,6 +20,8 @@ from agents.estimator import tools as local_data
 from . import (cache, commodity, fmt, forecast_statements, idx_history, landbank, method_chain,
                mineops, rate_benchmarks, scenario_value, share_basis)
 from . import consensus, exhibit_ids, peer_groups
+from . import prose_lang
+from .prose_lang import t as _t
 from . import lom as lom_mod
 
 TAX_RATE = 0.22  # Indonesian statutory corporate rate, used only for the sensitivity note
@@ -284,8 +286,11 @@ def attach_method_chain(doc, va):
     if page is None:
         doc["bagian"].append(_page(
             "Valuasi: rantai metode",
-            ["Metode utama dan fallback dinilai berurutan; tabel mencatat metode yang "
-             "dipakai dan alasan metode lain dilewati."], [exhibit] + ([sotp] if sotp else [])))
+            [_t("Metode utama dan fallback dinilai berurutan; tabel mencatat metode yang "
+                "dipakai dan alasan metode lain dilewati.",
+                "The Primary Method and its fallbacks are assessed in order; the table records "
+                "the method used and why the others were skipped.")],
+            [exhibit] + ([sotp] if sotp else [])))
     else:
         page["exhibit"].append(exhibit)
         if sotp:
@@ -432,15 +437,22 @@ def industry_page(intake):
                 label, unit = COMMODITY_UNITS[name]
                 day, price = series[name][-1]
                 change = _change_12m(series[name])
-                paragraphs.append(
+                paragraphs.append(_t(
                     f"Harga {label.lower()} USD {fmt._id(price, 0)}/{unit.split('/')[1]} pada "
                     f"{day.isoformat()}" + (f", {'naik' if change >= 0 else 'turun'} "
                                             f"{fmt.pct(abs(change))} dalam 12 bulan." if change is not None
-                                            else "."))
-            paragraphs.append(
+                                            else "."),
+                    f"{name} was USD {fmt._id(price, 0)}/{unit.split('/')[1]} on "
+                    f"{day.isoformat()}" + (f", {'up' if change >= 0 else 'down'} "
+                                            f"{fmt.pct(abs(change))} over 12 months." if change is not None
+                                            else ".")))
+            paragraphs.append(_t(
                 ("Kedua harga ini" if len(names) == 2 else "Harga ini") +
                 " menjadi driver harga realisasi emiten; dampaknya ke EBITDA, "
-                "laba bersih dan nilai per saham diuji pada tabel sensitivitas.")
+                "laba bersih dan nilai per saham diuji pada tabel sensitivitas.",
+                ("Both prices drive" if len(names) == 2 else "This price drives") +
+                " the issuer's realised prices; their effect on EBITDA, net profit and value "
+                "per share is tested in the sensitivity table."))
     report = None
     for _key, payload in cache.payloads(f"/subsector/report/{_slug(intake.get('sub_sector'))}/"):
         report = payload if isinstance(payload, dict) else report
@@ -464,16 +476,21 @@ def industry_page(intake):
         if years:
             last = history[years[-1]]
             forecasts = ((report.get("growth") or {}).get("growth_forecasts") or {})
-            paragraphs.append(
+            paragraphs.append(_t(
                 f"Sub-sektor {name} diperdagangkan pada P/E {fmt.mult(_num(last.get('pe')) or 0)} "
-                f"dan P/B {fmt.mult(_num(last.get('pb')) or 0)} pada {years[-1]}.")
+                f"dan P/B {fmt.mult(_num(last.get('pb')) or 0)} pada {years[-1]}.",
+                f"The {name} sub-sector traded at a P/E of {fmt.mult(_num(last.get('pe')) or 0)} "
+                f"and a P/B of {fmt.mult(_num(last.get('pb')) or 0)} in {years[-1]}."))
             for year, item in sorted(forecasts.items())[-1:]:
                 eps, rev = _num(item.get("eps_growth")), _num(item.get("revenue_growth"))
                 if eps is not None and rev is not None:
-                    paragraphs.append(
+                    paragraphs.append(_t(
                         f"Proyeksi Sectors untuk {year} memperkirakan EPS sub-sektor "
                         f"{'naik' if eps >= 0 else 'turun'} {fmt.pct(abs(eps))} dengan pendapatan "
-                        f"{'naik' if rev >= 0 else 'turun'} {fmt.pct(abs(rev))}.")
+                        f"{'naik' if rev >= 0 else 'turun'} {fmt.pct(abs(rev))}.",
+                        f"Sectors projects sub-sector EPS for {year} "
+                        f"{'up' if eps >= 0 else 'down'} {fmt.pct(abs(eps))}, with revenue "
+                        f"{'up' if rev >= 0 else 'down'} {fmt.pct(abs(rev))}."))
     if not exhibits:
         return peer_industry_page(intake)
     return _page("Industri dan harga komoditas", paragraphs, exhibits)
@@ -558,21 +575,36 @@ def peer_industry_page(intake):
         + (f" n.m. pada multiple {ticker}: di atas {fmt.MULT_CAP}x, basis laba atau ekuitas "
            "sangat kecil." if any(row[2] == "n.m." for row in table) else ""))
     paragraphs = []
+    # A curated group is named in Indonesian (data/peer_groups); a Sectors
+    # sub-industry already reads in English.
+    group_en = (prose_lang.source(group) if peers.get("curated") else
+                _t(group, "sub-sector") if group == "sub-sektor" else group)
     if peer_change is not None and own.get("mcap_change_1y") is not None:
-        paragraphs.append(
+        paragraphs.append(_t(
             f"Sub-sektor {group} berisi {len(others)} peer dengan kapitalisasi total "
             f"Rp{fmt._id(total_cap / 1e12, 1)} triliun; kapitalisasi pasar peer "
             f"{'naik' if peer_change >= 0 else 'turun'} {fmt.pct(abs(peer_change))} dalam setahun "
             f"(tertimbang kapitalisasi). Kapitalisasi pasar {ticker} "
             f"{'naik' if own['mcap_change_1y'] >= 0 else 'turun'} "
             f"{fmt.pct(abs(own['mcap_change_1y']))}; perubahan ini juga dipengaruhi "
-            "perubahan jumlah saham dan tidak mengukur imbal hasil harga saham.")
+            "perubahan jumlah saham dan tidak mengukur imbal hasil harga saham.",
+            f"The {group_en} group has {len(others)} peers with a combined market capitalisation of "
+            f"Rp{fmt._id(total_cap / 1e12, 1)} triliun; peer market capitalisation is "
+            f"{'up' if peer_change >= 0 else 'down'} {fmt.pct(abs(peer_change))} over the year "
+            f"(capitalisation-weighted). {ticker}'s market capitalisation is "
+            f"{'up' if own['mcap_change_1y'] >= 0 else 'down'} "
+            f"{fmt.pct(abs(own['mcap_change_1y']))}; this change also reflects changes in the "
+            "share count and does not measure share price return."))
     if own.get("roe") is not None and stats["roe"][0] is not None:
-        paragraphs.append(
+        paragraphs.append(_t(
             f"ROE {ticker} {fmt.pct(own['roe'])} dibanding median peer {fmt.pct(stats['roe'][0])}, "
             f"dengan margin laba bersih {pct(own.get('net_margin'))} (median peer "
             f"{pct(stats['net_margin'][0])}); selisih ini menjelaskan posisi valuasinya terhadap "
-            "peer, bukan tren industri yang terukur.")
+            "peer, bukan tren industri yang terukur.",
+            f"{ticker}'s ROE is {fmt.pct(own['roe'])} against a peer median of "
+            f"{fmt.pct(stats['roe'][0])}, with a net margin of {pct(own.get('net_margin'))} (peer "
+            f"median {pct(stats['net_margin'][0])}); the gap explains its valuation relative to "
+            "peers, not a measured industry trend."))
     # Sentiment: price vs IHSG over the past year (IDX), and net foreign flow.
     as_of = intake.get("as_of")
     year_ago = (date.fromisoformat(str(as_of)[:10]) - timedelta(days=365)).isoformat() if as_of else None
@@ -581,18 +613,26 @@ def peer_industry_page(intake):
     net_flow = sum(_num(r.get("net_foreign_inflow")) or 0 for r in flows if isinstance(r, dict))
     sentiment = []
     if own_move and ihsg_move:
-        sentiment.append(
+        sentiment.append(_t(
             f"Sejak {own_move[1]}, saham {ticker} {'naik' if own_move[0] >= 0 else 'turun'} "
             f"{fmt.pct(abs(own_move[0]))} sementara IHSG {'naik' if ihsg_move[0] >= 0 else 'turun'} "
-            f"{fmt.pct(abs(ihsg_move[0]))}")
+            f"{fmt.pct(abs(ihsg_move[0]))}",
+            f"since {own_move[1]}, {ticker} shares are {'up' if own_move[0] >= 0 else 'down'} "
+            f"{fmt.pct(abs(own_move[0]))} while the IHSG is "
+            f"{'up' if ihsg_move[0] >= 0 else 'down'} {fmt.pct(abs(ihsg_move[0]))}"))
     if flows:
-        sentiment.append(
+        sentiment.append(_t(
             f"investor asing mencatat {'beli' if net_flow >= 0 else 'jual'} bersih "
             f"Rp{_rp_bn(abs(net_flow), 1)} miliar pada {str(flows[0].get('date'))[:10]} sampai "
-            f"{str(flows[-1].get('date'))[:10]}")
+            f"{str(flows[-1].get('date'))[:10]}",
+            f"foreign investors were net {'buyers' if net_flow >= 0 else 'sellers'} of "
+            f"Rp{_rp_bn(abs(net_flow), 1)} miliar from {str(flows[0].get('date'))[:10]} to "
+            f"{str(flows[-1].get('date'))[:10]}"))
     if sentiment:
-        paragraphs.append("Sentimen pasar: " + "; ".join(sentiment) +
-                          ". Angka ini konteks pasar, bukan dasar target harga.")
+        paragraphs.append(_t("Sentimen pasar: " + "; ".join(sentiment) +
+                             ". Angka ini konteks pasar, bukan dasar target harga.",
+                             "Market sentiment: " + "; ".join(sentiment) +
+                             ". These figures are market context, not a basis for the Target Price."))
     return _page("Industri dan sentimen", paragraphs, [exhibit])
 
 
@@ -771,8 +811,10 @@ def peer_page(intake, valuation_inputs=None):
     caps = [r["metrics"]["market_cap"] for r in rows if r["metrics"].get("market_cap")]
     subject = next(r for r in rows if r["is_self"])
     paragraphs = [
-        f"Grup peer berisi {len(rows)} emiten dengan kapitalisasi Rp{_rp_bn(min(caps))} "
-        f"miliar sampai Rp{_rp_bn(max(caps))} miliar." if caps else "",
+        _t(f"Grup peer berisi {len(rows)} emiten dengan kapitalisasi Rp{_rp_bn(min(caps))} "
+           f"miliar sampai Rp{_rp_bn(max(caps))} miliar.",
+           f"The peer group has {len(rows)} issuers with market capitalisations of "
+           f"Rp{_rp_bn(min(caps))} miliar to Rp{_rp_bn(max(caps))} miliar.") if caps else "",
     ]
     pe_signal, roe_signal = ranked.get("peer.pe") or {}, ranked.get("peer.roe") or {}
     pe_median, pb_median = stats["pe"][0], stats["pb"][0]
@@ -781,18 +823,28 @@ def peer_page(intake, valuation_inputs=None):
         valid = [(r["symbol"], r["metrics"]["pe"]) for r in rows if not r["is_self"]
                  and isinstance(r["metrics"].get("pe"), (int, float))
                  and method_chain.PEER_PE_BAND[0] < r["metrics"]["pe"] <= method_chain.PEER_PE_BAND[1]]
-        paragraphs.append(
+        paragraphs.append(_t(
             f"Median dan rata-rata P/E peer tidak dihitung karena peer valid kurang dari tiga; "
             f"P/E {ticker} {fmt.mult(own_pe)} dibanding "
             + (", ".join(f"{sym} {fmt.mult(v)}" for sym, v in valid) if valid else "tanpa peer valid")
-            + ", sehingga posisi relatifnya hanya indikatif.")
+            + ", sehingga posisi relatifnya hanya indikatif.",
+            f"The peer median and average P/E are not computed because fewer than three peers are "
+            f"valid; {ticker}'s P/E of {fmt.mult(own_pe)} compares with "
+            + (", ".join(f"{sym} {fmt.mult(v)}" for sym, v in valid) if valid else "no valid peer")
+            + ", so its relative position is only indicative."))
     if pe_signal.get("value") is not None and pe_median:
-        paragraphs.append(
+        paragraphs.append(_t(
             (f"P/E {ticker} di atas {fmt.MULT_CAP}x (laba terlalu kecil untuk bermakna) dibanding median peer "
              if pe_signal["value"] > fmt.MULT_CAP else
              f"P/E {ticker} {fmt.mult(pe_signal['value'])} dibanding median peer ") +
             f"{fmt.mult(pe_median)}, sementara ROE berada di peringkat "
-            f"{roe_signal.get('rank') or '-'} dari {roe_signal.get('n') or '-'}.")
+            f"{roe_signal.get('rank') or '-'} dari {roe_signal.get('n') or '-'}.",
+            (f"{ticker}'s P/E is above {fmt.MULT_CAP}x (earnings too small to be meaningful) "
+             "against a peer median of "
+             if pe_signal["value"] > fmt.MULT_CAP else
+             f"{ticker}'s P/E of {fmt.mult(pe_signal['value'])} compares with a peer median of ") +
+            f"{fmt.mult(pe_median)}, while its ROE ranks "
+            f"{roe_signal.get('rank') or '-'} of {roe_signal.get('n') or '-'}."))
     outliers = [r["symbol"] for r in rows
                 if (r["metrics"].get("pe") or 0) > method_chain.PEER_PE_BAND[1]]
     negative = [r["symbol"] for r in rows if r["metrics"].get("pe") is None and not r["is_self"]]
@@ -802,14 +854,21 @@ def peer_page(intake, valuation_inputs=None):
         (r["metrics"].get("roa") is not None and all(
             r["metrics"].get(k) is None for k in ("pb", "roe", "leverage"))))]
     if outliers or negative or no_book:
-        paragraphs.append(
+        paragraphs.append(_t(
             "Pencilan: " + ", ".join(
                 ([f"P/E di atas {method_chain.PEER_PE_BAND[1]:.0f}x ({', '.join(outliers)})"]
                  if outliers else []) +
                 ([f"laba negatif atau P/E tidak tersedia ({', '.join(negative)})"] if negative else []) +
                 ([f"ekuitas negatif atau tidak dilaporkan ({', '.join(no_book)})"]
                  if no_book else []))
-            + "; pencilan tidak masuk median dan rata-rata.")
+            + "; pencilan tidak masuk median dan rata-rata.",
+            "Outliers: " + ", ".join(
+                ([f"P/E above {method_chain.PEER_PE_BAND[1]:.0f}x ({', '.join(outliers)})"]
+                 if outliers else []) +
+                ([f"negative earnings or no P/E ({', '.join(negative)})"] if negative else []) +
+                ([f"negative or unreported equity ({', '.join(no_book)})"]
+                 if no_book else []))
+            + "; outliers are excluded from the median and average."))
     cross = []
     inputs = valuation_inputs or {}
     thin = {key: stats["counts"].get(key, 0) < method_chain.MIN_PEERS for key in ("pe", "pb")}
@@ -833,14 +892,22 @@ def peer_page(intake, valuation_inputs=None):
             + _thin_peer_note(stats, ("pe", "pb"))))
         peer_ev = [p for p in intake.get("peers") or []
                    if isinstance(p.get("ev_ebitda"), (int, float))]
-        paragraphs.append(
+        paragraphs.append(_t(
             "Multiple peer di bawah ini hanya cross-check: EV/EBITDA peer dibangun dari "
             f"laporan tiap peer ({method_chain.peer_ev_sources(intake.get('peers'))}) dan "
             f"tersedia untuk {len(peer_ev)} peer; ia dipakai di rantai metode, bukan di tabel "
             "ini." if peer_ev else
             "Multiple peer di bawah ini hanya cross-check: EBITDA dan utang bersih peer belum "
             "tersedia dari laporan peer (Sectors atau snapshot Yahoo Finance), sehingga "
-            "EV/EBITDA peer belum dapat diverifikasi.")
+            "EV/EBITDA peer belum dapat diverifikasi.",
+            # Starts with "Peer multiples": _merge_paragraphs files it with the method notes.
+            "Peer multiples below are cross-checks only: peer EV/EBITDA is built from each "
+            f"peer's reports ({_peer_ev_sources_en(intake.get('peers'))}) and is "
+            f"available for {len(peer_ev)} peers; it is used in the Method Chain, not in this "
+            "table." if peer_ev else
+            "Peer multiples below are cross-checks only: peer EBITDA and net debt are not yet "
+            "available from peer reports (Sectors or Yahoo Finance snapshots), so peer "
+            "EV/EBITDA cannot yet be verified."))
     # 1-year own-history P/E and P/BV bands (mean, median, current, percentile).
     band = own_history_bands(intake)
     if band:
@@ -848,18 +915,38 @@ def peer_page(intake, valuation_inputs=None):
         exhibits.extend(band_charts(intake))
         swaps = [(sub, orig, why) for sub, orig, why in band_selection(_band_data(intake))
                  if orig]
-        paragraphs.append(
+        paragraphs.append(_t(
             "Band historis P/E dan P/BV adalah cross-check mean-reversion atas sejarah emiten "
             "sendiri, bukan target harga: harga implisitnya menganggap driver fundamental "
             "(EPS dan BVPS terakhir) konstan dan hanya multiple yang kembali ke mean atau median."
             + "".join(f" Grafik band memakai {sub} sebagai pengganti {orig} karena {why}; "
                       f"harga implisit {sub} = multiple x basis per saham terakhir dikurangi "
-                      "utang bersih per saham." for sub, orig, why in swaps))
+                      "utang bersih per saham." for sub, orig, why in swaps),
+            # Starts with "Own-history": _merge_paragraphs files it with the method notes.
+            "Own-history P/E and P/BV bands are a mean-reversion cross-check on the issuer's own "
+            "history, not a Target Price: the implied price holds the fundamental drivers "
+            "(latest EPS and BVPS) constant and lets only the multiple revert to its mean or median."
+            + "".join(f" The band chart uses {sub} in place of {orig} because {why}; the "
+                      f"implied {sub} price = multiple x latest per-share base less net debt per "
+                      "share." for sub, orig, why in swaps)))
     else:
-        paragraphs.append("Band historis P/E dan P/BV belum dimodelkan: "
-                          "cache membutuhkan harga harian + EPS/BVPS TTM yang sebanding; "
-                          "cakupan saat ini tidak cukup.")
+        paragraphs.append(_t("Band historis P/E dan P/BV belum dimodelkan: "
+                             "cache membutuhkan harga harian + EPS/BVPS TTM yang sebanding; "
+                             "cakupan saat ini tidak cukup.",
+                             "Own-history P/E and P/BV bands are not yet modelled: the cache "
+                             "needs daily prices + comparable TTM EPS/BVPS; current coverage is "
+                             "insufficient."))
     return _page("Perbandingan peer", _merge_paragraphs(paragraphs), exhibits)
+
+
+def _peer_ev_sources_en(peers):
+    """``method_chain.peer_ev_sources`` in English, for the English prose."""
+    text = method_chain.peer_ev_sources(peers)
+    for id_text, en_text in (("data Sectors", "Sectors data"), (" dan ", " and "),
+                             ("sumber tidak tercatat", "unrecorded source"),
+                             ("tanpa peer", "no peers")):
+        text = text.replace(id_text, en_text)
+    return text
 
 
 def _merge_paragraphs(paragraphs):
@@ -867,7 +954,7 @@ def _merge_paragraphs(paragraphs):
     multiple vs median, outliers) and one for the method notes (cross-check,
     bands), instead of a string of one-sentence paragraphs."""
     texts = [p.strip() for p in paragraphs if p and p.strip()]
-    notes = ("Multiple peer", "Band historis")
+    notes = _t(("Multiple peer", "Band historis"), ("Peer multiples", "Own-history"))
     position = [t for t in texts if not t.startswith(notes)]
     method = [t for t in texts if t.startswith(notes)]
     return [" ".join(group) for group in (position, method) if group]
@@ -964,21 +1051,30 @@ def _band_problem(data, label):
     stay within the multiple cap."""
     m = data["multiples"].get(label)
     base = _BAND_BASE[label].split(" ")[0]
+    base_en = {"pendapatan": "revenue"}.get(base, base)
     if not m:
-        return f"basis {base} tidak positif sepanjang jendela"
+        return _t(f"basis {base} tidak positif sepanjang jendela",
+                  f"the {base_en} base is not positive over the whole window")
     first, last = m["series"][0][0], m["series"][-1][0]
     if last < data["end"]:
         after = last + timedelta(days=1)
-        return (f"{base} FY{_published_year_on(data, label, after)} tidak positif sejak "
-                f"{after.isoformat()}, sehingga {label} kini tidak bermakna")
+        return _t(f"{base} FY{_published_year_on(data, label, after)} tidak positif sejak "
+                  f"{after.isoformat()}, sehingga {label} kini tidak bermakna",
+                  f"FY{_published_year_on(data, label, after)} {base_en} has not been positive "
+                  f"since {after.isoformat()}, so {label} is no longer meaningful")
     if (last - first).days < 330:
         months = max(1, round((last - first).days / 30.4))
-        return (f"basis {base} tidak positif sebelum {first.isoformat()}, sehingga band {label} "
-                f"hanya {months} bulan" if first > data["start"] else
-                f"data harga harian hanya {months} bulan")
+        return _t(f"basis {base} tidak positif sebelum {first.isoformat()}, sehingga band {label} "
+                  f"hanya {months} bulan" if first > data["start"] else
+                  f"data harga harian hanya {months} bulan",
+                  f"the {base_en} base was not positive before {first.isoformat()}, so the "
+                  f"{label} band covers only {months} months" if first > data["start"] else
+                  f"daily price data cover only {months} months")
     if max(m["mean"], m["median"]) > fmt.MULT_CAP:
-        return (f"{label} di atas {fmt.MULT_CAP}x (basis {base} sangat kecil), "
-                "sehingga band-nya tidak bermakna")
+        return _t(f"{label} di atas {fmt.MULT_CAP}x (basis {base} sangat kecil), "
+                  "sehingga band-nya tidak bermakna",
+                  f"{label} is above {fmt.MULT_CAP}x (a very small {base_en} base), "
+                  "so its band is not meaningful")
     return None
 
 
@@ -1137,7 +1233,9 @@ def ownership_exhibits(intake):
              "Sumber: Sectors, company/report, ownership.major_shareholders; komposisi dapat "
              "berbeda dari tanggal laporan interim.")))
         top = holders[0]
-        paragraphs.append(f"Pemegang saham terbesar adalah {top[0]} dengan {fmt._id(top[1], 1)}% saham.")
+        paragraphs.append(_t(
+            f"Pemegang saham terbesar adalah {top[0]} dengan {fmt._id(top[1], 1)}% saham.",
+            f"The largest shareholder is {top[0]} with {fmt._id(top[1], 1)}% of shares."))
     flow_rows = (local_data.cache_get(intake["ticker"], f"/foreign-flow/{intake['ticker']}/") or {}).get("data") or []
     flows = S.flow_signals(intake["ticker"], flow_rows)
     if flows:
@@ -1150,12 +1248,17 @@ def ownership_exhibits(intake):
         def flow(signal):
             value = signal.get("value")
             if not isinstance(value, (int, float)):
-                return f"arus bersih {signal['display']}"
-            return (f"{'beli' if value >= 0 else 'jual'} bersih "
-                    f"{signal['display'].replace('Rp-', 'Rp').replace('-', '', 1) if value < 0 else signal['display']}")
-        paragraphs.append(
+                return _t(f"arus bersih {signal['display']}", f"a net flow of {signal['display']}")
+            amount = (signal['display'].replace('Rp-', 'Rp').replace('-', '', 1) if value < 0
+                      else signal['display'])
+            return _t(f"{'beli' if value >= 0 else 'jual'} bersih "
+                      f"{signal['display'].replace('Rp-', 'Rp').replace('-', '', 1) if value < 0 else signal['display']}",
+                      f"net {'buying' if value >= 0 else 'selling'} of {amount}")
+        paragraphs.append(_t(
             f"Investor asing mencatat {flow(net)} dalam 20 sesi terakhir, dibanding "
-            f"{flow(window)} sepanjang jendela data.")
+            f"{flow(window)} sepanjang jendela data.",
+            f"Foreign investors recorded {flow(net)} over the last 20 sessions, against "
+            f"{flow(window)} over the full data window."))
     return exhibits, paragraphs
 
 
@@ -1206,6 +1309,11 @@ _NOT_MODELED = "pos ini tidak dihasilkan model forecast"
 _NOT_MEANINGFUL = "tidak bermakna karena basis pembanding nol, negatif, atau tidak tersedia"
 _BEYOND_MODEL = "tahun ini di luar horizon skenario tervalidasi"
 _SECTORS_GAP = "tidak dilaporkan di data Sectors untuk tahun ini"
+# English for ``forecast_statements``' basis labels, quoted in the English prose.
+_STATEMENT_BASIS_EN = {"skenario analis": "analyst scenario",
+                       "skenario analis (model driver bank)": "analyst scenario, bank driver model",
+                       "model operasional": "Operating Model",
+                       "forecast produksi": "production forecast"}
 # Cash-flow reconciling lines: shown only when an actual year's Sectors figures
 # do not reconcile, so the table adds up and the reader sees the source gap.
 # The harness (T7.cash_flow_actual_reconciliation) accepts them on actual
@@ -1852,14 +1960,26 @@ def financials_page(intake, fc=None, va=None, statements=None):
     tie = ("laba bersih, dividen dan ekuitas" if bank else
            "pendapatan, EBITDA dan laba bersih")
     actual_source = "rilis tahunan resmi dalam US$" if usd else "data Sectors"
-    paragraph = (
+    tie_en = ("net profit, dividends and equity" if bank else
+              "revenue, EBITDA and net profit")
+    actual_source_en = "the official annual release in US$" if usd else "Sectors data"
+    basis_en = prose_lang.source(basis, _STATEMENT_BASIS_EN.get(basis))
+    paragraph = _t(
         f"Laporan keuangan {labels[0]}-{labels[-1]}: dua tahun aktual dari {actual_source} dan tiga "
         f"tahun pertama model forecast lima tahun ({basis}). {tie[0].upper() + tie[1:]} forecast "
         "sama dengan Key Financials, grafik kinerja dan exhibit valuasi untuk tahun yang sama; "
         "pos yang tidak dapat diturunkan ditulis n.m. dengan alasannya di catatan tabel."
         if modeled else
         f"Laporan keuangan {labels[0]}-{labels[-1]}: dua tahun aktual dari {actual_source}; kolom "
-        f"{fc_span} ditulis n.m. karena {_NO_FORECAST}.")
+        f"{fc_span} ditulis n.m. karena {_NO_FORECAST}.",
+        f"Financial statements {labels[0]}-{labels[-1]}: two actual years from {actual_source_en} "
+        f"and the first three years of the five-year forecast model ({basis_en}). Forecast "
+        f"{tie_en} match Key Financials, the performance charts and the valuation exhibits for "
+        "the same years; lines that cannot be derived read n.m., with the reason in the table note."
+        if modeled else
+        f"Financial statements {labels[0]}-{labels[-1]}: two actual years from {actual_source_en}; "
+        f"the {fc_span} columns read n.m. because the forecast scenario is not yet validated, so "
+        "the forecast columns are not yet modelled.")
     return _page("Data keuangan", [paragraph], exhibits)
 
 
@@ -1901,10 +2021,14 @@ def sensitivity_page(inputs):
     ]
     low, high = grid[0][1], grid[-1][-1]
     return _page("Sensitivitas harga komoditas dan kurs", [
-        f"Guncangan harga komoditas 10% pada semester kedua mengubah EBITDA {label} sekitar "
-        f"US${fmt._id(inputs['h2_revenue'] * 0.10 / 1e6, 0)} juta.",
-        f"Rentang target pada tabel adalah {low} sampai {high}; skenario turun selalu "
-        "menghasilkan nilai lebih rendah dari base case."], exhibits)
+        _t(f"Guncangan harga komoditas 10% pada semester kedua mengubah EBITDA {label} sekitar "
+           f"US${fmt._id(inputs['h2_revenue'] * 0.10 / 1e6, 0)} juta.",
+           f"A 10% commodity price shock in the second half moves {label} EBITDA by about "
+           f"US${fmt._id(inputs['h2_revenue'] * 0.10 / 1e6, 0)} juta."),
+        _t(f"Rentang target pada tabel adalah {low} sampai {high}; skenario turun selalu "
+           "menghasilkan nilai lebih rendah dari base case.",
+           f"The target range in the table is {low} to {high}; the downside scenario always "
+           "gives a lower value than the base case.")], exhibits)
 
 
 # ------------------------------------------------------ catalysts (mining)
@@ -2026,7 +2150,7 @@ def _rank(title):
 
 # The bank screening DDM (historical payout on a CAGR screen), not a target.
 SCREENING_GRIDS = ("Sensitivitas DDM (CoE x g)", "Sensitivitas Inverse CoE (CoE x ROE)")
-_SCREENING_TEXT = "DDM Gordon memberi Rp"
+_SCREENING_TEXT = "DDM Gordon memberi Rp"  # no builder writes it now, in either language
 
 
 def drop_screening_values(doc):
@@ -2045,18 +2169,27 @@ def drop_screening_values(doc):
         return
 
     if draft:
-        withheld = "Target harga dan sensitivitas valuasi ditahan sampai tinjauan analis selesai."
+        withheld = _t("Target harga dan sensitivitas valuasi ditahan sampai tinjauan analis selesai.",
+                      "The Target Price and valuation sensitivities are withheld until analyst "
+                      "review is complete.")
+        # The English edition states its target in English (and may quote an
+        # Indonesian field it could not translate), so it matches both.
+        states_target = _t(
+            r"(?:menetapkan target|target(?:\s+harga)?\s+Rp|nilai model Rp)",
+            r"(?:menetapkan target|target(?:\s+harga)?\s+Rp|nilai model Rp"
+            r"|\bset (?:a |our |the )?target|target(?:\s+price)?(?:\s+(?:is|of|at))?\s+Rp"
+            r"|model value(?:\s+(?:is|of))?\s+Rp)")
         cover = doc.get("cover") or {}
         for index, bullet in enumerate(cover.get("bullets") or []):
             if isinstance(bullet, str) and re.search(
-                    r"(?:menetapkan target|target(?:\s+harga)?\s+Rp|nilai model Rp)",
+                    states_target,
                     bullet, flags=re.I):
                 cover["bullets"][index] = withheld
         for paragraph in cover.get("paragraf") or []:
             if not isinstance(paragraph, dict):
                 continue
             text = " ".join(str(paragraph.get(key) or "") for key in ("judul", "isi"))
-            if re.search(r"(?:menetapkan target|target(?:\s+harga)?\s+Rp|nilai model Rp)",
+            if re.search(states_target,
                          text, flags=re.I):
                 paragraph["judul"], paragraph["isi"] = "Status target harga", withheld
 
@@ -2652,22 +2785,32 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
     # makes the displayed FY26F-FY28F CAGR describe FY25A-FY28F instead.
     fc_cagr = cagr(rev_bars[n_act:]) if any(num(v) for v in fc_rev) else None
     years = f"{history[-5:][0].get('year')}-{history[-1].get('year')}"
-    move = lambda g: f"{'naik' if g >= 0 else 'turun'} {fmt.pct(abs(g) / 100)}"
+    move = lambda g: _t(f"{'naik' if g >= 0 else 'turun'} {fmt.pct(abs(g) / 100)}",
+                        f"{'up' if g >= 0 else 'down'} {fmt.pct(abs(g) / 100)}")
     last_g = rev_g[n_act - 1]
     if hist_cagr is not None and len([v for v in hist_rev if num(v) is not None]) > 2:
-        text = f"Pendapatan tumbuh CAGR {fmt.pct(hist_cagr)} pada {years}"
+        text = _t(f"Pendapatan tumbuh CAGR {fmt.pct(hist_cagr)} pada {years}",
+                  f"Revenue grew at a CAGR of {fmt.pct(hist_cagr)} over {years}")
         if last_g is not None:
-            text += f" dan {move(last_g)} pada {labels[n_act - 1]}"
+            text += _t(f" dan {move(last_g)} pada {labels[n_act - 1]}",
+                       f" and was {move(last_g)} in {labels[n_act - 1]}")
     elif last_g is not None:
-        text = f"Pendapatan {move(last_g)} pada {labels[n_act - 1]}"
+        text = _t(f"Pendapatan {move(last_g)} pada {labels[n_act - 1]}",
+                  f"Revenue was {move(last_g)} in {labels[n_act - 1]}")
     else:
-        text = "Pendapatan historis belum cukup untuk CAGR"
+        text = _t("Pendapatan historis belum cukup untuk CAGR",
+                  "Revenue history is too short for a CAGR")
     if fc_cagr is not None:
         pace = ("lebih lambat dari" if fc_cagr < hist_cagr - 0.05 else
                 "lebih cepat dari" if fc_cagr > hist_cagr + 0.05 else "sejalan dengan") \
             if hist_cagr is not None else "dibanding"
-        text += (f"; skenario {labels[n_act]}-{labels[-1]} memberi CAGR {fmt.pct(fc_cagr)}, "
-                 f"{pace} laju historis")
+        pace_en = ("slower than" if fc_cagr < hist_cagr - 0.05 else
+                   "faster than" if fc_cagr > hist_cagr + 0.05 else "in line with") \
+            if hist_cagr is not None else "against"
+        text += _t(f"; skenario {labels[n_act]}-{labels[-1]} memberi CAGR {fmt.pct(fc_cagr)}, "
+                   f"{pace} laju historis",
+                   f"; the {labels[n_act]}-{labels[-1]} scenario gives a CAGR of {fmt.pct(fc_cagr)}, "
+                   f"{pace_en} the historical pace")
     panels.append((revenue_title, {"label": f"Pendapatan ({unit}) & pertumbuhan", "bars": rev_bars,
                                    "line": rev_g, "is_forecast": is_fc}, labels, text + "."))
 
@@ -2676,18 +2819,29 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
                   if num(a.get("ebitda")) and a.get("revenue")]
         fc_m = [m for m in ebitda_m[n_act:] if m is not None]
         if hist_m:
-            text = (f"Margin EBITDA {labels[n_act - 1]} "
-                    f"{fmt.pct(ebitda_m[n_act - 1] / 100) if ebitda_m[n_act - 1] is not None else 'n.m.'}"
-                    f" dibanding rata-rata {len(hist_m)} tahun {fmt.pct(sum(hist_m) / len(hist_m))}")
-            text += (f"; skenario membawa margin ke {fmt.pct(fc_m[-1] / 100)} pada {labels[-1]}, "
-                     + ("di atas" if fc_m[-1] / 100 > sum(hist_m) / len(hist_m) + 0.02 else
-                        "di bawah" if fc_m[-1] / 100 < sum(hist_m) / len(hist_m) - 0.02 else
-                        "sejalan dengan") + " rata-rata historis."
-                     if fc_m else "; skenario belum memodelkan EBITDA, sehingga margin historis "
-                     "menjadi acuan.")
+            text = _t(f"Margin EBITDA {labels[n_act - 1]} "
+                      f"{fmt.pct(ebitda_m[n_act - 1] / 100) if ebitda_m[n_act - 1] is not None else 'n.m.'}"
+                      f" dibanding rata-rata {len(hist_m)} tahun {fmt.pct(sum(hist_m) / len(hist_m))}",
+                      f"The {labels[n_act - 1]} EBITDA margin was "
+                      f"{fmt.pct(ebitda_m[n_act - 1] / 100) if ebitda_m[n_act - 1] is not None else 'n.m.'}"
+                      f" against a {len(hist_m)}-year average of {fmt.pct(sum(hist_m) / len(hist_m))}")
+            text += _t(f"; skenario membawa margin ke {fmt.pct(fc_m[-1] / 100)} pada {labels[-1]}, "
+                       + ("di atas" if fc_m[-1] / 100 > sum(hist_m) / len(hist_m) + 0.02 else
+                          "di bawah" if fc_m[-1] / 100 < sum(hist_m) / len(hist_m) - 0.02 else
+                          "sejalan dengan") + " rata-rata historis."
+                       if fc_m else "; skenario belum memodelkan EBITDA, sehingga margin historis "
+                       "menjadi acuan.",
+                       f"; the scenario takes the margin to {fmt.pct(fc_m[-1] / 100)} in {labels[-1]}, "
+                       + ("above" if fc_m[-1] / 100 > sum(hist_m) / len(hist_m) + 0.02 else
+                          "below" if fc_m[-1] / 100 < sum(hist_m) / len(hist_m) - 0.02 else
+                          "in line with") + " the historical average."
+                       if fc_m else "; the scenario does not yet model EBITDA, so the historical "
+                       "margin is the reference.")
         else:
-            text = ("EBITDA tidak dilaporkan pada data Sectors untuk periode ini; margin "
-                    "EBITDA tidak ditampilkan.")
+            text = _t("EBITDA tidak dilaporkan pada data Sectors untuk periode ini; margin "
+                      "EBITDA tidak ditampilkan.",
+                      "EBITDA is not reported in Sectors data for this period; the EBITDA margin "
+                      "is not shown.")
         has_ebitda = any(num(v) is not None for v in ebitda_bars)
         panels.append((f"EBITDA dan margin ({span})",
                        {"label": f"EBITDA ({unit}) & margin" if has_ebitda else "EBITDA belum dimodelkan",
@@ -2697,26 +2851,37 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
     last_rev_g, last_net_g = rev_g[n_act - 1], eps_g[n_act - 1]
     if last_rev_g is not None and last_net_g is not None:
         gap = last_net_g - last_rev_g
-        text = (f"Laba bersih {labels[n_act - 1]} {'naik' if last_net_g >= 0 else 'turun'} "
-                f"{fmt.pct(abs(last_net_g) / 100)} dibanding pendapatan "
-                f"{'naik' if last_rev_g >= 0 else 'turun'} {fmt.pct(abs(last_rev_g) / 100)}")
+        text = _t(f"Laba bersih {labels[n_act - 1]} {'naik' if last_net_g >= 0 else 'turun'} "
+                  f"{fmt.pct(abs(last_net_g) / 100)} dibanding pendapatan "
+                  f"{'naik' if last_rev_g >= 0 else 'turun'} {fmt.pct(abs(last_rev_g) / 100)}",
+                  f"{labels[n_act - 1]} net profit was {'up' if last_net_g >= 0 else 'down'} "
+                  f"{fmt.pct(abs(last_net_g) / 100)} against revenue "
+                  f"{'up' if last_rev_g >= 0 else 'down'} {fmt.pct(abs(last_rev_g) / 100)}")
         if abs(gap) > 5:
             now, before = sectors_annuals[-1], sectors_annuals[-2]
             items = []
-            for key, name in (("interest", "beban bunga"), ("tax", "pajak")):
+            for key, name in (("interest", _t("beban bunga", "interest expense")),
+                              ("tax", _t("pajak", "tax"))):
                 a_now, a_before = _num(now.get(key)), _num(before.get(key))
                 if a_now is not None and a_before:
-                    items.append(f"{name} {'naik' if a_now >= a_before else 'turun'} "
-                                 f"{fmt.pct(abs(a_now / a_before - 1))}")
-            text += ("; selisihnya berasal dari pos di bawah laba usaha (" + ", ".join(items) + ")"
-                     if items else "; selisihnya berasal dari pos di bawah laba usaha")
+                    items.append(_t(f"{name} {'naik' if a_now >= a_before else 'turun'} "
+                                    f"{fmt.pct(abs(a_now / a_before - 1))}",
+                                    f"{name} {'up' if a_now >= a_before else 'down'} "
+                                    f"{fmt.pct(abs(a_now / a_before - 1))}"))
+            text += _t("; selisihnya berasal dari pos di bawah laba usaha (" + ", ".join(items) + ")"
+                       if items else "; selisihnya berasal dari pos di bawah laba usaha",
+                       "; the gap comes from lines below operating profit (" + ", ".join(items) + ")"
+                       if items else "; the gap comes from lines below operating profit")
         text += "."
     else:
-        text = "Pertumbuhan laba bersih belum dapat dibandingkan dengan pendapatan."
+        text = _t("Pertumbuhan laba bersih belum dapat dibandingkan dengan pendapatan.",
+                  "Net profit growth cannot yet be compared with revenue.")
     net_cagr = cagr(net_bars[n_act:]) if any(num(v) for v in net_bars[n_act:]) else None
     if net_cagr is not None and fc_cagr is not None:
-        text += (f" Pada {labels[n_act]}-{labels[-1]} laba bersih tumbuh CAGR {fmt.pct(net_cagr)} "
-                 f"dibanding pendapatan {fmt.pct(fc_cagr)}.")
+        text += _t(f" Pada {labels[n_act]}-{labels[-1]} laba bersih tumbuh CAGR {fmt.pct(net_cagr)} "
+                   f"dibanding pendapatan {fmt.pct(fc_cagr)}.",
+                   f" Over {labels[n_act]}-{labels[-1]} net profit grows at a CAGR of "
+                   f"{fmt.pct(net_cagr)} against {fmt.pct(fc_cagr)} for revenue.")
     panels.append((f"Laba bersih dan pertumbuhan EPS ({span})",
                    {"label": f"Laba bersih ({unit}) & pertumbuhan EPS", "bars": net_bars,
                     "line": eps_g, "is_forecast": is_fc}, labels, text))
@@ -2734,15 +2899,23 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
         mean = (now + prev) / 2 if now is not None and prev is not None else None
         roe.append(gain / mean * 100 if gain is not None and mean and mean > 0 else None)
     if bank:
-        text = (f"Ekuitas {labels[n_act - 1]} Rp{fmt._id(equity[n_act - 1] / 1e12, 1)} triliun "
-                f"dengan ROE {fmt.pct(roe[n_act - 1] / 100)}"
-                if equity[n_act - 1] and roe[n_act - 1] is not None else "Ekuitas aktual belum lengkap")
+        text = _t(f"Ekuitas {labels[n_act - 1]} Rp{fmt._id(equity[n_act - 1] / 1e12, 1)} triliun "
+                  f"dengan ROE {fmt.pct(roe[n_act - 1] / 100)}"
+                  if equity[n_act - 1] and roe[n_act - 1] is not None else "Ekuitas aktual belum lengkap",
+                  f"{labels[n_act - 1]} equity was Rp{fmt._id(equity[n_act - 1] / 1e12, 1)} triliun "
+                  f"with an ROE of {fmt.pct(roe[n_act - 1] / 100)}"
+                  if equity[n_act - 1] and roe[n_act - 1] is not None else
+                  "Actual equity is incomplete")
         payout = next((num(r.get("payout")) for r in statements.get("rows") or []
                        if num(r.get("payout")) is not None), None)
         if equity[-1] and roe[-1] is not None:
-            text += (f"; skenario membawa ekuitas ke Rp{fmt._id(equity[-1] / 1e12, 1)} triliun dan "
-                     f"ROE {fmt.pct(roe[-1] / 100)} pada {labels[-1]}"
-                     + (f", dengan payout {fmt.pct(payout)} dari laba" if payout is not None else ""))
+            text += _t(f"; skenario membawa ekuitas ke Rp{fmt._id(equity[-1] / 1e12, 1)} triliun dan "
+                       f"ROE {fmt.pct(roe[-1] / 100)} pada {labels[-1]}"
+                       + (f", dengan payout {fmt.pct(payout)} dari laba" if payout is not None else ""),
+                       f"; the scenario takes equity to Rp{fmt._id(equity[-1] / 1e12, 1)} triliun and "
+                       f"ROE to {fmt.pct(roe[-1] / 100)} in {labels[-1]}"
+                       + (f", with a payout of {fmt.pct(payout)} of profit"
+                          if payout is not None else ""))
         panels.append((f"Ekuitas dan ROE ({span})",
                        {"label": "Ekuitas (Rp) & ROE", "bars": equity, "line": roe,
                         "is_forecast": is_fc}, labels, text + "."))
@@ -2774,15 +2947,23 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
             coc.append(num(row.get("cost_of_credit")) * 100
                        if num(row.get("cost_of_credit")) is not None else None)
         has_fc = any(v is not None for v in nim[n_act:] + coc[n_act:])
-        text = (f"NIM {labels[n_act - 1]} {fmt.pct(nim[n_act - 1] / 100)}"
-                + (f" dengan biaya kredit {fmt.pct(coc[n_act - 1] / 100)}"
-                   if coc[n_act - 1] is not None else "")
-                + "; keduanya driver utama laba bank, bukan leverage"
-                if nim[n_act - 1] is not None else
-                "NIM belum tersedia di data Sectors untuk periode ini")
+        text = _t(f"NIM {labels[n_act - 1]} {fmt.pct(nim[n_act - 1] / 100)}"
+                  + (f" dengan biaya kredit {fmt.pct(coc[n_act - 1] / 100)}"
+                     if coc[n_act - 1] is not None else "")
+                  + "; keduanya driver utama laba bank, bukan leverage"
+                  if nim[n_act - 1] is not None else
+                  "NIM belum tersedia di data Sectors untuk periode ini",
+                  f"{labels[n_act - 1]} NIM was {fmt.pct(nim[n_act - 1] / 100)}"
+                  + (f" with a cost of credit of {fmt.pct(coc[n_act - 1] / 100)}"
+                     if coc[n_act - 1] is not None else "")
+                  + "; both are the main drivers of bank earnings, not leverage"
+                  if nim[n_act - 1] is not None else
+                  "NIM is not yet available in Sectors data for this period")
         if has_fc and nim[-1] is not None and coc[-1] is not None:
-            text += (f". Model driver bank membawa NIM ke {fmt.pct(nim[-1] / 100)} dan biaya "
-                     f"kredit ke {fmt.pct(coc[-1] / 100)} pada {labels[-1]}")
+            text += _t(f". Model driver bank membawa NIM ke {fmt.pct(nim[-1] / 100)} dan biaya "
+                       f"kredit ke {fmt.pct(coc[-1] / 100)} pada {labels[-1]}",
+                       f". The bank driver model takes NIM to {fmt.pct(nim[-1] / 100)} and the cost "
+                       f"of credit to {fmt.pct(coc[-1] / 100)} in {labels[-1]}")
         text += "."
         cols = labels if frows else labels[:n_act]
         nim, coc = nim[:len(cols)], coc[:len(cols)]
@@ -2805,52 +2986,80 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
         cols = labels if has_fc else labels[:n_act]
         parts = []
         if der[n_act - 1] is not None and roe[n_act - 1] is not None:
-            parts.append(f"Liabilitas terhadap ekuitas {labels[n_act - 1]} "
-                         f"{fmt.mult(der[n_act - 1])} dengan ROE "
-                         f"{fmt.pct(roe[n_act - 1] / 100)}: " +
-                         ("pertumbuhan didanai leverage yang meningkat"
-                          if der[n_act - 2] and der[n_act - 1] > der[n_act - 2] * 1.1
-                          else "rasio tidak naik material"))
+            parts.append(_t(f"Liabilitas terhadap ekuitas {labels[n_act - 1]} "
+                            f"{fmt.mult(der[n_act - 1])} dengan ROE "
+                            f"{fmt.pct(roe[n_act - 1] / 100)}: " +
+                            ("pertumbuhan didanai leverage yang meningkat"
+                             if der[n_act - 2] and der[n_act - 1] > der[n_act - 2] * 1.1
+                             else "rasio tidak naik material"),
+                            f"Liabilities to equity were {fmt.mult(der[n_act - 1])} in "
+                            f"{labels[n_act - 1]}, with an ROE of "
+                            f"{fmt.pct(roe[n_act - 1] / 100)}: " +
+                            ("growth funded by rising leverage"
+                             if der[n_act - 2] and der[n_act - 1] > der[n_act - 2] * 1.1
+                             else "the ratio has not risen materially")))
         elif any(num(a.get("equity")) is not None and a["equity"] <= 0 for a in sectors_annuals):
-            parts.append("Ekuitas aktual sempat negatif, sehingga DER dan ROE aktual tidak "
-                         "bermakna")
+            parts.append(_t("Ekuitas aktual sempat negatif, sehingga DER dan ROE aktual tidak "
+                            "bermakna",
+                            "Actual equity was negative at one point, so actual DER and ROE are "
+                            "not meaningful"))
         if has_fc and der[-1] is not None and roe[-1] is not None:
-            parts.append(f"skenario membawa DER ke {fmt.mult(der[-1])} dan ROE ke "
-                         f"{fmt.pct(roe[-1] / 100)} pada {labels[-1]}")
+            parts.append(_t(f"skenario membawa DER ke {fmt.mult(der[-1])} dan ROE ke "
+                            f"{fmt.pct(roe[-1] / 100)} pada {labels[-1]}",
+                            f"the scenario takes DER to {fmt.mult(der[-1])} and ROE to "
+                            f"{fmt.pct(roe[-1] / 100)} in {labels[-1]}"))
         elif has_fc and roe[-1] is not None:
-            parts.append(f"skenario membawa ROE ke {fmt.pct(roe[-1] / 100)} pada {labels[-1]}")
+            parts.append(_t(f"skenario membawa ROE ke {fmt.pct(roe[-1] / 100)} pada {labels[-1]}",
+                            f"the scenario takes ROE to {fmt.pct(roe[-1] / 100)} in {labels[-1]}"))
         text = ("; ".join(parts) + ".") if parts else \
-            "Data leverage/ROE belum lengkap untuk periode ini."
+            _t("Data leverage/ROE belum lengkap untuk periode ini.",
+               "Leverage/ROE data are incomplete for this period.")
         text = text[0].upper() + text[1:]
         panels.append((f"DER dan ROE ({cols[0]}-{cols[-1]})",
                        {"label": "DER (x) & ROE", "bars": der[:len(cols)], "line": roe[:len(cols)],
                         "is_forecast": is_fc[:len(cols)]}, cols, text))
 
-    notes = statements.get("notes") or {}
-    reasons = {"Produksi tembaga": (_MINING_VOLUME_GAP, _MINING_C1_GAP),
-               "Pendapatan": (notes.get("revenue"), "basis tahun sebelumnya nol atau negatif"),
-               "EBITDA": (notes.get("ebitda"), "pendapatan atau EBITDA tidak tersedia"),
-               "Laba bersih": (notes.get("earnings"), "laba tahun sebelumnya nol atau negatif"),
-               "DER": (notes.get("total_liabilities"), "ekuitas rata-rata tidak positif"),
-               "Ekuitas": (notes.get("total_equity"), "ekuitas rata-rata tidak positif"),
-               "NIM": (notes.get("net_interest_margin") or "skenario bank tidak memodelkan NIM",
-                       notes.get("cost_of_credit") or "skenario bank tidak memodelkan biaya kredit")}
+    # The statement model's own reasons are its Indonesian text: quoted as source.
+    notes = {key: prose_lang.source(value)
+             for key, value in (statements.get("notes") or {}).items()}
+    reasons = {"Produksi tembaga": (_t(_MINING_VOLUME_GAP, _MINING_VOLUME_GAP_EN),
+                                    _t(_MINING_C1_GAP, _MINING_C1_GAP_EN)),
+               "Pendapatan": (notes.get("revenue"),
+                              _t("basis tahun sebelumnya nol atau negatif",
+                                 "the prior-year base is zero or negative")),
+               "EBITDA": (notes.get("ebitda"), _t("pendapatan atau EBITDA tidak tersedia",
+                                                  "revenue or EBITDA is not available")),
+               "Laba bersih": (notes.get("earnings"),
+                               _t("laba tahun sebelumnya nol atau negatif",
+                                  "prior-year profit is zero or negative")),
+               "DER": (notes.get("total_liabilities"),
+                       _t("ekuitas rata-rata tidak positif", "average equity is not positive")),
+               "Ekuitas": (notes.get("total_equity"),
+                           _t("ekuitas rata-rata tidak positif", "average equity is not positive")),
+               "NIM": (notes.get("net_interest_margin")
+                       or _t("skenario bank tidak memodelkan NIM",
+                             "the bank scenario does not model NIM"),
+                       notes.get("cost_of_credit")
+                       or _t("skenario bank tidak memodelkan biaya kredit",
+                             "the bank scenario does not model the cost of credit"))}
 
     def explain(panel, cols, text):
         """Name forecast points left empty (n.m.) and why, next to the chart."""
         name = panel["label"].split(" (")[0].split(" &")[0]
-        bar_reason, line_reason = reasons.get(name, (None, "tidak bermakna"))
+        bar_reason, line_reason = reasons.get(name, (None, _t("tidak bermakna", "not meaningful")))
         flags = panel.get("is_forecast") or []
         out = []
-        for part, reason in (("bars", bar_reason or "tidak dimodelkan skenario"),
+        for part, reason in (("bars", bar_reason or _t("tidak dimodelkan skenario",
+                                                       "not modelled by the scenario")),
                              ("line", line_reason)):
             gone = [c for i, c in enumerate(cols) if i < len(flags) and flags[i]
                     and c not in padded and (i >= len(panel[part]) or panel[part][i] is None)]
             if gone:
-                what = ("batang" if part == "bars" else "garis")
+                what = (_t("batang", "bars") if part == "bars" else _t("garis", "line"))
                 out.append(f"{what} {', '.join(gone)} n.m.: {str(reason).rstrip('.')}")
         if padded and any(c in padded for c in cols):
-            out.append(f"{', '.join(padded)} n.m.: tahun di luar horizon skenario tervalidasi")
+            out.append(_t(f"{', '.join(padded)} n.m.: tahun di luar horizon skenario tervalidasi",
+                          f"{', '.join(padded)} n.m.: years beyond the validated scenario horizon"))
         return text + (" " + "; ".join(out)[0].upper() + "; ".join(out)[1:] + "." if out else "")
 
     panels = [(title, panel, cols, explain(panel, cols, text))
@@ -2871,13 +3080,18 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
         if exhibit["judul"] == revenue_title:
             exhibit_ids.tag(exhibit, exhibit_ids.REVENUE_PANEL)
     return _page("Kinerja keuangan dan profitabilitas",
-                 [f"Empat grafik berikut memakai periode {span} yang sama dengan Key Financials; "
-                  "forecast hanya tampil bila skenario tervalidasi."], exhibits)
+                 [_t(f"Empat grafik berikut memakai periode {span} yang sama dengan Key Financials; "
+                     "forecast hanya tampil bila skenario tervalidasi.",
+                     f"The four charts below use the same {span} period as Key Financials; "
+                     "forecasts appear only when the scenario is validated.")], exhibits)
 
 
 _MINING_C1_GAP = ("jadwal LoM valuasi hanya memuat sebagian tahun ini (2H), sehingga biaya "
                   "tunai setahun penuh per pon tidak dihitung")
+_MINING_C1_GAP_EN = ("the valuation LoM schedule covers only part of this year (2H), so a "
+                     "full-year cash cost per pound is not computed")
 _MINING_VOLUME_GAP = "jadwal LoM atau panduan emiten untuk tahun ini tidak tersedia"
+_MINING_VOLUME_GAP_EN = "no LoM schedule or issuer guidance is available for this year"
 
 
 def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
@@ -2924,31 +3138,38 @@ def _mining_ops_panel(intake, va, labels, n_act, frows, is_fc):
             tonnes = tonnes + h1 if h1 is not None else None
         if tonnes is not None:
             fc_volume.append(tonnes * lom_mod.LB_PER_T / 1e6)
-            basis.append((r.get("label"), "1H aktual + 2H jadwal LoM" if year in part_year
-                          else "jadwal LoM valuasi"))
+            basis.append((r.get("label"), _t("1H aktual + 2H jadwal LoM", "1H actual + 2H LoM schedule")
+                          if year in part_year
+                          else _t("jadwal LoM valuasi", "valuation LoM schedule")))
         elif _num((guidance.get(f"FY{year}") or {}).get("value")) is not None:
             fc_volume.append(float(guidance[f"FY{year}"]["value"]))
-            basis.append((r.get("label"), f"panduan emiten FY{year}"))
+            basis.append((r.get("label"), _t(f"panduan emiten FY{year}", f"issuer FY{year} guidance")))
         else:
             fc_volume.append(None)
     last = labels[n_act - 1]
-    text = (f"Tembaga dalam konsentrat {last} {fmt._id(volume[-1], 0)} juta pon "
-            f"({'turun' if volume[-1] < volume[0] else 'naik'} "
-            f"{fmt.pct(abs(volume[-1] / volume[0] - 1))} dari {labels[0]})")
+    text = _t(f"Tembaga dalam konsentrat {last} {fmt._id(volume[-1], 0)} juta pon "
+              f"({'turun' if volume[-1] < volume[0] else 'naik'} "
+              f"{fmt.pct(abs(volume[-1] / volume[0] - 1))} dari {labels[0]})",
+              f"{last} copper in concentrate was {fmt._id(volume[-1], 0)} juta lb "
+              f"({'down' if volume[-1] < volume[0] else 'up'} "
+              f"{fmt.pct(abs(volume[-1] / volume[0] - 1))} from {labels[0]})")
     if all(isinstance(g, (int, float)) for g in gold):
-        text += f", emas {fmt._id(gold[-1], 0)} ribu oz dari {fmt._id(gold[0], 0)} ribu oz"
+        text += _t(f", emas {fmt._id(gold[-1], 0)} ribu oz dari {fmt._id(gold[0], 0)} ribu oz",
+                   f", gold {fmt._id(gold[-1], 0)} koz from {fmt._id(gold[0], 0)} koz")
     if c1[-1] is not None:
         text += (f"; Adjusted C1 {'(' + fmt._id(-c1[-1], 2) + ')' if c1[-1] < 0 else fmt._id(c1[-1], 2)}"
                  " US$/lb"
-                 + (" (negatif: kredit emas dan perak melebihi biaya tunai)"
+                 + (_t(" (negatif: kredit emas dan perak melebihi biaya tunai)",
+                       " (negative: gold and silver credits exceed cash costs)")
                     if c1[-1] < 0 else ""))
     known = [f"{label} {fmt._id(v, 0)} ({how})" for (label, how), v in
              zip(basis, [v for v in fc_volume if v is not None])]
     if known:
-        text += ". Volume forecast (juta pon): " + ", ".join(known)
+        text += _t(". Volume forecast (juta pon): ", ". Forecast volume (million lb): ") + ", ".join(known)
     costed = [(r.get("label"), v) for r, v in zip(frows, fc_cost) if v is not None]
     if costed:
-        text += (". Biaya tunai model setelah kredit emas (US$/lb): "
+        text += (_t(". Biaya tunai model setelah kredit emas (US$/lb): ",
+                    ". Model cash cost after gold credit (US$/lb): ")
                  + ", ".join(f"{label} {'(' + fmt._id(-v, 2) + ')' if v < 0 else fmt._id(v, 2)}"
                              for label, v in costed))
     text += "."
@@ -2999,21 +3220,26 @@ def fallback_risks(intake):
     # Sectors annuals are in rupiah; only a rupiah reporter can mix them with the balance sheet.
     ebitda_rows = [r for r in annual if r.get("ebitda")] or (
         [] if usd else [r for r in sectors if r.get("ebitda")])
-    as_of = balance.get("period_end", "neraca terakhir")
+    as_of = balance.get("period_end", _t("neraca terakhir", "the latest balance sheet"))
     if (debt is None or cash is None) and not usd and sectors and \
             intake.get("model_profile") != "financial_ddm":
         debt, cash = sectors[-1].get("total_debt"), sectors[-1].get("cash")
-        as_of = f"akhir {sectors[-1]['year']}"
+        as_of = _t(f"akhir {sectors[-1]['year']}", f"end-{sectors[-1]['year']}")
     last = ebitda_rows[-1] if ebitda_rows else None
     leverage = ((debt - cash) / last["ebitda"] if debt is not None and cash is not None
                 and last and last["ebitda"] > 0 else None)
     # Net debt under 2x EBITDA is not a material funding risk.
     if debt is not None and cash is not None and debt > cash and (leverage is None or leverage >= 2):
-        cover = f", setara {fmt.mult(leverage, 1)} EBITDA {last['year']}" if leverage else ""
-        risks.append({"kategori": "Pendanaan", "judul": "Utang bersih serta biaya bunga",
-                      "isi": f"Utang bersih {money(debt - cash)} per {as_of}{cover}. "
-                             "Kenaikan bunga, refinancing, atau EBITDA yang lebih rendah "
-                             "langsung menekan laba bersih dan nilai ekuitas.",
+        cover = (_t(f", setara {fmt.mult(leverage, 1)} EBITDA {last['year']}",
+                    f", or {fmt.mult(leverage, 1)} {last['year']} EBITDA") if leverage else "")
+        risks.append({"kategori": "Pendanaan",
+                      "judul": _t("Utang bersih serta biaya bunga", "Net debt and interest cost"),
+                      "isi": _t(f"Utang bersih {money(debt - cash)} per {as_of}{cover}. "
+                                "Kenaikan bunga, refinancing, atau EBITDA yang lebih rendah "
+                                "langsung menekan laba bersih dan nilai ekuitas.",
+                                f"Net debt was {money(debt - cash)} as of {as_of}{cover}. "
+                                "Higher rates, refinancing or lower EBITDA would weigh directly "
+                                "on net profit and equity value."),
                       "sumber": source})
     holders = [(name, pct) for name, pct in _holders(intake) if pct is not None]
     public = next((pct for name, pct in holders
@@ -3023,23 +3249,37 @@ def fallback_risks(intake):
     top3 = sorted((h for h in holders if h[0].lower() not in ("public", "publik", "masyarakat")),
                   key=lambda h: -h[1])[:3]
     if control and control[1] <= 50 and sum(pct for _, pct in top3) > 50:
-        risks.append({"kategori": "Tata kelola", "judul": "Kepemilikan terkonsentrasi",
-                      "isi": f"Tiga pemegang saham terbesar memegang "
-                             f"{fmt._id(sum(pct for _, pct in top3), 1)}% saham. Kebijakan dividen "
-                             "dan aksi korporasi ditentukan oleh sedikit pihak, dan penjualan "
-                             "blok saham dapat menekan harga.",
+        risks.append({"kategori": "Tata kelola",
+                      "judul": _t("Kepemilikan terkonsentrasi", "Concentrated ownership"),
+                      "isi": _t(f"Tiga pemegang saham terbesar memegang "
+                                f"{fmt._id(sum(pct for _, pct in top3), 1)}% saham. Kebijakan dividen "
+                                "dan aksi korporasi ditentukan oleh sedikit pihak, dan penjualan "
+                                "blok saham dapat menekan harga.",
+                                f"The three largest shareholders hold "
+                                f"{fmt._id(sum(pct for _, pct in top3), 1)}% of shares. Dividend "
+                                "policy and corporate actions rest with a few parties, and block "
+                                "sales could weigh on the share price."),
                       "sumber": "data kepemilikan Sectors"})
     if control and control[1] > 50:
-        risks.append({"kategori": "Tata kelola", "judul": "Kendali pemegang saham mayoritas",
-                      "isi": f"{control[0]} memegang {fmt._id(control[1], 1)}% saham. Transaksi "
-                             "pihak berelasi, kebijakan dividen, dan aksi korporasi mengikuti "
-                             "kepentingan pengendali, sehingga minoritas menanggung risikonya.",
+        risks.append({"kategori": "Tata kelola",
+                      "judul": _t("Kendali pemegang saham mayoritas", "Majority shareholder control"),
+                      "isi": _t(f"{control[0]} memegang {fmt._id(control[1], 1)}% saham. Transaksi "
+                                "pihak berelasi, kebijakan dividen, dan aksi korporasi mengikuti "
+                                "kepentingan pengendali, sehingga minoritas menanggung risikonya.",
+                                f"{control[0]} holds {fmt._id(control[1], 1)}% of shares. "
+                                "Related-party transactions, dividend policy and corporate actions "
+                                "follow the controlling shareholder's interests, and minority "
+                                "shareholders bear the risk."),
                       "sumber": "data kepemilikan Sectors"})
     if public is not None and public < 7.5:
-        risks.append({"kategori": "Regulasi", "judul": "Free float di bawah batas minimum",
-                      "isi": f"Free float {fmt._id(public, 1)}% di bawah batas 7,5% bursa. "
-                             "Pemenuhannya lewat penerbitan saham baru atau penjualan pengendali "
-                             "dapat mendilusi atau menekan harga saham.",
+        risks.append({"kategori": "Regulasi",
+                      "judul": _t("Free float di bawah batas minimum", "Free float below the minimum"),
+                      "isi": _t(f"Free float {fmt._id(public, 1)}% di bawah batas 7,5% bursa. "
+                                "Pemenuhannya lewat penerbitan saham baru atau penjualan pengendali "
+                                "dapat mendilusi atau menekan harga saham.",
+                                f"Free float of {fmt._id(public, 1)}% is below the exchange's 7,5% "
+                                "minimum. Meeting it through new shares or a sale by the controlling "
+                                "shareholder could dilute or weigh on the share price."),
                       "sumber": "data kepemilikan Sectors"})
     # Filed annuals when extracted, otherwise the Sectors annual history.
     history = [(row["year"], row.get("revenue"), row.get("net_profit")) for row in annual] or [
@@ -3050,52 +3290,82 @@ def fallback_risks(intake):
     if len(margins) == 2 and margins[1][1] <= margins[0][1] - 0.01:
         (y0, m0), (y1, m1) = margins
         risks.append({"kategori": "Operasi",
-                      "judul": ("Laba bersih berbalik rugi" if m1 < 0
-                                else "Margin laba bersih menyempit"),
-                      "isi": (f"Margin laba bersih {fmt.pct(m0)} pada {y0} berbalik menjadi rugi "
-                              f"bersih {fmt.pct(-m1)} dari pendapatan pada {y1}. "
-                              if m1 < 0 else
-                              f"Margin laba bersih turun dari {fmt.pct(m0)} pada {y0} ke "
-                              f"{fmt.pct(m1)} pada {y1}. ")
-                             + "Bila tekanan biaya berlanjut, pertumbuhan pendapatan tidak "
-                               "sepenuhnya menjadi laba.",
+                      "judul": (_t("Laba bersih berbalik rugi", "Net profit turned to a loss")
+                                if m1 < 0
+                                else _t("Margin laba bersih menyempit", "Net margin narrowing")),
+                      "isi": _t((f"Margin laba bersih {fmt.pct(m0)} pada {y0} berbalik menjadi rugi "
+                                 f"bersih {fmt.pct(-m1)} dari pendapatan pada {y1}. "
+                                 if m1 < 0 else
+                                 f"Margin laba bersih turun dari {fmt.pct(m0)} pada {y0} ke "
+                                 f"{fmt.pct(m1)} pada {y1}. ")
+                                + "Bila tekanan biaya berlanjut, pertumbuhan pendapatan tidak "
+                                  "sepenuhnya menjadi laba.",
+                                (f"A net margin of {fmt.pct(m0)} in {y0} turned into a net loss of "
+                                 f"{fmt.pct(-m1)} of revenue in {y1}. "
+                                 if m1 < 0 else
+                                 f"The net margin fell from {fmt.pct(m0)} in {y0} to "
+                                 f"{fmt.pct(m1)} in {y1}. ")
+                                + "If cost pressure persists, revenue growth will not fully "
+                                  "reach profit."),
                       "sumber": source})
     if intake.get("model_profile") == "financial_ddm":
         loans, deposits = balance.get("loans"), balance.get("deposits")
         if loans and deposits:
-            risks.append({"kategori": "Pendanaan", "judul": "Likuiditas serta biaya dana",
-                          "isi": f"Rasio kredit terhadap simpanan {fmt.pct(loans / deposits)} "
-                                 f"per {balance.get('period_end', 'neraca terakhir')}. Pertumbuhan "
-                                 "kredit bergantung pada kenaikan simpanan; persaingan dana "
-                                 "menaikkan biaya dana dan menekan margin bunga bersih.",
+            risks.append({"kategori": "Pendanaan",
+                          "judul": _t("Likuiditas serta biaya dana", "Liquidity and cost of funds"),
+                          "isi": _t(f"Rasio kredit terhadap simpanan {fmt.pct(loans / deposits)} "
+                                    f"per {balance.get('period_end', 'neraca terakhir')}. Pertumbuhan "
+                                    "kredit bergantung pada kenaikan simpanan; persaingan dana "
+                                    "menaikkan biaya dana dan menekan margin bunga bersih.",
+                                    f"The loan-to-deposit ratio was {fmt.pct(loans / deposits)} as "
+                                    f"of {balance.get('period_end', 'the latest balance sheet')}. "
+                                    "Loan growth depends on deposit growth; competition for funding "
+                                    "raises the cost of funds and squeezes the net interest margin."),
                           "sumber": source})
         last = next((row for row in reversed(intake.get("annuals") or [])
                      if row.get("equity") and row.get("assets")), None)
         if last:
-            risks.append({"kategori": "Modal", "judul": "Ruang modal untuk pertumbuhan kredit",
-                          "isi": f"Ekuitas setara {fmt.pct(last['equity'] / last['assets'])} dari "
-                                 f"aset pada {last.get('year', 'tahun terakhir')}. Kenaikan kredit "
-                                 "bermasalah atau pembayaran dividen yang besar menggerus modal "
-                                 "yang menopang pertumbuhan kredit.",
+            risks.append({"kategori": "Modal",
+                          "judul": _t("Ruang modal untuk pertumbuhan kredit",
+                                      "Capital headroom for loan growth"),
+                          "isi": _t(f"Ekuitas setara {fmt.pct(last['equity'] / last['assets'])} dari "
+                                    f"aset pada {last.get('year', 'tahun terakhir')}. Kenaikan kredit "
+                                    "bermasalah atau pembayaran dividen yang besar menggerus modal "
+                                    "yang menopang pertumbuhan kredit.",
+                                    f"Equity was {fmt.pct(last['equity'] / last['assets'])} of "
+                                    f"assets in {last.get('year', 'the latest year')}. Rising "
+                                    "non-performing loans or large dividend payouts would erode the "
+                                    "capital that supports loan growth."),
                           "sumber": "data keuangan Sectors"})
     if intake.get("model_profile") == "finite_life_mining":
         for name in reversed(_commodities(intake)):
             change = _change_12m(_series(name, intake.get("as_of")))
             label = COMMODITY_UNITS.get(name, (name,))[0].lower()
             if change is not None:
-                risks.insert(0, {"kategori": "Komoditas", "judul": f"Harga {label}",
-                              "isi": f"Harga {label} {'naik' if change >= 0 else 'turun'} "
-                                     f"{fmt.pct(abs(change))} dalam 12 bulan. Harga realisasi "
-                                     "mengalir langsung ke pendapatan dan EBITDA, sehingga "
-                                     "koreksi harga menurunkan laba dan nilai aset.",
+                risks.insert(0, {"kategori": "Komoditas",
+                              "judul": _t(f"Harga {label}", f"{name} price"),
+                              "isi": _t(f"Harga {label} {'naik' if change >= 0 else 'turun'} "
+                                        f"{fmt.pct(abs(change))} dalam 12 bulan. Harga realisasi "
+                                        "mengalir langsung ke pendapatan dan EBITDA, sehingga "
+                                        "koreksi harga menurunkan laba dan nilai aset.",
+                                        f"The {name.lower()} price is "
+                                        f"{'up' if change >= 0 else 'down'} {fmt.pct(abs(change))} "
+                                        "over 12 months. Realised prices flow straight into revenue "
+                                        "and EBITDA, so a price correction lowers profit and asset "
+                                        "value."),
                               "sumber": "harga komoditas Sectors"})
         life = evidence.get("mine_life_context") or {}
         if life.get("elang_fid_target") or life.get("elang_first_ore"):
-            risks.insert(sum(r["kategori"] == "Komoditas" for r in risks), {"kategori": "Proyek", "judul": "Umur tambang serta capex pengembangan",
-                          "isi": f"Target keputusan investasi {life.get('elang_fid_target', '-')} "
-                                 f"dan bijih pertama {life.get('elang_first_ore', '-')}. "
-                                 "Penundaan atau kenaikan capex menekan arus kas bebas sebelum "
-                                 "cadangan baru menggantikan tambang yang menua.",
+            risks.insert(sum(r["kategori"] == "Komoditas" for r in risks), {"kategori": "Proyek", "judul": _t("Umur tambang serta capex pengembangan", "Mine life and development capex"),
+                          "isi": _t(f"Target keputusan investasi {life.get('elang_fid_target', '-')} "
+                                    f"dan bijih pertama {life.get('elang_first_ore', '-')}. "
+                                    "Penundaan atau kenaikan capex menekan arus kas bebas sebelum "
+                                    "cadangan baru menggantikan tambang yang menua.",
+                                    f"The final investment decision is targeted for "
+                                    f"{life.get('elang_fid_target', '-')} and first ore for "
+                                    f"{life.get('elang_first_ore', '-')}. Delays or higher capex "
+                                    "would weigh on free cash flow before new reserves replace the "
+                                    "ageing mine."),
                           "sumber": source})
     return risks[:5]
 
@@ -3113,9 +3383,12 @@ def attach_risks(doc, intake, page):
     paragraphs = (doc.get("cover") or {}).get("paragraf") or []
     if paragraphs and isinstance(paragraphs[-1], dict):
         names = [r["judul"][:1].lower() + r["judul"][1:] for r in risks[:3]]
-        joined = (" dan ".join(names) if len(names) <= 2
-                  else ", ".join(names[:-1]) + ", dan " + names[-1])
-        paragraphs[-1]["isi"] = paragraphs[-1]["isi"].rstrip() + f" Risiko utama: {joined}."
+        joined = _t(" dan ".join(names) if len(names) <= 2
+                    else ", ".join(names[:-1]) + ", dan " + names[-1],
+                    " and ".join(names) if len(names) <= 2
+                    else ", ".join(names[:-1]) + " and " + names[-1])
+        paragraphs[-1]["isi"] = paragraphs[-1]["isi"].rstrip() + _t(f" Risiko utama: {joined}.",
+                                                                    f" Key risks: {joined}.")
 
 
 def _rp(value):
@@ -3161,9 +3434,12 @@ def driver_value_page(doc, intake):
                         + ["Perubahan driver"], case_rows,
                         "Sumber: model yang sama dengan target; rentang uji bukan probabilitas.")
     return _page("Driver dan skenario nilai",
-                 ["Setiap driver material digeser dalam rentang uji dan dinilai ulang dengan "
-                  "kalkulasi referensi independen; kasus turun dan naik menggeser semua driver "
-                  "bersamaan. Tidak ada probabilitas yang diberikan pada kasus."],
+                 [_t("Setiap driver material digeser dalam rentang uji dan dinilai ulang dengan "
+                     "kalkulasi referensi independen; kasus turun dan naik menggeser semua driver "
+                     "bersamaan. Tidak ada probabilitas yang diberikan pada kasus.",
+                     "Each material driver is moved across its tested range and revalued with an "
+                     "independent reference calculation; the downside and upside cases move all "
+                     "drivers together. No probability is assigned to the cases.")],
                  [drivers, scenario])
 
 
@@ -3203,9 +3479,13 @@ def investability_page(doc, intake):
                        bq_rows, "Setiap dimensi memakai bukti bertanggal; dimensi tanpa bukti "
                        "tidak dijawab. Risiko yang sudah ada di arus kas tidak didiskon lagi.")
     return _page("Kualitas bisnis dan investabilitas",
-                 ["Kualitas bisnis, batas likuiditas dan nilai model dipisahkan: yang pertama "
-                  "menjelaskan dasar driver, yang kedua membatasi penggunaan riset ini oleh "
-                  "investor institusi, dan tidak ada yang mengubah nilai di luar driver model."],
+                 [_t("Kualitas bisnis, batas likuiditas dan nilai model dipisahkan: yang pertama "
+                     "menjelaskan dasar driver, yang kedua membatasi penggunaan riset ini oleh "
+                     "investor institusi, dan tidak ada yang mengubah nilai di luar driver model.",
+                     "Business quality, liquidity limits and model value are kept separate: the "
+                     "first explains the basis of the drivers, the second limits how institutional "
+                     "investors can use this research, and neither changes value outside the "
+                     "model's drivers.")],
                  [quality, liquidity])
 
 
@@ -3321,8 +3601,11 @@ def enrich(doc, intake, valuation_inputs=None, va=None, fc=None):
     owner_exhibits, owner_paragraphs = ownership_exhibits(intake)
     risk_page = _page(
         "Katalis, risiko, dan kepemilikan",
-        ["Katalis dan risiko dipilih menurut dampaknya ke volume, harga realisasi, biaya dan "
-         "neraca; kepemilikan dan arus asing ditampilkan sebagai konteks pasar."] + owner_paragraphs,
+        [_t("Katalis dan risiko dipilih menurut dampaknya ke volume, harga realisasi, biaya dan "
+            "neraca; kepemilikan dan arus asing ditampilkan sebagai konteks pasar.",
+            "Catalysts and risks are selected by their effect on volume, realised prices, costs "
+            "and the balance sheet; ownership and foreign flows are shown as market context.")]
+        + owner_paragraphs,
         ([catalyst] if catalyst else []) + owner_exhibits)
     for page in pages:
         page["exhibit"] = [e for e in page["exhibit"] if e is not catalyst]
@@ -3530,16 +3813,24 @@ def slim_mining(doc, intake):
                       len(kept) - 1)
             kept.insert(at + 1, _page(
                 VALUATION_APPENDIX,
-                ["Komponen tingkat diskonto dan pembandingnya, uji tambahan dan daftar asumsi analis "
-                 "di balik target SOTP/LoM. Lampiran berikutnya memuat royalti, capex, cadangan, "
-                 "Elang, jadwal tambang dan jembatan korporat."], side))
+                [_t("Komponen tingkat diskonto dan pembandingnya, uji tambahan dan daftar asumsi analis "
+                    "di balik target SOTP/LoM. Lampiran berikutnya memuat royalti, capex, cadangan, "
+                    "Elang, jadwal tambang dan jembatan korporat.",
+                    "Discount-rate components and their benchmarks, additional tests and the list "
+                    "of analyst assumptions behind the SOTP/LoM target. The following appendices "
+                    "cover royalties, capex, reserves, Elang, the mine schedule and the corporate "
+                    "bridge.")], side))
     appendix = next((p for p in kept if p.get("judul") == VALUATION_APPENDIX), None)
     if audit and appendix:
-        appendix["paragraf"].append(
+        appendix["paragraf"].append(_t(
             f"Rekonstruksi H2 FY26 dan uji rekonsiliasinya ({len(audit)} bagian: Q2 2026, jembatan "
             "revenue dan harga realisasi, settlement provisional, persediaan dan arus pinjaman) "
             "tidak dicetak karena hampir tidak menggerakkan target umur tambang; semuanya tersimpan "
-            "di jejak audit laporan.")
+            "di jejak audit laporan.",
+            f"The FY26 H2 reconstruction and its reconciliation tests ({len(audit)} sections: Q2 "
+            "2026, the revenue and realised-price bridge, provisional settlement, inventory and "
+            "loan flows) are not printed because they barely move the life-of-mine target; all "
+            "are kept in the report's audit trail."))
     for index, page in enumerate(kept):
         page["halaman"] = index + 2
     doc["bagian"] = kept
