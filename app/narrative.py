@@ -245,15 +245,17 @@ def _market_price_unit(unit):
 
 
 def _replace_interest_causality(text, net_margin_pct):
-    safe = (f"Net margin H2 {fmt.pct(net_margin_pct / 100)} adalah asumsi analis; "
-            "pajak dan jadwal bunga belum dijembatani.")
+    safe = _t(f"Net margin H2 {fmt.pct(net_margin_pct / 100)} adalah asumsi analis; "
+              "pajak dan jadwal bunga belum dijembatani.",
+              f"H2 net margin of {fmt.pct(net_margin_pct / 100)} is an analyst assumption; "
+              "tax and the interest schedule are not yet bridged.")
     sentences = re.split(r"(?<=[.!?])\s+", str(text or ""))
     out = []
     replaced = False
     for sentence in sentences:
         lower = sentence.lower()
-        if ("net margin" in lower and "bunga" in lower and
-                ("flat" in lower or "karena" in lower)):
+        if ("net margin" in lower and _t("bunga", "interest") in lower and
+                ("flat" in lower or _t("karena", "because") in lower)):
             out.append(safe)
             replaced = True
         else:
@@ -646,7 +648,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             "judul": "Persediaan, penjualan, dan batas rekonsiliasi",
             "layout": "stack",
             "paragraf": [
-                "Penjualan H1 dapat ditautkan ke produk dan pasar, dan laporan memberi nilai tercatat persediaan konsentrat serta WIP smelter. Namun, nilai tersebut memakai basis biaya dan tidak menyediakan tonase fisik atau kandungan logam per tahap. Karena itu, selisih 227.228 dmt antara produksi dan penjualan konsentrat H1 belum dapat dijelaskan sebagai umpan smelter, perubahan stockpile konsentrat, atau produk yang menunggu penjualan."
+                _t("Penjualan H1 dapat ditautkan ke produk dan pasar, dan laporan memberi nilai tercatat persediaan konsentrat serta WIP smelter. Namun, nilai tersebut memakai basis biaya dan tidak menyediakan tonase fisik atau kandungan logam per tahap. Karena itu, selisih 227.228 dmt antara produksi dan penjualan konsentrat H1 belum dapat dijelaskan sebagai umpan smelter, perubahan stockpile konsentrat, atau produk yang menunggu penjualan.",
+                   "H1 sales can be traced to product and market, and the report gives the carrying value of concentrate inventory and smelter WIP. Those values are on a cost basis, however, and give no physical tonnage or metal content by stage. The 227.228 dmt gap between H1 concentrate production and sales therefore cannot yet be explained as smelter feed, a change in the concentrate stockpile, or product awaiting sale.")
             ],
             "exhibit": [
                 next(e for e in exhibits if e["judul"] == "Nilai tercatat persediaan dan stockpiles"),
@@ -698,7 +701,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 "judul": "Produksi dan penjualan aktual H1 menurut tahap",
                 "layout": "stack",
                 "paragraf": [
-                    "Laporan memberi volume produksi dan penjualan pada beberapa tahap rantai produk. Selisih antarangka menunjukkan pekerjaan rekonsiliasi yang dibutuhkan, tetapi tidak mengungkap sendiri tonase yang masuk smelter, recovery, payable metal, stok awal/akhir, atau waktu pengapalan dan pengakuan pendapatan."
+                    _t("Laporan memberi volume produksi dan penjualan pada beberapa tahap rantai produk. Selisih antarangka menunjukkan pekerjaan rekonsiliasi yang dibutuhkan, tetapi tidak mengungkap sendiri tonase yang masuk smelter, recovery, payable metal, stok awal/akhir, atau waktu pengapalan dan pengakuan pendapatan.",
+                       "The report gives production and sales volumes at several stages of the product chain. The gaps between them show the reconciliation work required, but do not by themselves reveal the tonnage fed to the smelter, recovery, payable metal, opening/closing stock, or the timing of shipment and revenue recognition.")
                 ],
                 "exhibit": [physical_exhibit],
             }
@@ -769,7 +773,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             "judul": "Royalti, bea keluar, dan netback",
             "layout": "stack",
             "paragraf": [
-                "HMA resmi untuk seluruh 12 periode H1 telah dipetakan dan menentukan tier maksimum PP 19/2025. Namun, HMA bukan harga shipment AMMN: assay/payable, HPM, TC/RC, volume dan dasar royalti per produk serta tie-out terhadap net realized dan kas belum diungkap. Karena itu netback H1/H2 belum tervalidasi dan tarif legal tidak dikurangkan ulang dari realized price."
+                _t("HMA resmi untuk seluruh 12 periode H1 telah dipetakan dan menentukan tier maksimum PP 19/2025. Namun, HMA bukan harga shipment AMMN: assay/payable, HPM, TC/RC, volume dan dasar royalti per produk serta tie-out terhadap net realized dan kas belum diungkap. Karena itu netback H1/H2 belum tervalidasi dan tarif legal tidak dikurangkan ulang dari realized price.",
+                   "Official HMA for all 12 H1 periods has been mapped and sets the top tier of PP 19/2025. HMA is not AMMN's shipment price, however: assay/payable, HPM, TC/RC, volume and royalty base by product, and the tie-out to net realized price and cash are undisclosed. H1/H2 netback is therefore not validated, and statutory rates are not deducted again from the realized price.")
             ],
             "exhibit": [royalty_exhibit],
         }
@@ -851,7 +856,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             "judul": "Capex historis dan asumsi analis FY26",
             "layout": "stack",
             "paragraf": [
-                "Skenario capex FY26 US$390 juta menyisakan sekitar US$260 juta untuk H2 setelah aktual H1. Total FY26 skenario itu US$84 juta lebih rendah daripada US$474 juta capex sustaining Phase 8 yang dilaporkan untuk FY25, dan tidak mencakup pembanding proyek-proyek FY25 secara sebanding. Laporan interim menunjukkan CIP konsolidasi US$3.082 juta dengan estimasi selesai yang membentang hingga Q4 2027; angka tersebut adalah biaya terakumulasi, bukan biaya tersisa atau budget FY26. Karena nilai CIP tidak dirinci per proyek dan tidak ada jadwal pembayaran, asumsi capex H2 belum tervalidasi. Belum ada rekonsiliasi capex, modal kerja, bunga, pajak, dan pembayaran utang menjadi FCFF H2."
+                _t("Skenario capex FY26 US$390 juta menyisakan sekitar US$260 juta untuk H2 setelah aktual H1. Total FY26 skenario itu US$84 juta lebih rendah daripada US$474 juta capex sustaining Phase 8 yang dilaporkan untuk FY25, dan tidak mencakup pembanding proyek-proyek FY25 secara sebanding. Laporan interim menunjukkan CIP konsolidasi US$3.082 juta dengan estimasi selesai yang membentang hingga Q4 2027; angka tersebut adalah biaya terakumulasi, bukan biaya tersisa atau budget FY26. Karena nilai CIP tidak dirinci per proyek dan tidak ada jadwal pembayaran, asumsi capex H2 belum tervalidasi. Belum ada rekonsiliasi capex, modal kerja, bunga, pajak, dan pembayaran utang menjadi FCFF H2.",
+                   "The FY26 capex scenario of US$390 juta leaves about US$260 juta for H2 after H1 actuals. That FY26 scenario total is US$84 juta below the US$474 juta of Phase 8 sustaining capex reported for FY25, and it offers no like-for-like comparison with the FY25 projects. The interim report shows consolidated CIP of US$3.082 juta, with estimated completion stretching to Q4 2027; that figure is accumulated cost, not remaining cost or an FY26 budget. As CIP is not broken down by project and there is no payment schedule, the H2 capex assumption is not validated. Capex, working capital, interest, tax and debt repayment are not yet reconciled into H2 FCFF.")
             ],
             "exhibit": [capex_exhibit] + ([cip_exhibit] if cip_exhibit else []),
         }
@@ -1302,7 +1308,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 "halaman": 0, "judul": "Uji antar-tahap produksi H2",
                 "layout": "stack",
                 "paragraf": [
-                    "Panduan FY26 menyiratkan output H2 katoda dan emas murni yang besar relatif terhadap sisa logam terkandung dalam panduan konsentrat. Rasio ini hanya penanda besarnya aliran material yang perlu dijelaskan: produk H2 dapat memakai umpan dan persediaan lintas periode, sedangkan produksi konsentrat dapat dijual eksternal atau masuk ke smelter. Tanpa rekonsiliasi feed, stockpile, recovery, dan jadwal penjualan, diagnostik ini tidak dapat dipakai sebagai recovery ataupun jembatan revenue tervalidasi."],
+                    _t("Panduan FY26 menyiratkan output H2 katoda dan emas murni yang besar relatif terhadap sisa logam terkandung dalam panduan konsentrat. Rasio ini hanya penanda besarnya aliran material yang perlu dijelaskan: produk H2 dapat memakai umpan dan persediaan lintas periode, sedangkan produksi konsentrat dapat dijual eksternal atau masuk ke smelter. Tanpa rekonsiliasi feed, stockpile, recovery, dan jadwal penjualan, diagnostik ini tidak dapat dipakai sebagai recovery ataupun jembatan revenue tervalidasi.",
+                       "FY26 guidance implies large H2 cathode and refined gold output relative to the contained metal left in concentrate guidance. The ratio only flags how much material flow needs explaining: H2 products can draw on feed and inventory across periods, while concentrate output can be sold externally or go to the smelter. Without a reconciliation of feed, stockpiles, recovery and the sales schedule, this diagnostic cannot serve as a recovery rate or a validated revenue bridge.")],
                 "exhibit": [interstage_exhibit]})
         q2_data = ((evidence.get("quarterly_actuals") or {}).get(
             "q2_2026_derived") or {})
@@ -1387,7 +1394,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 "halaman": 0, "judul": "Rekonstruksi aktual Q2 2026",
                 "layout": "stack",
                 "paragraf": [
-                    "Ini angka aktual turunan dari dua rilis, bukan angka Q2 yang dilaporkan terpisah. Perusahaan melaporkan volume dan realized price H1; harga Q2 sendiri tidak diberikan terpisah. Konsentrat dan katoda juga memakai provisional pricing sampai settlement final, sehingga implied price Q2 hanya kalibrasi historis, bukan harga final H2. Revenue/unit hanya proxy untuk menguji konsistensi mix dan sales."],
+                    _t("Ini angka aktual turunan dari dua rilis, bukan angka Q2 yang dilaporkan terpisah. Perusahaan melaporkan volume dan realized price H1; harga Q2 sendiri tidak diberikan terpisah. Konsentrat dan katoda juga memakai provisional pricing sampai settlement final, sehingga implied price Q2 hanya kalibrasi historis, bukan harga final H2. Revenue/unit hanya proxy untuk menguji konsistensi mix dan sales.",
+                       "These are actuals derived from two releases, not separately reported Q2 figures. The company reports H1 volumes and realized prices; Q2 prices are not given separately. Concentrate and cathode are also provisionally priced until final settlement, so the implied Q2 price is only a historical calibration, not the final H2 price. Revenue per unit is only a proxy for testing the consistency of mix and sales.")],
                 "exhibit": [q2_exhibit, q2_fin_exhibit] +
                            ([pricing_exhibit] if pricing_exhibit else [])})
 
@@ -1427,7 +1435,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "judul": "Saldo settlement provisional dan klasifikasi derivatif",
                     "layout": "stack",
                     "paragraf": [
-                        "Kebijakan akuntansi menyebut aset FVPL mencakup sebagian piutang dari penjualan tembaga/emas provisional. Nilai tercatat kategori itu turun dari US$540,5 juta pada akhir 2025 menjadi US$23,3 juta per Juni 2026, tetapi laporan tidak memecahnya per produk, customer, shipment, atau tanggal final pricing. Penurunan saldo tidak sama dengan volume settlement atau realized price H1. Pos derivative asset/liability yang terpisah dirinci sebagai IRS, CCS, dan POS; jangan menghitungnya sebagai eksposur harga komoditas provisional."
+                        _t("Kebijakan akuntansi menyebut aset FVPL mencakup sebagian piutang dari penjualan tembaga/emas provisional. Nilai tercatat kategori itu turun dari US$540,5 juta pada akhir 2025 menjadi US$23,3 juta per Juni 2026, tetapi laporan tidak memecahnya per produk, customer, shipment, atau tanggal final pricing. Penurunan saldo tidak sama dengan volume settlement atau realized price H1. Pos derivative asset/liability yang terpisah dirinci sebagai IRS, CCS, dan POS; jangan menghitungnya sebagai eksposur harga komoditas provisional.",
+                           "The accounting policy says FVPL assets include part of the receivables from provisionally priced copper/gold sales. The carrying value of that category fell from US$540,5 juta at end-2025 to US$23,3 juta at June 2026, but the report does not split it by product, customer, shipment or final pricing date. The fall in the balance is not the same as settlement volume or the H1 realized price. The separate derivative asset/liability lines are itemised as IRS, CCS and POS; they are not provisional commodity price exposure.")
                     ],
                     "exhibit": [pricing_balance_exhibit]})
 
@@ -1470,7 +1479,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "judul": "Komposisi biaya aktual dan keterbatasan run-rate",
                     "layout": "stack",
                     "paragraf": [
-                        "Catatan biaya menunjukkan HPP Q2 US$622,7 juta tersusun dari US$436,9 juta mining/processing/operasi, US$286,0 juta amortisasi stripping tertunda, dan US$168,6 juta royalti, lalu sebagian diimbangi mutasi stockpile/persediaan negatif US$435,9 juta serta kredit produk sampingan. Catatan 11 melaporkan nihil tambahan kapitalisasi stripping pada Q1 dan H1; jumlah US$286,0 juta adalah amortisasi aset stripping, bukan belanja kas Q2. Jadi HPP akuntansi tidak sama dengan biaya kas unit yang bisa langsung diekstrapolasi. Data ini merekonsiliasi aktual Q2; belum menentukan biaya H2 karena jadwal ore, grade, penjualan, inventory, dan basis kewajiban fiskal per shipment belum tersedia."
+                        _t("Catatan biaya menunjukkan HPP Q2 US$622,7 juta tersusun dari US$436,9 juta mining/processing/operasi, US$286,0 juta amortisasi stripping tertunda, dan US$168,6 juta royalti, lalu sebagian diimbangi mutasi stockpile/persediaan negatif US$435,9 juta serta kredit produk sampingan. Catatan 11 melaporkan nihil tambahan kapitalisasi stripping pada Q1 dan H1; jumlah US$286,0 juta adalah amortisasi aset stripping, bukan belanja kas Q2. Jadi HPP akuntansi tidak sama dengan biaya kas unit yang bisa langsung diekstrapolasi. Data ini merekonsiliasi aktual Q2; belum menentukan biaya H2 karena jadwal ore, grade, penjualan, inventory, dan basis kewajiban fiskal per shipment belum tersedia.",
+                           "The cost notes show Q2 COGS of US$622,7 juta made up of US$436,9 juta mining/processing/operations, US$286,0 juta amortisation of deferred stripping and US$168,6 juta royalties, partly offset by a negative stockpile/inventory movement of US$435,9 juta and by-product credits. Note 11 reports no additions to capitalised stripping in Q1 and H1; the US$286,0 juta is amortisation of the stripping asset, not Q2 cash spending. Accounting COGS is therefore not a unit cash cost that can be extrapolated directly. These data reconcile Q2 actuals; they do not yet set H2 costs, because the schedule of ore, grade, sales and inventory, and the fiscal-obligation base per shipment, are not available.")
                     ],
                     "exhibit": [cogs_exhibit]})
 
@@ -1543,7 +1553,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                         "judul": "Persediaan, gross profit, dan batas rekonsiliasi",
                         "layout": "stack",
                         "paragraf": [
-                            "Baris pergerakan stockpile/persediaan mengurangi HPP yang dilaporkan sebesar US$974,7 juta pada H1. Jika baris itu dibalik secara mekanis, laba kotor H1 menjadi negatif US$10,6 juta; angka ini hanya diagnostik, bukan ukuran laba atau arus kas alternatif. Nilai tercatat gabungan persediaan dan stockpiles naik US$1.024,6 juta, berbeda US$49,9 juta dari kredit HPP. Catatan tidak menyediakan roll-forward fisik yang menghubungkan produksi, transfer ke smelter, penjualan, dan saldo akhir. Karena itu nilai inventory tidak memvalidasi penjualan konsentrat H2."
+                            _t("Baris pergerakan stockpile/persediaan mengurangi HPP yang dilaporkan sebesar US$974,7 juta pada H1. Jika baris itu dibalik secara mekanis, laba kotor H1 menjadi negatif US$10,6 juta; angka ini hanya diagnostik, bukan ukuran laba atau arus kas alternatif. Nilai tercatat gabungan persediaan dan stockpiles naik US$1.024,6 juta, berbeda US$49,9 juta dari kredit HPP. Catatan tidak menyediakan roll-forward fisik yang menghubungkan produksi, transfer ke smelter, penjualan, dan saldo akhir. Karena itu nilai inventory tidak memvalidasi penjualan konsentrat H2.",
+                               "The stockpile/inventory movement line reduced reported COGS by US$974,7 juta in H1. Reversing that line mechanically would turn H1 gross profit into a loss of US$10,6 juta; this is only a diagnostic, not an alternative measure of profit or cash flow. The combined carrying value of inventory and stockpiles rose US$1.024,6 juta, US$49,9 juta different from the COGS credit. The notes give no physical roll-forward linking production, transfers to the smelter, sales and closing balances. Inventory values therefore do not validate H2 concentrate sales.")
                         ],
                         "exhibit": [gp_exhibit, inv_exhibit]})
 
