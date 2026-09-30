@@ -699,6 +699,113 @@ TERMS.update({"komoditas": "commodity", "modal": "capital", "operasi": "operatio
               "pendanaan": "funding", "proyek": "project", "regulasi": "regulation",
               "tata kelola": "governance", "pasar": "market", "valuasi": "valuation"})
 
+# Headings and exhibit titles of the prose pages (#33).
+TERMS.update({
+    "Persediaan, penjualan, dan batas rekonsiliasi": "Inventory, sales and reconciliation limits",
+    "Produksi dan penjualan aktual H1 menurut tahap": "1H actual production and sales by stage",
+    "Uji antar-tahap produksi H2": "2H production inter-stage test",
+    "Rekonstruksi aktual Q2 2026": "Q2 2026 actuals reconstruction",
+    "Saldo settlement provisional dan klasifikasi derivatif": "Provisional settlement balances and derivative classification",
+    "Komposisi biaya aktual dan keterbatasan run-rate": "Actual cost composition and run-rate limits",
+    "Persediaan, gross profit, dan batas rekonsiliasi": "Inventory, gross profit and reconciliation limits",
+    "Baris kuartalan dalam data lokal": "Quarterly rows in local data",
+    "Delta produksi dan penjualan produk H1": "1H product production and sales delta",
+    "Uji antar-tahap logam H2: konsentrat ke produk refinery": "2H metal inter-stage test: concentrate to refinery products",
+    "Rekonstruksi Q2 2026 (H1 dikurangi Q1)": "Q2 2026 reconstruction (1H less Q1)",
+    "Rekonstruksi laba rugi dan arus kas Q2 2026": "Q2 2026 income statement and cash flow reconstruction",
+    "Ketentuan provisional pricing dan settlement": "Provisional pricing and settlement terms",
+    "Piutang provisional FVPL dan derivatif swap": "Provisional FVPL receivables and swap derivatives",
+    "Rekonsiliasi komponen beban pokok penjualan Q2": "Q2 cost of goods sold reconciliation",
+    "Dampak pergerakan persediaan pada laba kotor (diagnostik)": "Inventory movement effect on gross profit (diagnostic)",
+    "Nilai tercatat persediaan bukan tonase konsentrat": "Inventory carrying value, not concentrate tonnage",
+    "Batas bukti kontrak, beban bunga, dan capex": "Evidence limits: contracts, interest expense and capex",
+    "Arus kas pinjaman dan pelunasan utang": "Borrowing cash flows and debt repayment",
+    "Uji monetisasi produksi terhadap revenue H2": "Production monetisation test against 2H revenue",
+    "Uji realized price terhadap revenue aktual H1": "Realized price test against 1H actual revenue",
+    "Uji kapasitas terhadap sisa panduan produksi": "Capacity test against remaining production guidance",
+    "Konteks historis dan kepemilikan": "Historical context and ownership",
+    "Skenario operasi ilustratif": "Illustrative operating scenario",
+    "Berita dan keputusan asumsi": "News and assumption decisions",
+    "Valuasi ilustratif dan keterbatasannya": "Illustrative valuation and its limits",
+    "Valuasi menunggu rekonsiliasi": "Valuation awaits reconciliation",
+    "Kontrak cathode, utang, dan kewajiban kas yang diungkapkan": "Disclosed cathode contracts, debt and cash obligations",
+    "Rekonsiliasi arus pinjaman dan pembayaran utang H1 2026": "1H 2026 borrowing and debt repayment reconciliation",
+    "Uji revenue H2 dari volume produk dan realized price": "2H revenue test from product volumes and realized prices",
+    "Rekonsiliasi realized price dengan revenue produk H1": "Realized price reconciliation with 1H product revenue",
+    "Kapasitas fasilitas versus panduan produksi FY26": "Facility capacity versus FY26 production guidance",
+    "Cross-check EV/EBITDA FY26 berbasis skenario interim": "FY26 EV/EBITDA cross-check on the interim scenario",
+    "Input cross-check FY26 dan batasannya": "FY26 cross-check inputs and their limits",
+    "Riwayat keuangan dalam data Sectors": "Financial history in Sectors data",
+    "Neraca historis dalam data Sectors": "Historical balance sheet in Sectors data",
+    "Screen proyeksi historis, bukan forecast produksi": "Historical projection screen, not a production forecast",
+    "Asumsi yang membuat screen belum layak rilis": "Assumptions that keep the screen from release",
+    "Berita sebagai asumsi skenario": "News as scenario assumptions",
+    "Perbandingan nilai model lama, bukan target harga": "Prior model value comparison, not a Target Price",
+    "Sensitivitas Gordon ilustratif (Rp/saham)": "Illustrative Gordon sensitivity (Rp/share)",
+    "Sensitivitas DDM (CoE x g)": "DDM sensitivity (CoE x g)",
+    "Sensitivitas Inverse CoE (CoE x ROE)": "Inverse CoE sensitivity (CoE x ROE)",
+    "Valuasi dan batasan model": "Valuation and model limits",
+    "Jembatan revenue H2 menurut produk": "2H revenue bridge by product",
+    "Output dan penjualan H2": "2H output and sales",
+    "Net realized price dan volume logam": "Net realized price and metal volumes",
+    "Harga komoditas dan asumsi realisasi": "Commodity prices and realization assumptions",
+    "Estimasi FY26 dan pembanding": "FY26 estimates and comparison",
+    "Valuasi: hasil ekstrem ditahan": "Valuation: extreme result withheld",
+    "Jembatan penjualan produk dan revenue H2 2026": "2H 2026 product sales and revenue bridge",
+    "Q2 2026: angka turunan dari H1 dikurangi Q1": "Q2 2026: figures derived as 1H less Q1",
+    "Output tersirat dan asumsi penjualan H2": "Implied output and 2H sales assumptions",
+    "Volume penjualan dan net realized price per logam": "Sales volume and net realized price by metal",
+    "Benchmark komoditas dan asumsi nilai realisasi": "Commodity benchmarks and realization assumptions",
+    "Estimasi FY26 Sektoral dibanding BRIDS": "Sektoral FY26 estimates versus BRIDS",
+    "Valuasi: rantai metode": "Valuation: Method Chain",
+    "Sensitivitas harga komoditas dan kurs": "Commodity price and FX sensitivity",
+    "Target harga ditahan": "Target Price withheld",
+    "Status target harga": "Target Price status",
+    "Target harga: P/B peer x nilai buku terlapor": "Target Price: peer P/B x reported book value",
+    "Ringkasan riset berbantuan AI": "AI-assisted research summary",
+    "Kinerja dan bukti yang tersedia": "Performance and available evidence",
+    "Valuasi dan kelengkapan model": "Valuation and model completeness",
+    "Konteks berita dan kaitannya ke tesis": "News context and its link to the thesis",
+    "Screen historis untuk diskusi internal": "Historical screen for internal discussion",
+    "Status riset": "Research status",
+    "Basis model": "Model basis",
+    "Laporan historis di data Sectors": "Historical statements in Sectors data",
+    "Kinerja kuartalan yang tersedia di data Sectors": "Quarterly performance available in Sectors data",
+    "Screen historis (bukan forecast produksi)": "Historical screen (not a production forecast)",
+    "Konteks berita dari Sectors dan implikasi": "News context from Sectors and implications",
+    "Kelengkapan sebelum rilis": "Completeness before release",
+    "Input SOTP yang belum lengkap": "Incomplete SOTP inputs",
+    "Hasil terakhir jadi basis forecast": "Latest results anchor the forecast",
+    "Volume dan leverage jadi mesin laba": "Volume and leverage drive earnings",
+    "Skenario nilai indikatif": "Indicative value scenario",
+    "Industri dan makro: permintaan ke depan": "Industry and macro: demand ahead",
+    "Asumsi forecast dan sensitivitas": "Forecast assumptions and sensitivity",
+    "Katalis, risiko, kepemilikan": "Catalysts, risks, ownership",
+    "Laporan keuangan": "Financial statements",
+    "Neraca dan arus kas historis": "Historical balance sheet and cash flow",
+    "Operasional tambang": "Mine operations",
+    "Asumsi forecast": "Forecast assumptions",
+    "Sensitivitas EBITDA terhadap harga/permintaan": "EBITDA sensitivity to price/demand",
+    "Katalis": "Catalysts",
+    "Ringkasan skenario DCF": "DCF scenario summary",
+    "Proyeksi FCFF": "FCFF projection",
+    "Sensitivitas nilai skenario (WACC x g)": "Scenario value sensitivity (WACC x g)",
+    "Jembatan pendapatan tambang": "Mining revenue bridge",
+    "Discount Rate per Aset": "Discount rate by asset",
+    "Sensitivitas RNAV (diskon x harga)": "RNAV sensitivity (discount x price)",
+})
+# Checked before the general patterns above, which they narrow.
+_PATTERNS[:0] = [(re.compile(p), t) for p, t in (
+    (r"Target harga: PER peer x EPS (.+)", "Target Price: peer PER x EPS {0}"),
+    (r"Target harga: P/BV wajar dari ROE (.+) \(sensitivitas CoE x g\)", "Target Price: fair P/BV from ROE {0} (CoE x g sensitivity)"),
+    (r"Target harga (FY\d+F?) EV/EBITDA", "{0} EV/EBITDA Target Price"),
+    (r"Target harga dan sensitivitas (FY\d+F?) EV/EBITDA", "Target Price and {0} EV/EBITDA sensitivity"),
+    (r"Input target harga (FY\d+F?) dan batasannya", "{0} Target Price inputs and their limits"),
+    (r"Target harga berbasis hasil (FY\d+F?)", "Target Price based on {0} results"),
+    (r"Asumsi skenario laba (FY\d+F?)-(FY\d+F?)", "Earnings scenario assumptions, {0}-{1}"),
+    (r"(.+) \(lanjutan\)", "{0} (continued)"),
+)]
+
 _LEAD = re.compile(r"(\(\+\) |\(-\) |\(=\) |\(/\) |\(-/\+\) |\(\+/-\) |\(x\) |(?:\d+|x)\. )")
 _TAIL = re.compile(r"(.+?) \(([^()]*)\)")
 _CURRENCY_SCALE = re.compile(r"(Rp|US\$|USD)\s(triliun|miliar|juta)\b")
@@ -709,7 +816,7 @@ _MONTH = re.compile(r"\b(Mei|Agu|Okt|Des)\b(?=[- ]?\d)")
 _MONTHS = {"Mei": "May", "Agu": "Aug", "Okt": "Oct", "Des": "Dec"}
 
 
-def _plain(text: str) -> str:
+def plain(text: str) -> str:
     """Words kept; figures, currency scales and months in English."""
     out = fmt.localize(text, "en")
     out = _CURRENCY_SCALE.sub(lambda m: f"{m[1]} {_SCALE[m[2]]}", out)
@@ -740,7 +847,7 @@ def _en(text: str) -> str:
     for sep in (" & ", " / "):
         if sep in text:
             return sep.join(_en(part) for part in text.split(sep))
-    return _plain(text)
+    return plain(text)
 
 
 def label(text, lang: str = DEFAULT):

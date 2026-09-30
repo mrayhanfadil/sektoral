@@ -1,11 +1,12 @@
 """Pipeline v3: cache market data, local official source packs, report build."""
 import argparse
+import copy
 import sys
 from datetime import date
 from pathlib import Path
 
 from . import (assumption_review, driver_value, earnings_quality, forecast_ledger, investability, evidence as evidence_mod, forecast, intake,
-               narrative, outputs, publication_archive, publication_monitor, render,
+               narrative, outputs, prose_lang, publication_archive, publication_monitor, render,
                report_contract, report_extras, report_lang, run_manifest, scrub, valuation)
 
 PDF_OK = True
@@ -15,6 +16,43 @@ except Exception:
     pdf_mod = None
 
 OUT = Path(__file__).resolve().parent.parent / "out"
+
+
+def english_prose(inputs, doc, s1, *, method, illustrative_scenarios):
+    """The report's prose stage again, in English, over pristine copies of its inputs.
+
+    Mirrors ``build`` from ``narrative.build`` to ``scrub.normalize_doc_prose``
+    and takes the model fields enrich reads from the Indonesian document, so
+    both editions come from the same numbers. Returns None when it fails: the
+    Indonesian report never depends on it."""
+    doc_in, fc, va = inputs
+    try:
+        with prose_lang.building("en"):
+            doc_en = narrative.build(doc_in, fc, va, s1, method=method,
+                                     illustrative_scenarios=illustrative_scenarios)
+            for key in ("driver_value", "investability", "model_inputs", "forecast_record"):
+                doc_en[key] = copy.deepcopy(doc.get(key))
+            report_extras.enrich(doc_en, doc_in, report_extras.valuation_inputs(doc_in, fc, va),
+                                 va=va, fc=fc)
+            doc_en = narrative.client_copy(doc_en)
+            scrub.normalize_doc_prose(doc_en)
+        return doc_en
+    except Exception as e:  # the English edition falls back to Indonesian prose
+        print(f"  English prose skipped: {e}", flush=True)
+        return None
+
+
+def attach_english(doc, doc_en):
+    """Give the English prose the final release, then attach it (app.prose_lang)."""
+    if doc_en is None:
+        return
+    try:
+        with prose_lang.building("en"):
+            doc_en["meta"] = copy.deepcopy(doc["meta"])
+            report_extras.drop_screening_values(doc_en)
+        prose_lang.attach(doc, doc_en)
+    except Exception as e:
+        print(f"  English prose skipped: {e}", flush=True)
 
 
 def render_english(doc, outdir, ticker):
@@ -87,6 +125,8 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
                          assumption_status=assumption_status,
                          method_override=_override,
                          assumption_plan=assumption_plan or fc.get("assumption_plan"))
+    # The English prose stage reads the inputs as the Indonesian one first saw them.
+    english_inputs = copy.deepcopy((doc_in, fc, va))
     doc = narrative.build(doc_in, fc, va, s1, method=method,
                           illustrative_scenarios=illustrative_scenarios or analyst_target)
     # Plan §6: driver effects on value and investability, before the exhibits.
@@ -98,6 +138,8 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     report_extras.enrich(doc, doc_in, report_extras.valuation_inputs(doc_in, fc, va), va=va, fc=fc)
     doc = narrative.client_copy(doc)
     scrub.normalize_doc_prose(doc)
+    doc_en = english_prose(english_inputs, doc, s1, method=method,
+                           illustrative_scenarios=illustrative_scenarios or analyst_target)
     doc["forecast_assumptions"] = {
         "plan": fc.get("assumption_plan"),
         "news_effects": fc.get("news_assumptions") or [],
@@ -138,6 +180,7 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     # With the release status final, drop screening values that would read as
     # a withheld or second target.
     report_extras.drop_screening_values(doc)
+    attach_english(doc, doc_en)
     # Cover rating status (Inisiasi/Dipertahankan/Naik/Turun), set after the
     # harness so it reflects the final release. A draft publishes no rating,
     # so it never claims one is maintained; history is shown as context only.
