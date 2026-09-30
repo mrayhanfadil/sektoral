@@ -16,9 +16,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 import uuid
 
+from agents.analyst import signals as analyst_signals
 from agents.analyst.run import verdict_code
 
-from . import assumption_review, cache, gallery, outputs, progress, publication_archive, research
+from . import (assumption_review, cache, gallery, host_lang, outputs, progress,
+               publication_archive, research)
 
 LOG = logging.getLogger(__name__)
 TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
@@ -46,8 +48,12 @@ def public_intel(intel) -> dict | None:
     """Whitelist the analyst result fields the web app renders.
 
     English twins (``<field>_en``) pass through beside their Indonesian; results
-    stored before them simply have none (None). ``verdict_code`` is the
-    verdict's stable code, worked out for results stored before it."""
+    stored before them simply have none (None). Text the host wrote itself
+    (signal labels, flags and notes, tool summaries, peer bases, change items,
+    the host fallback plan and synthesis) gets its English here, old results
+    included (``app.host_lang``); display values get English figures.
+    ``verdict_code`` is the verdict's stable code, worked out for results
+    stored before it."""
     if not isinstance(intel, dict) or not isinstance(intel.get("plan"), dict):
         return None
     plan, synthesis = intel["plan"], intel.get("synthesis") or {}
@@ -59,12 +65,19 @@ def public_intel(intel) -> dict | None:
         row = {key: text(signal.get(key), 200) for key in
                ("id", "kind", "label", "label_en", "display", "note", "flag", "flag_en", "period",
                 "median_display")}
+        row["label_en"] = row["label_en"] or text(analyst_signals.label_en(signal), 200)
+        row["flag_en"] = row["flag_en"] or text(host_lang.english(signal.get("flag")), 200)
+        row.update({f"{key}_en": text(host_lang.english(signal.get(key)), 200)
+                    for key in ("note", "period")})
+        row.update({f"{key}_en": text(host_lang.figures(signal.get(key)), 200)
+                    for key in ("display", "median_display")})
         for key in ("rank", "n"):
             row[key] = signal.get(key) if isinstance(signal.get(key), int) else None
         if signal.get("kind") == "web":
             row["url"] = http_url(signal.get("url"))
         if signal.get("kind") == "peer":
-            row["peers"] = [{"symbol": text(p.get("symbol"), 12), "display": text(p.get("display"), 40)}
+            row["peers"] = [{"symbol": text(p.get("symbol"), 12), "display": text(p.get("display"), 40),
+                             "display_en": text(host_lang.figures(p.get("display")), 40)}
                             for p in (signal.get("peers") or [])[:15] if isinstance(p, dict)]
         signals.append(row)
 
@@ -77,36 +90,51 @@ def public_intel(intel) -> dict | None:
             return None
         return [text(x, limit) for x in values[:count]]
 
+    def twin(holder, key, limit):
+        """The stored English twin, else the host text's own English."""
+        return text(holder.get(f"{key}_en") or host_lang.english(holder.get(key)), limit)
+
+    def twins(holder, key, limit, count):
+        """``texts`` of the stored twins, else the host text's own English."""
+        stored = texts(holder.get(f"{key}_en"), limit, count)
+        if stored is not None or not isinstance(holder.get(key), list):
+            return stored
+        found = [text(host_lang.english(x), limit) for x in holder[key][:count]]
+        return found if any(found) else None
+
     return {
         "ticker": text(intel.get("ticker"), 12), "name": text(intel.get("name"), 120),
         "market_date": text(intel.get("market_date"), 20), "status": text(intel.get("status"), 20),
         "plan": {"question": text(plan.get("question"), 500), "source": text(plan.get("source"), 20),
                  "hypotheses": [text(h, 400) for h in (plan.get("hypotheses") or [])[:4]],
-                 "question_en": text(plan.get("question_en"), 500),
-                 "hypotheses_en": texts(plan.get("hypotheses_en"), 400, 4)},
-        "steps": [{key: text(step.get(key), 240)
-                   for key in ("tool", "why", "why_en", "summary", "status", "origin")}
+                 "question_en": twin(plan, "question", 500),
+                 "hypotheses_en": twins(plan, "hypotheses", 400, 4)},
+        "steps": [{**{key: text(step.get(key), 240)
+                      for key in ("tool", "why", "summary", "status", "origin")},
+                   "why_en": twin(step, "why", 240), "summary_en": twin(step, "summary", 240)}
                   for step in (intel.get("steps") or [])[:10] if isinstance(step, dict)],
         "signals": signals[:30],
-        "peers": {key: text((intel.get("peers") or {}).get(key), 160) for key in ("basis", "group")},
+        "peers": {**{key: text((intel.get("peers") or {}).get(key), 160) for key in ("basis", "group")},
+                  **{f"{key}_en": twin(intel.get("peers") or {}, key, 160) for key in ("basis", "group")}},
         "web_news": {"window": text(((intel.get("web_news") or {}).get("window")), 40),
+                     "window_en": twin(intel.get("web_news") or {}, "window", 40),
                      "items": [{"title": text(i.get("title"), 200), "url": http_url(i.get("url")),
                                 "domain": text(i.get("domain"), 80), "date": text(i.get("date"), 12)}
                                for i in ((intel.get("web_news") or {}).get("items") or [])[:8]
                                if isinstance(i, dict) and http_url(i.get("url"))]},
         "synthesis": {
             "headline": text(synthesis.get("headline"), 400), "source": text(synthesis.get("source"), 20),
-            "headline_en": text(synthesis.get("headline_en"), 400),
+            "headline_en": twin(synthesis, "headline", 400),
             "findings": [{"title": text(f.get("title"), 200), "interpretation": text(f.get("interpretation"), 900),
                           "caveat": text(f.get("caveat"), 400), "signal_ids": ids(f.get("signal_ids")),
-                          "title_en": text(f.get("title_en"), 200),
-                          "interpretation_en": text(f.get("interpretation_en"), 900),
-                          "caveat_en": text(f.get("caveat_en"), 400)}
+                          "title_en": twin(f, "title", 200),
+                          "interpretation_en": twin(f, "interpretation", 900),
+                          "caveat_en": twin(f, "caveat", 400)}
                          for f in (synthesis.get("findings") or [])[:4] if isinstance(f, dict)],
             "hypotheses": [{"index": h.get("index") if isinstance(h.get("index"), int) else None,
                             "verdict": text(h.get("verdict"), 30), "reason": text(h.get("reason"), 400),
                             "signal_ids": ids(h.get("signal_ids")),
-                            "verdict_code": verdict_code(h), "reason_en": text(h.get("reason_en"), 400)}
+                            "verdict_code": verdict_code(h), "reason_en": twin(h, "reason", 400)}
                            for h in (synthesis.get("hypotheses") or [])[:4] if isinstance(h, dict)],
             "next_checks": [text(x, 200) for x in (synthesis.get("next_checks") or [])[:3]],
             "next_checks_en": texts(synthesis.get("next_checks_en"), 200, 3),
@@ -115,7 +143,8 @@ def public_intel(intel) -> dict | None:
                     "same_market_date": bool(changes.get("same_market_date")),
                     "previous_run_at": text(changes.get("previous_run_at"), 40),
                     "previous_market_date": text(changes.get("previous_market_date"), 20),
-                    "items": [{"kind": text(i.get("kind"), 20), "text": text(i.get("text"), 240)}
+                    "items": [{"kind": text(i.get("kind"), 20), "text": text(i.get("text"), 240),
+                               "text_en": text(host_lang.english(i.get("text")), 240)}
                               for i in (changes.get("items") or [])[:12] if isinstance(i, dict)]},
     }
 
