@@ -112,3 +112,16 @@ def test_analyst_notes_recorded_by_the_run_are_used_as_they_are():
     notes = [{"message": "sintesis: teks Inggris dibuang, bahasa Indonesia dipakai", "removed": []}]
     view = build({"ticker": "TEST", "analyst": {"problems": ["x; hapus: 1"], "problem_notes": notes}})
     assert view["analyst_problem_notes"] == notes
+
+
+def test_trace_view_passes_the_forecast_english_twins_through():
+    plan = {"news_effects": [{"rationale": "Alasan.", "rationale_en": "Reason.",
+                              "mechanism": "Mekanisme.", "mechanism_en": "Mechanism."}],
+            "interim_scenario": {"rationale": "Interim.", "rationale_en": "Interim EN."},
+            "outyear_scenario": [{"year": "FY27F", "rationale": "Lanjut.", "rationale_en": "Later."}]}
+    view = build({"ticker": "TEST", "forecast_assumptions": {"plan": plan}})["forecast"]
+    assert view["news_effects"][0]["rationale_en"] == "Reason."
+    assert view["news_effects"][0]["mechanism_en"] == "Mechanism."
+    assert view["news_effects"][0]["uncertainty_en"] is None
+    assert view["interim"]["rationale_en"] == "Interim EN."
+    assert view["outyears"][0]["rationale_en"] == "Later."

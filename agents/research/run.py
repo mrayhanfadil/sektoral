@@ -360,7 +360,7 @@ def _english_problems(ticker, insight, payload_by_endpoint):
             problems.append(f"{path} missing")
             continue
         problems.extend(_text_problems(path, en_text))
-        if en_text.strip() == id_text.strip() or prose_lang.mixed(en_text):
+        if en_text.strip() == id_text.strip() or not prose_lang.reads_english(en_text):
             problems.append(f"{path} must be an English translation, not Indonesian")
     english = {key: insight.get(f"{key}_en") for key in _PROSE_KEYS}
     english["citations"] = insight.get("citations") or []
