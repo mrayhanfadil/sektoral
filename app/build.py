@@ -229,14 +229,16 @@ def build(ticker, outdir=OUT, want_pdf=False, method="auto", as_of=None,
     review = assumption_review.status(outdir, t)
     if (review.get("state") == "approved" and
             all(kind in (review.get("artifact_hashes") or {})
-                for kind in ("html", "pdf", "trace_html"))):
+                for kind in assumption_review.REQUIRED_PUBLISH_ARTIFACTS)):
         archived = publication_archive.archive_approved_bundle(outdir, t)
         if archived is None:
             raise OSError(f"refusing to replace approved {t}: publication archive failed")
     # A direct build does not render a trace HTML. Remove an earlier run's
-    # trace/PDF so neither can be mistaken for an artifact of this run. The
-    # research/rebuild callers write their fresh trace and optional PDF later.
+    # trace/PDFs and English HTML so none can be mistaken for an artifact of
+    # this run (the English HTML is rendered again below, or stays absent).
+    # The research/rebuild callers write their fresh trace and optional PDF later.
     for stale in (outdir / f"{t}.pdf", outdir / f"{t}-trace.html",
+                  outdir / report_lang.file_name(t, "en"),
                   outdir / report_lang.file_name(t, "en", "pdf")):
         stale.unlink(missing_ok=True)
     outputs.save(outputs.REPORT, outdir, t, doc)

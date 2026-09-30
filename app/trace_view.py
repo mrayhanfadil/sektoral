@@ -193,6 +193,7 @@ def _manifest(value: object) -> dict | None:
                       model.get("schema_version"), int) else None},
         "spec_sha256": text(value.get("spec_sha256"), 64),
         "evidence_register_sha256": text(value.get("evidence_register_sha256"), 64),
+        "source_text_en_sha256": text(value.get("source_text_en_sha256"), 64),
         "release_policy": {
             "version": text(policy_body.get("version"), 24),
             "effective_date": text(policy_body.get("effective_date"), 20),

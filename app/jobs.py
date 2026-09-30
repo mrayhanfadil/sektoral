@@ -206,7 +206,7 @@ class ResearchJobs:
             review = assumption_review.status(self.reports, ticker)
             if (review.get("state") == "approved" and
                     all(kind in (review.get("artifact_hashes") or {})
-                        for kind in ("html", "pdf", "trace_html"))):
+                        for kind in assumption_review.REQUIRED_PUBLISH_ARTIFACTS)):
                 archived = publication_archive.archive_approved_bundle(self.reports, ticker)
                 if archived is None:
                     raise OSError(f"refusing to replace approved {ticker}: publication archive failed")

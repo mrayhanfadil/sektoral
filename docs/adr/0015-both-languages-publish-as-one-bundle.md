@@ -1,0 +1,9 @@
+# Both languages publish as one bundle
+
+Extends [0009](0009-publication-uses-an-approved-frozen-bundle.md) and [0014](0014-reports-that-clear-the-automatic-gates-publish-at-once.md).
+
+A Company Update is written in Indonesian and, beside it, in English (`TICKER.en.html`, `TICKER.en.pdf`). Until now only the Indonesian files were in the Publication Bundle, so the English edition could change after approval and no public route could serve it. The English edition now joins the bundle as optional kinds `html_en` and `pdf_en`: the run manifest lists each English file, with its SHA-256, when it exists at finalize time, and the Publication ID covers it like every other rendered file. The manifest also records `source_text_en_sha256`, the hash of the source-text translations (`data/source_text_en`) the build quoted, so a translation edit shows up as a new manifest.
+
+A public route serves an English file only when its kind is in the report's bundle and the file on disk still has the bundle's SHA-256. The bundle is the approved record's `artifact_hashes` for an analyst-reviewed report, and the finalized run manifest's `artifacts` for an automatic publication under 0014. Anything else (an English file written after the bundle was finalized, edited afterwards, or missing) returns 404 while the Indonesian report stays as it is. An analyst approval covers both languages, so a changed English file makes that approval stale like any other changed artifact. Archives keep the languages their bundle was approved with.
+
+English is optional in every check: `html`, `pdf` and `trace_html` stay required, and English kinds are hashed and verified only where a run manifest lists them. Manifests, approvals and archives made before this decision carry no English and verify exactly as before. A report whose English build failed publishes in Indonesian only.

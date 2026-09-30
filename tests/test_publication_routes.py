@@ -50,12 +50,15 @@ def test_archived_publication_is_listed_and_served_with_its_identity(tmp_path):
         "predecessor_publication_id": None, "successor_publication_id": None,
         "supersession_reason": None, "withdrawal_reason": None, "withdrawn_at": None,
         "archived_at": archived["archived_at"], "review_sha": archived["review_sha"],
-        "artifact_hashes": {key: archived["artifact_hashes"].get(key)
-                             for key in ("html", "pdf", "trace_html")},
+        # A bundle approved without the English edition archives none.
+        "artifact_hashes": {**{key: archived["artifact_hashes"].get(key)
+                               for key in ("html", "pdf", "trace_html")},
+                            "html_en": None, "pdf_en": None},
         "files": {
             "html": f"/files/reports/AAAA/archives/{publication_id}/html",
             "pdf": f"/files/reports/AAAA/archives/{publication_id}/pdf",
             "trace": f"/files/reports/AAAA/archives/{publication_id}/trace",
+            "html_en": None, "pdf_en": None,
         },
     }]
 
@@ -65,6 +68,28 @@ def test_archived_publication_is_listed_and_served_with_its_identity(tmp_path):
     assert Path(file_response.path).read_bytes() == b"%PDF-1.4 test"
     assert file_response.headers["x-sektoral-artifact-state"] == "archived"
     assert file_response.headers["cache-control"].endswith("immutable")
+
+
+def test_archive_of_an_english_bundle_lists_and_serves_both_languages(tmp_path):
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    _report(reports, "AAAA", english=True)
+    archived = publication_archive.archive_approved_bundle(reports, "AAAA")
+    assert archived is not None
+    publication_id = archived["publication_id"]
+
+    app = server.create_app(tmp_path / "jobs", reports, static_dir=None)
+    item = json.loads(_endpoint(app, "/api/reports/{ticker}/archives")("AAAA").body)["items"][0]
+    for kind in ("html_en", "pdf_en"):
+        assert item["files"][kind] == f"/files/reports/AAAA/archives/{publication_id}/{kind}"
+        assert item["artifact_hashes"][kind] == archived["artifact_hashes"][kind]
+    route = _endpoint(app, "/files/reports/{ticker}/archives/{publication_id}/{kind}")
+    html_en = route("AAAA", publication_id, "html_en")
+    assert Path(html_en.path).read_text() == "<html lang='en'>report</html>"
+    assert html_en.media_type.startswith("text/html")
+    pdf_en = route("AAAA", publication_id, "pdf_en")
+    assert Path(pdf_en.path).read_bytes() == b"%PDF-1.4 english"
+    assert pdf_en.media_type == "application/pdf"
 
 
 def test_archive_route_rejects_unknown_or_tampered_bundle(tmp_path):
