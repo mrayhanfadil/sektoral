@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { decisionWord, gateWord, isJudged, verdictGlyph, verdictOf, verdictTone, verdictWord, words } from "./read";
+import type { Step } from "../../lib/agents";
+import { decisionWord, gateWord, isJudged, stepLine, valuationLabel, verdictGlyph, verdictOf, verdictTone, verdictWord, words } from "./read";
 
 describe("hypothesis verdicts", () => {
   it("counts only real verdicts as judged", () => {
@@ -49,5 +50,24 @@ describe("pipeline words", () => {
     expect(words("5 emiten", "en")).toBe("5 emiten");
     expect(words("constructor", "en")).toBe("constructor");
     expect(words(undefined, "en")).toBeUndefined();
+  });
+});
+
+describe("valuation labels", () => {
+  const release = { kind: "release", status: "distributable_assumption_led" };
+  it("reads the release and the primary method in English from their data", () => {
+    expect(valuationLabel("Status rilis: dapat didistribusikan, berbasis asumsi analis", "release", release, "en"))
+      .toBe("Release status: distributable, assumption-led");
+    expect(valuationLabel("Metode utama DDM", "primary_method", { method: "DDM" }, "en")).toBe("Primary method DDM");
+    expect(valuationLabel("Status rilis: dapat didistribusikan, berbasis asumsi analis", "release", release, "id"))
+      .toBe("Status rilis: dapat didistribusikan, berbasis asumsi analis");
+    expect(valuationLabel("Rencana siap", undefined, undefined, "en")).toBe("Rencana siap");
+  });
+  it("reads a step by its closing label, else its title", () => {
+    const step = { title: "Menyusun company update", result: "Status rilis: dapat didistribusikan, berbasis asumsi analis",
+      resultEvent: "release", data: release } as unknown as Step;
+    expect(stepLine(step, "en")).toBe("Release status: distributable, assumption-led");
+    expect(stepLine(step, "id")).toBe("Status rilis: dapat didistribusikan, berbasis asumsi analis");
+    expect(stepLine({ ...step, result: undefined }, "en")).toBe("Menyusun company update");
   });
 });

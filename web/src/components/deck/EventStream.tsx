@@ -5,12 +5,11 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, TriangleAlert } from "lucide-react";
 import { AGENT, AGENTS, duration, releaseFigures, type AgentId, type DeckState, type Step } from "../../lib/agents";
-import type { EventData } from "../../lib/api";
-import { decisionCode, gateCode, primaryMethodOf, str, type EventKind } from "../../lib/codes";
+import { decisionCode, gateCode, str } from "../../lib/codes";
 import { pick, useLang, type Bi, type Lang } from "../../lib/i18n";
 import { EngineTag, Glyph, Hold, Sweep } from "./kit";
 import {
-  SPRING, clock, decisionWord, gateWord, useChangeCount, verdictGlyph, verdictOf, verdictTone, verdictWord, words,
+  SPRING, clock, decisionWord, gateWord, stepLine, useChangeCount, valuationLabel, verdictGlyph, verdictOf, verdictTone, verdictWord, words,
 } from "./read";
 
 /** Whether rows mounting in this render are new arrivals (animate) or a jump (don't). */
@@ -30,7 +29,7 @@ type Props = {
 };
 
 export function EventStream({ state, filter, onFilter, live, fit, loading, empty }: Props) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const reduce = useReducedMotion();
   const total = state.steps.length;
 
@@ -81,7 +80,7 @@ export function EventStream({ state, filter, onFilter, live, fit, loading, empty
     : state.roots;
   const agentsWithSteps = AGENTS.filter((a) => state.agents[a.id].steps > 0 || a.id === filter);
   const latest = state.active ?? state.steps[state.steps.length - 1];
-  const announce = useThrottled(latest ? latest.result ?? latest.title : "", 2500);
+  const announce = useThrottled(latest ? stepLine(latest, lang) : "", 2500);
 
   const height = fit ? "min-[1100px]:min-h-0 min-[1100px]:flex-1 max-[1099px]:h-[min(68dvh,620px)]" : "";
   return (
@@ -219,19 +218,6 @@ function resultLabel(step: Step, lang: Lang): string | undefined {
     return lang === "id" && label.startsWith(prefix) ? label.slice(prefix.length) : pick(TOOL_OUTCOME[kind], lang);
   }
   return valuationLabel(label, kind, step.data, lang);
-}
-
-/** The gate agent's closing labels, in the reader's words; any other label passes through. */
-function valuationLabel(label: string, kind: EventKind | undefined, data: EventData | undefined, lang: Lang): string {
-  if (kind === "primary_method") {
-    const method = primaryMethodOf({ label, data }) ?? "";
-    return pick({ id: label, en: `Primary method ${method}`.trim() }, lang);
-  }
-  if (kind === "chain_done") return pick({ id: label, en: "Method Chain done" }, lang);
-  if (kind === "release" && data?.status) {
-    return pick({ id: label, en: `Release status: ${words(str(data.status), "en")}` }, lang);
-  }
-  return label;
 }
 
 function resultParts(step: Step, lang: Lang): { label?: string; detail?: string } {

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { motion } from "motion/react";
 import { Pause, Play, RotateCcw } from "lucide-react";
-import { PHASES } from "../../lib/agents";
+import { eventText, PHASES } from "../../lib/agents";
 import type { JobEvent } from "../../lib/api";
 import { useLang } from "../../lib/i18n";
 import { playbackTimes, type Replay } from "../../lib/replay";
@@ -94,7 +94,7 @@ function Speed({ speed, setSpeed }: { speed: number; setSpeed: (s: number) => vo
 }
 
 function Scrubber({ replay, events }: { replay: Replay; events: JobEvent[] }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const track = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const times = useMemo(() => playbackTimes(events), [events]);
@@ -130,7 +130,8 @@ function Scrubber({ replay, events }: { replay: Replay; events: JobEvent[] }) {
     else if (e.key === "Home") { e.preventDefault(); seek(0); }
     else if (e.key === "End") { e.preventDefault(); seek(total); }
   };
-  const label = events[count - 1]?.label;
+  const last = events[count - 1];
+  const label = last && eventText(last, lang).label;
   return (
     <div className="flex min-w-[180px] flex-1 items-center max-sm:order-last max-sm:basis-full">
       <div ref={track} role="slider" tabIndex={0} aria-label={t({ id: "Posisi putar ulang", en: "Replay position" })} aria-valuemin={0} aria-valuemax={total} aria-valuenow={count}

@@ -12,7 +12,7 @@ import {
 import { useReplay } from "../../lib/replay";
 import { useLang } from "../../lib/i18n";
 import { useRunIntel } from "../../lib/useRunIntel";
-import { gateWord, verdictWord, words } from "../deck/read";
+import { gateWord, stepLine, valuationLabel, verdictWord, words } from "../deck/read";
 import { LiveMark } from "../Mark";
 import { RatingBadge } from "../Reports";
 import { GATE_TONE, GateMeter } from "./GateMeter";
@@ -91,7 +91,7 @@ function Player({ run, item }: { run: RunReplay; item?: ReportItem }) {
   // An English reader's plan takes its English twins from the run's analyst result.
   const intel = useRunIntel(run.ticker, lang);
   const deck = useMemo(() => {
-    const state = derive(replay.shown, { finished: replay.finished });
+    const state = derive(replay.shown, { finished: replay.finished, lang });
     const plan = planIn(state.plan, intel, lang);
     return plan === state.plan ? state : { ...state, plan };
   }, [replay.shown, replay.finished, intel, lang]);
@@ -329,9 +329,9 @@ function StreamRow({ step, recorded, reduce }: { step: Step; recorded: boolean; 
   const call = step.kind === "call";
   const running = step.status === "run";
   const label = call ? step.tool : t(AGENT[step.agent].short);
-  const text = call ? step.reason || step.title : step.title;
+  const text = call ? step.reason || step.title : valuationLabel(step.title, step.event, step.data, lang);
   // A call's answer is its result detail; a task's is its closing label, with the detail beside it.
-  const main = words(running ? undefined : call ? step.resultDetail || step.result : step.result ?? step.resultDetail, lang);
+  const main = words(running ? undefined : call ? step.resultDetail || step.result : step.result ? stepLine(step, lang) : step.resultDetail, lang);
   const extra = !running && !call && step.result ? step.resultDetail : undefined;
   const flagged = step.status === "warn" || step.status === "error";
   const right = running || flagged ? t(STATUS_WORD[step.status])
