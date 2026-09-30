@@ -105,4 +105,18 @@ describe("validator notes", () => {
       .toEqual([{ message: "Prosa memuat bahasa rekomendasi investasi", removed: ["beli"] }]);
     expect(problemNotes([], [])).toEqual([]);
   });
+  it("gives an English reader the notes' English twins, and the Indonesian where there is none", () => {
+    const parsed = [
+      { message: "Sintesis ditolak: tulis dalam bahasa Indonesia saja", message_en: "Synthesis rejected: write in Indonesian only", removed: [] },
+      { message: "Prosa tidak boleh memuat angka", message_en: null, removed: ["11"] },
+    ];
+    expect(problemNotes(parsed, [], undefined, "en").map((n) => n.message))
+      .toEqual(["Synthesis rejected: write in Indonesian only", "Prosa tidak boleh memuat angka"]);
+    expect(problemNotes(parsed, [], undefined, "id")).toBe(parsed);
+    const raw = ["prosa memuat bahasa rekomendasi investasi; hapus kata: beli", "hypotheses[0] perlu signal_ids"];
+    expect(problemNotes(undefined, raw, ["prose holds investment advice language", null], "en").map((n) => n.message))
+      .toEqual(["Prose holds investment advice language", "hypotheses[0] perlu signal_ids"]);
+    expect(problemNotes(undefined, raw, ["prose holds investment advice language", null], "id")[0].message)
+      .toBe("Prosa memuat bahasa rekomendasi investasi");
+  });
 });
