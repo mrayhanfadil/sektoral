@@ -107,6 +107,21 @@ def source(id_text, en_text=None):
     return f"{_UNTRANSLATED}{id_text}{_UNTRANSLATED}"
 
 
+def known(id_text) -> str | None:
+    """The English ``source`` gives Indonesian source or model text, or None
+    when it has none (the web app's ``_en`` twins, outside a build)."""
+    if not isinstance(id_text, str) or not id_text.strip():
+        return None
+    token = _BUILD.set("en")
+    try:
+        found = source(id_text)
+    finally:
+        _BUILD.reset(token)
+    if not isinstance(found, str) or found == id_text or _UNTRANSLATED in found:
+        return None
+    return found
+
+
 @contextlib.contextmanager
 def building(language: str):
     """Build prose in `language` inside the block."""

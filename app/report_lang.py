@@ -860,6 +860,21 @@ def label(text, lang: str = DEFAULT):
     return _en(text)
 
 
+def known(text) -> str | None:
+    """The English of a label the tables know (a term, or a pattern whose
+    groups are labels too), or None; ``label`` would keep unknown words."""
+    if not isinstance(text, str) or not text:
+        return None
+    hit = TERMS.get(text)
+    if hit is not None:
+        return hit
+    for pattern, template in _PATTERNS:
+        found = pattern.fullmatch(text)
+        if found:
+            return template.format(*(_en(g) if g else "" for g in found.groups()))
+    return None
+
+
 def title(exhibit: dict, lang: str = DEFAULT) -> str:
     """An exhibit's title in `lang`: by its stable id when it has one."""
     judul = exhibit.get("judul") or ""
