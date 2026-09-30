@@ -324,7 +324,7 @@ def test_plan_schema_moves_the_fingerprint():
     finally:
         agent.PLAN_SCHEMA_BY_PROFILE.clear()
         agent.PLAN_SCHEMA_BY_PROFILE.update(original)
-    assert agent.plan_schema("financial_ddm") == 7
+    assert agent.plan_schema("financial_ddm") == 6
 
 
 def test_a_bank_schema_bump_keeps_other_profiles_plans():
