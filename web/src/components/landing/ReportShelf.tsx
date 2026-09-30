@@ -3,7 +3,7 @@
 // (replay the run, or open the report).
 import { Link } from "react-router-dom";
 import { FileText, Play } from "lucide-react";
-import { reportFiles, type ReportItem } from "../../lib/api";
+import { readerFiles, type ReportItem } from "../../lib/api";
 import { pct, rp } from "../../lib/format";
 import { useLang } from "../../lib/i18n";
 import { selectedStep } from "../../lib/labels";
@@ -17,8 +17,8 @@ function selected(item: ReportItem) {
 }
 
 function Actions({ item }: { item: ReportItem }) {
-  const { t } = useLang();
-  const files = reportFiles(item.ticker);
+  const { t, lang } = useLang();
+  const files = readerFiles(item, lang);
   const href = item.files.html ? files.html : item.files.pdf ? files.pdf : undefined;
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5 max-md:justify-start">

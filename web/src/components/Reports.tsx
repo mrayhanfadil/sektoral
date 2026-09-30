@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowDown, ArrowUp, ChevronRight, FileDown, FileText, Footprints, Play } from "lucide-react";
-import { api, reportFiles, type ArchivedPublication, type ChainStep, type ReportItem } from "../lib/api";
+import { api, readerFiles, reportFiles, type ArchivedPublication, type ChainStep, type ReportItem } from "../lib/api";
 import { DECISION_WORD, decisionCode } from "../lib/codes";
 import { pct, rp } from "../lib/format";
 import { getLang, LOCALE, useLang, type Bi, type Lang } from "../lib/i18n";
@@ -216,8 +216,8 @@ function UpsideMeter({ value, scale }: { value: number | null; scale: number }) 
 
 /** Replay, report, PDF and trace for one company update, as one compact group. */
 export function ReportActions({ item, className = "" }: { item: ReportItem; className?: string }) {
-  const { t } = useLang();
-  const files = reportFiles(item.ticker);
+  const { t, lang } = useLang();
+  const files = readerFiles(item, lang);
   const trace = traceHref(item);
   const cell =
     "inline-flex h-8 flex-1 items-center justify-center gap-1.5 px-2.5 text-[13px] font-medium whitespace-nowrap no-underline transition-colors " +
@@ -258,7 +258,7 @@ export function ReportActions({ item, className = "" }: { item: ReportItem; clas
 
 /** Earlier approved bundles stay reachable with an explicit archived label. */
 function ArchivedVersions({ ticker }: { ticker: string }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [archives, setArchives] = useState<ArchivedPublication[] | null>(null);
   useEffect(() => {
     let current = true;
@@ -279,16 +279,21 @@ function ArchivedVersions({ ticker }: { ticker: string }) {
       <div className="absolute right-0 z-20 mt-1.5 w-[min(360px,calc(100vw-2rem))] rounded-md border border-rule bg-surface p-3 shadow-[var(--shadow-pop)]">
         <p className="m-0 mb-2 text-[12px] text-ink-soft">{t({ id: "Versi terdahulu yang disetujui, disimpan sebagai arsip.", en: "Earlier approved versions, kept as archives." })}</p>
         <ul className="m-0 list-none divide-y divide-rule-soft p-0">
-          {archives.map((archive) => (
-            <li key={archive.publication_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0">
-              <span className="min-w-0 flex-1 truncate font-medium text-ink" title={archive.publication_id}>
-                {t({ id: "Arsip", en: "Archived" })} · {formatDay(archive.archived_at)} · {archive.publication_id.slice(0, 10)}
-              </span>
-              {archive.files.html && <a className="underline underline-offset-2" href={archive.files.html}>HTML</a>}
-              {archive.files.pdf && <a className="underline underline-offset-2" href={archive.files.pdf}>PDF</a>}
-              {archive.files.trace && <a className="underline underline-offset-2" href={archive.files.trace}>Audit Trace</a>}
-            </li>
-          ))}
+          {archives.map((archive) => {
+            // English readers open the archived English files when that bundle had them.
+            const html = (lang === "en" && archive.files.html_en) || archive.files.html;
+            const pdf = (lang === "en" && archive.files.pdf_en) || archive.files.pdf;
+            return (
+              <li key={archive.publication_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0">
+                <span className="min-w-0 flex-1 truncate font-medium text-ink" title={archive.publication_id}>
+                  {t({ id: "Arsip", en: "Archived" })} · {formatDay(archive.archived_at)} · {archive.publication_id.slice(0, 10)}
+                </span>
+                {html && <a className="underline underline-offset-2" href={html}>HTML</a>}
+                {pdf && <a className="underline underline-offset-2" href={pdf}>PDF</a>}
+                {archive.files.trace && <a className="underline underline-offset-2" href={archive.files.trace}>Audit Trace</a>}
+              </li>
+            );
+          })}
         </ul>
       </div>
     </details>
@@ -297,9 +302,9 @@ function ArchivedVersions({ ticker }: { ticker: string }) {
 
 /** The PDF cover as a row thumbnail; hover or focus lifts a readable preview beside it. */
 function Cover({ item }: { item: ReportItem }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [broken, setBroken] = useState(false);
-  const files = reportFiles(item.ticker);
+  const files = readerFiles(item, lang);
   if (!item.files.pdf || broken) {
     return <span aria-hidden className="block h-[62px] w-11 rounded-[3px] border border-dashed border-rule" />;
   }

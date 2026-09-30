@@ -6,6 +6,9 @@ import { pick } from "./i18n";
 /** One Method Chain row; `decision` is the Indonesian label, `decision_code` its stable code (#34). */
 export type ChainStep = { step: string; decision: string; decision_code?: string; value: string };
 
+/** Report languages: Bahasa Indonesia always, English once it is part of the published bundle. */
+export type ReportLang = "id" | "en";
+
 export type ReportItem = {
   ticker: string;
   name: string;
@@ -30,7 +33,9 @@ export type ReportItem = {
   held_reason: string;
   /** Release policy freshness: a stale view stays visible with its reason. */
   freshness?: { state: "current" | "stale" | "withdrawal_due"; reason?: string | null; triggers?: string[] } | null;
-  files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean };
+  /** Public languages of the report (`[]` when unpublished); older servers omit it and publish Indonesian only. */
+  languages?: ReportLang[];
+  files: { pdf: boolean; html: boolean; trace: boolean; trace_json: boolean; html_en?: boolean; pdf_en?: boolean };
   review?: { state: ReviewState; reviewer: string | null; reviewed_at: string | null; decision: string | null; edits: number };
 };
 
@@ -41,8 +46,9 @@ export type ArchivedPublication = {
   publication_id: string;
   archived_at: string | null;
   review_sha: string | null;
-  artifact_hashes: { html: string | null; pdf: string | null; trace_html: string | null };
-  files: { html: string | null; pdf: string | null; trace: string | null };
+  artifact_hashes: { html: string | null; pdf: string | null; trace_html: string | null;
+    html_en?: string | null; pdf_en?: string | null };
+  files: { html: string | null; pdf: string | null; trace: string | null; html_en?: string | null; pdf_en?: string | null };
 };
 
 export type ReviewState = "approved" | "pending" | "no_plan";
@@ -278,6 +284,8 @@ export type TraceView = {
     cache_snapshot_sha256: Record<string, { cache_key: string | null; content_sha256: string | null }>;
     artifacts: Record<string, { file: string | null; sha256: string | null }>;
     missing_artifacts: string[];
+    /** Hash of the English source-text translations the report prose loaded (#34); older manifests lack it. */
+    source_text_en_sha256?: string | null;
   } | null;
   /** Gallery reports only: whether an analyst approved the Forecast Plan. */
   review_state?: ReviewState;
@@ -381,7 +389,7 @@ export const api = {
     request<TraceView>(`/api/reports/${encodeURIComponent(ticker)}/trace/preview`, {
       headers: { "X-Review-Token": token },
     }),
-  reviewArtifact: (ticker: string, token: string, kind: "pdf" | "html" | "trace") =>
+  reviewArtifact: (ticker: string, token: string, kind: PreviewKind) =>
     requestBlob(`/api/reports/${encodeURIComponent(ticker)}/artifact-preview/${kind}`, token),
   review: (ticker: string, token?: string) => request<ReviewView>(
     `/api/reports/${encodeURIComponent(ticker)}/review`,
@@ -404,10 +412,30 @@ export const api = {
     }).then((r) => r.id),
 };
 
-/** Where a report's files live on the server. */
-export const reportFiles = (t: string) => ({
-  pdf: `/files/reports/${t}.pdf`,
-  html: `/files/reports/${t}.html`,
-  traceHtml: `/files/reports/${t}-trace.html`,
-  cover: `/files/reports/${t}/cover.png`,
-});
+/** The bundle files a reviewer can preview before publication. */
+export type PreviewKind = "pdf" | "html" | "trace" | "html_en" | "pdf_en";
+
+/** Whether the report is published in English: `languages` from the server, else its English file flags. */
+export function hasEnglish(item: Pick<ReportItem, "languages" | "files"> | null | undefined): boolean {
+  if (!item) return false;
+  return item.languages ? item.languages.includes("en") : Boolean(item.files.html_en || item.files.pdf_en);
+}
+
+/**
+ * Where a report's files live on the server. `html` and `pdf` follow the
+ * reader: the English files when ``lang`` is English and ``english`` says the
+ * report is published in English, else the Indonesian ones.
+ */
+export const reportFiles = (t: string, lang: ReportLang = "id", english = false) => {
+  const suffix = lang === "en" && english ? ".en" : "";
+  return {
+    pdf: `/files/reports/${t}${suffix}.pdf`,
+    html: `/files/reports/${t}${suffix}.html`,
+    traceHtml: `/files/reports/${t}-trace.html`,
+    cover: `/files/reports/${t}/cover.png`,
+  };
+};
+
+/** A report's files in the reader's language, as far as its item says English is published. */
+export const readerFiles = (item: Pick<ReportItem, "ticker" | "languages" | "files">, lang: ReportLang) =>
+  reportFiles(item.ticker, lang, hasEnglish(item));
