@@ -76,6 +76,7 @@ def test_summaries_hold_drafts_and_read_the_method_chain(tmp_path):
     assert first["publication_state"] == "published" and first["analytically_eligible"]
     assert [s["decision"] for s in first["chain"]] == ["Dilewati", "Terpilih", "Silang cek"]
     assert first["chain"][0]["step"] == "DCF FCFF"
+    assert [s["decision_code"] for s in first["chain"]] == ["skipped", "selected", "cross_check"]
     assert held["rating"] is None and held["tp"] is None
     assert held["held_reason"] == "laporan belum tersedia untuk umum"
     assert held["method"] == "" and held["headline"] == "" and held["risks"] == []
@@ -146,7 +147,10 @@ def test_draft_profile_falls_back_to_the_run_manifest(tmp_path):
     assert gallery.load(tmp_path)[0]["profile"] == "Bank"
 
 
-def test_template_harness_blockers_get_a_reader_reason():
-    assert gallery._held_reason(["T.T4.discount_rate_currency: pelapor USD"]) == \
-        "discount rate belum sesuai mata uang pelaporan"
-    assert gallery._held_reason(["T.TF.bare_na: Laba rugi"]) == "pemeriksaan format laporan belum lolos"
+def test_every_chain_decision_cell_reads_back_to_its_code():
+    from app import report_extras
+    assert {cell: report_extras.decision_code(cell) for cell in report_extras._DECISION.values()} == {
+        "Terpilih": "selected", "Terpilih, ekstrem (rantai berhenti)": "stop_extreme",
+        "Dilewati": "skipped", "Silang cek": "cross_check", "Tidak dijalankan": "not_needed",
+        "Belum tersedia": "unavailable"}
+    assert report_extras.decision_code("lain") is None

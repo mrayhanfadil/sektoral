@@ -92,6 +92,16 @@ def _page(title, paragraphs, exhibits):
 _DECISION = {"selected": "Terpilih", "stop_extreme": "Terpilih, ekstrem (rantai berhenti)",
              "skipped": "Dilewati", "cross_check": "Silang cek", "not_needed": "Tidak dijalankan",
              "not_available": "Belum tersedia"}
+# The web matches a chain row on a code, not on its Indonesian cell. The
+# exhibit keeps only the cell (the stored report stays as it is), so the code
+# is read back from it; that also covers reports stored before codes existed.
+_DECISION_CODE = {label: "unavailable" if code == "not_available" else code
+                  for code, label in _DECISION.items()}
+
+
+def decision_code(cell) -> str | None:
+    """The Method Chain decision code of a chain-exhibit Keputusan cell."""
+    return _DECISION_CODE.get(str(cell))
 
 
 METHOD_CHAIN_TITLE = "Rantai metode valuasi"
