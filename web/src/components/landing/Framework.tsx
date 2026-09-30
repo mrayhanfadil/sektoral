@@ -3,8 +3,9 @@
 // verdict and the chain shows its real decisions and reasons.
 import { GATES, type ChainState, type GateState } from "../../lib/agents";
 import type { ReportItem } from "../../lib/api";
+import { decisionCode, type DecisionCode } from "../../lib/codes";
 import { useLang, type Bi } from "../../lib/i18n";
-import { words } from "../deck/read";
+import { decisionWord, gateWord } from "../deck/read";
 import { GATE_TONE, GateMeter } from "./GateMeter";
 
 /** What each gate decides (PRODUCT.md, CONTEXT.md). */
@@ -39,7 +40,7 @@ export function GateInstruments({ gates, ticker }: { gates?: GateState[]; ticker
                   <GateMeter status={g.status} className="h-[3px]" />
                   <p className="m-0 mt-2 flex items-baseline justify-between gap-2 text-[12.5px] font-medium">
                     <span className="font-mono text-[11.5px] text-ink-soft">{ticker}</span>
-                    <span className={`truncate ${GATE_TONE[g.status].text}`}>{words(g.verdict, lang) || t({ id: "belum dinilai", en: "not assessed yet" })}</span>
+                    <span className={`truncate ${GATE_TONE[g.status].text}`}>{gateWord(g, lang) || t({ id: "belum dinilai", en: "not assessed yet" })}</span>
                   </p>
                 </div>
               )}
@@ -57,12 +58,12 @@ export function GateInstruments({ gates, ticker }: { gates?: GateState[]; ticker
   );
 }
 
-const DECISION_TONE: Record<string, string> = {
-  Terpilih: "bg-brand text-white",
-  "Silang cek": "bg-ok-bg text-ok-ink",
+const DECISION_TONE: Partial<Record<DecisionCode, string>> = {
+  selected: "bg-brand text-white",
+  cross_check: "bg-ok-bg text-ok-ink",
 };
 
-type ChainRow = { method: string; decision: string; value: string; reason?: string };
+type ChainRow = { method: string; decision: string; code?: DecisionCode; value: string; reason?: string };
 
 /** The numbered rules of the chain, in order. */
 const RULES: [term: Bi, body: Bi][] = [
@@ -77,7 +78,9 @@ const RULES: [term: Bi, body: Bi][] = [
 
 export function MethodChain({ item, chain }: { item?: ReportItem; chain?: ChainState[] }) {
   const { lang, t } = useLang();
-  const rows: ChainRow[] = chain?.length ? chain : (item?.chain ?? []).map((s) => ({ method: s.step, decision: s.decision, value: s.value }));
+  const rows: ChainRow[] = chain?.length ? chain : (item?.chain ?? []).map((s) => ({
+    method: s.step, decision: s.decision, code: decisionCode(s.decision_code, s.decision), value: s.value,
+  }));
   return (
     <div className="grid gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <div>
@@ -103,10 +106,10 @@ export function MethodChain({ item, chain }: { item?: ReportItem; chain?: ChainS
           <ol aria-label={t({ id: `Rantai metode ${item.ticker}`, en: `Method Chain ${item.ticker}` })} className="m-0 list-none p-0">
             {rows.map((row, i) => (
               <li key={`${row.method}-${i}`}
-                className={`grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-3 first:border-t-0 ${row.decision === "Terpilih" ? "bg-brand-50/70" : ""}`}>
+                className={`grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 border-t border-rule-soft px-4 py-3 first:border-t-0 ${row.code === "selected" ? "bg-brand-50/70" : ""}`}>
                 <p className="m-0 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
                   <span className="font-mono text-[14px] font-semibold text-ink-strong">{row.method}</span>
-                  <span className={`rounded-full px-2 text-[12px] leading-[20px] font-bold ${DECISION_TONE[row.decision] ?? "bg-raised text-ink-soft"}`}>{words(row.decision, lang)}</span>
+                  <span className={`rounded-full px-2 text-[12px] leading-[20px] font-bold ${(row.code && DECISION_TONE[row.code]) ?? "bg-raised text-ink-soft"}`}>{decisionWord(row, lang)}</span>
                 </p>
                 <span className={`self-center font-mono text-[14px] tabular-nums ${row.value === "-" ? "text-ink-faint" : "font-semibold text-ink-strong"}`}>
                   {row.value === "-" ? t({ id: "tanpa nilai", en: "no value" }) : row.value}

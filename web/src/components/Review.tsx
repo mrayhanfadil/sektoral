@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { CircleCheck, ClipboardCheck, Eye, KeyRound, TriangleAlert } from "lucide-react";
-import { api, ApiError, type ReviewAttestation, type ReviewField, type ReviewView } from "../lib/api";
+import { api, ApiError, type PreviewKind, type ReviewAttestation, type ReviewField, type ReviewView } from "../lib/api";
 import { getLang, LOCALE, useLang, type Bi, type Lang } from "../lib/i18n";
 import { Chip } from "./Intel";
 import { CHECK_LABELS, ReviewAttestationForm } from "./ReviewAttestationForm";
@@ -32,8 +32,11 @@ const PUBLIC_DISCLOSURE_LABELS: Record<string, Bi> = {
 const changes = (n: number): Bi => ({ id: `${n} perubahan`, en: `${n} ${n === 1 ? "change" : "changes"}` });
 
 /** The analyst review of a report's Forecast Plan: who approved it, what they changed, or the form to do so. */
-export function ReviewPanel({ ticker, reviewToken, onApproved }: {
-  ticker: string; reviewToken?: string; onApproved: () => void;
+export function ReviewPanel({ ticker, reviewToken, bundleKinds = [], onApproved }: {
+  ticker: string; reviewToken?: string;
+  /** Artifact kinds the run manifest lists (`html`, `pdf_en`, ...); English previews show only when listed. */
+  bundleKinds?: string[];
+  onApproved: () => void;
 }) {
   const { t } = useLang();
   const state = useLoad(() => api.review(ticker, reviewToken), [ticker, reviewToken]);
@@ -68,7 +71,7 @@ export function ReviewPanel({ ticker, reviewToken, onApproved }: {
         )}
       </header>
       {view.state === "approved" ? <Approved view={view} /> : (
-        <ReviewForm ticker={ticker} view={view} onDone={() => { state.reload(); onApproved(); }} />
+        <ReviewForm ticker={ticker} view={view} bundleKinds={bundleKinds} onDone={() => { state.reload(); onApproved(); }} />
       )}
     </section>
   );
@@ -191,7 +194,30 @@ function Approved({ view }: { view: ReviewView }) {
   );
 }
 
-function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView; onDone: () => void }) {
+/** Bundle files a reviewer can open: [preview kind, button, manifest kind]. English only when the bundle lists it. */
+const PREVIEWS: [PreviewKind, Bi, string][] = [
+  ["pdf", { id: "Buka PDF", en: "Open PDF" }, "pdf"],
+  ["html", { id: "Buka HTML", en: "Open HTML" }, "html"],
+  ["trace", { id: "Buka jejak HTML", en: "Open HTML trace" }, "trace_html"],
+  ["pdf_en", { id: "Buka PDF Inggris", en: "Open English PDF" }, "pdf_en"],
+  ["html_en", { id: "Buka HTML Inggris", en: "Open English HTML" }, "html_en"],
+];
+const ENGLISH_KINDS: ReadonlySet<string> = new Set(["html_en", "pdf_en"]);
+
+/** What each missing bundle part is called; an unknown kind shows as sent. */
+const MISSING_LABEL: Record<string, Bi> = {
+  html: { id: "HTML", en: "HTML" },
+  pdf: { id: "PDF", en: "PDF" },
+  trace_html: { id: "jejak HTML", en: "HTML trace" },
+  html_en: { id: "HTML Inggris", en: "English HTML" },
+  pdf_en: { id: "PDF Inggris", en: "English PDF" },
+  publication_manifest: { id: "manifest publikasi", en: "publication manifest" },
+  evidence_register: { id: "register bukti", en: "evidence register" },
+};
+
+function ReviewForm({ ticker, view, bundleKinds, onDone }: {
+  ticker: string; view: ReviewView; bundleKinds: string[]; onDone: () => void;
+}) {
   const { t, lang } = useLang();
   const [draft, setDraft] = useState<Draft>({});
   const [note, setNote] = useState("");
@@ -218,6 +244,12 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
   });
   const missingReason = changed.filter((f) => (draft[f.path]?.reason ?? "").trim().length < 10);
   const missingArtifacts = view.missing_artifacts ?? [];
+  const missingNames: Bi = {
+    id: missingArtifacts.map((k) => MISSING_LABEL[k]?.id ?? k).join(", "),
+    en: missingArtifacts.map((k) => MISSING_LABEL[k]?.en ?? k).join(", "),
+  };
+  const missingEnglish = missingArtifacts.some((k) => ENGLISH_KINDS.has(k));
+  const previews = PREVIEWS.filter(([, , artifact]) => !ENGLISH_KINDS.has(artifact) || bundleKinds.includes(artifact));
   const manifestErrors = view.manifest_errors ?? [];
   const evidenceRegisterErrors = view.evidence_register_errors ?? [];
   const reviewerRole = view.current_reviewer?.role?.toLowerCase();
@@ -249,7 +281,7 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
     }
   }
 
-  async function openArtifact(kind: "pdf" | "html" | "trace") {
+  async function openArtifact(kind: PreviewKind) {
     if (!token || previewBusy) return;
     const popup = window.open("about:blank", "_blank");
     if (!popup) {
@@ -287,8 +319,8 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
       {missingArtifacts.length > 0 && (
         <p role="alert" className="rounded-md border border-warn-rule/50 bg-warn-bg/50 px-4 py-2.5 text-[14px] text-warn-ink">
           {t({
-            id: `Bundle belum lengkap untuk review: ${missingArtifacts.join(", ")}. Bangun HTML, PDF, dan jejak HTML dari run yang sama, lalu muat ulang halaman ini.`,
-            en: `The bundle is incomplete for review: ${missingArtifacts.join(", ")}. Build the HTML, PDF and HTML trace from the same run, then reload this page.`,
+            id: `Bundle belum lengkap untuk review: ${missingNames.id}. Bangun HTML, PDF, dan jejak HTML${missingEnglish ? " (serta versi Inggrisnya)" : ""} dari run yang sama, lalu muat ulang halaman ini.`,
+            en: `The bundle is incomplete for review: ${missingNames.en}. Build the HTML, PDF and HTML trace${missingEnglish ? " (and their English versions)" : ""} from the same run, then reload this page.`,
           })}
         </p>
       )}
@@ -359,8 +391,7 @@ function ReviewForm({ ticker, view, onDone }: { ticker: string; view: ReviewView
       <div className="grid gap-2 rounded-md border border-rule bg-raised px-4 py-3">
         <p className="m-0 text-[13.5px] font-medium text-ink-strong">{t({ id: "Pratinjau bundle yang akan diterbitkan", en: "Preview the bundle to be published" })}</p>
         <div className="flex flex-wrap gap-2">
-          {([["pdf", { id: "Buka PDF", en: "Open PDF" }, "pdf"], ["html", { id: "Buka HTML", en: "Open HTML" }, "html"],
-             ["trace", { id: "Buka jejak HTML", en: "Open HTML trace" }, "trace_html"]] as const).map(([kind, label, artifact]) => (
+          {previews.map(([kind, label, artifact]) => (
             <button key={kind} type="button" onClick={() => openArtifact(kind)}
               disabled={!token || previewBusy !== null || missingArtifacts.includes(artifact)}
               className="btn btn-sm btn-ghost disabled:cursor-not-allowed">

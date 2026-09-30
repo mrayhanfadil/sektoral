@@ -2,8 +2,10 @@
 // went out and came back, where the run is, and what the Method Gates and the
 // method chain decided. Everything here is derived from the progress events
 // (app/progress.py), so a live job and a replayed run render the same way.
-import type { JobEvent } from "./api";
-import { getLang, type Bi, type Lang } from "./i18n";
+import type { EventData, Intel, JobEvent } from "./api";
+import { decisionCode, eventKind, gateCode, num, str, verdictCode, type DecisionCode, type EventKind, type GateCode, type VerdictCode } from "./codes";
+import { pct, rp } from "./format";
+import { getLang, twin, type Bi, type Lang } from "./i18n";
 
 export type AgentId = "memori" | "analis" | "riset" | "berita" | "forecast" | "gerbang" | "laporan";
 export type Status = "idle" | "run" | "ok" | "warn" | "error";
@@ -122,6 +124,10 @@ export type Step = {
   stage: string;
   tool?: string;
   title: string;
+  /** What the opening event reports (lib/codes.ts `eventKind`), when it is one the Deck reads. */
+  event?: EventKind;
+  /** What the closing event reports, likewise. */
+  resultEvent?: EventKind;
   /** Why the call or task started (the opening event's detail). */
   reason?: string;
   /** The closing event's label, when the step closed with a different one. */
@@ -130,15 +136,17 @@ export type Step = {
   status: Status;
   t0: number;
   t1?: number;
-  data?: Record<string, string>;
+  data?: EventData;
   parent?: number;
   children: number[];
 };
 
 export type AgentState = { status: Status; steps: number; calls: number; last?: string; lastEvent: number };
-export type GateState = { n: number; name: Bi; status: "idle" | "ok" | "warn" | "skip"; verdict?: string; detail?: string };
-export type ChainState = { method: string; decision: string; value: string; reason?: string; order: number };
-export type Hypothesis = { index: number; text: string; verdict?: string; reason?: string };
+// Each verdict and decision keeps the label the pipeline sent and its code
+// (lib/codes.ts: the server's code, else read from the label). Logic reads the code.
+export type GateState = { n: number; name: Bi; status: "idle" | "ok" | "warn" | "skip"; verdict?: string; code?: GateCode; detail?: string };
+export type ChainState = { method: string; decision: string; code?: DecisionCode; value: string; reason?: string; order: number };
+export type Hypothesis = { index: number; text: string; verdict?: string; code?: VerdictCode; reason?: string };
 
 export type DeckState = {
   steps: Step[];
@@ -151,7 +159,7 @@ export type DeckState = {
   gates: GateState[];
   chain: ChainState[];
   plan: { question?: string; hypotheses: Hypothesis[] };
-  release?: Record<string, string>;
+  release?: EventData;
   counts: { events: number; calls: number; llmSteps: number; warnings: number };
   elapsed: number;
   /** The most recent step still running, if any. */
@@ -188,7 +196,7 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
   const plan: DeckState["plan"] = { hypotheses: [] };
   const gates: GateState[] = GATES.map((g) => ({ ...g, status: "idle" }));
   const chain: ChainState[] = [];
-  let release: Record<string, string> | undefined;
+  let release: EventData | undefined;
   let phaseAt = -1;
   const lastEvent: Partial<Record<AgentId, number>> = {};
 
@@ -218,26 +226,30 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
     } else if (kind === "verdict") {
       const index = Number(e.data?.index);
       const h = plan.hypotheses.find((x) => x.index === index);
-      if (h) Object.assign(h, { verdict: e.data?.verdict ?? e.label, reason: e.detail });
+      const verdict = str(e.data?.verdict) ?? e.label;
+      if (h) Object.assign(h, { verdict, code: verdictCode(e.data?.verdict_code, verdict), reason: e.detail });
     } else if (kind === "gate") {
       const n = Number(e.data?.gate ?? (e.tool ?? "").slice(5));
       const g = gates.find((x) => x.n === n);
       if (g) {
-        const verdict = e.data?.verdict ?? "";
+        const verdict = str(e.data?.verdict) ?? "";
+        const code = gateCode(e.data?.verdict_code, verdict);
         Object.assign(g, {
-          status: verdict === "tidak berlaku" ? "skip" : e.status === "ok" ? "ok" : "warn",
-          verdict, detail: e.detail,
+          status: code === "not_applicable" ? "skip" : e.status === "ok" ? "ok" : "warn",
+          verdict, code, detail: e.detail,
         });
       }
     } else if (kind === "chain") {
-      chain.push({ method: e.label, decision: e.data?.decision ?? "", value: e.data?.value ?? "-", reason: e.detail, order: chain.length });
+      const decision = str(e.data?.decision) ?? "";
+      chain.push({ method: e.label, decision, code: decisionCode(e.data?.decision_code, decision),
+        value: str(e.data?.value) ?? "-", reason: e.detail, order: chain.length });
     } else if (kind === "release") {
       release = e.data;
     }
 
     if (e.status === "run") {
       const parent = enclosing(agent, sub) ?? (agent === "gerbang" ? enclosing("laporan") : undefined);
-      const step: Step = { id: i, agent, sub, kind, stage: e.stage, tool: e.tool, title: e.label, reason: e.detail,
+      const step: Step = { id: i, agent, sub, kind, stage: e.stage, tool: e.tool, title: e.label, event: eventKind(e), reason: e.detail,
         status: "run", t0: e.t, data: e.data, parent: parent?.id, children: [] };
       add(step);
       open.push(step);
@@ -254,13 +266,13 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
       const s = open[match];
       open.splice(match, 1);
       Object.assign(s, { status: e.status, t1: e.t, result: e.label !== s.title ? e.label : undefined,
-        resultDetail: e.detail, data: { ...s.data, ...e.data } });
+        resultEvent: eventKind(e), resultDetail: e.detail, data: { ...s.data, ...e.data } });
       if (s.stage === "plan" && e.detail && !plan.question) plan.question = e.detail;
       return;
     }
     if (e.stage === "plan" && e.detail && !plan.question && kind === "note") plan.question = e.detail;
     const parent = enclosing(agent, sub) ?? (agent === "gerbang" ? enclosing("laporan") : undefined);
-    add({ id: i, agent, sub, kind, stage: e.stage, tool: e.tool, title: e.label, resultDetail: e.detail,
+    add({ id: i, agent, sub, kind, stage: e.stage, tool: e.tool, title: e.label, event: eventKind(e), resultDetail: e.detail,
       status: e.status, t0: e.t, t1: e.t, data: e.data, parent: parent?.id, children: [] });
   });
 
@@ -311,6 +323,46 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
     elapsed,
     active: running[running.length - 1],
   };
+}
+
+/**
+ * The release's target price and upside for display: the raw `tp_value` and
+ * `upside_pct` in the reader's format, else (an older event) the Indonesian
+ * `tp` and `upside` strings as sent. `down` says the upside is negative.
+ */
+export function releaseFigures(release: EventData | undefined, lang: Lang = getLang()): { tp?: string; upside?: string; down: boolean } {
+  const tpValue = num(release?.tp_value);
+  const upsideValue = num(release?.upside_pct);
+  const tp = tpValue !== undefined ? `Rp${rp(tpValue, lang)}` : str(release?.tp);
+  const upside = upsideValue !== undefined ? `${upsideValue > 0 ? "+" : ""}${pct(upsideValue, lang)}` : str(release?.upside);
+  const down = upsideValue !== undefined ? upsideValue < 0 : /^[−-]/.test(upside ?? "");
+  return { tp, upside, down };
+}
+
+/** Event details are cut at 400 characters (app/progress.py), so text is compared on that much. */
+const same = (a: string | null | undefined, b: string | null | undefined) =>
+  Boolean(a && b) && a!.trim().slice(0, 400) === b!.trim().slice(0, 400);
+
+/**
+ * The plan in the reader's language. Run events carry the analyst's
+ * Indonesian only; for an English reader the question, each hypothesis and
+ * each verdict reason take the English twin from the analyst result
+ * (`intel`) where it holds the same Indonesian text, and stay Indonesian
+ * otherwise (no twin, or a result from another run).
+ */
+export function planIn(plan: DeckState["plan"], intel: Intel | null | undefined, lang: Lang): DeckState["plan"] {
+  if (lang !== "en" || !intel) return plan;
+  const question = same(plan.question, intel.plan.question) ? twin(intel.plan, "question", lang) ?? plan.question : plan.question;
+  const texts = twin(intel.plan, "hypotheses", lang);
+  const hypotheses = plan.hypotheses.map((h) => {
+    const at = h.index - 1;
+    const text = same(h.text, intel.plan.hypotheses[at]) ? texts[at] ?? h.text : h.text;
+    // Synthesis numbers hypotheses from 0; the plan events from 1.
+    const verdict = intel.synthesis.hypotheses.find((v) => v.index === at);
+    const reason = verdict && same(h.reason, verdict.reason) ? twin(verdict, "reason", lang) ?? h.reason : h.reason;
+    return text === h.text && reason === h.reason ? h : { ...h, text, reason };
+  });
+  return { question, hypotheses };
 }
 
 const UNIT: Bi<{ s: string; m: string; comma: boolean }> = {

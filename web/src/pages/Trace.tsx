@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
-import { api, ApiError, reportFiles, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
+import { api, ApiError, readerFiles, reportFiles, type ProblemNote, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
-import { LOCALE, useLang, type Bi } from "../lib/i18n";
-import { validatorNote } from "../lib/labels";
+import { LOCALE, twin, useLang, type Bi } from "../lib/i18n";
+import { problemNotes, validatorNote } from "../lib/labels";
 import { AGENT, derive, type AgentId, type Status } from "../lib/agents";
 import { LiveMark } from "../components/Mark";
 import {
@@ -175,7 +175,7 @@ function AgentGroup({ agent, status, chip, children }:
 }
 
 /** Validator notes (rejected drafts, failed calls) kept visible at the top of an agent's panel. */
-function Problems({ title, items }: { title: string; items: string[] }) {
+function Problems({ title, items }: { title: string; items: ProblemNote[] }) {
   const { t } = useLang();
   if (!items.length) return null;
   return (
@@ -185,8 +185,7 @@ function Problems({ title, items }: { title: string; items: string[] }) {
           <TriangleAlert aria-hidden className="size-3.5 flex-none" strokeWidth={2.2} />{title} <span className="data">{items.length}</span>
         </p>
         <ul className="mt-1.5 grid gap-1.5 pl-[22px] text-[13.5px] leading-relaxed break-words text-ink">
-          {items.map((p, i) => {
-            const { message, removed } = validatorNote(p);
+          {items.map(({ message, removed }, i) => {
             return (
               <li key={i}>
                 {message}{/[.!?]$/.test(message) ? "" : "."}
@@ -395,7 +394,8 @@ function TraceBody({ trace }: { trace: TraceView }) {
           {analyst ? (
             <>
               <div className="border-t border-rule px-6 py-5 max-sm:px-4"><IntelHeadline intel={analyst} as="p" /></div>
-              <Problems title={t({ id: "Catatan validator", en: "Validator notes" })} items={trace.analyst_problems} />
+              <Problems title={t({ id: "Catatan validator", en: "Validator notes" })}
+                items={problemNotes(trace.analyst_problem_notes, trace.analyst_problems)} />
               <IntelSections intel={analyst} />
             </>
           ) : (
@@ -431,11 +431,11 @@ function TraceBody({ trace }: { trace: TraceView }) {
               <div className="grid divide-y divide-rule-soft">
                 {research.insights.map((insight, i) => (
                   <article key={i} className="grid gap-2.5 py-4 first:pt-0 last:pb-0">
-                    <h4 className="text-[16px]">{insight.title || t({ id: "Temuan", en: "Finding" })}</h4>
+                    <h4 className="text-[16px]">{twin(insight, "title", lang) || t({ id: "Temuan", en: "Finding" })}</h4>
                     <dl className="m-0 grid gap-x-5 gap-y-1.5 text-[15px] sm:grid-cols-[104px_minmax(0,1fr)]">
-                      {insight.observation && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Observasi", en: "Observation" })}</dt><dd className="m-0">{insight.observation}</dd></>}
-                      {insight.implication && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Implikasi", en: "Implication" })}</dt><dd className="m-0">{insight.implication}</dd></>}
-                      {insight.caveat && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Batas bukti", en: "Evidence limit" })}</dt><dd className="m-0 text-ink-soft">{insight.caveat}</dd></>}
+                      {insight.observation && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Observasi", en: "Observation" })}</dt><dd className="m-0">{twin(insight, "observation", lang)}</dd></>}
+                      {insight.implication && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Implikasi", en: "Implication" })}</dt><dd className="m-0">{twin(insight, "implication", lang)}</dd></>}
+                      {insight.caveat && <><dt className="text-[13.5px] font-medium text-ink-soft sm:pt-px">{t({ id: "Batas bukti", en: "Evidence limit" })}</dt><dd className="m-0 text-ink-soft">{twin(insight, "caveat", lang)}</dd></>}
                     </dl>
                     {insight.citations.length > 0 && (
                       <ul aria-label={t({ id: "Sitasi", en: "Citations" })} className="m-0 grid list-none divide-y divide-rule-soft rounded-md border border-rule bg-raised p-0">
@@ -574,7 +574,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
 
         <AgentGroup agent="forecast" status={fStatus}
           chip={<StatusWord status={fStatus}>{t(fLabel)}</StatusWord>}>
-          <Problems title={t({ id: "Catatan validator forecast", en: "Forecast validator notes" })} items={forecast.problems} />
+          <Problems title={t({ id: "Catatan validator forecast", en: "Forecast validator notes" })} items={forecast.problems.map(validatorNote)} />
           <Section id="asumsi" title={t(LABEL.asumsi)} count={forecast.news_effects.length || undefined}>
             {forecast.news_effects.length ? (
               <div className="grid divide-y divide-rule-soft">
@@ -591,13 +591,13 @@ function TraceBody({ trace }: { trace: TraceView }) {
                         {e.date}{e.url && <Source url={e.url} />}
                       </span>
                     </div>
-                    {e.rationale && <p className="text-[15px]">{e.rationale}</p>}
+                    {e.rationale && <p className="text-[15px]">{twin(e, "rationale", lang)}</p>}
                     {(e.factual_basis || e.mechanism || e.uncertainty) && (
                       <dl className="m-0 grid gap-x-6 gap-y-2.5 text-[14px] text-ink xl:grid-cols-3">
                         {([
-                          [{ id: "Fakta", en: "Fact" }, e.factual_basis],
-                          [{ id: "Mekanisme", en: "Mechanism" }, e.mechanism],
-                          [{ id: "Ketidakpastian", en: "Uncertainty" }, e.uncertainty],
+                          [{ id: "Fakta", en: "Fact" }, twin(e, "factual_basis", lang)],
+                          [{ id: "Mekanisme", en: "Mechanism" }, twin(e, "mechanism", lang)],
+                          [{ id: "Ketidakpastian", en: "Uncertainty" }, twin(e, "uncertainty", lang)],
                         ] as const).map(([k, v]) => v && (
                           <div key={k.id} className="min-w-0 border-t border-rule-soft pt-2">
                             <dt className="text-[12.5px] font-medium text-ink-soft">{t(k)}</dt>
@@ -614,7 +614,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
 
           {forecast.interim && (
             <Section id="interim" title={t(LABEL.interim)}>
-              <p className="max-w-[80ch] text-[15px]">{forecast.interim.rationale}</p>
+              <p className="max-w-[80ch] text-[15px]">{twin(forecast.interim, "rationale", lang)}</p>
               <p className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[12px] text-ink-soft">
                 {forecast.interim.published_at && <span>{t({ id: "Rilis", en: "Released" })} {forecast.interim.published_at}</span>}
                 <Source url={forecast.interim.url} />
@@ -645,7 +645,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                       </tr>
                       <tr>
                         <td colSpan={5} className="px-2 pb-3 text-[13.5px] text-ink-soft">
-                          <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{row.rationale}
+                          <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{twin(row, "rationale", lang)}
                           {row.source_ids.length > 0 && (
                             <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                               {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
@@ -693,7 +693,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                           <td colSpan={BANK_COLS.length + 1} className="px-2 pb-3 text-[13.5px] text-ink-soft">
                             {/* The table scrolls sideways on phones; the rationale stays in view and wraps to it. */}
                             <div className="sticky left-2 max-w-[min(80ch,calc(100vw-72px))]">
-                              <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{row.rationale}
+                              <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{twin(row, "rationale", lang)}
                               {row.source_ids.length > 0 && (
                                 <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
                                   {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
@@ -751,6 +751,8 @@ function RunManifest({ manifest }: { manifest: NonNullable<TraceView["run_manife
         {row(t({ id: "Tanggal data / profile", en: "Data date / profile" }), `${manifest.as_of ?? "—"} · ${manifest.profile ?? "—"}`)}
         {row("Forecast agent", `${manifest.model.forecast_agent ?? "—"} · ${manifest.model.agent_effort ?? "—"}`)}
         {row("Spec / evidence register", `${manifest.spec_sha256 ?? "—"} · ${manifest.evidence_register_sha256 ?? "—"}`)}
+        {manifest.source_text_en_sha256 !== undefined &&
+          row(t({ id: "Terjemahan teks sumber", en: "Source-text translations" }), manifest.source_text_en_sha256)}
         {manifest.release_policy && row("Release policy", `${manifest.release_policy.version ?? "—"} · ${manifest.release_policy.status ?? "—"} · ${manifest.release_policy.sha256 ?? "—"}`)}
         {manifest.release_policy?.ambiguities.length ? row("Policy ambiguities", manifest.release_policy.ambiguities.join(", ")) : null}
         {manifest.house_assumptions && row("House assumptions", `${manifest.house_assumptions.version ?? "—"} · documented ${manifest.house_assumptions.documented_as_of ?? "—"} · effective date ${manifest.house_assumptions.effective_from ?? "unrecorded"} · ${manifest.house_assumptions.status ?? "—"} · ${manifest.house_assumptions.sha256 ?? "—"}`)}
@@ -844,7 +846,7 @@ function AuditAppendix({ pages }: { pages: NonNullable<TraceView["audit_appendix
 
 export function ReportTrace() {
   const { ticker = "" } = useParams();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const T = ticker.toUpperCase();
   const [reviewToken, setReviewToken] = useState(readReviewToken);
   const state = useLoad(async () => {
@@ -862,11 +864,13 @@ export function ReportTrace() {
   const reports = useLoad(() => api.reports().catch(() => [] as ReportItem[]), []);
   const run = useLoad(() => api.reportRun(T).catch(() => undefined), [T]);
   const item = reports.data?.find((r) => r.ticker === T);
-  const files = reportFiles(T);
+  const files = item ? readerFiles(item, lang) : reportFiles(T);
+  // The bundle kinds this run's manifest lists: English previews are offered only when it has them.
+  const kinds = Object.keys(state.data?.run_manifest?.artifacts ?? {});
   return (
     <TracePage state={state} item={item} run={run.data ?? undefined} missing={t({ id: `Jejak riset ${T} tidak ditemukan.`, en: `No Audit Trace found for ${T}.` })}
       links={{ reportUrl: files.html, pdfUrl: item?.files.pdf ? files.pdf : undefined, replayUrl: `/laporan/${T}/putar` }}
-      review={<ReviewPanel ticker={T}
+      review={<ReviewPanel ticker={T} bundleKinds={kinds}
         reviewToken={state.data?.review_state === "pending" ? reviewToken || undefined : undefined}
         onApproved={() => { state.reload(); reports.reload(); }} />}
       reviewAccess={reviewState.data?.enabled && reviewState.data.state === "pending"

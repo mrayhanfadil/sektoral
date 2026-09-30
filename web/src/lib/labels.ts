@@ -1,11 +1,23 @@
-import type { ReportItem } from "./api";
+import type { ChainStep, ProblemNote, ReportItem } from "./api";
+import { decisionCode } from "./codes";
 import type { Bi } from "./i18n";
 
 export type RatingTone = "buy" | "hold" | "sell" | "review";
 
-/** Published rating; a held report is a Draft unless Method Gate 5 held it. */
-export function ratingLabel(item: Pick<ReportItem, "rating" | "held_reason">): string {
+/** What decides the rating label; the Deck sets `review_required` from its own Method Gate 5 reading. */
+export type RatingSource = Pick<ReportItem, "rating"> &
+  Partial<Pick<ReportItem, "held_reason" | "publication_state">> & { review_required?: boolean };
+
+/**
+ * Published rating; without one, Review Required when Method Gate 5 held it,
+ * else Draft. An item with a `publication_state` is held for a publication
+ * step (its `held_reason` says which, never the gate); only an older item
+ * without it falls back to a `held_reason` that names Method Gate 5.
+ */
+export function ratingLabel(item: RatingSource): string {
   if (item.rating) return item.rating;
+  if (item.review_required) return "Review Required";
+  if (item.publication_state) return "Draft";
   return item.held_reason?.startsWith("Method Gate 5") ? "Review Required" : "Draft";
 }
 
@@ -17,8 +29,8 @@ export function ratingTone(item: Pick<ReportItem, "rating">): RatingTone {
 /** The featured landing report: primary method selected, most cross-checks. */
 export function featuredReport(items: ReportItem[]): ReportItem | undefined {
   const score = (item: ReportItem): [number, number, number] => {
-    const decisions = item.chain.map((s) => s.decision);
-    return [decisions[0] === "Terpilih" ? 1 : 0, decisions.filter((d) => d === "Silang cek").length, decisions.length];
+    const codes = item.chain.map((s) => decisionCode(s.decision_code, s.decision));
+    return [codes[0] === "selected" ? 1 : 0, codes.filter((c) => c === "cross_check").length, codes.length];
   };
   const candidates = items.filter((i) => i.published && i.files.pdf && i.chain.length);
   return candidates.reduce<ReportItem | undefined>((best, item) => {
@@ -27,6 +39,11 @@ export function featuredReport(items: ReportItem[]): ReportItem | undefined {
     for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i] ? item : best;
     return best;
   }, undefined);
+}
+
+/** The chain step the Method Chain selected (by `decision_code`, else the "Terpilih" label). */
+export function selectedStep<T extends Pick<ChainStep, "decision" | "decision_code">>(chain: T[]): T | undefined {
+  return chain.find((s) => decisionCode(s.decision_code, s.decision) === "selected");
 }
 
 export const PROGRESS_STEPS: readonly { title: Bi; sub: Bi }[] = [
@@ -65,4 +82,12 @@ export function validatorNote(text: string): { message: string; removed: string[
     if (token && !removed.includes(token)) removed.push(token);
   }
   return { message: sentence, removed };
+}
+
+/**
+ * The analyst validator's notes for people: the server's parsed
+ * `analyst_problem_notes` when it sends them, else each raw note parsed here.
+ */
+export function problemNotes(notes: ProblemNote[] | null | undefined, raw: string[]): ProblemNote[] {
+  return notes?.length ? notes : raw.map(validatorNote);
 }
