@@ -3392,7 +3392,9 @@ def attach_risks(doc, intake, page):
                                    for e in page["exhibit"]) else 0
     paragraphs = (doc.get("cover") or {}).get("paragraf") or []
     if paragraphs and isinstance(paragraphs[-1], dict):
-        names = [r["judul"][:1].lower() + r["judul"][1:] for r in risks[:3]]
+        # English keeps each title as written ("SME …", "Bank Indonesia …").
+        names = [r["judul"] if prose_lang.english() else r["judul"][:1].lower() + r["judul"][1:]
+                 for r in risks[:3]]
         joined = _t(" dan ".join(names) if len(names) <= 2
                     else ", ".join(names[:-1]) + ", dan " + names[-1],
                     " and ".join(names) if len(names) <= 2
