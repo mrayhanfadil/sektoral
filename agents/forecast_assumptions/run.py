@@ -1683,6 +1683,10 @@ def _batches(fields):
         yield batch
 
 
+class _CutOff(ValueError):
+    """A translation reply cut off at the completion budget."""
+
+
 def _ask(chat, fields, follow_up=()):
     """One translation call for ``fields``: ``{path: English}``, or it raises."""
     limits = {f.path: (f"{f.bounds[0]}-{f.bounds[1]}" if f.bounds[1] < math.inf
@@ -1694,7 +1698,7 @@ def _ask(chat, fields, follow_up=()):
     raw, finish_reason = _response_text(chat(messages, max_tokens=16384,
                                              reasoning_effort="low"))
     if finish_reason == "length":
-        raise ValueError("translation cut off (finish_reason=length)")
+        raise _CutOff("translation cut off (finish_reason=length)")
     answer = _decode_response(raw)
     if not isinstance(answer, dict):
         raise ValueError("translation is not an object")
@@ -1736,6 +1740,17 @@ def translate_plan(plan, chat=None, official=None):
         notes["calls"] += 1
         try:
             answer = _ask(chat, batch, follow_up)
+        except _CutOff:
+            # The model's thinking shares the budget: a reply cut off is asked
+            # again in halves, down to one field, before its fields go without.
+            if len(batch) > 1 and not follow_up:
+                half = len(batch) // 2
+                ask(batch[:half], label=label)
+                ask(batch[half:], label=label)
+                return
+            notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
+                                     "ValueError: translation cut off (finish_reason=length)")
+            return
         except Exception as error:  # noqa: BLE001 — the plan stands without these twins
             notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
                                      f"{type(error).__name__}: {str(error)[:180]}")
