@@ -3,8 +3,9 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useSpring } from "motion/react";
 import { GATES, type DeckState, type GateState, type Hypothesis } from "../../lib/agents";
+import { useLang, type Bi } from "../../lib/i18n";
 import { Clamp, Glyph, Hold, HoldLight, RegionHead } from "./kit";
-import { GATE_SETTLE, SPRING, SPRING_SOFT, isJudged, useChangeCount, verdictGlyph, verdictStatus, verdictTone } from "./read";
+import { GATE_SETTLE, SPRING, SPRING_SOFT, isJudged, useChangeCount, verdictGlyph, verdictStatus, verdictTone, words } from "./read";
 
 const REGION = "border-b border-rule px-5 py-4 max-sm:px-4";
 
@@ -13,18 +14,23 @@ function Empty({ children }: { children: ReactNode }) {
 }
 
 export function PlanPanel({ state, loading }: { state: DeckState; loading?: boolean }) {
+  const { t } = useLang();
   const { question, hypotheses } = state.plan;
   // Only a real verdict counts; "belum terjawab" was tried but not answered.
   const judged = hypotheses.filter((h) => isJudged(h.verdict)).length;
   return (
     <section aria-labelledby="plan-title" className={REGION}>
-      <RegionHead id="plan-title" title="Rencana riset" reading={hypotheses.length ? `${judged}/${hypotheses.length} terjawab` : undefined} />
+      <RegionHead id="plan-title" title={t({ id: "Rencana riset", en: "Research plan" })}
+        reading={hypotheses.length ? `${judged}/${hypotheses.length} ${t({ id: "terjawab", en: "answered" })}` : undefined} />
       {loading ? <Lines n={3} /> : question ? (
         <div className="mt-2">
           <Clamp lines={3} className="text-[15px] leading-snug font-medium text-ink-strong" title={question}>{question}</Clamp>
         </div>
       ) : (
-        <Empty>Pertanyaan riset dan hipotesisnya muncul setelah agent perencana menyusun rencana.</Empty>
+        <Empty>{t({
+          id: "Pertanyaan riset dan hipotesisnya muncul setelah agent perencana menyusun rencana.",
+          en: "The research question and its hypotheses appear once the planning agent has drawn up the plan.",
+        })}</Empty>
       )}
       {hypotheses.length > 0 && (
         <ol className="m-0 mt-3 list-none divide-y divide-rule-soft border-t border-rule-soft p-0">
@@ -38,6 +44,7 @@ export function PlanPanel({ state, loading }: { state: DeckState; loading?: bool
 }
 
 function HypothesisRow({ h }: { h: Hypothesis }) {
+  const { t, lang } = useLang();
   const changed = useChangeCount(h.verdict);
   const text = h.text.replace(/^H\d+:\s*/, "");
   return (
@@ -54,10 +61,10 @@ function HypothesisRow({ h }: { h: Hypothesis }) {
               {h.verdict ? (
                 <motion.span key={h.verdict} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
                   transition={SPRING_SOFT} className={`pill ${verdictTone(h.verdict)} px-2 py-0 text-[12.5px]`} title={h.reason}>
-                  {h.verdict}
+                  {words(h.verdict, lang)}
                 </motion.span>
               ) : (
-                <motion.span key="wait" exit={{ opacity: 0 }} className="text-[12.5px] text-ink-faint">menunggu uji</motion.span>
+                <motion.span key="wait" exit={{ opacity: 0 }} className="text-[12.5px] text-ink-faint">{t({ id: "menunggu uji", en: "awaiting test" })}</motion.span>
               )}
             </AnimatePresence>
           </div>
@@ -81,21 +88,29 @@ function reading(g: GateState): Reading {
 const READING_INK: Record<Reading, string> = {
   idle: "text-ink-faint", pass: "text-done", fail: "text-warn-ink", unknown: "text-warn-ink", skip: "text-ink-soft",
 };
-const READING_WORD: Record<Reading, string> = {
-  idle: "belum dinilai", pass: "lolos", fail: "gagal", unknown: "tidak dapat dinilai", skip: "tidak berlaku",
+const READING_WORD: Record<Reading, Bi> = {
+  idle: { id: "belum dinilai", en: "not yet assessed" },
+  pass: { id: "lolos", en: "pass" },
+  fail: { id: "gagal", en: "fail" },
+  unknown: { id: "tidak dapat dinilai", en: "cannot be assessed" },
+  skip: { id: "tidak berlaku", en: "not applicable" },
 };
 /** Short gate names for the instrument strip; the full name is in the title and for screen readers. */
-const GATE_SHORT = ["Bisnis", "Data", "Kepemilikan", "Siklus", "Siklus hidup", "Kewajaran"];
+const GATE_SHORT: Bi<string[]> = {
+  id: ["Bisnis", "Data", "Kepemilikan", "Siklus", "Siklus hidup", "Kewajaran"],
+  en: ["Business", "Data", "Ownership", "Cycle", "Life cycle", "Sanity"],
+};
 
 /**
  * The six Method Gates as a fixed strip of instruments, pinned above the
  * scrolling plan and chain so every gate stays in view for the whole run.
  */
 export function GateBoard({ state }: { state: DeckState }) {
+  const { t } = useLang();
   const settled = state.gates.filter((g) => g.status !== "idle").length;
   return (
     <section aria-labelledby="gates-title" className="border-b border-rule px-5 pt-3 pb-3.5 max-sm:px-4">
-      <RegionHead id="gates-title" title="Method Gates" reading={`${settled}/${GATES.length} dinilai`} />
+      <RegionHead id="gates-title" title="Method Gates" reading={`${settled}/${GATES.length} ${t({ id: "dinilai", en: "assessed" })}`} />
       <ol className="m-0 mt-2.5 grid list-none grid-cols-6 gap-px overflow-hidden rounded-md border border-rule bg-rule p-0 max-sm:grid-cols-3">
         {state.gates.map((g) => <Gate key={g.n} g={g} />)}
       </ol>
@@ -104,20 +119,22 @@ export function GateBoard({ state }: { state: DeckState }) {
 }
 
 function Gate({ g }: { g: GateState }) {
+  const { t, lang } = useLang();
   const r = reading(g);
   const changed = useChangeCount(r);
   const tone = r === "pass" || r === "skip" ? "ok" : r === "idle" ? "idle" : "warn";
-  const word = r === "idle" || !g.verdict ? READING_WORD[r] : g.verdict;
+  const word = r === "idle" || !g.verdict ? t(READING_WORD[r]) : words(g.verdict, lang);
+  const name = t(g.name);
   return (
-    <li className="relative isolate min-w-0 bg-surface px-1.5 pt-2 pb-2" title={`Gate ${g.n}, ${g.name}: ${word}${g.detail ? `. ${g.detail}` : ""}`}>
+    <li className="relative isolate min-w-0 bg-surface px-1.5 pt-2 pb-2" title={`Gate ${g.n}, ${name}: ${word}${g.detail ? `. ${g.detail}` : ""}`}>
       <Hold n={changed} tone={tone} />
       <div aria-hidden className="flex items-start justify-center gap-1">
         <span className="data -ml-0.5 text-[10.5px] leading-none text-ink-soft">G{g.n}</span>
         <Dial r={r} />
       </div>
-      <p aria-hidden className={`mt-1 truncate text-center text-[11.5px] leading-4 font-bold tracking-[-.005em] ${r === "idle" ? "text-ink-soft" : "text-ink-strong"}`}>{GATE_SHORT[g.n] ?? g.name}</p>
+      <p aria-hidden className={`mt-1 truncate text-center text-[11.5px] leading-4 font-bold tracking-[-.005em] ${r === "idle" ? "text-ink-soft" : "text-ink-strong"}`}>{t(GATE_SHORT)[g.n] ?? name}</p>
       <p aria-hidden className={`line-clamp-2 min-h-8 text-center text-[11.5px] leading-4 font-medium ${READING_INK[r]}`}>{word}</p>
-      <span className="sr-only">Method Gate {g.n}, {g.name}: {word}</span>
+      <span className="sr-only">Method Gate {g.n}, {name}: {word}</span>
     </li>
   );
 }
@@ -180,19 +197,24 @@ function Dial({ r }: { r: Reading }) {
 }
 
 export function ChainTable({ state }: { state: DeckState }) {
+  const { t, lang } = useLang();
   const chain = state.chain;
   return (
     <section aria-labelledby="chain-title" className={REGION}>
-      <RegionHead id="chain-title" title="Rantai metode" reading={chain.length ? `${chain.length} metode` : undefined} />
+      <RegionHead id="chain-title" title={t({ id: "Rantai metode", en: "Method Chain" })}
+        reading={chain.length ? t({ id: `${chain.length} metode`, en: `${chain.length} ${chain.length === 1 ? "method" : "methods"}` }) : undefined} />
       {chain.length === 0 ? (
-        <Empty>Rantai metode muncul setelah keenam gerbang selesai menilai emiten: gerbang menentukan urutan metode sebelum nilai dihitung.</Empty>
+        <Empty>{t({
+          id: "Rantai metode muncul setelah keenam gerbang selesai menilai emiten: gerbang menentukan urutan metode sebelum nilai dihitung.",
+          en: "The Method Chain appears once all six Method Gates have assessed the issuer: the gates fix the order of methods before any value is computed.",
+        })}</Empty>
       ) : (
         <table className="mt-2 w-full border-collapse text-[13.5px]">
           <thead>
             <tr className="border-b border-rule text-left text-[12px] text-ink-soft">
-              <th scope="col" className="py-1.5 pr-3 font-medium">Metode</th>
-              <th scope="col" className="py-1.5 pr-3 font-medium">Keputusan</th>
-              <th scope="col" className="py-1.5 text-right font-medium">Nilai per saham</th>
+              <th scope="col" className="py-1.5 pr-3 font-medium">{t({ id: "Metode", en: "Method" })}</th>
+              <th scope="col" className="py-1.5 pr-3 font-medium">{t({ id: "Keputusan", en: "Decision" })}</th>
+              <th scope="col" className="py-1.5 text-right font-medium">{t({ id: "Nilai per saham", en: "Value per share" })}</th>
             </tr>
           </thead>
           <tbody>
@@ -206,7 +228,7 @@ export function ChainTable({ state }: { state: DeckState }) {
                     <td className={`py-2 pr-3 pl-2 align-top font-mono text-[13px] font-semibold ${picked ? "text-brand-ink" : skipped ? "text-ink-soft" : "text-ink-strong"}`}>
                       {c.method}
                     </td>
-                    <td className={`py-2 pr-3 align-top ${picked ? "font-bold text-brand-ink" : skipped ? "text-ink-soft" : "text-ink"}`}>{c.decision}</td>
+                    <td className={`py-2 pr-3 align-top ${picked ? "font-bold text-brand-ink" : skipped ? "text-ink-soft" : "text-ink"}`}>{words(c.decision, lang)}</td>
                     <td className={`py-2 pr-2 text-right align-top font-mono tabular-nums ${picked ? "font-bold text-brand-ink" : skipped ? "text-ink-soft" : "text-ink"}`}>{c.value}</td>
                   </motion.tr>
                 );
@@ -233,17 +255,18 @@ const RATING_INK = { buy: "text-ok-ink", hold: "text-ink-strong", sell: "text-er
 
 /** The result as a ruled data row: rating, target, upside, price; then the method and actions. */
 export function ResultBlock({ result, actions }: { result?: ResultData; actions?: ReactNode }) {
+  const { t } = useLang();
   if (!result && !actions) return null;
   const cells: [string, ReactNode][] = result ? [
     ["Rating", <span className={RATING_INK[result.tone]}>{result.rating}</span>],
-    ["Target harga", result.tp],
+    [t({ id: "Target harga", en: "Target price" }), result.tp],
     ["Upside", result.upside],
-    ...(result.price ? [["Harga", result.price] as [string, ReactNode]] : []),
+    ...(result.price ? [[t({ id: "Harga", en: "Price" }), result.price] as [string, ReactNode]] : []),
   ] : [];
   return (
     <motion.section aria-labelledby="result-title" className={`${REGION} @container`}
       initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={SPRING_SOFT}>
-      <RegionHead id="result-title" title="Hasil run" />
+      <RegionHead id="result-title" title={t({ id: "Hasil run", en: "Run result" })} />
       {result && (
         <>
           <dl className={`mt-3 grid border-y border-rule ${cells.length === 4 ? "grid-cols-2 @md:grid-cols-4" : "grid-cols-3"}`}>
@@ -257,13 +280,13 @@ export function ResultBlock({ result, actions }: { result?: ResultData; actions?
           </dl>
           <dl className="mt-2.5 grid gap-1 text-[13px] leading-snug">
             {result.release && (
-              <div className="flex gap-2"><dt className="w-[76px] flex-none text-ink-soft">Status rilis</dt><dd className="min-w-0 text-ink">{result.release}</dd></div>
+              <div className="flex gap-2"><dt className="w-[76px] flex-none text-ink-soft">{t({ id: "Status rilis", en: "Release status" })}</dt><dd className="min-w-0 text-ink">{result.release}</dd></div>
             )}
             {result.method && (
-              <div className="flex gap-2"><dt className="w-[76px] flex-none text-ink-soft">Metode</dt><dd className="min-w-0 text-ink">{result.method}</dd></div>
+              <div className="flex gap-2"><dt className="w-[76px] flex-none text-ink-soft">{t({ id: "Metode", en: "Method" })}</dt><dd className="min-w-0 text-ink">{result.method}</dd></div>
             )}
           </dl>
-          <p className="mt-2 text-[12.5px] text-ink-soft">Informasi dan analisis, bukan rekomendasi investasi.</p>
+          <p className="mt-2 text-[12.5px] text-ink-soft">{t({ id: "Informasi dan analisis, bukan rekomendasi investasi.", en: "Information and analysis, not investment advice." })}</p>
         </>
       )}
       {actions && <div className="mt-3.5 flex flex-wrap gap-2">{actions}</div>}

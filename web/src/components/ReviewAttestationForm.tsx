@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AttestationDraft, ReviewAttestation, ReviewAttestationSchema, ReviewView } from "../lib/api";
+import { useLang, type Bi } from "../lib/i18n";
 
 type AssumptionDraft = { id: string; description: string; sensitivity: string; sourceIds: string };
 type CheckDraft = { status: string; note: string; sourceIds: string; period: string; assumptions: AssumptionDraft[] };
@@ -16,31 +17,31 @@ type FormState = {
   overrides: OverrideDraft[];
 };
 
-export const CHECK_LABELS: Record<string, string> = {
-  latest_official_actual_and_period: "Hasil resmi terbaru dan periode",
-  material_source_claims_and_conflicts: "Klaim sumber material dan konflik bukti",
-  top_three_value_sensitive_assumptions: "Tiga asumsi paling sensitif terhadap nilai",
-  interim_statement_reconciliation: "Rekonsiliasi interim dan laporan keuangan",
-  model_profile_and_method_chain: "Model Profile dan Method Chain",
-  scenario_consistency: "Konsistensi base, downside, dan upside",
-  catalyst_and_thesis_change_tests: "Katalis dan ambang perubahan tesis",
-  consensus_comparison: "Perbandingan dengan konsensus independen",
-  limitations_conflicts: "Keterbatasan dan konflik",
-  earnings_normalization: "Normalisasi laba",
-  restatements_corporate_actions: "Restatement dan aksi korporasi",
-  house_assumptions_terminal_economics: "Asumsi house dan ekonomi terminal",
-  independent_validation: "Validasi model independen",
-  business_quality: "Kualitas bisnis",
-  liquidity_limitations: "Likuiditas dan investability",
+export const CHECK_LABELS: Record<string, Bi> = {
+  latest_official_actual_and_period: { id: "Hasil resmi terbaru dan periode", en: "Latest official results and period" },
+  material_source_claims_and_conflicts: { id: "Klaim sumber material dan konflik bukti", en: "Material source claims and conflicting evidence" },
+  top_three_value_sensitive_assumptions: { id: "Tiga asumsi paling sensitif terhadap nilai", en: "Three most value-sensitive assumptions" },
+  interim_statement_reconciliation: { id: "Rekonsiliasi interim dan laporan keuangan", en: "Interim and financial statement reconciliation" },
+  model_profile_and_method_chain: { id: "Model Profile dan Method Chain", en: "Model Profile and Method Chain" },
+  scenario_consistency: { id: "Konsistensi base, downside, dan upside", en: "Base, downside and upside consistency" },
+  catalyst_and_thesis_change_tests: { id: "Katalis dan ambang perubahan tesis", en: "Catalysts and thesis-change thresholds" },
+  consensus_comparison: { id: "Perbandingan dengan konsensus independen", en: "Comparison with independent consensus" },
+  limitations_conflicts: { id: "Keterbatasan dan konflik", en: "Limitations and conflicts" },
+  earnings_normalization: { id: "Normalisasi laba", en: "Earnings normalization" },
+  restatements_corporate_actions: { id: "Restatement dan aksi korporasi", en: "Restatements and corporate actions" },
+  house_assumptions_terminal_economics: { id: "Asumsi house dan ekonomi terminal", en: "House assumptions and terminal economics" },
+  independent_validation: { id: "Validasi model independen", en: "Independent model validation" },
+  business_quality: { id: "Kualitas bisnis", en: "Business quality" },
+  liquidity_limitations: { id: "Likuiditas dan investability", en: "Liquidity and investability" },
 };
 
-const DISCLOSURE_LABELS: Record<string, string> = {
-  author_role: "Peran penulis",
-  reviewer_role: "Peran reviewer",
-  issuer_relationship: "Hubungan dengan emiten",
-  economic_or_ownership_conflicts: "Konflik ekonomi atau kepemilikan",
-  scope_limitations: "Cakupan dan batasan review",
-  rating_or_scenario_policy: "Kebijakan rating atau label skenario",
+const DISCLOSURE_LABELS: Record<string, Bi> = {
+  author_role: { id: "Peran penulis", en: "Author role" },
+  reviewer_role: { id: "Peran reviewer", en: "Reviewer role" },
+  issuer_relationship: { id: "Hubungan dengan emiten", en: "Relationship with the issuer" },
+  economic_or_ownership_conflicts: { id: "Konflik ekonomi atau kepemilikan", en: "Economic or ownership conflicts" },
+  scope_limitations: { id: "Cakupan dan batasan review", en: "Review scope and limitations" },
+  rating_or_scenario_policy: { id: "Kebijakan rating atau label skenario", en: "Rating or scenario-label policy" },
 };
 
 const checkKeys = Object.keys(CHECK_LABELS);
@@ -132,6 +133,7 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
   draft?: AttestationDraft | null;
   onChange: (attestation: ReviewAttestation) => void;
 }) {
+  const { t } = useLang();
   const [form, setForm] = useState<FormState>(() => {
     const initial = draft ? draftForm(draft) : emptyForm();
     if (identity?.role) initial.disclosures.reviewer_role = identity.role;
@@ -162,11 +164,13 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
     return (
       <div className="grid gap-1.5">
         <label className="block">
-          <span className={labelClass}>Pilih ID sumber yang diperiksa</span>
+          <span className={labelClass}>{t({ id: "Pilih ID sumber yang diperiksa", en: "Select the source IDs you checked" })}</span>
           <select value="" disabled={!availableSourceIds.length}
             onChange={(event) => { add(event.target.value); event.target.value = ""; }}
             className={inputClass}>
-            <option value="">{availableSourceIds.length ? "Pilih dari Evidence Register…" : "Evidence Register tidak tersedia"}</option>
+            <option value="">{availableSourceIds.length
+              ? t({ id: "Pilih dari Evidence Register…", en: "Select from the Evidence Register…" })
+              : t({ id: "Evidence Register tidak tersedia", en: "Evidence Register unavailable" })}</option>
             {availableSourceIds.filter((item) => !selected.includes(item.id)).map((item) => {
               const period = Array.isArray(item.period) ? item.period.join("–") : item.period;
               const label = [item.kind, item.label, period].filter(Boolean).join(" · ");
@@ -178,14 +182,14 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
           <ul className="m-0 flex flex-wrap gap-1.5 p-0">
             {selected.map((id) => (
               <li key={id} className="list-none">
-                <button type="button" onClick={() => remove(id)} aria-label={`Hapus sumber ${id}`}
+                <button type="button" onClick={() => remove(id)} aria-label={`${t({ id: "Hapus sumber", en: "Remove source" })} ${id}`}
                   className="rounded border border-rule bg-surface px-2 py-1 font-mono text-[11px] text-ink">
                   {id} <span aria-hidden>×</span>
                 </button>
               </li>
             ))}
           </ul>
-        ) : <p className="m-0 text-[11.5px] text-ink-faint">Pilih ID yang muncul di register tersimpan.</p>}
+        ) : <p className="m-0 text-[11.5px] text-ink-faint">{t({ id: "Pilih ID yang muncul di register tersimpan.", en: "Select IDs that appear in the stored register." })}</p>}
       </div>
     );
   };
@@ -193,9 +197,10 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
   return (
     <div className="grid gap-4 rounded-md border border-rule bg-raised/40 p-4">
       <div>
-        <h3 className="m-0 text-[15px] font-semibold text-ink-strong">Attestation review</h3>
+        <h3 className="m-0 text-[15px] font-semibold text-ink-strong">{t({ id: "Attestation review", en: "Review attestation" })}</h3>
         <p className="m-0 mt-1 text-[13px] text-ink-soft">
-          Checklist ini ikut diikat ke Publication Bundle. Reviewer: {identity?.name ?? "belum terautentikasi"}
+          {t({ id: "Checklist ini ikut diikat ke Publication Bundle.", en: "This checklist is bound into the Publication Bundle." })}{" "}
+          Reviewer: {identity?.name ?? t({ id: "belum terautentikasi", en: "not authenticated" })}
           {identity?.role ? ` · ${identity.role}` : ""}.
         </p>
         {draft && (
@@ -207,7 +212,7 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
 
       <details className="rounded-md border border-rule bg-surface">
         <summary className="cursor-pointer px-3 py-2.5 text-[14px] font-medium text-ink-strong">
-          15 area review wajib diisi
+          {t({ id: "15 area review wajib diisi", en: "15 review areas, all required" })}
         </summary>
         <div className="grid gap-3 border-t border-rule p-3">
           {checkKeys.map((key) => {
@@ -219,7 +224,7 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
             return (
               <details key={key} className="rounded-md border border-rule-soft bg-surface">
                 <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-[13.5px] font-medium text-ink-strong">
-                  <span>{CHECK_LABELS[key]}</span>
+                  <span>{t(CHECK_LABELS[key])}</span>
                   <span className="font-mono text-[11.5px] text-ink-faint">{check.status}</span>
                 </summary>
                 <div className="grid gap-3 border-t border-rule-soft p-3">
@@ -231,13 +236,13 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
                     </select>
                   </label>
                   <label className="block">
-                    <span className={labelClass}>Temuan review (minimal 8 karakter)</span>
+                    <span className={labelClass}>{t({ id: "Temuan review (minimal 8 karakter)", en: "Review findings (at least 8 characters)" })}</span>
                     <textarea value={check.note} onChange={(event) => setCheck(key, { note: event.target.value })}
                       className={`${inputClass} min-h-20`} />
                   </label>
                   {key === "latest_official_actual_and_period" && (
                     <label className="block">
-                      <span className={labelClass}>Periode hasil resmi terbaru</span>
+                      <span className={labelClass}>{t({ id: "Periode hasil resmi terbaru", en: "Period of the latest official results" })}</span>
                       <input value={check.period} onChange={(event) => setCheck(key, { period: event.target.value })}
                         className={inputClass} placeholder="1H26" />
                     </label>
@@ -245,7 +250,7 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
                   {sourceField(check.sourceIds, (v) => setCheck(key, { sourceIds: v }))}
                   {key === "top_three_value_sensitive_assumptions" && (
                     <div className="grid gap-3 border-t border-rule-soft pt-3">
-                      <p className="m-0 text-[13px] font-medium text-ink-strong">Tiga asumsi bernilai paling sensitif</p>
+                      <p className="m-0 text-[13px] font-medium text-ink-strong">{t({ id: "Tiga asumsi bernilai paling sensitif", en: "Three most value-sensitive assumptions" })}</p>
                       {check.assumptions.map((assumption, index) => {
                         const patchAssumption = (change: Partial<AssumptionDraft>) => {
                           const assumptions = check.assumptions.map((item, i) => i === index ? { ...item, ...change } : item);
@@ -253,16 +258,16 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
                         };
                         return (
                           <fieldset key={index} className="grid gap-2 rounded-md border border-rule-soft p-3">
-                            <legend className="px-1 text-[12.5px] font-medium text-ink-soft">Asumsi {index + 1}</legend>
-                            <input aria-label={`ID asumsi ${index + 1}`} value={assumption.id}
+                            <legend className="px-1 text-[12.5px] font-medium text-ink-soft">{t({ id: "Asumsi", en: "Assumption" })} {index + 1}</legend>
+                            <input aria-label={t({ id: `ID asumsi ${index + 1}`, en: `Assumption ${index + 1} ID` })} value={assumption.id}
                               onChange={(event) => patchAssumption({ id: event.target.value })}
-                              className={inputClass} placeholder="ID driver atau asumsi" />
-                            <textarea aria-label={`Deskripsi asumsi ${index + 1}`} value={assumption.description}
+                              className={inputClass} placeholder={t({ id: "ID driver atau asumsi", en: "Driver or assumption ID" })} />
+                            <textarea aria-label={t({ id: `Deskripsi asumsi ${index + 1}`, en: `Assumption ${index + 1} description` })} value={assumption.description}
                               onChange={(event) => patchAssumption({ description: event.target.value })}
-                              className={`${inputClass} min-h-16`} placeholder="Deskripsi driver dan basisnya" />
-                            <textarea aria-label={`Sensitivitas nilai asumsi ${index + 1}`} value={assumption.sensitivity}
+                              className={`${inputClass} min-h-16`} placeholder={t({ id: "Deskripsi driver dan basisnya", en: "Describe the driver and its basis" })} />
+                            <textarea aria-label={t({ id: `Sensitivitas nilai asumsi ${index + 1}`, en: `Assumption ${index + 1} value sensitivity` })} value={assumption.sensitivity}
                               onChange={(event) => patchAssumption({ sensitivity: event.target.value })}
-                              className={`${inputClass} min-h-16`} placeholder="Dampak perubahan driver pada laba, kas, atau nilai" />
+                              className={`${inputClass} min-h-16`} placeholder={t({ id: "Dampak perubahan driver pada laba, kas, atau nilai", en: "Effect of a change in the driver on earnings, cash flow or value" })} />
                             {sourceField(assumption.sourceIds,
                               (v) => patchAssumption({ sourceIds: v }))}
                           </fieldset>
@@ -278,12 +283,12 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
       </details>
 
       <details className="rounded-md border border-rule bg-surface">
-        <summary className="cursor-pointer px-3 py-2.5 text-[14px] font-medium text-ink-strong">Deklarasi dan tindak lanjut</summary>
+        <summary className="cursor-pointer px-3 py-2.5 text-[14px] font-medium text-ink-strong">{t({ id: "Deklarasi dan tindak lanjut", en: "Declarations and follow-up" })}</summary>
         <div className="grid gap-4 border-t border-rule p-3">
           <div className="grid gap-3 sm:grid-cols-2">
             {disclosureKeys.filter((key) => !conflictKeys.includes(key)).map((key) => (
               <label key={key} className="block">
-                <span className={labelClass}>{DISCLOSURE_LABELS[key]}</span>
+                <span className={labelClass}>{t(DISCLOSURE_LABELS[key])}</span>
                 <textarea value={form.disclosures[key] ?? ""}
                   disabled={key === "reviewer_role" && Boolean(identity?.role)}
                   onChange={(event) => update({ ...form, disclosures: { ...form.disclosures, [key]: event.target.value } })}
@@ -294,42 +299,43 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
           <div className="grid gap-3 sm:grid-cols-2">
             {conflictKeys.map((key) => {
               const conflict = form.conflicts[key];
+              const name = t(DISCLOSURE_LABELS[key]);
               const options = schema.properties.disclosures?.properties?.[key]?.properties?.status?.enum
                 ?? ["none", "disclosed", "unknown"];
               return (
                 <fieldset key={key} className="grid content-start gap-2 rounded-md border border-rule-soft p-3">
-                  <legend className="px-1 text-[12.5px] font-medium text-ink-soft">{DISCLOSURE_LABELS[key]}</legend>
-                  <select aria-label={`Status ${DISCLOSURE_LABELS[key]}`} value={conflict.status} className={inputClass}
+                  <legend className="px-1 text-[12.5px] font-medium text-ink-soft">{name}</legend>
+                  <select aria-label={t({ id: `Status ${name}`, en: `${name} status` })} value={conflict.status} className={inputClass}
                     onChange={(event) => update({ ...form, conflicts: { ...form.conflicts,
                       [key]: { ...conflict, status: event.target.value as ConflictDraft["status"] } } })}>
                     {options.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
-                  <textarea aria-label={`Rincian ${DISCLOSURE_LABELS[key]}`} value={conflict.details}
+                  <textarea aria-label={t({ id: `Rincian ${name}`, en: `${name} details` })} value={conflict.details}
                     className={`${inputClass} min-h-16`}
                     onChange={(event) => update({ ...form, conflicts: { ...form.conflicts,
                       [key]: { ...conflict, details: event.target.value } } })}
-                    placeholder="Jelaskan hubungan/konflik atau nyatakan tidak ada." />
-                  {conflict.status === "unknown" && <p className="m-0 text-[12px] text-warn-ink">Status unknown memblokir publikasi.</p>}
+                    placeholder={t({ id: "Jelaskan hubungan/konflik atau nyatakan tidak ada.", en: "Describe the relationship or conflict, or state that there is none." })} />
+                  {conflict.status === "unknown" && <p className="m-0 text-[12px] text-warn-ink">{t({ id: "Status unknown memblokir publikasi.", en: "An unknown status blocks publication." })}</p>}
                 </fieldset>
               );
             })}
           </div>
           <div className="grid gap-2 border-t border-rule-soft pt-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="m-0 text-[13.5px] font-medium text-ink-strong">Keberatan reviewer</p>
+              <p className="m-0 text-[13.5px] font-medium text-ink-strong">{t({ id: "Keberatan reviewer", en: "Reviewer objections" })}</p>
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => update({ ...form,
                 objections: [...form.objections, { objection: "", response: "", disposition: "resolved", sourceIds: "" }] })}>
-                Tambah keberatan
+                {t({ id: "Tambah keberatan", en: "Add objection" })}
               </button>
             </div>
             {form.objections.map((item, index) => (
               <fieldset key={index} className="grid gap-2 rounded-md border border-rule-soft p-3">
-                <legend className="px-1 text-[12.5px] font-medium text-ink-soft">Keberatan {index + 1}</legend>
-                <textarea aria-label={`Keberatan ${index + 1}`} value={item.objection} className={`${inputClass} min-h-16`}
+                <legend className="px-1 text-[12.5px] font-medium text-ink-soft">{t({ id: "Keberatan", en: "Objection" })} {index + 1}</legend>
+                <textarea aria-label={t({ id: `Keberatan ${index + 1}`, en: `Objection ${index + 1}` })} value={item.objection} className={`${inputClass} min-h-16`}
                   onChange={(event) => update({ ...form, objections: form.objections.map((row, i) => i === index ? { ...row, objection: event.target.value } : row) })} />
-                <textarea aria-label={`Respons keberatan ${index + 1}`} value={item.response} className={`${inputClass} min-h-16`}
+                <textarea aria-label={t({ id: `Respons keberatan ${index + 1}`, en: `Response to objection ${index + 1}` })} value={item.response} className={`${inputClass} min-h-16`}
                   onChange={(event) => update({ ...form, objections: form.objections.map((row, i) => i === index ? { ...row, response: event.target.value } : row) })} />
-                <select aria-label={`Disposition keberatan ${index + 1}`} value={item.disposition} className={inputClass}
+                <select aria-label={t({ id: `Disposition keberatan ${index + 1}`, en: `Objection ${index + 1} disposition` })} value={item.disposition} className={inputClass}
                   onChange={(event) => update({ ...form, objections: form.objections.map((row, i) => i === index ? { ...row, disposition: event.target.value as ObjectionDraft["disposition"] } : row) })}>
                   <option value="resolved">resolved</option><option value="accepted">accepted</option>
                 </select>
@@ -343,14 +349,14 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
               <p className="m-0 text-[13.5px] font-medium text-ink-strong">Required edits</p>
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => update({ ...form,
                 requiredEdits: [...form.requiredEdits, { description: "", status: "completed" }] })}>
-                Tambah item
+                {t({ id: "Tambah item", en: "Add item" })}
               </button>
             </div>
             {form.requiredEdits.map((item, index) => (
               <div key={index} className="grid gap-2 sm:grid-cols-[1fr_180px]">
                 <input aria-label={`Required edit ${index + 1}`} value={item.description} className={inputClass}
                   onChange={(event) => update({ ...form, requiredEdits: form.requiredEdits.map((row, i) => i === index ? { ...row, description: event.target.value } : row) })} />
-                <select aria-label={`Status required edit ${index + 1}`} value={item.status} className={inputClass}
+                <select aria-label={t({ id: `Status required edit ${index + 1}`, en: `Required edit ${index + 1} status` })} value={item.status} className={inputClass}
                   onChange={(event) => update({ ...form, requiredEdits: form.requiredEdits.map((row, i) => i === index ? { ...row, status: event.target.value as EditDraft["status"] } : row) })}>
                   <option value="completed">completed</option><option value="not_required">not_required</option>
                 </select>
@@ -359,20 +365,20 @@ export function ReviewAttestationForm({ schema, identity, availableSourceIds, dr
           </div>
           <div className="grid gap-2 border-t border-rule-soft pt-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="m-0 text-[13.5px] font-medium text-ink-strong">Override materialitas/toleransi</p>
+              <p className="m-0 text-[13.5px] font-medium text-ink-strong">{t({ id: "Override materialitas/toleransi", en: "Materiality/tolerance override" })}</p>
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => update({ ...form,
                 overrides: [...form.overrides, { description: "", justification: "", policyVersion: "" }] })}>
-                Tambah override
+                {t({ id: "Tambah override", en: "Add override" })}
               </button>
             </div>
             {form.overrides.map((item, index) => (
               <fieldset key={index} className="grid gap-2 rounded-md border border-rule-soft p-3">
                 <legend className="px-1 text-[12.5px] font-medium text-ink-soft">Override {index + 1}</legend>
-                <input aria-label={`Deskripsi override ${index + 1}`} value={item.description} className={inputClass}
+                <input aria-label={t({ id: `Deskripsi override ${index + 1}`, en: `Override ${index + 1} description` })} value={item.description} className={inputClass}
                   onChange={(event) => update({ ...form, overrides: form.overrides.map((row, i) => i === index ? { ...row, description: event.target.value } : row) })} />
-                <textarea aria-label={`Justifikasi override ${index + 1}`} value={item.justification} className={`${inputClass} min-h-16`}
+                <textarea aria-label={t({ id: `Justifikasi override ${index + 1}`, en: `Override ${index + 1} justification` })} value={item.justification} className={`${inputClass} min-h-16`}
                   onChange={(event) => update({ ...form, overrides: form.overrides.map((row, i) => i === index ? { ...row, justification: event.target.value } : row) })} />
-                <input aria-label={`Versi policy override ${index + 1}`} value={item.policyVersion} className={inputClass}
+                <input aria-label={t({ id: `Versi policy override ${index + 1}`, en: `Override ${index + 1} policy version` })} value={item.policyVersion} className={inputClass}
                   onChange={(event) => update({ ...form, overrides: form.overrides.map((row, i) => i === index ? { ...row, policyVersion: event.target.value } : row) })} />
               </fieldset>
             ))}

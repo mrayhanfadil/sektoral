@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, TriangleAlert } from "lucide-react";
 import { AGENT, AGENTS, duration, type AgentId, type DeckState, type Step } from "../../lib/agents";
+import { useLang, type Lang } from "../../lib/i18n";
 import { EngineTag, Glyph, Hold, Sweep } from "./kit";
 import { SPRING, clock, useChangeCount, verdictGlyph, verdictTone, words } from "./read";
 
@@ -25,6 +26,7 @@ type Props = {
 };
 
 export function EventStream({ state, filter, onFilter, live, fit, loading, empty }: Props) {
+  const { t } = useLang();
   const reduce = useReducedMotion();
   const total = state.steps.length;
 
@@ -81,21 +83,23 @@ export function EventStream({ state, filter, onFilter, live, fit, loading, empty
   return (
     <section aria-labelledby="stream-title" className="flex min-h-0 min-w-0 flex-col">
       <div className="flex items-center gap-3 border-b border-rule px-4 py-2.5 max-sm:px-3">
-        <h2 id="stream-title" className="text-[14px] font-bold tracking-normal whitespace-nowrap">Aliran kerja agent</h2>
-        <span className="data whitespace-nowrap text-ink-soft max-sm:hidden">{total} langkah</span>
+        <h2 id="stream-title" className="text-[14px] font-bold tracking-normal whitespace-nowrap">{t({ id: "Aliran kerja agent", en: "Agent work stream" })}</h2>
+        <span className="data whitespace-nowrap text-ink-soft max-sm:hidden">
+          {t({ id: `${total} langkah`, en: `${total} ${total === 1 ? "step" : "steps"}` })}
+        </span>
         <FollowSwitch on={follow} onChange={(on) => setFollow(on)} disabled={!live} />
       </div>
       {agentsWithSteps.length > 0 && (
-        <div role="group" aria-label="Saring menurut agent" className="flex gap-1 overflow-x-auto border-b border-rule-soft px-3 py-2 [scrollbar-width:none]">
-          <FilterChip pressed={filter === null} onClick={() => onFilter(null)}>Semua agent</FilterChip>
+        <div role="group" aria-label={t({ id: "Saring menurut agent", en: "Filter by agent" })} className="flex gap-1 overflow-x-auto border-b border-rule-soft px-3 py-2 [scrollbar-width:none]">
+          <FilterChip pressed={filter === null} onClick={() => onFilter(null)}>{t({ id: "Semua agent", en: "All agents" })}</FilterChip>
           {agentsWithSteps.map((a) => (
             <FilterChip key={a.id} pressed={filter === a.id} onClick={() => onFilter(filter === a.id ? null : a.id)}>
-              {a.short}<span className="data text-ink-soft">{state.agents[a.id].steps}</span>
+              {t(a.short)}<span className="data text-ink-soft">{state.agents[a.id].steps}</span>
             </FilterChip>
           ))}
         </div>
       )}
-      <div ref={scroller} onScroll={onScroll} tabIndex={0} aria-label="Langkah riset"
+      <div ref={scroller} onScroll={onScroll} tabIndex={0} aria-label={t({ id: "Langkah riset", en: "Research steps" })}
         className={`relative overflow-y-auto overscroll-contain focus-visible:outline-offset-[-2px] ${height} ${total === 0 ? "min-h-[220px]" : ""}`}>
         <div ref={content}>
           {loading ? <Skeleton /> : total === 0 ? (
@@ -126,11 +130,12 @@ function useThrottled(value: string, ms: number) {
 }
 
 function FollowSwitch({ on, onChange, disabled }: { on: boolean; onChange: (on: boolean) => void; disabled: boolean }) {
+  const { t } = useLang();
   return (
     <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange(!on)}
-      title="Gulir ke langkah terbaru selama run berjalan"
+      title={t({ id: "Gulir ke langkah terbaru selama run berjalan", en: "Scroll to the newest step while the run is going" })}
       className="ml-auto flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium whitespace-nowrap text-ink-soft transition-colors hover:text-ink-strong disabled:cursor-default disabled:opacity-60 disabled:hover:text-ink-soft">
-      Ikuti otomatis
+      {t({ id: "Ikuti otomatis", en: "Auto-follow" })}
       <span aria-hidden className={`relative h-[18px] w-8 rounded-full border transition-colors duration-200 ${on ? "border-brand bg-brand" : "border-rule-strong bg-raised"}`}>
         <motion.span className="absolute top-[2px] left-[2px] size-3 rounded-full bg-white shadow-[0_1px_2px_rgb(0_0_0/.25)]"
           animate={{ x: on ? 14 : 0 }} transition={SPRING} />
@@ -190,7 +195,7 @@ function Data({ text }: { text: string }) {
   return <>{parts.map((p, i) => (i % 2 ? <code key={i} className="font-mono text-[.92em] text-ink-strong">{p}</code> : p))}</>;
 }
 
-function resultParts(step: Step): { label?: string; detail?: string } {
+function resultParts(step: Step, lang: Lang): { label?: string; detail?: string } {
   let label = step.result;
   if (label && step.tool) {
     if (label === `${step.tool} selesai`) label = undefined;
@@ -199,18 +204,20 @@ function resultParts(step: Step): { label?: string; detail?: string } {
   const path = step.title.match(/(\/\S+)/)?.[1];
   if (label && path && label.startsWith(path)) label = label.slice(path.length).trim();
   if (label) label = label.charAt(0).toUpperCase() + label.slice(1);
-  return { label, detail: words(step.resultDetail) };
+  return { label, detail: words(step.resultDetail, lang) };
 }
 
-function Stamp({ t }: { t: number }) {
-  return <span className="data pt-[3px] text-ink-faint" title="Waktu sejak run dimulai">{clock(t)}</span>;
+function Stamp({ at }: { at: number }) {
+  const { t } = useLang();
+  return <span className="data pt-[3px] text-ink-faint" title={t({ id: "Waktu sejak run dimulai", en: "Time since the run started" })}>{clock(at)}</span>;
 }
 
 /** The result of a call or task, springing open when it comes back. */
 function ResultLine({ step, clampLines = false }: { step: Step; clampLines?: boolean }) {
   // The result is what changed, so it holds the light (not the whole card).
+  const { t, lang } = useLang();
   const changed = useChangeCount(step.status);
-  const { label, detail } = resultParts(step);
+  const { label, detail } = resultParts(step, lang);
   const back = step.status !== "run" && step.t1 !== undefined;
   const warn = step.status === "warn" || step.status === "error";
   const show = back && (label || detail || step.t1! > step.t0);
@@ -228,9 +235,9 @@ function ResultLine({ step, clampLines = false }: { step: Step; clampLines?: boo
               {label && <span className={`font-medium ${warn ? "" : "text-ink"}`}>{label}</span>}
               {label && detail ? ": " : ""}
               {detail && <Data text={detail} />}
-              {!label && !detail && <span>Selesai</span>}
+              {!label && !detail && <span>{t({ id: "Selesai", en: "Done" })}</span>}
             </span>
-            <span className="data pt-[1px] whitespace-nowrap" title="Durasi">{duration(step.t1! - step.t0)}</span>
+            <span className="data pt-[1px] whitespace-nowrap" title={t({ id: "Durasi", en: "Duration" })}>{duration(step.t1! - step.t0, lang)}</span>
           </div>
         </motion.div>
       )}
@@ -240,6 +247,7 @@ function ResultLine({ step, clampLines = false }: { step: Step; clampLines?: boo
 
 /** The signature card: agent mark, mono tool name, the reason, then the result. */
 function CallCard({ step, showAgent }: { step: Step; showAgent: boolean }) {
+  const { t } = useLang();
   const tool = step.tool ?? "";
   const reason = step.reason ?? (step.title !== `Menjalankan ${tool}` ? step.title : undefined);
   return (
@@ -249,13 +257,13 @@ function CallCard({ step, showAgent }: { step: Step; showAgent: boolean }) {
         <div className="min-w-0">
           <p className="flex flex-wrap items-baseline gap-x-2">
             <code className="font-mono text-[13.5px] font-semibold text-ink-strong">{tool}</code>
-            {showAgent && <span className="text-[12.5px] text-ink-soft">{AGENT[step.agent].short}</span>}
-            {step.status === "run" && <span className="text-[12.5px] font-medium text-brand-ink">keluar</span>}
+            {showAgent && <span className="text-[12.5px] text-ink-soft">{t(AGENT[step.agent].short)}</span>}
+            {step.status === "run" && <span className="text-[12.5px] font-medium text-brand-ink">{t({ id: "keluar", en: "out" })}</span>}
           </p>
           {reason && <p className="mt-0.5 text-[14px] leading-snug text-ink"><Data text={reason} /></p>}
           <ResultLine step={step} />
         </div>
-        <Stamp t={step.t0} />
+        <Stamp at={step.t0} />
       </div>
       {step.status === "run" && <Sweep />}
     </div>
@@ -264,6 +272,7 @@ function CallCard({ step, showAgent }: { step: Step; showAgent: boolean }) {
 
 /** An agent's task: a section header with its own calls nested under it. */
 function TaskBlock({ step, state, filter, depth }: { step: Step; state: DeckState; filter: AgentId | null; depth: number }) {
+  const { t } = useLang();
   const meta = AGENT[step.agent];
   const kids = step.children.map((id) => state.byId.get(id)!).filter((c) => c && (!filter || c.agent === filter));
   const busyChild = kids.some((k) => k.status === "run");
@@ -274,14 +283,14 @@ function TaskBlock({ step, state, filter, depth }: { step: Step; state: DeckStat
           <Glyph status={step.status} className="mt-[3px]" />
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-[12.5px] leading-5">
-              <span className="font-bold text-ink-soft">{meta.name}</span>
+              <span className="font-bold text-ink-soft">{t(meta.name)}</span>
               <EngineTag engine={meta.engine} />
             </p>
             <p className="text-[14.5px] leading-snug font-bold text-ink-strong">{step.title}</p>
             {step.reason && <p className="mt-0.5 text-[13px] leading-snug text-ink-soft"><Data text={step.reason} /></p>}
             {kids.length === 0 && <ResultLine step={step} clampLines />}
           </div>
-          <Stamp t={step.t0} />
+          <Stamp at={step.t0} />
         </div>
         {step.status === "run" && !busyChild && <Sweep />}
       </div>
@@ -299,11 +308,12 @@ function TaskBlock({ step, state, filter, depth }: { step: Step; state: DeckStat
 
 /** Hypotheses, verdicts, gates, chain steps, the release and notes: one line each. */
 function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
+  const { t, lang } = useLang();
   const d = step.data ?? {};
   let lead: ReactNode = null;
   let text: ReactNode = step.title;
   let side: ReactNode = null;
-  let sub: string | undefined = words(step.resultDetail);
+  let sub: string | undefined = words(step.resultDetail, lang);
   let glyph = step.status;
 
   if (step.kind === "hypothesis") {
@@ -312,14 +322,14 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
     sub = undefined;
   } else if (step.kind === "verdict") {
     lead = `H${d.index ?? ""}`;
-    text = <span className={`pill ${verdictTone(d.verdict)} px-2 py-0 text-[12.5px]`}>{d.verdict ?? step.title}</span>;
+    text = <span className={`pill ${verdictTone(d.verdict)} px-2 py-0 text-[12.5px]`}>{words(d.verdict, lang) ?? step.title}</span>;
     // An unanswered hypothesis is not a finished test: it carries the warning mark.
     if (step.status !== "run" && verdictGlyph(d.verdict) === "warn") glyph = "warn";
   } else if (step.kind === "gate") {
     lead = `G${d.gate ?? ""}`;
-    text = <>{step.title} <span className={`text-[12.5px] font-medium ${step.status === "ok" ? "text-done" : d.verdict === "tidak berlaku" ? "text-ink-soft" : "text-warn-ink"}`}>{d.verdict}</span></>;
+    text = <>{step.title} <span className={`text-[12.5px] font-medium ${step.status === "ok" ? "text-done" : d.verdict === "tidak berlaku" ? "text-ink-soft" : "text-warn-ink"}`}>{words(d.verdict, lang)}</span></>;
   } else if (step.kind === "chain") {
-    text = <><code className="font-mono text-[13px] font-semibold text-ink-strong">{step.title}</code> <span className={d.decision === "Terpilih" ? "font-bold text-brand-ink" : "text-ink-soft"}>{d.decision}</span></>;
+    text = <><code className="font-mono text-[13px] font-semibold text-ink-strong">{step.title}</code> <span className={d.decision === "Terpilih" ? "font-bold text-brand-ink" : "text-ink-soft"}>{words(d.decision, lang)}</span></>;
     side = <span className="data text-ink-strong">{d.value}</span>;
   } else if (step.kind === "release") {
     side = d.rating ? <span className="data text-ink-strong">{d.rating} {d.tp}</span> : null;
@@ -332,12 +342,12 @@ function CompactRow({ step, showAgent }: { step: Step; showAgent: boolean }) {
         <div className="min-w-0">
           <p className={step.kind === "hypothesis" ? "line-clamp-2" : ""} title={typeof text === "string" ? text : undefined}>
             {lead && <span className="data mr-2 text-ink-soft">{lead}</span>}
-            {showAgent && step.kind === "note" && <span className="mr-2 text-[12.5px] text-ink-soft">{AGENT[step.agent].short}</span>}
+            {showAgent && step.kind === "note" && <span className="mr-2 text-[12.5px] text-ink-soft">{t(AGENT[step.agent].short)}</span>}
             <span className={step.kind === "note" || step.kind === "release" ? "font-medium text-ink" : "text-ink"}>{text}</span>
           </p>
           {sub && <p className="mt-0.5 line-clamp-2 text-[13px] text-ink-soft" title={sub}><Data text={sub} /></p>}
         </div>
-        {side ?? <Stamp t={step.t0} />}
+        {side ?? <Stamp at={step.t0} />}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@
 // trace, for any issuer that already has a report.
 import { useEffect, useState } from "react";
 import { api, ApiError } from "./api";
+import { pick } from "./i18n";
 
 const RUN_TOKEN = "sectoral.run-token";
 
@@ -39,7 +40,10 @@ export async function launch(ticker: string): Promise<{ path: string; replay: bo
   if (reports.some((r) => r.ticker === ticker && (r.files.trace_json || r.files.trace))) {
     return { path: `/laporan/${ticker}/putar`, replay: true };
   }
-  throw new Error(`${ticker} belum diriset di situs ini. Pilih salah satu emiten yang sudah diriset untuk memutar ulang run-nya.`);
+  throw new Error(pick({
+    id: `${ticker} belum diriset di situs ini. Pilih salah satu emiten yang sudah diriset untuk memutar ulang run-nya.`,
+    en: `${ticker} has not been researched on this site yet. Pick an issuer that has, to replay its run.`,
+  }));
 }
 
 /** The site's live-run mode ("open" until the server answers). */

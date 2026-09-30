@@ -1,6 +1,8 @@
 // Shapes returned by the Python API (app/server.py). Every field is
 // whitelisted server-side; see app/jobs.py and app/trace_view.py.
 
+import { pick } from "./i18n";
+
 export type ChainStep = { step: string; decision: string; value: string };
 
 export type ReportItem = {
@@ -317,10 +319,14 @@ export class ApiError extends Error {
   }
 }
 
+/** The fallback message when the server sends no detail of its own. */
+const requestFailed = (status: number) =>
+  pick({ id: `Permintaan gagal (${status}).`, en: `Request failed (${status}).` });
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { cache: "no-store", ...init });
   if (!response.ok) {
-    let detail = `Permintaan gagal (${response.status}).`;
+    let detail = requestFailed(response.status);
     try {
       const body = await response.json();
       if (typeof body?.detail === "string") detail = body.detail;
@@ -337,7 +343,7 @@ async function requestBlob(path: string, token: string): Promise<Blob> {
     cache: "no-store", headers: { "X-Review-Token": token },
   });
   if (!response.ok) {
-    let detail = `Permintaan gagal (${response.status}).`;
+    let detail = requestFailed(response.status);
     try {
       const body = await response.json();
       if (typeof body?.detail === "string") detail = body.detail;

@@ -72,8 +72,12 @@ describe("derive", () => {
 
 describe("helpers", () => {
   it("formats durations the Indonesian way", () => {
-    expect(duration(12.44)).toBe("12,4 dtk");
-    expect(duration(125)).toBe("2 mnt 05 dtk");
+    expect(duration(12.44, "id")).toBe("12,4 dtk");
+    expect(duration(125, "id")).toBe("2 mnt 05 dtk");
+  });
+  it("formats durations the English way", () => {
+    expect(duration(12.44, "en")).toBe("12.4 s");
+    expect(duration(125, "en")).toBe("2 min 05 s");
   });
   it("shortens long waits on playback but keeps order", () => {
     const times = playbackTimes([ev("plan", "a", "ok", 0), ev("plan", "b", "ok", 60), ev("plan", "c", "ok", 60)]);

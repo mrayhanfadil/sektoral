@@ -7,6 +7,7 @@ import { CircleX, FileDown, FileText, Route, SquareTerminal } from "lucide-react
 import { AGENTS, derive, PHASES, type DeckState } from "../lib/agents";
 import { api, ApiError, type Job, type JobEvent, type ReportItem, type RunReplay } from "../lib/api";
 import { pct, rp } from "../lib/format";
+import { useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone } from "../lib/labels";
 import { useReplay } from "../lib/replay";
 import { useJob } from "../lib/useJob";
@@ -40,19 +41,24 @@ export function DeckLaunch() {
 
 /** Before a run: what each agent on the rail will do, in pipeline order. */
 function IdleLegend() {
+  const { t } = useLang();
   return (
     <>
       <p className="max-w-[64ch]">
-        Belum ada langkah. Setelah riset dimulai, setiap tool call muncul di sini: nama tool, alasan agent memanggilnya, lalu hasilnya.
-        Agent di rail menyala saat bekerja, dan keenam Method Gates di kanan terisi saat valuasi dipilih.
+        {t({
+          id: "Belum ada langkah. Setelah riset dimulai, setiap tool call muncul di sini: nama tool, alasan agent memanggilnya, lalu hasilnya. "
+            + "Agent di rail menyala saat bekerja, dan keenam Method Gates di kanan terisi saat valuasi dipilih.",
+          en: "No steps yet. Once research starts, every tool call appears here: the tool name, why the agent called it, then its result. "
+            + "Agents on the rail light up while they work, and the six Method Gates on the right fill in as the valuation is chosen.",
+        })}
       </p>
-      <ol aria-label="Urutan agent" className="m-0 mt-4 list-none border-t border-rule-soft p-0">
+      <ol aria-label={t({ id: "Urutan agent", en: "Agent order" })} className="m-0 mt-4 list-none border-t border-rule-soft p-0">
         {AGENTS.map((a, i) => (
           <li key={a.id} className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-baseline gap-x-3 border-b border-rule-soft py-2">
             <span className="data text-ink-faint">{i + 1}</span>
             <span className="min-w-0">
-              <span className="font-bold text-ink">{a.name}</span>
-              <span className="block text-[13px] leading-snug text-ink-soft">{a.role}</span>
+              <span className="font-bold text-ink">{t(a.name)}</span>
+              <span className="block text-[13px] leading-snug text-ink-soft">{t(a.role)}</span>
             </span>
             <EngineTag engine={a.engine} />
           </li>
@@ -70,56 +76,60 @@ function methodOf(state: DeckState): string | undefined {
   return closing?.result?.slice("Metode utama ".length) ?? state.chain.find((c) => c.decision === "Terpilih")?.method;
 }
 
-function signed(value: number | null | undefined) {
-  const text = pct(value);
+function signed(value: number | null | undefined, lang: Lang) {
+  const text = pct(value, lang);
   return typeof value === "number" && value > 0 ? `+${text}` : text;
 }
 
-function fromRelease(state: DeckState): ResultData | undefined {
+const WITHHELD: Bi = { id: "ditahan", en: "withheld" };
+
+function fromRelease(state: DeckState, lang: Lang): ResultData | undefined {
   const release = state.release;
   if (!release) return undefined;
   const heldByGate5 = state.gates[5]?.verdict === "gagal";
   const item = { rating: release.rating ?? null, held_reason: heldByGate5 ? "Method Gate 5" : "" };
   return {
     rating: ratingLabel(item), tone: ratingTone(item),
-    tp: release.tp ?? "ditahan", upside: release.upside ?? "-",
-    method: methodOf(state), release: words(release.status),
+    tp: release.tp ?? WITHHELD[lang], upside: release.upside ?? "-",
+    method: methodOf(state), release: words(release.status, lang),
   };
 }
 
-function fromReport(report: ReportItem, state: DeckState): ResultData {
+function fromReport(report: ReportItem, state: DeckState, lang: Lang): ResultData {
   return {
     rating: ratingLabel(report), tone: ratingTone(report),
-    tp: report.published && report.tp !== null ? `Rp${rp(report.tp)}` : "ditahan",
-    upside: report.published ? signed(report.upside) : "-",
-    price: report.price !== null ? `Rp${rp(report.price)}` : undefined,
+    tp: report.published && report.tp !== null ? `Rp${rp(report.tp, lang)}` : WITHHELD[lang],
+    upside: report.published ? signed(report.upside, lang) : "-",
+    price: report.price !== null ? `Rp${rp(report.price, lang)}` : undefined,
     method: report.method || methodOf(state),
-    release: words(state.release?.status) ?? (report.published ? undefined : "draft, tidak didistribusikan"),
+    release: words(state.release?.status, lang) ?? (report.published ? undefined : words("draft_non_distributable", lang)),
   };
 }
 
 type Links = { report?: string; trace?: string; pdf?: string };
 
 function OpenReport({ href }: { href: string }) {
+  const { t } = useLang();
   return (
     <a className="btn btn-primary" href={href}>
-      <FileText aria-hidden className="size-4" strokeWidth={2.2} />Buka company update
+      <FileText aria-hidden className="size-4" strokeWidth={2.2} />{t({ id: "Buka company update", en: "Open Company Update" })}
     </a>
   );
 }
 
 function Actions({ links, rerun }: { links: Links; rerun?: ReactNode }) {
+  const { t } = useLang();
   return (
     <>
       {links.report && <OpenReport href={links.report} />}
       {links.trace && (
         <Link className="btn btn-ghost" to={links.trace}>
-          <Route aria-hidden className="size-4" strokeWidth={2.2} />Lihat jejak agent
+          <Route aria-hidden className="size-4" strokeWidth={2.2} />{t({ id: "Lihat jejak agent", en: "View Audit Trace" })}
         </Link>
       )}
       {links.pdf && (
         <a className="btn btn-ghost" href={links.pdf}>
-          <FileDown aria-hidden className="size-4" strokeWidth={2.2} />Buka PDF
+          <FileDown aria-hidden className="size-4" strokeWidth={2.2} />{t({ id: "Buka PDF", en: "Open PDF" })}
         </a>
       )}
       {rerun}
@@ -129,6 +139,7 @@ function Actions({ links, rerun }: { links: Links; rerun?: ReactNode }) {
 
 /** Submit a new run of ``ticker`` and go to it; errors stay next to the button. */
 function RerunButton({ ticker, label }: { ticker: string; label: string }) {
+  const { t } = useLang();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,17 +152,21 @@ function RerunButton({ ticker, label }: { ticker: string; label: string }) {
           try {
             const next = await launch(ticker);
             if (next.replay && location.pathname === next.path) {
-              setError("Riset langsung di situs ini butuh token pemilik; run tersimpan sudah diputar di sini.");
+              setError(t({
+                id: "Riset langsung di situs ini butuh token pemilik; run tersimpan sudah diputar di sini.",
+                en: "Live research on this site needs the owner's token; the stored run is already playing here.",
+              }));
               setBusy(false);
               return;
             }
             navigate(next.path);
           } catch (e) {
-            setError(`Riset belum bisa dimulai: ${(e as Error).message}`);
+            const message = (e as Error).message;
+            setError(t({ id: `Riset belum bisa dimulai: ${message}`, en: `Research could not start: ${message}` }));
             setBusy(false);
           }
         }}>
-        <SquareTerminal aria-hidden className="size-4" strokeWidth={2.2} />{busy ? "Memulai…" : label}
+        <SquareTerminal aria-hidden className="size-4" strokeWidth={2.2} />{busy ? t({ id: "Memulai…", en: "Starting…" }) : label}
       </button>
       {error && <span role="alert" className="text-[13px] font-medium text-err-ink">{error}</span>}
     </span>
@@ -164,7 +179,8 @@ const JOB_PHASE: Record<Job["state"], RunPhase> = { pending: "pending", running:
 
 export function DeckJob() {
   const { id = "" } = useParams();
-  const { job, error } = useJob(id);
+  const { t, lang } = useLang();
+  const { job, error, missing } = useJob(id);
   const { data: reports } = useLoad(api.reports);
   const events = job?.events ?? NO_EVENTS;
   const finished = job?.state === "completed" || job?.state === "error";
@@ -172,12 +188,15 @@ export function DeckJob() {
   const state = useMemo(() => derive(events, { finished, failed }), [events, finished, failed]);
 
   if (!job) {
-    if (error === "Riset tidak ditemukan.") {
+    if (missing) {
       return (
         <Page>
-          <Message title="Riset tidak ditemukan">
-            Server tidak lagi menyimpan riset ini, atau tautannya salah. Jalankan riset baru dari Deck.
-            <div className="mt-4"><Link className="btn btn-primary" to="/research">Buka Deck riset</Link></div>
+          <Message title={t({ id: "Riset tidak ditemukan", en: "Research not found" })}>
+            {t({
+              id: "Server tidak lagi menyimpan riset ini, atau tautannya salah. Jalankan riset baru dari Deck.",
+              en: "The server no longer keeps this research, or the link is wrong. Run new research from the Deck.",
+            })}
+            <div className="mt-4"><Link className="btn btn-primary" to="/research">{t({ id: "Buka Deck riset", en: "Open the research Deck" })}</Link></div>
           </Message>
         </Page>
       );
@@ -186,7 +205,11 @@ export function DeckJob() {
       <Page>
         <DeckView state={IDLE} live={false} loading
           top={<RunHeader ticker="" phase="pending" clock={clock(0)} counts={IDLE.counts} loading />}
-          notice={error ? <Notice tone="warn">Status riset belum tersedia ({error}). Deck mencoba lagi otomatis.</Notice> : undefined} />
+          notice={error ? (
+            <Notice tone="warn">
+              {t({ id: `Status riset belum tersedia (${error}). Deck mencoba lagi otomatis.`, en: `Research status is not available yet (${error}). The Deck retries automatically.` })}
+            </Notice>
+          ) : undefined} />
       </Page>
     );
   }
@@ -194,7 +217,7 @@ export function DeckJob() {
   const name = job.intel?.name ?? reports?.find((r) => r.ticker === job.ticker)?.name;
   const done = job.state === "completed";
   const links: Links = { report: job.report_url, trace: job.trace_url, pdf: job.pdf_url };
-  const result = fromRelease(state);
+  const result = fromRelease(state, lang);
   const lastError = [...events].reverse().find((e) => e.status === "error");
   const phase = PHASES[Math.max(0, state.phaseAt)];
 
@@ -205,24 +228,34 @@ export function DeckJob() {
           <RunHeader ticker={job.ticker} name={name} phase={JOB_PHASE[job.state]} counts={state.counts}
             clock={<LiveClock lastT={state.elapsed} running={job.state === "running"} />}
             badges={done && job.quality === "partial" ? (
-              <span className="pill pill-warn px-2 py-0 text-[12.5px]" title="Bukti belum cukup untuk semua bagian; batasnya dijelaskan di laporan dan jejak agent.">Parsial</span>
+              <span className="pill pill-warn px-2 py-0 text-[12.5px]" title={t({
+                id: "Bukti belum cukup untuk semua bagian; batasnya dijelaskan di laporan dan jejak agent.",
+                en: "Evidence does not yet cover every section; the limits are explained in the report and the Audit Trace.",
+              })}>{t({ id: "Parsial", en: "Partial" })}</span>
             ) : undefined}
             action={done && job.report_url ? <OpenReport href={job.report_url} /> : undefined} />
         }
         notice={job.state === "error" ? (
-          <Notice tone="error" action={<RerunButton ticker={job.ticker} label="Jalankan ulang riset" />}>
-            <strong className="font-bold">Riset {job.ticker} berhenti di fase {phase.title}.</strong>{" "}
+          <Notice tone="error" action={<RerunButton ticker={job.ticker} label={t({ id: "Jalankan ulang riset", en: "Rerun the research" })} />}>
+            <strong className="font-bold">
+              {t({ id: `Riset ${job.ticker} berhenti di fase ${phase.title.id}.`, en: `The ${job.ticker} research stopped in the ${phase.title.en} phase.` })}
+            </strong>{" "}
             {lastError ? `${lastError.label}${lastError.detail ? ` (${lastError.detail})` : ""}. ` : ""}
-            Jalankan ulang riset; jika berhenti lagi, periksa log server lokal.
+            {t({ id: "Jalankan ulang riset; jika berhenti lagi, periksa log server lokal.", en: "Rerun the research; if it stops again, check the local server log." })}
           </Notice>
         ) : done && job.quality === "partial" ? (
-          <Notice tone="warn">Analisis parsial: bukti belum cukup untuk semua bagian. Batasnya dijelaskan di company update dan jejak agent.</Notice>
+          <Notice tone="warn">{t({
+            id: "Analisis parsial: bukti belum cukup untuk semua bagian. Batasnya dijelaskan di company update dan jejak agent.",
+            en: "Partial analysis: evidence does not yet cover every section. The limits are explained in the Company Update and the Audit Trace.",
+          })}</Notice>
         ) : undefined}
-        empty={job.state === "pending" ? <>Masuk antrean… Riset mulai begitu worker bebas.</> : <>Agent memulai riset…</>}
+        empty={job.state === "pending"
+          ? t({ id: "Masuk antrean… Riset mulai begitu worker bebas.", en: "Queued… Research starts as soon as a worker is free." })
+          : t({ id: "Agent memulai riset…", en: "Agents are starting the research…" })}
         result={result}
-        actions={done ? <Actions links={links} rerun={<RerunButton ticker={job.ticker} label="Jalankan riset lagi" />} /> : undefined} />
+        actions={done ? <Actions links={links} rerun={<RerunButton ticker={job.ticker} label={t({ id: "Jalankan riset lagi", en: "Run the research again" })} />} /> : undefined} />
       {done && job.intel && (
-        <section aria-label="Temuan agent analis" className="mt-4">
+        <section aria-label={t({ id: "Temuan agent analis", en: "Analyst agent findings" })} className="mt-4">
           <IntelPanel intel={job.intel} />
         </section>
       )}
@@ -233,6 +266,7 @@ export function DeckJob() {
 /* ---------------------------------------------------------------- replay */
 
 export function DeckReplay() {
+  const { t, lang } = useLang();
   const { ticker = "" } = useParams();
   const T = ticker.toUpperCase();
   const [load, setLoad] = useState<{ run?: RunReplay; error?: Error }>({});
@@ -252,11 +286,15 @@ export function DeckReplay() {
     const missing = load.error instanceof ApiError && load.error.status === 404;
     return (
       <Page>
-        <Message title={missing ? `Belum ada run tersimpan untuk ${T}` : "Run tersimpan belum bisa dimuat"}>
-          {missing ? "Hanya emiten yang sudah punya company update bisa diputar ulang." : `${load.error.message} Muat ulang halaman untuk mencoba lagi.`}
+        <Message title={missing
+          ? t({ id: `Belum ada run tersimpan untuk ${T}`, en: `No stored run for ${T} yet` })
+          : t({ id: "Run tersimpan belum bisa dimuat", en: "The stored run could not load" })}>
+          {missing
+            ? t({ id: "Hanya emiten yang sudah punya company update bisa diputar ulang.", en: "Only issuers that already have a Company Update can be replayed." })
+            : `${load.error.message} ${t({ id: "Muat ulang halaman untuk mencoba lagi.", en: "Reload the page to try again." })}`}
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link className="btn btn-primary" to="/laporan">Lihat laporan tersimpan</Link>
-            <Link className="btn btn-ghost" to="/research">Buka Deck riset</Link>
+            <Link className="btn btn-primary" to="/laporan">{t({ id: "Lihat laporan tersimpan", en: "View stored reports" })}</Link>
+            <Link className="btn btn-ghost" to="/research">{t({ id: "Buka Deck riset", en: "Open the research Deck" })}</Link>
           </div>
         </Message>
       </Page>
@@ -276,9 +314,9 @@ export function DeckReplay() {
   const finished = replay.finished;
   const playing = replay.playing && !finished;
   const phase: RunPhase = finished ? "completed" : playing ? "running" : "paused";
-  const result = state.release && report ? fromReport(report, state)
-    : state.release ? fromRelease(state)
-    : finished && report ? fromReport(report, state) : undefined;
+  const result = state.release && report ? fromReport(report, state, lang)
+    : state.release ? fromRelease(state, lang)
+    : finished && report ? fromReport(report, state, lang) : undefined;
   const links: Links = {
     report: !report || report.files.html ? `/files/reports/${T}.html` : undefined,
     trace: `/laporan/${T}/jejak`,
@@ -291,12 +329,12 @@ export function DeckReplay() {
         top={
           <RunHeader ticker={run.ticker} name={run.name ?? report?.name} phase={phase} counts={state.counts}
             clock={<Tweened value={state.elapsed} format={clock} />}
-            clockNote={run.source === "derived" ? "durasi diperkirakan dari jejak audit" : undefined}
+            clockNote={run.source === "derived" ? t({ id: "durasi diperkirakan dari jejak audit", en: "durations estimated from the Audit Trace" }) : undefined}
             action={finished && links.report ? <OpenReport href={links.report} /> : undefined}
             controls={<ReplayControls replay={replay} events={events} source={run.source} />} />
         }
         result={result}
-        actions={finished ? <Actions links={links} rerun={<RerunButton ticker={run.ticker} label="Jalankan riset baru" />} /> : undefined} />
+        actions={finished ? <Actions links={links} rerun={<RerunButton ticker={run.ticker} label={t({ id: "Jalankan riset baru", en: "Run new research" })} />} /> : undefined} />
     </Page>
   );
 }
