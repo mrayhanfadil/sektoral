@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { JobEvent } from "./api";
-import { derive, duration, releaseFigures } from "./agents";
+import type { Intel, JobEvent } from "./api";
+import { derive, duration, planIn, releaseFigures } from "./agents";
 import { playbackTimes } from "./replay";
 
 const ev = (stage: string, label: string, status: JobEvent["status"], t: number, extra: Partial<JobEvent> = {}): JobEvent =>
@@ -108,6 +108,30 @@ describe("release figures", () => {
     expect(releaseFigures({ tp: "Rp5.075", upside: "+61,6%" }, "en")).toEqual({ tp: "Rp5.075", upside: "+61,6%", down: false });
     expect(releaseFigures({ status: "draft_non_distributable" }, "en")).toEqual({ tp: undefined, upside: undefined, down: false });
     expect(releaseFigures(undefined, "en").tp).toBeUndefined();
+  });
+});
+
+describe("plan in the reader's language", () => {
+  const intel = {
+    plan: { question: "Apakah margin bertahan?", question_en: "Will margins hold?", source: "agent",
+      hypotheses: ["Margin di atas peer", "Utang turun"], hypotheses_en: ["Margins above peers", null] },
+    synthesis: { hypotheses: [{ index: 0, verdict: "didukung", reason: "ROE tinggi", reason_en: "High ROE", signal_ids: [] }] },
+  } as unknown as Intel;
+  const plan = {
+    question: "Apakah margin bertahan?",
+    hypotheses: [{ index: 1, text: "Margin di atas peer", verdict: "didukung", reason: "ROE tinggi" }, { index: 2, text: "Utang turun" }],
+  };
+  it("takes the English twins for an English reader", () => {
+    expect(planIn(plan, intel, "en")).toEqual({
+      question: "Will margins hold?",
+      hypotheses: [{ index: 1, text: "Margins above peers", verdict: "didukung", reason: "High ROE" }, { index: 2, text: "Utang turun" }],
+    });
+  });
+  it("keeps the Indonesian for Indonesian readers, without a result, or when the text is not the same run's", () => {
+    expect(planIn(plan, intel, "id")).toBe(plan);
+    expect(planIn(plan, null, "en")).toBe(plan);
+    const other = { question: "Pertanyaan lain", hypotheses: [{ index: 1, text: "Hipotesis lain" }] };
+    expect(planIn(other, intel, "en")).toEqual(other);
   });
 });
 

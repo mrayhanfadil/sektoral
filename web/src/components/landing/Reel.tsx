@@ -7,10 +7,11 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, Pause, Play } from "lucide-react";
 import { api, type ReportItem, type RunReplay } from "../../lib/api";
 import {
-  AGENT, AGENTS, STATUS_WORD, derive, duration, releaseFigures, type DeckState, type Hypothesis, type Status, type Step, type StepKind,
+  AGENT, AGENTS, STATUS_WORD, derive, duration, planIn, releaseFigures, type DeckState, type Hypothesis, type Status, type Step, type StepKind,
 } from "../../lib/agents";
 import { useReplay } from "../../lib/replay";
 import { useLang } from "../../lib/i18n";
+import { useRunIntel } from "../../lib/useRunIntel";
 import { gateWord, verdictWord, words } from "../deck/read";
 import { LiveMark } from "../Mark";
 import { RatingBadge } from "../Reports";
@@ -86,7 +87,14 @@ function Player({ run, item }: { run: RunReplay; item?: ReportItem }) {
     else pause();
   }, [reduce, onScreen, held, total, play, pause, seek]);
 
-  const deck = useMemo(() => derive(replay.shown, { finished: replay.finished }), [replay.shown, replay.finished]);
+  const { lang } = useLang();
+  // An English reader's plan takes its English twins from the run's analyst result.
+  const intel = useRunIntel(run.ticker, lang);
+  const deck = useMemo(() => {
+    const state = derive(replay.shown, { finished: replay.finished });
+    const plan = planIn(state.plan, intel, lang);
+    return plan === state.plan ? state : { ...state, plan };
+  }, [replay.shown, replay.finished, intel, lang]);
   return (
     <Frame frameRef={frame} deck={deck} ticker={run.ticker} name={run.name} item={item} reduce={reduce}
       recorded={run.source === "recorded"} finished={replay.finished} progress={replay.progress}

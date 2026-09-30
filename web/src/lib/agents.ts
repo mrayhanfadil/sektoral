@@ -2,10 +2,10 @@
 // went out and came back, where the run is, and what the Method Gates and the
 // method chain decided. Everything here is derived from the progress events
 // (app/progress.py), so a live job and a replayed run render the same way.
-import type { EventData, JobEvent } from "./api";
+import type { EventData, Intel, JobEvent } from "./api";
 import { decisionCode, eventKind, gateCode, num, str, verdictCode, type DecisionCode, type EventKind, type GateCode, type VerdictCode } from "./codes";
 import { pct, rp } from "./format";
-import { getLang, type Bi, type Lang } from "./i18n";
+import { getLang, twin, type Bi, type Lang } from "./i18n";
 
 export type AgentId = "memori" | "analis" | "riset" | "berita" | "forecast" | "gerbang" | "laporan";
 export type Status = "idle" | "run" | "ok" | "warn" | "error";
@@ -337,6 +337,32 @@ export function releaseFigures(release: EventData | undefined, lang: Lang = getL
   const upside = upsideValue !== undefined ? `${upsideValue > 0 ? "+" : ""}${pct(upsideValue, lang)}` : str(release?.upside);
   const down = upsideValue !== undefined ? upsideValue < 0 : /^[−-]/.test(upside ?? "");
   return { tp, upside, down };
+}
+
+/** Event details are cut at 400 characters (app/progress.py), so text is compared on that much. */
+const same = (a: string | null | undefined, b: string | null | undefined) =>
+  Boolean(a && b) && a!.trim().slice(0, 400) === b!.trim().slice(0, 400);
+
+/**
+ * The plan in the reader's language. Run events carry the analyst's
+ * Indonesian only; for an English reader the question, each hypothesis and
+ * each verdict reason take the English twin from the analyst result
+ * (`intel`) where it holds the same Indonesian text, and stay Indonesian
+ * otherwise (no twin, or a result from another run).
+ */
+export function planIn(plan: DeckState["plan"], intel: Intel | null | undefined, lang: Lang): DeckState["plan"] {
+  if (lang !== "en" || !intel) return plan;
+  const question = same(plan.question, intel.plan.question) ? twin(intel.plan, "question", lang) ?? plan.question : plan.question;
+  const texts = twin(intel.plan, "hypotheses", lang);
+  const hypotheses = plan.hypotheses.map((h) => {
+    const at = h.index - 1;
+    const text = same(h.text, intel.plan.hypotheses[at]) ? texts[at] ?? h.text : h.text;
+    // Synthesis numbers hypotheses from 0; the plan events from 1.
+    const verdict = intel.synthesis.hypotheses.find((v) => v.index === at);
+    const reason = verdict && same(h.reason, verdict.reason) ? twin(verdict, "reason", lang) ?? h.reason : h.reason;
+    return text === h.text && reason === h.reason ? h : { ...h, text, reason };
+  });
+  return { question, hypotheses };
 }
 
 const UNIT: Bi<{ s: string; m: string; comma: boolean }> = {
