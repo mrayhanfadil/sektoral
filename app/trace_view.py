@@ -238,7 +238,12 @@ def build(audit: dict | None) -> dict | None:
         "report": _status(audit.get("report") if isinstance(audit.get("report"), dict) else {}),
         "analyst": public_intel(analyst),
         "analyst_problems": [text(p, 300) for p in (analyst.get("problems") or [])[:6] if isinstance(p, str)],
-        "analyst_problem_notes": problem_notes(analyst.get("problems")),
+        # The analyst records structured notes since #34; older runs are parsed.
+        "analyst_problem_notes": (analyst["problem_notes"]
+                                  if isinstance(analyst.get("problem_notes"), list)
+                                  and len(analyst["problem_notes"])
+                                  == sum(isinstance(p, str) for p in analyst.get("problems") or [])
+                                  else problem_notes(analyst.get("problems"))),
         "research": _research(audit.get("research") if isinstance(audit.get("research"), dict) else {}),
         "news": _news(audit.get("news_sources") if isinstance(audit.get("news_sources"), dict) else {}),
         "forecast": _forecast(audit.get("forecast_assumptions")

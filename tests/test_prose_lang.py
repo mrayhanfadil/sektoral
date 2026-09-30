@@ -174,3 +174,11 @@ def test_research_cards_without_english_fall_back_to_indonesian():
     assert fallback == 4
     assert view["bagian"][0]["research_cards"][0]["caveat"] == card["caveat"]
     assert card["observation"] in missing
+
+
+def test_reads_english_rejects_indonesian_the_mixed_guard_lets_through():
+    assert not prose_lang.mixed("Tekanan biaya dana naik")  # one function word only
+    assert not prose_lang.reads_english("Tekanan biaya dana naik")
+    assert not prose_lang.reads_english("Biaya kredit 1H26 3,02% sudah di atas rata-rata")
+    assert prose_lang.reads_english("NIM margin risk from the BI rate cycle")
+    assert prose_lang.reads_english("Rising funding costs")
