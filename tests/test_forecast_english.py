@@ -273,7 +273,6 @@ def test_interim_twin_obeys_the_interim_evidence_rules():
     RuntimeError("provider down"),
     "Maaf, saya tidak bisa.",
     "[\"not\", \"an object\"]",
-    {"content": "{\"earnings_scenario.rationale\": \"H2 profit fol", "finish_reason": "length"},
 ])
 def test_a_failed_translation_leaves_the_plan_unchanged(reply):
     plan = _earnings_plan()
@@ -289,8 +288,40 @@ def test_a_failed_translation_leaves_the_plan_unchanged(reply):
     assert out == before and "_en" not in json.dumps(out)
     assert notes["status"] == "failed" and notes["attached"] == 0 and notes["problems"]
     assert len(calls) == 1                         # a failed call is not repeated
-    if isinstance(reply, dict):
-        assert "finish_reason=length" in notes["problems"][0]
+
+
+def test_a_cut_off_translation_is_asked_again_in_halves():
+    cut = {"content": "{\"earnings_scenario.rationale\": \"H2 profit fol", "finish_reason": "length"}
+    english = _earnings_english()
+    whole = len(agent._prose_fields(_earnings_plan()))
+    calls = []
+
+    def chat(messages, **_kwargs):
+        calls.append(messages)
+        asked = _asked(messages)
+        # The whole plan does not fit the budget; half of it does.
+        if len(asked) > whole // 2 + 1:
+            return cut
+        return json.dumps({path: english[path] for path in asked if path in english})
+    out, notes = agent.translate_plan(_earnings_plan(), chat=chat)
+    assert notes["status"] == "translated" and notes["attached"] == whole
+    assert not notes["problems"] and len(calls) >= 3
+
+
+def test_a_reply_always_cut_off_leaves_the_plan_unchanged():
+    plan = _earnings_plan()
+    before = copy.deepcopy(plan)
+    calls = []
+
+    def chat(messages, **_kwargs):
+        calls.append(messages)
+        return {"content": "{\"x\": \"cut", "finish_reason": "length"}
+    out, notes = agent.translate_plan(plan, chat=chat)
+    fields = len(agent._prose_fields(copy.deepcopy(plan)))
+    assert out == before and notes["status"] == "failed"
+    assert len(calls) == 2 * fields - 1              # halved down to single fields
+    assert len(notes["problems"]) == fields
+    assert all("finish_reason=length" in p for p in notes["problems"])
 
 
 def test_twins_a_plan_already_had_are_replaced():
