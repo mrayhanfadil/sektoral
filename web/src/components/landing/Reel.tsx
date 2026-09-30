@@ -6,10 +6,12 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownRight, Pause, Play } from "lucide-react";
 import { api, type ReportItem, type RunReplay } from "../../lib/api";
-import { AGENT, AGENTS, STATUS_WORD, derive, duration, type DeckState, type Status, type Step, type StepKind } from "../../lib/agents";
+import {
+  AGENT, AGENTS, STATUS_WORD, derive, duration, releaseFigures, type DeckState, type Hypothesis, type Status, type Step, type StepKind,
+} from "../../lib/agents";
 import { useReplay } from "../../lib/replay";
 import { useLang } from "../../lib/i18n";
-import { words } from "../deck/read";
+import { gateWord, verdictWord, words } from "../deck/read";
 import { LiveMark } from "../Mark";
 import { RatingBadge } from "../Reports";
 import { GATE_TONE, GateMeter } from "./GateMeter";
@@ -137,7 +139,7 @@ function Frame({ frameRef, deck, ticker, name, item, reduce, recorded = false, f
   const captionId = useId();
   const rows = deck.steps.filter((s) => STREAM.has(s.kind)).slice(-ROWS);
   const at = deck.phaseAt;
-  const chosen = deck.chain.find((c) => c.decision === "Terpilih");
+  const chosen = deck.chain.find((c) => c.code === "selected");
   // Announce phases, not rows: a polite summary that changes a handful of times per run.
   const summary = !playing ? "" : at >= 0
     ? `${t({ id: "Fase", en: "Phase" })} ${at + 1} ${t({ id: "dari", en: "of" })} ${deck.phases.length}: ${t(deck.phases[at].title)}`
@@ -271,8 +273,12 @@ function Plan({ deck, reduce }: { deck: DeckState; reduce: boolean }) {
   const { lang, t } = useLang();
   const { question, hypotheses } = deck.plan;
   const planning = deck.agents.analis.status === "run" && !question;
+  // Verdicts counted by their words in the reader's language (code first, else the label).
   const tally = new Map<string, number>();
-  for (const h of hypotheses) if (h.verdict) tally.set(h.verdict, (tally.get(h.verdict) ?? 0) + 1);
+  for (const h of hypotheses) {
+    const word = h.verdict ? verdictWord(h, lang) : undefined;
+    if (word) tally.set(word, (tally.get(word) ?? 0) + 1);
+  }
   const fade = reduce ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.24 } };
   return (
     <div className="flex-1 border-t border-rule-soft px-3.5 pt-3 pb-3.5 max-sm:hidden">
@@ -289,13 +295,13 @@ function Plan({ deck, reduce }: { deck: DeckState; reduce: boolean }) {
           <ul aria-label={t({ id: "Hipotesis", en: "Hypotheses" })} className="m-0 flex list-none gap-1 p-0">
             {hypotheses.map((h) => (
               <li key={h.index} title={h.text.replace(HYPOTHESIS_NUMBER, "")}
-                className={`rounded-[4px] border px-1.5 font-mono text-[11px] leading-[18px] font-medium transition-colors duration-300 ${chipTone(h.verdict)}`}>
-                H{h.index}<span className="sr-only">: {words(h.verdict, lang) ?? t({ id: "belum diuji", en: "not tested yet" })}</span>
+                className={`rounded-[4px] border px-1.5 font-mono text-[11px] leading-[18px] font-medium transition-colors duration-300 ${chipTone(h)}`}>
+                H{h.index}<span className="sr-only">: {(h.verdict && verdictWord(h, lang)) || t({ id: "belum diuji", en: "not tested yet" })}</span>
               </li>
             ))}
           </ul>
           {tally.size > 0 && (
-            <span className="text-[11.5px] text-ink-soft">{[...tally].map(([v, n]) => `${n} ${words(v, lang)}`).join(", ")}</span>
+            <span className="text-[11.5px] text-ink-soft">{[...tally].map(([word, n]) => `${n} ${word}`).join(", ")}</span>
           )}
         </div>
       )}
@@ -303,10 +309,10 @@ function Plan({ deck, reduce }: { deck: DeckState; reduce: boolean }) {
   );
 }
 
-function chipTone(verdict?: string) {
-  if (!verdict) return "border-rule text-ink-soft";
-  if (verdict === "didukung") return "border-transparent bg-ok-bg text-ok-ink";
-  if (verdict === "tidak didukung") return "border-transparent bg-warn-bg text-warn-ink";
+function chipTone(h: Hypothesis) {
+  if (!h.verdict) return "border-rule text-ink-soft";
+  if (h.code === "supported") return "border-transparent bg-ok-bg text-ok-ink";
+  if (h.code === "not_supported") return "border-transparent bg-warn-bg text-warn-ink";
   return "border-dashed border-rule-strong text-ink-soft";
 }
 
@@ -367,9 +373,9 @@ function GateBoard({ deck }: { deck: DeckState }) {
           </p>
           <GateMeter status={g.status} className="relative mt-2 h-[3px]" />
           <p aria-hidden className={`relative m-0 mt-1.5 truncate text-[11.5px] font-medium max-sm:hidden ${GATE_TONE[g.status].text}`}>
-            {words(g.verdict, lang) || t({ id: "antri", en: "queued" })}
+            {gateWord(g, lang) || t({ id: "antri", en: "queued" })}
           </p>
-          <span className="sr-only">Method Gate {g.n}, {t(g.name)}: {words(g.verdict, lang) || t({ id: "belum dinilai", en: "not assessed yet" })}</span>
+          <span className="sr-only">Method Gate {g.n}, {t(g.name)}: {gateWord(g, lang) || t({ id: "belum dinilai", en: "not assessed yet" })}</span>
         </li>
       ))}
     </ol>
@@ -377,11 +383,11 @@ function GateBoard({ deck }: { deck: DeckState }) {
 }
 
 function Outcome({ deck, item, chosen, reduce }: { deck: DeckState; item?: ReportItem; chosen?: DeckState["chain"][number]; reduce: boolean }) {
-  const { t } = useLang();
-  const checks = deck.chain.filter((c) => c.decision === "Silang cek").length;
+  const { lang, t } = useLang();
+  const checks = deck.chain.filter((c) => c.code === "cross_check").length;
   const release = deck.release;
   const rated = Boolean(release?.rating);
-  const down = (release?.upside ?? "").startsWith("−") || (release?.upside ?? "").startsWith("-");
+  const { tp, upside, down } = releaseFigures(release, lang);
   const swap = reduce ? {} : { initial: { opacity: 0, y: 6 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0 }, transition: SPRING };
   return (
     <div className="grid min-h-[62px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 border-t border-rule bg-raised px-3.5 py-2.5">
@@ -404,8 +410,8 @@ function Outcome({ deck, item, chosen, reduce }: { deck: DeckState; item?: Repor
           <motion.div key="rated" {...swap} className="flex items-center gap-3">
             {item ? <RatingBadge item={item} /> : <span className="pill">{release.rating}</span>}
             <div className="text-right leading-tight">
-              <p className="m-0 font-mono text-[13.5px] font-semibold text-ink-strong tabular-nums">TP {release.tp}</p>
-              {release.upside && <p className={`m-0 font-mono text-[12px] tabular-nums ${down ? "text-err-ink" : "text-ok-ink"}`}>{release.upside}</p>}
+              <p className="m-0 font-mono text-[13.5px] font-semibold text-ink-strong tabular-nums">TP {tp}</p>
+              {upside && <p className={`m-0 font-mono text-[12px] tabular-nums ${down ? "text-err-ink" : "text-ok-ink"}`}>{upside}</p>}
             </div>
           </motion.div>
         ) : (

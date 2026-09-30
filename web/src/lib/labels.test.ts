@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { featuredReport, progressStep, ratingLabel, ratingTone, validatorNote } from "./labels";
+import { featuredReport, problemNotes, progressStep, ratingLabel, ratingTone, selectedStep, validatorNote } from "./labels";
 import { pct, rp } from "./format";
 import type { ReportItem } from "./api";
 
@@ -16,10 +16,15 @@ describe("rating labels", () => {
     expect(ratingLabel(item({}))).toBe("Hold");
     expect(ratingTone(item({ rating: "Sell" }))).toBe("sell");
   });
-  it("calls a held report a Draft, and Review Required only for Method Gate 5", () => {
-    expect(ratingLabel(item({ rating: null, held_reason: "forecast belum tervalidasi" }))).toBe("Draft");
-    expect(ratingLabel(item({ rating: null, held_reason: "Method Gate 5, hasil ekstrem (Review Required)" }))).toBe("Review Required");
+  it("calls a held gallery report a Draft: its publication state says why it is held", () => {
+    expect(ratingLabel(item({ rating: null, publication_state: "review_pending", held_reason: "menunggu review publikasi oleh reviewer" }))).toBe("Draft");
+    expect(ratingLabel(item({ rating: null, publication_state: "built", held_reason: "Method Gate 5, hasil ekstrem (Review Required)" }))).toBe("Draft");
     expect(ratingTone(item({ rating: null }))).toBe("review");
+  });
+  it("says Review Required when the caller read Method Gate 5, or an older item names it", () => {
+    expect(ratingLabel({ rating: null, review_required: true })).toBe("Review Required");
+    expect(ratingLabel({ rating: null, held_reason: "Method Gate 5, hasil ekstrem (Review Required)" })).toBe("Review Required");
+    expect(ratingLabel({ rating: null, held_reason: "forecast belum tervalidasi" })).toBe("Draft");
   });
 });
 
@@ -29,6 +34,18 @@ describe("featured report", () => {
     const rich = item({ ticker: "RICH", chain: [{ step: "A", decision: "Terpilih", value: "1" }, { step: "B", decision: "Silang cek", value: "2" }] });
     expect(featuredReport([plain, rich])?.ticker).toBe("RICH");
     expect(featuredReport([item({ published: false })])).toBeUndefined();
+  });
+  it("reads decision codes before labels", () => {
+    // Labels in another language: only the codes say which step was selected.
+    const coded = item({ ticker: "CODED", chain: [
+      { step: "A", decision: "Selected", decision_code: "selected", value: "1" },
+      { step: "B", decision: "Cross-check", decision_code: "cross_check", value: "2" },
+      { step: "C", decision: "Cross-check", decision_code: "cross_check", value: "3" },
+    ] });
+    const labelled = item({ ticker: "LABEL", chain: [{ step: "A", decision: "Terpilih", value: "1" }, { step: "B", decision: "Silang cek", value: "2" }] });
+    expect(featuredReport([labelled, coded])?.ticker).toBe("CODED");
+    expect(selectedStep(coded.chain)?.step).toBe("A");
+    expect(selectedStep([{ step: "X", decision: "Terpilih", decision_code: undefined }])?.step).toBe("X");
   });
 });
 
@@ -65,5 +82,12 @@ describe("validator notes", () => {
   });
   it("passes other notes through", () => {
     expect(validatorNote("hypotheses[0] perlu signal_ids")).toEqual({ message: "hypotheses[0] perlu signal_ids", removed: [] });
+  });
+  it("uses the server's parsed notes when it sends them, else parses the raw ones", () => {
+    const parsed = [{ message: "Prose must not hold figures", removed: ["11", "2026"] }];
+    expect(problemNotes(parsed, ["prosa tidak boleh memuat angka; hapus: 11, 2026"])).toEqual(parsed);
+    expect(problemNotes(undefined, ["prosa memuat bahasa rekomendasi investasi; hapus kata: beli"]))
+      .toEqual([{ message: "Prosa memuat bahasa rekomendasi investasi", removed: ["beli"] }]);
+    expect(problemNotes([], [])).toEqual([]);
   });
 });

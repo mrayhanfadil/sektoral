@@ -1,6 +1,10 @@
 // Pure helpers of the Deck: motion constants, formats and word maps.
 import { useState } from "react";
 import type { Status } from "../../lib/agents";
+import type { EventData } from "../../lib/api";
+import {
+  DECISION_WORD, GATE_WORD, VERDICT_WORD, str, verdictCode, type DecisionCode, type GateCode, type VerdictCode,
+} from "../../lib/codes";
 import { getLang, type Bi, type Lang } from "../../lib/i18n";
 
 /** Damped springs: the deck never bounces. */
@@ -35,66 +39,73 @@ export function clock(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${tenths % 10}`;
 }
 
-const VERDICT_TONE: Record<string, string> = { didukung: "pill-ok", "tidak didukung": "pill-err" };
+/**
+ * A hypothesis verdict as the Deck holds it: the label the pipeline sent and
+ * its code (lib/codes.ts `verdictCode`). The helpers below read the code; the
+ * label only says whether any verdict arrived.
+ */
+export type Verdict = { verdict?: string | null; code?: VerdictCode };
+
+/** A verdict from an event's data: `verdict_code`, else the label. */
+export const verdictOf = (data: EventData | undefined): Verdict =>
+  ({ verdict: str(data?.verdict), code: verdictCode(data?.verdict_code, data?.verdict) });
+
+const VERDICT_TONE: Partial<Record<VerdictCode, string>> = { supported: "pill-ok", not_supported: "pill-err" };
 
 /** Pill tone of a hypothesis verdict; anything short of a verdict reads as a gap. */
-export function verdictTone(verdict?: string): string {
-  if (!verdict) return "";
-  return VERDICT_TONE[verdict.toLowerCase()] ?? "pill-warn";
+export function verdictTone(v: Verdict): string {
+  if (!v.verdict && !v.code) return "";
+  return (v.code && VERDICT_TONE[v.code]) ?? "pill-warn";
 }
 
-/** The analyst could not answer the hypothesis: tested, but no verdict. */
-export const UNANSWERED = "belum terjawab";
-
-/** A real verdict (didukung, tidak didukung, sebagian...); "belum terjawab" is not one. */
-export function isJudged(verdict?: string): boolean {
-  return !!verdict && verdict.toLowerCase() !== UNANSWERED;
+/** A real verdict (supported, not supported, partly...); "unanswered" is not one. */
+export function isJudged(v: Verdict): boolean {
+  return Boolean(v.verdict || v.code) && v.code !== "unanswered";
 }
 
 /**
  * The row glyph of a hypothesis: open until the analyst answers, the done
  * check for a real verdict, the warning mark when it stayed unanswered.
  */
-export function verdictGlyph(verdict?: string): Status {
-  return !verdict ? "idle" : isJudged(verdict) ? "ok" : "warn";
+export function verdictGlyph(v: Verdict): Status {
+  return !v.verdict && !v.code ? "idle" : isJudged(v) ? "ok" : "warn";
 }
 
-export function verdictStatus(verdict?: string): Status {
-  const tone = verdictTone(verdict);
-  return !verdict ? "idle" : tone === "pill-ok" ? "ok" : tone === "pill-err" ? "error" : "warn";
+export function verdictStatus(v: Verdict): Status {
+  const tone = verdictTone(v);
+  return !v.verdict && !v.code ? "idle" : tone === "pill-ok" ? "ok" : tone === "pill-err" ? "error" : "warn";
 }
+
+/** A verdict in the reader's words: by its code, else the label as sent. */
+export const verdictWord = (v: Verdict, lang: Lang = getLang()) =>
+  v.code ? VERDICT_WORD[v.code][lang] : words(v.verdict ?? undefined, lang);
+
+/** A gate verdict in the reader's words: by its code, else the label as sent. */
+export const gateWord = (g: { verdict?: string; code?: GateCode }, lang: Lang = getLang()) =>
+  g.code ? GATE_WORD[g.code][lang] : words(g.verdict, lang);
+
+/** A chain decision in the reader's words: by its code, else the label as sent. */
+export const decisionWord = (c: { decision: string; code?: DecisionCode }, lang: Lang = getLang()) =>
+  c.code ? DECISION_WORD[c.code][lang] : words(c.decision, lang);
 
 /**
  * Codes and fixed labels the pipeline sends (release status codes in a
- * detail, hypothesis and gate verdicts, method-chain decisions), in the
- * deck's words. The logic keeps matching on the pipeline's own value; only
- * the shown word changes with the language. Anything else is free text and
- * passes through.
+ * detail; the Indonesian labels of hypothesis and gate verdicts and
+ * method-chain decisions), in the deck's words. Anything else is free text
+ * and passes through. Verdicts and decisions read by code where the Deck has
+ * one (`verdictWord`, `gateWord`, `decisionWord`); this map shows a label that
+ * came without a code.
  */
-const CODE_WORDS = new Map<string, Bi>(Object.entries({
-  distributable: { id: "dapat didistribusikan", en: "distributable" },
-  distributable_assumption_led: { id: "dapat didistribusikan, berbasis asumsi analis", en: "distributable, assumption-led" },
-  draft_non_distributable: { id: "draft, tidak didistribusikan", en: "draft, not distributable" },
-  partial: { id: "parsial", en: "partial" },
-  complete: { id: "lengkap", en: "complete" },
-  searched: { id: "pencarian selesai", en: "search done" },
-  validated: { id: "tervalidasi", en: "validated" },
-  // Hypothesis verdicts.
-  didukung: { id: "didukung", en: "supported" },
-  "tidak didukung": { id: "tidak didukung", en: "not supported" },
-  "sebagian didukung": { id: "sebagian didukung", en: "partly supported" },
-  [UNANSWERED]: { id: UNANSWERED, en: "unanswered" },
-  // Method Gate verdicts.
-  lolos: { id: "lolos", en: "pass" },
-  gagal: { id: "gagal", en: "fail" },
-  "tidak berlaku": { id: "tidak berlaku", en: "not applicable" },
-  "tidak dapat dinilai": { id: "tidak dapat dinilai", en: "cannot be assessed" },
-  // Method Chain decisions (app/report_extras.py).
-  Terpilih: { id: "Terpilih", en: "Selected" },
-  "Terpilih, ekstrem (rantai berhenti)": { id: "Terpilih, ekstrem (rantai berhenti)", en: "Selected, extreme (chain stops)" },
-  Dilewati: { id: "Dilewati", en: "Skipped" },
-  "Silang cek": { id: "Silang cek", en: "Cross-check" },
-  "Tidak dijalankan": { id: "Tidak dijalankan", en: "Not run" },
-  "Belum tersedia": { id: "Belum tersedia", en: "Not yet available" },
-}));
+const CODE_WORDS = new Map<string, Bi>([
+  ...Object.entries({
+    distributable: { id: "dapat didistribusikan", en: "distributable" },
+    distributable_assumption_led: { id: "dapat didistribusikan, berbasis asumsi analis", en: "distributable, assumption-led" },
+    draft_non_distributable: { id: "draft, tidak didistribusikan", en: "draft, not distributable" },
+    partial: { id: "parsial", en: "partial" },
+    complete: { id: "lengkap", en: "complete" },
+    searched: { id: "pencarian selesai", en: "search done" },
+    validated: { id: "tervalidasi", en: "validated" },
+  }),
+  ...[VERDICT_WORD, GATE_WORD, DECISION_WORD].flatMap((map) => Object.values<Bi>(map).map((bi) => [bi.id, bi] as const)),
+]);
 export const words = (text?: string, lang: Lang = getLang()) => (text && CODE_WORDS.get(text)?.[lang]) || text;

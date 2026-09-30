@@ -1,6 +1,7 @@
 import { CornerDownRight, ExternalLink } from "lucide-react";
 import type { Intel, Signal } from "../lib/api";
 import { STATUS_WORD, type Status } from "../lib/agents";
+import { VERDICT_WORD, verdictCode, type VerdictCode } from "../lib/codes";
 import { useLang, type Bi } from "../lib/i18n";
 
 /** Section anchors, shared with the trace page's index so labels match headings. Pipeline order. */
@@ -99,13 +100,8 @@ export function Source({ url, children }: { url: string | null | undefined; chil
 
 /* ------------------------------------------------------------------ */
 
-const VERDICT: Record<string, ChipTone> = { didukung: "ok", "tidak didukung": "err" };
-/** The analyst agent's verdict values (agents/analyst/run.py), read for people; anything else shows as sent. */
-const VERDICT_LABEL: Record<string, Bi> = {
-  didukung: { id: "didukung", en: "supported" },
-  "tidak didukung": { id: "tidak didukung", en: "not supported" },
-  "belum terjawab": { id: "belum terjawab", en: "unanswered" },
-};
+/** Chip tone of a hypothesis verdict, by its code (`verdict_code`, else the Indonesian label). */
+const VERDICT: Partial<Record<VerdictCode, ChipTone>> = { supported: "ok", not_supported: "err" };
 const ORIGIN: Record<string, [ChipTone, Bi]> = {
   agent: ["neutral", { id: "sesuai rencana", en: "as planned" }],
   agent_adaptive: ["brand", { id: "keputusan baru agent", en: "new agent decision" }],
@@ -200,6 +196,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
         <ol className="m-0 grid max-w-[920px] list-none divide-y divide-rule-soft p-0">
           {intel.plan.hypotheses.map((h, i) => {
             const v = verdicts[i];
+            const code = v ? verdictCode(v.verdict_code, v.verdict) : undefined;
             const [label, text] = hypothesisText(h, i);
             return (
               <li key={i} className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-3 py-3 first:pt-0 last:pb-0">
@@ -207,8 +204,8 @@ export function IntelSections({ intel }: { intel: Intel }) {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1.5">
                     <p className="min-w-0 flex-1 basis-[280px] text-[15px]">{text}</p>
-                    <Chip tone={v?.verdict ? VERDICT[v.verdict] ?? "neutral" : "dashed"} className="flex-none">
-                      {v?.verdict ? (VERDICT_LABEL[v.verdict] ? t(VERDICT_LABEL[v.verdict]) : v.verdict) : t({ id: "belum dinilai", en: "not assessed" })}
+                    <Chip tone={v?.verdict || code ? (code && VERDICT[code]) ?? "neutral" : "dashed"} className="flex-none">
+                      {code ? t(VERDICT_WORD[code]) : v?.verdict ? v.verdict : t({ id: "belum dinilai", en: "not assessed" })}
                     </Chip>
                   </div>
                   {v?.reason && <p className="mt-1 text-[13.5px] text-ink-soft">{v.reason}</p>}
