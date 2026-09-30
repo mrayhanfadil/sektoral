@@ -1029,3 +1029,166 @@ def test_crosslink_quality_rejects_boilerplate_and_accepts_specific_bbca_paraphr
     problems = research._validate_document(ticker, document(generic_global), evidence)
     assert any("meaningful subject" in issue for issue in problems)
     assert research._validate_document(ticker, document(specific), evidence) == []
+
+
+_QUARTER = "/financials/quarterly/TEST/"
+_TWIN_CARD = {
+    "title": "Pendapatan kuartal",
+    "observation": "Cache mencatat pendapatan perusahaan pada catatan terbaru.",
+    "implication": "Catatan ini memberi konteks untuk memahami aktivitas usaha.",
+    "caveat": "Satu catatan belum menjelaskan dampak terhadap laba atau arus kas.",
+    "title_en": "Quarterly revenue",
+    "observation_en": "The cache records the company's revenue in its latest record.",
+    "implication_en": "This record gives context for understanding business activity.",
+    "caveat_en": "A single record does not explain the effect on earnings or cash flow.",
+    "citations": [{"endpoint": _QUARTER, "field_path": "/revenue"}],
+}
+
+
+def _one_endpoint_cache(monkeypatch):
+    monkeypatch.setattr(research.cache_tools, "cache_endpoints", lambda ticker: [_QUARTER])
+    monkeypatch.setattr(research.cache_tools, "cache_get",
+                        lambda ticker, ep: {"revenue": 1250} if ep == _QUARTER else None)
+
+
+def _script(monkeypatch, *finals):
+    """Scripted `_chat`: read the quarter, then return each final's cards in turn."""
+    responses = [json.dumps({"tool": "cache_get", "args": ["TEST", _QUARTER]})] + \
+        [json.dumps({"final": {"summary": "", "limitations": [], "insights": cards}})
+         for cards in finals]
+    seen = []
+    monkeypatch.setattr(research, "_chat",
+                        lambda messages: (seen.append(messages), responses.pop(0))[1])
+    return seen
+
+
+def test_english_twins_validate_persist_and_survive_cache_revalidation(monkeypatch, tmp_path):
+    from app import research_context
+    _one_endpoint_cache(monkeypatch)
+    seen = _script(monkeypatch, [_TWIN_CARD])
+
+    result = research.run_live("TEST", db=tmp_path)
+    assert result["ok"] is True
+    assert len(seen) == 2  # no repair: both languages passed
+    card = result["document"]["insights"][0]
+    for key in ("title", "observation", "implication", "caveat"):
+        assert card[key] == _TWIN_CARD[key]
+        assert card[f"{key}_en"] == _TWIN_CARD[f"{key}_en"]
+    assert "english_problems" not in result["agent_trace"]["validation"]
+    # The system prompt asks for the twins in the same call.
+    assert "observation_en" in seen[0][0]["content"]
+
+    clean, problems = research.validate_against_cache("TEST", result["document"])
+    assert problems == []
+    assert clean["insights"][0]["observation_en"] == _TWIN_CARD["observation_en"]
+    loaded, status = research_context.load_analysis("TEST", db=tmp_path)
+    assert status["status"] == "loaded"
+    assert loaded["insights"][0]["caveat_en"] == _TWIN_CARD["caveat_en"]
+
+
+def test_bad_english_twin_gets_repairs_then_is_dropped_keeping_the_indonesian(monkeypatch, tmp_path):
+    _one_endpoint_cache(monkeypatch)
+    bad = dict(_TWIN_CARD, observation_en="The cache records revenue of 1250.")
+    seen = _script(monkeypatch, [bad], [bad], [bad])
+
+    result = research.run_live("TEST", db=tmp_path)
+    assert result["ok"] is True
+    assert len(seen) == 4  # the final plus two repairs asked for the English alone
+    assert "observation_en must not contain digits" in seen[2][-1]["content"]
+    card = result["document"]["insights"][0]
+    assert card["observation"] == _TWIN_CARD["observation"]
+    assert not [key for key in card if key.endswith("_en")]
+    notes = result["agent_trace"]["validation"]["english_problems"]
+    assert notes and "English twin dropped" in notes[0]
+    assert research.validate_against_cache("TEST", result["document"])[1] == []
+
+
+def test_english_repair_that_breaks_the_indonesian_keeps_the_passing_candidate(monkeypatch, tmp_path):
+    _one_endpoint_cache(monkeypatch)
+    bad_english = dict(_TWIN_CARD, caveat_en="Satu catatan belum menjelaskan dampak pada laba.")
+    broken = dict(_TWIN_CARD, implication="Beli saham ini.")
+    seen = _script(monkeypatch, [bad_english], [broken], [broken])
+
+    result = research.run_live("TEST", db=tmp_path)
+    assert result["ok"] is True
+    assert len(seen) == 4
+    card = result["document"]["insights"][0]
+    assert card["implication"] == _TWIN_CARD["implication"]
+    assert "caveat_en" not in card and "title_en" not in card
+    validation = result["agent_trace"]["validation"]
+    assert validation["repair_attempts"] == 2
+    assert any("investment action" in claim for claim in validation["rejected_claims"])
+
+
+def test_english_repair_can_complete_a_partial_twin(monkeypatch, tmp_path):
+    _one_endpoint_cache(monkeypatch)
+    partial = {key: value for key, value in _TWIN_CARD.items() if key != "caveat_en"}
+    seen = _script(monkeypatch, [partial], [_TWIN_CARD])
+
+    result = research.run_live("TEST", db=tmp_path)
+    assert len(seen) == 3
+    assert "caveat_en missing" in seen[2][-1]["content"]
+    assert result["document"]["insights"][0]["caveat_en"] == _TWIN_CARD["caveat_en"]
+
+
+def test_english_twin_is_checked_like_the_indonesian_for_claims_and_language():
+    payloads = {_QUARTER: {"revenue": 1250}}
+    card = dict(_TWIN_CARD, citations=[{"endpoint": _QUARTER, "field_path": "/revenue",
+                                        "value": 1250}])
+    assert research._english_problems("TEST", card, payloads) == []
+    # A trend the single cited value cannot support, stated only in English.
+    rising = dict(card, observation_en="The company's revenue rose in the latest record.")
+    assert any("English trend" in p for p in research._english_problems("TEST", rising, payloads))
+    for field, text in (("caveat_en", "Target price is not covered."),
+                        ("title_en", "収益"),
+                        ("implication_en", card["implication"]),
+                        ("observation_en", "Revenue dan pendapatan yang tercatat.")):
+        assert research._english_problems("TEST", dict(card, **{field: text}), payloads), field
+    # No twin at all is no problem to repair: the report falls back to Indonesian.
+    plain = {key: value for key, value in card.items() if not key.endswith("_en")}
+    assert research._english_problems("TEST", plain, payloads) == []
+
+
+def test_briefs_without_english_load_unchanged(monkeypatch, tmp_path):
+    from app import research_context
+    _one_endpoint_cache(monkeypatch)
+    plain = {key: value for key, value in _TWIN_CARD.items() if not key.endswith("_en")}
+    _script(monkeypatch, [plain])
+    result = research.run_live("TEST", db=tmp_path)
+    assert result["ok"] is True
+    assert result["agent_trace"]["validation"]["english_problems"] == [
+        "insights[0] has no English twin"]
+    # A brief stored before English carries neither twins nor the note.
+    old = json.loads(json.dumps(result["document"]))
+    old["agent_trace"]["validation"].pop("english_problems")
+    store.put("research_analysis", "TEST", old, tmp_path)
+    loaded, status = research_context.load_analysis("TEST", db=tmp_path)
+    assert status["status"] == "loaded"
+    assert loaded["insights"] == old["insights"]
+    assert loaded["agent_trace"] == old["agent_trace"]
+
+
+def test_cache_revalidation_drops_a_stored_bad_twin_without_failing(monkeypatch, tmp_path):
+    _one_endpoint_cache(monkeypatch)
+    _script(monkeypatch, [_TWIN_CARD])
+    stored = research.run_live("TEST", db=tmp_path)["document"]
+    stored["insights"][0]["implication_en"] = "Revenue grew and will keep growing."
+    clean, problems = research.validate_against_cache("TEST", stored)
+    assert problems == []
+    assert clean["insights"][0]["observation"] == _TWIN_CARD["observation"]
+    assert not [key for key in clean["insights"][0] if key.endswith("_en")]
+    assert "English twin dropped" in clean["agent_trace"]["validation"]["english_problems"][0]
+    # Reading never rewrites the stored document.
+    assert "english_problems" not in stored["agent_trace"]["validation"]
+
+
+def test_every_host_research_sentence_has_english():
+    from app import prose_lang
+    english = json.loads((prose_lang.SOURCE_TEXT_DIR / "research.json").read_text(encoding="utf-8"))
+    host = ["Brief ini merangkum temuan cache yang lolos validasi.",
+            "Belum ada temuan yang lolos validasi.",
+            research._NO_EVIDENCE_LIMITATION, research._NEWS_LIMITATION,
+            research._QUARTERLY_LIMITATION, research._FLOW_LIMITATION,
+            research._COMPANY_LIMITATION]
+    assert sorted(english) == sorted(host)
+    assert research._fallback_document("TEST", [], "x")["summary"] in english
