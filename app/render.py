@@ -3,6 +3,10 @@
 Struktur: header → status → cover 2 kolom (data pasar + narasi) → Key
 Financials → halaman 2-6 → metodologi + disclaimer. Chart SVG native dari
 cache daily. Nomor halaman via CSS counter. Cetak via app/pdf.py (A4).
+
+``render(doc, lang)`` writes the same stored document in Indonesian ("id",
+the default) or English ("en"): the fixed words, labels and figures follow
+``lang`` (app.report_lang, app.fmt); narrative prose stays as written.
 """
 import base64
 import contextvars
@@ -17,6 +21,7 @@ from . import cache as cache_mod
 from . import exhibit_ids
 from . import fmt
 from . import idx_history
+from . import report_lang
 
 FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 BRAND_DIR = Path(__file__).resolve().parent / "assets" / "brand"
@@ -283,6 +288,38 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".page{page-break-before:always}}")
 
 
+# The report language of the render in progress (see render()).
+_LANG = contextvars.ContextVar("report_lang", default=report_lang.DEFAULT)
+
+
+def _english():
+    return _LANG.get() == "en"
+
+
+def _say(id_text, en_text):
+    """Fixed report wording in the render's language."""
+    return en_text if _english() else id_text
+
+
+def _lbl(text):
+    """A label from the (Indonesian) report document, in the render's language."""
+    return report_lang.label(text, _LANG.get())
+
+
+def _title(ex):
+    """An exhibit's title in the render's language."""
+    return report_lang.title(ex, _LANG.get())
+
+
+def _bracketed(text, whole=False):
+    return fmt.bracket_negatives(text, whole=whole, lang=_LANG.get())
+
+
+def _figures(text):
+    """A short value from the report document with its figures in the render's language."""
+    return fmt.localize(text, _LANG.get())
+
+
 def _daily_prices(endpoint, value_field, as_of):
     """Read dated positive prices; later cache snapshots replace older rows."""
     cutoff = date.fromisoformat(str(as_of)[:10]) if as_of else None
@@ -409,8 +446,10 @@ def _price_chart(ticker, as_of, number=None, source=None,
         quote_day = None
     window = _price_window(ticker, chart_as_of)
     if window is None:
-        return ("<p class='small'>Perbandingan harga belum tersedia: "
-                "kurang dari dua tanggal perdagangan yang sama di data Sectors.</p>")
+        return _say("<p class='small'>Perbandingan harga belum tersedia: "
+                    "kurang dari dua tanggal perdagangan yang sama di data Sectors.</p>",
+                    "<p class='small'>Price comparison not available: fewer than two "
+                    "common trading dates in Sectors data.</p>")
 
     dates, closes = list(window["price_dates"]), list(window["closes"])
     rel_dates, relative = list(window["rel_dates"]), list(window["relative"])
@@ -425,8 +464,10 @@ def _price_chart(ticker, as_of, number=None, source=None,
         aligned = [(day, value) for day, value in zip(rel_dates, relative) if day <= quote_day]
         rel_dates, relative = [day for day, _ in aligned], [value for _, value in aligned]
     if len(dates) < 2 or len(closes) < 2:
-        return ("<p class='small'>Perbandingan harga belum tersedia: "
-                "belum ada dua tanggal perdagangan sebelum tanggal harga laporan.</p>")
+        return _say("<p class='small'>Perbandingan harga belum tersedia: "
+                    "belum ada dua tanggal perdagangan sebelum tanggal harga laporan.</p>",
+                    "<p class='small'>Price comparison not available: fewer than two "
+                    "trading dates before the report's price date.</p>")
     p_lo, p_hi = _axis_scale(closes, PRICE_STEPS)
     r_lo, r_hi = _axis_scale(relative, REL_STEPS)
     # Figma frame 2611:333 (360 x 320): plot 48..292 x 24..223.
@@ -453,7 +494,7 @@ def _price_chart(ticker, as_of, number=None, source=None,
             parts.append(f"<line x1='{x0}' x2='{x1}' y1='{y:.1f}' y2='{y:.1f}' "
                          f"stroke='{GRID}' stroke-width='1' stroke-dasharray='3 3'/>")
         parts.append(f"<text x='10' y='{y + 4:.1f}' {label} fill='{INK}'>"
-                     f"{fmt.rp(price_tick)}</text>"
+                     f"{fmt.rp(price_tick, lang=_LANG.get())}</text>"
                      f"<text x='302' y='{y + 4:.1f}' {label} fill='{INK}'>{rel_tick:+.0f}%</text>")
     parts.append(f"<polygon points='{x0},{y1} {points(closes, p_lo, p_hi)} {x_of(dates[-1]):.1f},{y1}' "
                  f"fill='{ISSUER_COLOR}' fill-opacity='0.12'/>")
@@ -468,26 +509,29 @@ def _price_chart(ticker, as_of, number=None, source=None,
     parts.append(f"<line x1='{x0}' x2='{x1}' y1='{y1}' y2='{y1}' stroke='#000000' stroke-width='1'/>")
     last_y = y_of(closes[-1], p_lo, p_hi)
     parts.append(f"<text x='{x0 + 10}' y='{min(y1 - 6, last_y + 16):.1f}' {label} fill='{LIME}'>"
-                 f"Terakhir {fmt.rp(closes[-1])}</text>")
+                 f"{_say('Terakhir', 'Last')} {fmt.rp(closes[-1], lang=_LANG.get())}</text>")
     # A tick hugging the left edge would sit on the lowest price label.
     ticks = [day for day in _month_ticks(dates[0], dates[-1]) if x_of(day) - x0 >= 16]
     for index, day in enumerate(ticks):
         parts.append(f"<text x='{x_of(day):.1f}' y='{238 + 16 * (index % 2)}' text-anchor='middle' "
                      f"{label} fill='{INK}'>{_mon(day)}</text>")
     parts.append(f"<rect x='19' y='288' width='14' height='14' fill='{ISSUER_COLOR}'/>"
-                 f"<text x='43' y='300' {label} fill='{INK}'>Harga (Rp, kiri)</text>"
+                 f"<text x='43' y='300' {label} fill='{INK}'>{_say('Harga (Rp, kiri)', 'Price (Rp, lhs)')}</text>"
                  f"<rect x='150' y='288' width='14' height='14' fill='{INDEX_COLOR}'/>"
-                 f"<text x='172' y='300' {label} fill='{INK}'>Relatif vs IHSG (%, kanan)</text>")
+                 f"<text x='172' y='300' {label} fill='{INK}'>"
+                 f"{_say('Relatif vs IHSG (%, kanan)', 'Relative to JCI (%, rhs)')}</text>")
 
     span_months = max(1, round(days / 30.4))
-    heading = (f"{ticker} relatif terhadap IHSG ({span_months} bulan, "
-               f"{_mon(dates[0])} s.d. {_mon(dates[-1])})")
+    heading = _say(f"{ticker} relatif terhadap IHSG ({span_months} bulan, "
+                   f"{_mon(dates[0])} s.d. {_mon(dates[-1])})",
+                   f"{ticker} relative to the JCI ({span_months} months, "
+                   f"{_mon(dates[0])} to {_mon(dates[-1])})")
     title = f"{'Exhibit ' + str(number) + '. ' if number else ''}{html.escape(heading)}"
     safe_ticker = html.escape(ticker)
     issuer_return, ihsg_return = window["issuer_return"], window["ihsg_return"]
 
     def pct(value):
-        return f"{value:+.1f}".replace(".", ",")
+        return f"{value:+.1f}" if _english() else f"{value:+.1f}".replace(".", ",")
     # The data source is the one actually plotted: IDX when its files exist.
     # It goes to the source appendix with the method notes; the footer is the
     # house line like every other exhibit.
@@ -500,21 +544,30 @@ def _price_chart(ticker, as_of, number=None, source=None,
     detail += (f"; return harga dari {len(rel_dates)} tanggal perdagangan yang sama, "
                "tidak termasuk dividen")
     # The template asks for 12-24 months; say so when the data holds less.
-    short_window = (f". Riwayat harga harian yang tersedia hanya {span_months} bulan "
-                    f"(sejak {_mon(dates[0])}); template meminta 12-24 bulan"
+    short_window = (_say(f". Riwayat harga harian yang tersedia hanya {span_months} bulan "
+                         f"(sejak {_mon(dates[0])}); template meminta 12-24 bulan",
+                         f". Daily price history covers only {span_months} months "
+                         f"(since {_mon(dates[0])}); the template asks for 12-24 months")
                     if span_months < 12 else "")
-    footer = (_source_line({"n": number, "judul": heading}, detail) if number
+    footer = (_source_line({"n": number, "judul": heading}, detail, title=heading) if number
               else f"<p class='src'>{html.escape(fmt.DEFAULT_SOURCE)}</p>")
+    note = _say(f"Return harga sampai {rel_dates[-1].isoformat()}: "
+                f"{safe_ticker} {pct(issuer_return)}%, IHSG {pct(ihsg_return)}%. "
+                f"Selisih {pct(issuer_return - ihsg_return)} poin persentase",
+                f"Price return to {rel_dates[-1].isoformat()}: "
+                f"{safe_ticker} {pct(issuer_return)}%, JCI {pct(ihsg_return)}%. "
+                f"Difference {pct(issuer_return - ihsg_return)} percentage points")
+    chart_title = _say(f"Harga penutupan {safe_ticker} dan kinerja "
+                       f"relatif terhadap IHSG, {dates[0].isoformat()} sampai {dates[-1].isoformat()}",
+                       f"{safe_ticker} closing price and performance relative to the JCI, "
+                       f"{dates[0].isoformat()} to {dates[-1].isoformat()}")
     return (
         f"<div class='info-title'>{title}</div>"
-        f"<div class='info-note'>Return harga sampai {rel_dates[-1].isoformat()}: "
-        f"{safe_ticker} {pct(issuer_return)}%, IHSG {pct(ihsg_return)}%. "
-        f"Selisih {pct(issuer_return - ihsg_return)} poin persentase"
+        f"<div class='info-note'>{note}"
         f"{short_window}</div>"
         "<svg class='price-chart' viewBox='0 0 360 320' width='360' height='320' "
         "style='display:block;width:100%;height:auto' role='img' aria-labelledby='price-chart-title'>"
-        f"<title id='price-chart-title'>Harga penutupan {safe_ticker} dan kinerja "
-        f"relatif terhadap IHSG, {dates[0].isoformat()} sampai {dates[-1].isoformat()}</title>"
+        f"<title id='price-chart-title'>{chart_title}</title>"
         + "".join(parts) + "</svg>" + footer.replace("class='src'", "class='info-src'"))
 
 
@@ -598,12 +651,12 @@ def _is_section_row(cells):
     return bool(cells) and cells[0].startswith("Blok ") and all(not c for c in cells[1:])
 
 
-def _column_widths(cols, rows=(), context="full"):
+def _column_widths(cols, rows=(), context="full", kinds=None):
     """Percent widths for a table's <colgroup> (see _column_plan)."""
-    return _column_plan(cols, rows, context)[0] if cols else []
+    return _column_plan(cols, rows, context, kinds)[0] if cols else []
 
 
-def _column_plan(cols, rows, context):
+def _column_plan(cols, rows, context, kinds=None):
     """Percent widths that give each column room in proportion to its content,
     plus which columns are compact figures and whether the table overflows.
 
@@ -614,10 +667,12 @@ def _column_plan(cols, rows, context):
     a step at a time, to the column whose growth most reduces the summed row
     heights; a last pass takes back width no row needs and hands it to the
     columns still short of one line. Deterministic for a given table.
+    `kinds` overrides the column kinds read from `cols` and `rows` (an English
+    table keeps the kinds of its Indonesian source).
     """
     n = len(cols)
     budget = _TABLE_EM.get(context, _TABLE_EM["full"])
-    kinds = _column_kinds(cols, rows)
+    kinds = kinds or _column_kinds(cols, rows)
     headers = [str(col).strip() for col in cols]
     body = []
     for row in rows:
@@ -761,10 +816,11 @@ def _column_kinds(cols, rows):
 _NOTES = contextvars.ContextVar("exhibit_notes", default=None)
 
 
-def _source_line(ex, detail=None):
+def _source_line(ex, detail=None, title=None):
     notes = _NOTES.get()
     if notes is not None:
-        notes.append((ex.get("n"), str(ex.get("judul") or ""),
+        title = report_lang.title(ex, _LANG.get()) if title is None else title
+        notes.append((ex.get("n"), str(title or ""),
                       fmt.provenance_detail(ex.get("catatan_sumber") if detail is None else detail)))
     return f"<p class='src'>{html.escape(fmt.DEFAULT_SOURCE)}</p>"
 
@@ -796,11 +852,16 @@ def _header_cell(col, kind):
 
 
 _MONTHS_ID = ("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des")
+_MONTHS_EN = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _month(day):
+    return (_MONTHS_EN if _english() else _MONTHS_ID)[day.month - 1]
 
 
 def _mon(day, with_day=False):
-    """Indonesian short month label: Sep-24 (or 24-Sep-26 with the day)."""
-    label = f"{_MONTHS_ID[day.month - 1]}-{day:%y}"
+    """Short month label in the report language: Sep-24 (or 24-Sep-26 with the day)."""
+    label = f"{_month(day)}-{day:%y}"
     return f"{day:%d}-{label}" if with_day else label
 
 
@@ -864,13 +925,20 @@ def _row_marks(ex, cols, rows):
 
 
 def _table(ex, context="full"):
-    """Exhibit table; `context` is where it sits (full width, cover column, half grid)."""
+    """Exhibit table; `context` is where it sits (full width, cover column, half grid).
+
+    Column kinds, row marks and section rows are read from the stored
+    (Indonesian) cells; the printed cells are in the render's language."""
     data = ex["data"]
     cols, rows = data["cols"], data["rows"]
-    widths = _column_widths(cols, rows, context)
     kinds = _column_kinds(cols, rows)
+    shown_cols = [_lbl(str(col)) for col in cols]
+    shown = [[_lbl(str(row[i])) if i < len(row) else "" for i in range(len(cols))] for row in rows]
+    body_rows = [cells for row, cells in zip(rows, shown)
+                 if not _is_section_row([str(row[i]) if i < len(row) else "" for i in range(len(cols))])]
+    widths = _column_widths(shown_cols, body_rows, context, kinds)
     colgroup = "".join(f"<col style='width:{width}%'>" for width in widths)
-    head = "".join(_header_cell(col, kind) for col, kind in zip(cols, kinds))
+    head = "".join(_header_cell(col, kind) for col, kind in zip(shown_cols, kinds))
     marks = _row_marks(ex, cols, rows)
     groups = [[]]
     has_nm = False
@@ -880,16 +948,17 @@ def _table(ex, context="full"):
             if groups[-1]:
                 groups.append([])
             groups[-1].append("<tr class='section-row'>"
-                              f"<th scope='rowgroup' colspan='{len(cols)}'>{html.escape(cells[0])}</th></tr>")
+                              f"<th scope='rowgroup' colspan='{len(cols)}'>{html.escape(shown[index][0])}</th></tr>")
             continue
         total = bool(re.match(r"^(?:Jumlah |Total |\(=\) |FCFF$|PV FCFF$|Laba bersih$|Nilai skenario gabungan$|WACC$)",
                               cells[0], re.I))
+        cells = shown[index]
         kind_of_row = marks["rows"].get(index) or ("total-row" if total else "")
         classes = f" class='{kind_of_row}'" if kind_of_row else ""
         rendered = []
         for col, (cell, kind) in enumerate(zip(cells, kinds)):
             # Spec §5.5: negative figures in brackets, bare or as inline money.
-            cell = fmt.bracket_negatives(cell, whole=True)
+            cell = fmt.bracket_negatives(cell, whole=True, lang=_LANG.get())
             if kind == "num" and len(cell) > 24 and not _NUMERIC_CELL.match(cell):
                 kind = "text"
             short = " short" if kind == "num" and len(cell) <= 13 and " " not in cell else ""
@@ -905,7 +974,7 @@ def _table(ex, context="full"):
     # breaks, with its header row repeated.
     keep = " keep" if len(rows) <= 40 else ""
     return (f"<div class='exhibit{keep}'><table class='exhibit-table'>"
-            f"<caption>Exhibit {ex['n']}. {html.escape(fmt.bracket_negatives(ex['judul']))}</caption>"
+            f"<caption>Exhibit {ex['n']}. {html.escape(_bracketed(_title(ex)))}</caption>"
             f"<colgroup>{colgroup}</colgroup><thead><tr>{head}</tr></thead>"
             f"{body}</table>{_source_line(ex)}{_nm_note(ex) if has_nm else ''}</div>")
 
@@ -921,12 +990,14 @@ def _nice_max(value):
 def _short_number(value):
     """Compact bar label: 55.800.818 -> 55,8 jt; 6.524 -> 6.524."""
     magnitude = abs(value)
+    lang = _LANG.get()
     if magnitude < 100:
-        return fmt._id(value, 1)  # ratios such as DER 0,9x
-    for size, suffix in ((1e12, " T"), (1e9, " M"), (1e6, " jt")):
+        return fmt.num(value, 1, lang)  # ratios such as DER 0,9x
+    suffixes = (" tn", " bn", " mn") if lang == "en" else (" T", " M", " jt")
+    for size, suffix in zip((1e12, 1e9, 1e6), suffixes):
         if magnitude >= size * 10 or (magnitude >= size and size >= 1e9):
-            return fmt._id(value / size, 1) + suffix
-    return fmt.rp(round(value))
+            return fmt.num(value / size, 1, lang) + suffix
+    return fmt.rp(round(value), lang=lang)
 
 
 def _mini_chart(ox, oy, w, h, title, labels, bars, line, forecast, line_label=None,
@@ -936,7 +1007,7 @@ def _mini_chart(ox, oy, w, h, title, labels, bars, line, forecast, line_label=No
     `line_label` names the line in the corner (the 2x2 grid; a single panel
     names it in its legend instead)."""
     out = [f"<text x='{ox}' y='{oy + 11}' font-size='11' font-weight='700' "
-           f"fill='{INK}'>{html.escape(title)}</text>"]
+           f"fill='{INK}'>{html.escape(_lbl(title))}</text>"]
     top, base = oy + 30, oy + h - 22
     values = [v for v in bars if isinstance(v, (int, float))]
     lo = min(0.0, min(values)) if values else 0.0
@@ -978,7 +1049,7 @@ def _mini_chart(ox, oy, w, h, title, labels, bars, line, forecast, line_label=No
                        f"font-size='{bar_font:.1f}' font-weight='500' fill='{fill}'>"
                        f"{_short_number(v)}{bar_unit}</text>")
         out.append(f"<text x='{cx:.1f}' y='{base + 13}' text-anchor='middle' font-size='8' "
-                   f"fill='{INK}'>{html.escape(str(label))}</text>")
+                   f"fill='{INK}'>{html.escape(_lbl(str(label)))}</text>")
     out.append(f"<line x1='{ox}' x2='{ox + w}' y1='{zero:.1f}' y2='{zero:.1f}' "
                f"stroke='#000000' stroke-width='1'/>")
     points = [(ox + slot * (i + 0.5), v) for i, v in enumerate(line or [])
@@ -996,7 +1067,7 @@ def _mini_chart(ox, oy, w, h, title, labels, bars, line, forecast, line_label=No
                        f"fill='{INK}'>{html.escape(_line_value(v, line_unit))}</text>")
         if line_label:
             out.append(f"<text x='{ox + w}' y='{oy + 11}' text-anchor='end' font-size='8' "
-                       f"fill='{INK}'>garis: {html.escape(line_label)}</text>")
+                       f"fill='{INK}'>{_say('garis', 'line')}: {html.escape(_lbl(line_label))}</text>")
     return "".join(out)
 
 
@@ -1005,8 +1076,8 @@ def _line_value(value, unit="%"):
     ('US$/lb') in two decimals, negatives in brackets (a by-product credit
     larger than the cost gives a negative C1)."""
     if unit == "%":
-        return f"{fmt._id(value, 1)}%"
-    text = fmt._id(abs(value), 2)
+        return f"{fmt.num(value, 1, _LANG.get())}%"
+    text = fmt.num(abs(value), 2, _LANG.get())
     return f"({text})" if value < 0 else text
 
 
@@ -1050,9 +1121,9 @@ def _combo_chart(ex):
     rows = (len(series) + 1) // 2
     height = rows * h + (rows - 1) * gap + 22
     parts = [f"<div class='exhibit keep'><div class='chart-caption'>Exhibit {ex['n']}. "
-             f"{html.escape(ex['judul'])}</div>",
+             f"{html.escape(_title(ex))}</div>",
              f"<svg class='combo-chart' viewBox='0 0 {2 * w + gap} {height}' role='img' "
-             f"aria-label='{html.escape(ex['judul'])}' style='display:block;width:100%;height:auto'>"]
+             f"aria-label='{html.escape(_title(ex))}' style='display:block;width:100%;height:auto'>"]
     for idx, s in enumerate(series):
         title = str(s.get("label") or "")
         parts.append(_mini_chart((idx % 2) * (w + gap), (idx // 2) * (h + gap), w, h, title,
@@ -1061,11 +1132,12 @@ def _combo_chart(ex):
                                  _bar_unit(s)))
     ly = height - 8
     parts.append(f"<rect x='0' y='{ly - 7}' width='8' height='8' fill='{PRIMARY}'/>"
-                 f"<text x='12' y='{ly}' font-size='8' fill='{INK}'>Aktual</text>"
+                 f"<text x='12' y='{ly}' font-size='8' fill='{INK}'>{_say('Aktual', 'Actual')}</text>"
                  f"<rect x='62' y='{ly - 7}' width='8' height='8' fill='{EVEN_ROW}'/>"
-                 f"<text x='74' y='{ly}' font-size='8' fill='{INK}'>Proyeksi</text>"
+                 f"<text x='74' y='{ly}' font-size='8' fill='{INK}'>{_say('Proyeksi', 'Forecast')}</text>"
                  f"<rect x='130' y='{ly - 7}' width='8' height='8' fill='{SERIES[3]}'/>"
-                 f"<text x='142' y='{ly}' font-size='8' fill='{INK}'>Garis (sumbu sendiri)</text>")
+                 f"<text x='142' y='{ly}' font-size='8' fill='{INK}'>"
+                 f"{_say('Garis (sumbu sendiri)', 'Line (own axis)')}</text>")
     parts.append("</svg>")
     parts.append(_source_line(ex) + "</div>")
     return "".join(parts)
@@ -1081,24 +1153,25 @@ def _combo_panel(ex):
     # The legend names the plotted series as the builder labels them
     # ("Ekuitas (Rp) & ROE": bars Ekuitas, line ROE); the unit stays in the title.
     bar, line = _series_names(series)
-    bar = re.sub(r"\s*\([^)]*\)", "", bar).strip() or "Nilai"
+    bar = _lbl(re.sub(r"\s*\([^)]*\)", "", bar).strip() or "Nilai")
+    line = _lbl(line)
     forecast = series.get("is_forecast") or []
     plotted = [bool(forecast[i]) if i < len(forecast) else False
                for i, v in enumerate(series.get("bars") or []) if isinstance(v, (int, float))]
     items = []
     if False in plotted:
-        items.append((PRIMARY, f"{bar} aktual"))
+        items.append((PRIMARY, f"{bar} {_say('aktual', 'actual')}"))
     if True in plotted:
-        items.append((EVEN_ROW, f"{bar} proyeksi"))
+        items.append((EVEN_ROW, f"{bar} {_say('proyeksi', 'forecast')}"))
     if sum(isinstance(v, (int, float)) for v in series.get("line") or []) >= 2:
-        items.append((SERIES[3], f"{line[:1].upper() + line[1:] if line else 'Garis'} "
-                                 f"({series.get('line_unit') or '%'}, sumbu kanan)"))
+        items.append((SERIES[3], f"{line[:1].upper() + line[1:] if line else _say('Garis', 'Line')} "
+                                 f"({series.get('line_unit') or '%'}, {_say('sumbu kanan', 'rhs')})"))
     w, h = 360, 190
     legend, legend_h = _legend(items, 0, h + 3, w)
     parts = [f"<div class='exhibit keep panel'><div class='chart-caption'>Exhibit {ex['n']}. "
-             f"{html.escape(ex['judul'])}</div>",
+             f"{html.escape(_title(ex))}</div>",
              f"<svg class='combo-chart' viewBox='0 0 {w} {h + 4 + legend_h}' role='img' "
-             f"aria-label='{html.escape(ex['judul'])}' style='display:block;width:100%;height:auto'>",
+             f"aria-label='{html.escape(_title(ex))}' style='display:block;width:100%;height:auto'>",
              _mini_chart(0, 0, w, h, title, labels, series.get("bars") or [],
                          series.get("line") or [], series.get("is_forecast") or [],
                          bar_unit=_bar_unit(series), line_unit=series.get("line_unit") or "%"),
@@ -1135,7 +1208,7 @@ def _bar_scale(unit, values):
 
 
 def _bar_value(value):
-    text = fmt._id(abs(value), 1)
+    text = fmt.num(abs(value), 1, _LANG.get())
     return f"({text})" if value < 0 else text
 
 
@@ -1149,9 +1222,9 @@ def _bar_chart(ex):
     unit, divisor = _bar_scale(str(data.get("unit") or ""), raw)
     top = _nice_max(max([v / divisor for v in raw] + [1e-9]))
     parts = [f"<div class='exhibit keep'><div class='chart-caption'>Exhibit {ex['n']}. "
-             f"{html.escape(ex['judul'])}</div>",
+             f"{html.escape(_title(ex))}</div>",
              "<svg class='metric-chart' viewBox='0 0 780 205' role='img' "
-             f"aria-label='{html.escape(ex['judul'])}'>"]
+             f"aria-label='{html.escape(_title(ex))}'>"]
     for i in range(1, 4):
         gy = 164 - 112 * i / 3
         parts.append(f"<line x1='35' x2='750' y1='{gy:.1f}' y2='{gy:.1f}' stroke='{GRID}' "
@@ -1184,14 +1257,14 @@ def _bar_chart(ex):
                          f"text-anchor='middle' font-size='{font:g}' font-weight='500' "
                          f"fill='{fill}'>{html.escape(_bar_value(value))}</text>")
         parts.append(f"<text x='{center:.1f}' y='185' text-anchor='middle' "
-                     f"font-size='13' fill='{INK}'>{html.escape(str(row['label']))}</text>")
+                     f"font-size='13' fill='{INK}'>{html.escape(_lbl(str(row['label'])))}</text>")
     parts.append("<line x1='35' x2='750' y1='164' y2='164' stroke='#000000' stroke-width='1'/>")
     parts.append(f"<rect x='34' y='15' width='12' height='12' fill='{EVEN_ROW}'/>")
-    parts.append(f"<text x='51' y='26' font-size='13'>{html.escape(data['prior_label'])}</text>")
+    parts.append(f"<text x='51' y='26' font-size='13'>{html.escape(_lbl(data['prior_label']))}</text>")
     parts.append(f"<rect x='130' y='15' width='12' height='12' fill='{PRIMARY}'/>")
-    parts.append(f"<text x='147' y='26' font-size='13'>{html.escape(data['current_label'])}</text>")
+    parts.append(f"<text x='147' y='26' font-size='13'>{html.escape(_lbl(data['current_label']))}</text>")
     parts.append(f"<text x='745' y='26' text-anchor='end' font-size='12' "
-                 f"fill='{INK}'>{html.escape(unit)}</text>")
+                 f"fill='{INK}'>{html.escape(_lbl(unit))}</text>")
     parts.append("</svg>")
     parts.append(_source_line(ex) + "</div>")
     return "".join(parts)
@@ -1213,15 +1286,15 @@ def _band_chart(ex):
     y = lambda v: y1 - (v - lo) / (hi - lo) * (y1 - y0)
     label = "font-size='10' font-weight='700'"
     parts = [f"<div class='exhibit keep band'><div class='chart-caption'>Exhibit {ex['n']}. "
-             f"{html.escape(ex['judul'])}</div>",
+             f"{html.escape(_title(ex))}</div>",
              "<svg class='band-chart' viewBox='0 0 360 190' role='img' "
-             f"aria-label='{html.escape(ex['judul'])}'>"]
+             f"aria-label='{html.escape(_title(ex))}'>"]
     for i in range(4):
         v = hi - i * (hi - lo) / 3
         gy = y(v)
         parts.append(f"<line x1='{x0}' x2='{x1}' y1='{gy:.1f}' y2='{gy:.1f}' stroke='{GRID}' "
                      "stroke-dasharray='3 3'/>"
-                     f"<text x='4' y='{gy + 3:.1f}' {label} fill='{INK}'>{html.escape(fmt.mult(v))}</text>")
+                     f"<text x='4' y='{gy + 3:.1f}' {label} fill='{INK}'>{html.escape(fmt.mult(v, lang=_LANG.get()))}</text>")
     points = " ".join(f"{x(d):.1f},{y(v):.1f}" for d, v in zip(days, values))
     parts.append(f"<polyline points='{points}' fill='none' stroke='{PRIMARY}' stroke-width='2' "
                  "stroke-linejoin='round'/>")
@@ -1243,10 +1316,10 @@ def _band_chart(ex):
     parts.append(f"<line x1='40' x2='58' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{PRIMARY}' stroke-width='2'/>"
                  f"<text x='62' y='{legend_y}' {label} fill='{INK}'>{html.escape(data['label'])}</text>"
                  f"<line x1='{100 + dx}' x2='{118 + dx}' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{INK}' stroke-dasharray='6 4'/>"
-                 f"<text x='{122 + dx}' y='{legend_y}' {label} fill='{INK}'>Mean {html.escape(fmt.mult(data['mean']))}</text>"
+                 f"<text x='{122 + dx}' y='{legend_y}' {label} fill='{INK}'>Mean {html.escape(fmt.mult(data['mean'], lang=_LANG.get()))}</text>"
                  f"<line x1='{190 + dx}' x2='{208 + dx}' y1='{legend_y - 4}' y2='{legend_y - 4}' stroke='{INK}' stroke-dasharray='1.5 3'/>"
-                 f"<text x='{212 + dx}' y='{legend_y}' {label} fill='{INK}'>Median {html.escape(fmt.mult(data['median']))}</text>"
-                 f"<text x='{290 + dx}' y='{legend_y}' {label} fill='{INK}'>Kini p{data['percentile']:.0f}</text>")
+                 f"<text x='{212 + dx}' y='{legend_y}' {label} fill='{INK}'>Median {html.escape(fmt.mult(data['median'], lang=_LANG.get()))}</text>"
+                 f"<text x='{290 + dx}' y='{legend_y}' {label} fill='{INK}'>{_say('Kini', 'Now')} p{data['percentile']:.0f}</text>")
     parts.append("</svg>")
     parts.append(_source_line(ex) + "</div>")
     return "".join(parts)
@@ -1397,7 +1470,7 @@ def _display_date(report_date):
         day = date.fromisoformat(str(report_date)[:10])
     except (TypeError, ValueError):
         return str(report_date)
-    return f"{day.day:02d} {_MONTHS_ID[day.month - 1]} {day.year}"
+    return f"{day.day:02d} {_month(day)} {day.year}"
 
 
 def _header_title(meta):
@@ -1415,7 +1488,7 @@ def _header_title(meta):
         return code
     if meta.get("tp") is None:
         return f"{code} | {str(rating).upper()}"
-    return f"{code} | {str(rating).upper()} \u00b7 TP Rp {fmt.rp(meta['tp'])}"
+    return f"{code} | {str(rating).upper()} \u00b7 TP Rp {fmt.rp(meta['tp'], lang=_LANG.get())}"
 
 
 def _header_subtitle(report_date):
@@ -1443,23 +1516,27 @@ def _draft_banner(meta):
     if meta.get("status") != "draft_non_distributable":
         return ""
     if meta.get("illustrative_scenarios"):
-        return ("<div class='draft-banner'>DRAFT ILUSTRATIF: skenario memakai fakta "
-                "bersumber dan asumsi analis; belum layak sebagai target harga.</div>")
-    return ("<div class='draft-banner'>DRAFT: BUKTI BELUM LENGKAP: "
-            "skenario nilai belum disajikan sampai data dan model tervalidasi.</div>")
+        return _say("<div class='draft-banner'>DRAFT ILUSTRATIF: skenario memakai fakta "
+                    "bersumber dan asumsi analis; belum layak sebagai target harga.</div>",
+                    "<div class='draft-banner'>ILLUSTRATIVE DRAFT: scenarios use sourced facts "
+                    "and Analyst Assumptions; not fit to serve as a Target Price.</div>")
+    return _say("<div class='draft-banner'>DRAFT: BUKTI BELUM LENGKAP: "
+                "skenario nilai belum disajikan sampai data dan model tervalidasi.</div>",
+                "<div class='draft-banner'>DRAFT: EVIDENCE INCOMPLETE: value scenarios are "
+                "withheld until the data and model are validated.</div>")
 
 
 def _risk_block(risks):
     """Spec §5.4 'Risiko utama': named, categorised risks in the thesis-card
     style, each with the source of its number."""
-    res = ["<h3 class='sub risk-head'>Risiko utama</h3><div class='cards risks'>"]
+    res = [f"<h3 class='sub risk-head'>{_say('Risiko utama', 'Key risks')}</h3><div class='cards risks'>"]
     for risk in risks:
         res.append("<div class='card'><div class='card-body'>"
                    f"<div class='card-title'>{html.escape(str(risk.get('judul') or ''))}"
-                   + (f" <span class='risk-tag'>({html.escape(str(risk.get('kategori')).strip().lower())})</span>"
+                   + (f" <span class='risk-tag'>({html.escape(_lbl(str(risk.get('kategori')).strip().lower()))})</span>"
                       if risk.get("kategori") else "") + "</div>"
                    f"<div class='card-text'>{html.escape(str(risk.get('isi') or ''))}</div>"
-                   f"<div class='risk-src'>Sumber: {html.escape(str(risk.get('sumber') or '-'))}</div>"
+                   f"<div class='risk-src'>{_say('Sumber', 'Source')}: {html.escape(str(risk.get('sumber') or '-'))}</div>"
                    "</div></div>")
     res.append("</div>")
     return "".join(res)
@@ -1478,10 +1555,11 @@ def _render_page_content(b):
             refs = "; ".join(card.get("citations") or [])
             res.append("<article class='research-card'>"
                        f"<h3>{html.escape(card['title'])}</h3>"
-                       f"<p><b>Observasi.</b> {html.escape(card['observation'])}</p>"
-                       f"<p><b>Kaitan.</b> {html.escape(card['implication'])}</p>"
-                       f"<p><b>Batasan.</b> {html.escape(card['caveat'])}</p>"
-                       f"<p class='research-cite'><b>Rujukan data:</b> {html.escape(refs)}</p>"
+                       f"<p><b>{_say('Observasi', 'Observation')}.</b> {html.escape(card['observation'])}</p>"
+                       f"<p><b>{_say('Kaitan', 'Implication')}.</b> {html.escape(card['implication'])}</p>"
+                       f"<p><b>{_say('Batasan', 'Caveat')}.</b> {html.escape(card['caveat'])}</p>"
+                       f"<p class='research-cite'><b>{_say('Rujukan data', 'Data references')}:</b> "
+                       f"{html.escape(refs)}</p>"
                        "</article>")
 
     elif b.get("layout") == "cards":
@@ -1492,8 +1570,8 @@ def _render_page_content(b):
             metric = ""
             if card.get("metric"):
                 metric = ("<div class='card-metric'>"
-                          f"<div class='card-value'>{html.escape(str(card['metric']))}</div>"
-                          f"<div class='card-label'>{html.escape(str(card.get('metric_label') or ''))}</div>"
+                          f"<div class='card-value'>{html.escape(_figures(str(card['metric'])))}</div>"
+                          f"<div class='card-label'>{html.escape(_lbl(str(card.get('metric_label') or '')))}</div>"
                           "</div>")
             res.append("<div class='card'><div class='card-body'>"
                        f"<div class='card-title'>{html.escape(str(card.get('title') or ''))}</div>"
@@ -1645,34 +1723,58 @@ def _source_appendix(notes, meta):
         seen.add((number, title))
         if detail and detail[0].islower() and not _URL_RE.match(detail):
             detail = detail[0].upper() + detail[1:]
-        body = _linked(detail) if detail else "Data perusahaan dan estimasi Sektoral."
+        body = _linked(detail) if detail else _say("Data perusahaan dan estimasi Sektoral.",
+                                                    "Company data and Sektoral estimates.")
         entries.append(f"<dt>Exhibit {html.escape(str(number))}. {html.escape(title)}</dt>"
                        f"<dd>{body}</dd>")
     if not entries:
         return ""
     return (f"<div class='page source-appendix'>{_report_header(meta['tanggal'], meta)}"
             f"{_draft_banner(meta)}"
-            "<h2 class='sec'>Lampiran: sumber dan catatan exhibit</h2>"
-            f"<p class='small'>Setiap exhibit memakai baris sumber \"{html.escape(fmt.DEFAULT_SOURCE)}\". "
-            "Rincian data, tanggal, metode dan batasan tiap exhibit tercantum di bawah. "
-            "Konvensi tabel: angka negatif dalam kurung; n.m. berarti tidak bermakna; "
-            "NA berarti tidak tersedia atau tidak dimodelkan.</p>"
+            + _say("<h2 class='sec'>Lampiran: sumber dan catatan exhibit</h2>"
+                   f"<p class='small'>Setiap exhibit memakai baris sumber \"{html.escape(fmt.DEFAULT_SOURCE)}\". "
+                   "Rincian data, tanggal, metode dan batasan tiap exhibit tercantum di bawah. "
+                   "Konvensi tabel: angka negatif dalam kurung; n.m. berarti tidak bermakna; "
+                   "NA berarti tidak tersedia atau tidak dimodelkan.</p>",
+                   "<h2 class='sec'>Appendix: exhibit sources and notes</h2>"
+                   f"<p class='small'>Every exhibit carries the source line \"{html.escape(fmt.DEFAULT_SOURCE)}\". "
+                   "The data, dates, method and limits of each exhibit are listed below. "
+                   "Table conventions: negative figures in brackets; n.m. means not meaningful; "
+                   "NA means not available or not modelled.</p>") +
             f"<dl class='src-list'>{''.join(entries)}</dl></div>")
 
 
-def render(doc):
+def render(doc, lang=report_lang.DEFAULT):
+    """The Company Update HTML of `doc` in `lang` ("id" or "en")."""
     token = _NOTES.set([])
+    lang_token = _LANG.set(report_lang.check(lang))
     try:
         return _render(doc)
     finally:
+        _LANG.reset(lang_token)
         _NOTES.reset(token)
+
+
+# The English edition still carries Indonesian narrative (agent and templated
+# prose, #33/#34). This note says so under the cover header; delete it, its
+# style and its one call in _render once the prose is translated.
+_PROSE_NOTE_CSS = (".prose-lang-note{font-size:6.7pt;font-style:italic;color:" + MUT + ";"
+                   "margin:1.2mm 0 0}")
+_PROSE_NOTE = ("<p class='prose-lang-note'>English edition: labels, tables and figures are in "
+               "English; narrative paragraphs are still in Bahasa Indonesia.</p>")
 
 
 def _render(doc):
     m, cov = doc["meta"], doc["cover"]
-    h = [f"<html><head><meta charset='utf-8'><style>{CSS}{_running_header(m)}</style></head><body>"]
+    english = _english()
+    css = (CSS.replace("Geser tabel untuk kolom lainnya →", "Scroll the table for more columns →")
+           + _PROSE_NOTE_CSS if english else CSS)
+    opening = "<html lang='en'>" if english else "<html>"
+    h = [f"{opening}<head><meta charset='utf-8'><style>{css}{_running_header(m)}</style></head><body>"]
     h.append(_report_header(m["tanggal"], m))
     h.append(_draft_banner(m))
+    if english:
+        h.append(_PROSE_NOTE)
     draft = m.get("status") == "draft_non_distributable"
     rating_word = m.get("rating") or ("Draft" if draft else "Analisis")
     rating_status = m.get("rating_status") or cov.get("rating_status")
@@ -1688,40 +1790,50 @@ def _render(doc):
         return (f"<div class='rating-row'><span>{html.escape(label)}</span>"
                 f"<b class='{'na' if na else ''}'>{html.escape(value)}</b></div>")
 
+    lang = _LANG.get()
     dp = cov.get("data_pasar") or {}
     released = bool(m.get("rating")) and m.get("tp") is not None
     prev_tp = m.get("tp_sebelumnya")
     both = lambda rp, usd: f"{rp} / {usd}" if usd else rp
     h.append("<div class='cover'><div class='left'>")
     h.append("<div class='rating-block'><div class='rating-head'>"
-             f"<div class='rating-label'>{html.escape(str(rating_word))}</div>"
-             f"<div class='rating-detail'>({html.escape(str(rating_status))})</div>"
+             f"<div class='rating-label'>{html.escape(_lbl(str(rating_word)))}</div>"
+             f"<div class='rating-detail'>({html.escape(_lbl(str(rating_status)))})</div>"
              "<div class='rating-method'>"
-             + ("Rating ditahan hingga pemeriksaan selesai.<br>" if draft else "")
-             + f"Valuasi: {html.escape(doc.get('method', 'DCF'))}</div></div>" + sep)
-    price_label = (f"Harga Terakhir (Rp; {m['harga_tanggal']})"
+             + (_say("Rating ditahan hingga pemeriksaan selesai.<br>",
+                     "Rating withheld until checks are complete.<br>") if draft else "")
+             + f"{_say('Valuasi', 'Valuation')}: {html.escape(_lbl(doc.get('method', 'DCF')))}</div></div>"
+             + sep)
+    last_price = _say("Harga Terakhir", "Last Price")
+    price_label = (f"{last_price} (Rp; {m['harga_tanggal']})"
                    if m.get("harga_tanggal") and m.get("harga_tanggal") != m["tanggal"]
-                   else "Harga Terakhir (Rp)")
-    h.append(row(price_label, fmt.rp(m["harga"]) if m.get("harga") is not None else "NA",
+                   else f"{last_price} (Rp)")
+    h.append(row(price_label, fmt.rp(m["harga"], lang=lang) if m.get("harga") is not None else "NA",
                  m.get("harga") is None))
-    h.append(row("Target Harga (Rp)", fmt.rp(m["tp"]) if released else "NA", not released))
-    h.append(row("TP Sebelumnya (Rp)", str(prev_tp) if prev_tp else "NA", not prev_tp))
-    h.append(row("Upside/Downside (%)", f"{m['upside_persen']:+.1f}%".replace(".", ",")
-                 if released and m.get("upside_persen") is not None else "NA", not released))
-    h.append(row("Jumlah Saham (juta)",
-                 fmt._id(dp["saham"] / 1e6, 1) if dp.get("saham") is not None else "NA"))
-    mcap = fmt._id(dp["market_cap"] / 1e9, 1) if dp.get("market_cap") is not None else "NA"
-    h.append(row("Kap. Pasar (Rp miliar / US$ juta)" if dp.get("market_cap_usd")
-                 else "Kap. Pasar (Rp miliar)", both(mcap, dp.get("market_cap_usd"))))
-    h.append(row("Rata-rata T/O Harian 3M (Rp miliar / US$ juta)" if dp.get("adtv_usd")
-                 else "Rata-rata T/O Harian 3M (Rp miliar)",
-                 both(str(dp.get("adtv", "NA")), dp.get("adtv_usd"))))
-    h.append(row("Free Float (%)", str(dp.get("public_ownership", dp.get("free_float", "NA")))))
+    h.append(row(_say("Target Harga (Rp)", "Target Price (Rp)"),
+                 fmt.rp(m["tp"], lang=lang) if released else "NA", not released))
+    h.append(row(_say("TP Sebelumnya (Rp)", "Previous TP (Rp)"),
+                 _figures(str(prev_tp)) if prev_tp else "NA", not prev_tp))
+    upside = f"{m['upside_persen']:+.1f}%" if released and m.get("upside_persen") is not None else "NA"
+    h.append(row("Upside/Downside (%)", upside if english else upside.replace(".", ","),
+                 not released))
+    h.append(row(_say("Jumlah Saham (juta)", "Shares Outstanding (mn)"),
+                 fmt.num(dp["saham"] / 1e6, 1, lang) if dp.get("saham") is not None else "NA"))
+    mcap = fmt.num(dp["market_cap"] / 1e9, 1, lang) if dp.get("market_cap") is not None else "NA"
+    h.append(row(_say("Kap. Pasar (Rp miliar / US$ juta)", "Market Cap (Rp bn / US$ mn)")
+                 if dp.get("market_cap_usd") else _say("Kap. Pasar (Rp miliar)", "Market Cap (Rp bn)"),
+                 both(mcap, _figures(dp.get("market_cap_usd")))))
+    h.append(row(_say("Rata-rata T/O Harian 3M (Rp miliar / US$ juta)", "3M Avg Daily T/O (Rp bn / US$ mn)")
+                 if dp.get("adtv_usd")
+                 else _say("Rata-rata T/O Harian 3M (Rp miliar)", "3M Avg Daily T/O (Rp bn)"),
+                 both(_figures(str(dp.get("adtv", "NA"))), _figures(dp.get("adtv_usd")))))
+    h.append(row("Free Float (%)",
+                 _figures(str(dp.get("public_ownership", dp.get("free_float", "NA"))))))
     holders = (doc.get("holders") or [])[:4]
     if holders:
-        h.append(sep + "<div class='rating-sub'>Pemegang saham utama (%)</div>")
+        h.append(sep + f"<div class='rating-sub'>{_say('Pemegang saham utama (%)', 'Major Shareholders (%)')}</div>")
         for holder in holders:
-            h.append(row(str(holder[0])[:34], str(holder[1])))
+            h.append(row(str(holder[0])[:34], _figures(str(holder[1]))))
     h.append("</div>")
     chart = next((e for e in doc["exhibits"] if e.get("tipe") == "price_chart"), None)
     h.append("<div class='info'>")
@@ -1730,7 +1842,8 @@ def _render(doc):
                           source=(chart or {}).get("catatan_sumber"),
                           latest_close=m.get("harga"), latest_date=m.get("harga_tanggal")))
     h.append(sep + "</div>")
-    h.append("<div class='analyst'><b>Tim Riset Sektoral</b><br>Equity Analyst</div>")
+    h.append(f"<div class='analyst'><b>{_say('Tim Riset Sektoral', 'Sektoral Research Team')}</b>"
+             "<br>Equity Analyst</div>")
     h.append("</div><div class='right'>")
     h.append(f"<h1 class='emit'>{html.escape(m['emiten'])} ({html.escape(m['ticker'])} IJ)</h1>")
     h.append(f"<div class='headline'>{html.escape(cov['headline'])}</div>"
@@ -1739,7 +1852,7 @@ def _render(doc):
         h.append(f"<li>{html.escape(b)}</li>")
     h.append("</ul></div>")
     for p in cov["paragraf"]:
-        h.append(f"<h2 class='sub'>{html.escape(p['judul'])}</h2><p>{html.escape(p['isi'])}</p>")
+        h.append(f"<h2 class='sub'>{html.escape(_lbl(p['judul']))}</h2><p>{html.escape(p['isi'])}</p>")
     # Key Financials sits under the narrative in the main column (design 5.4.2).
     # Without a "Key Financials" exhibit, the first non-chart exhibit that no
     # section places is the cover table (renumber puts it right after the chart).
@@ -1761,26 +1874,32 @@ def _render(doc):
         h.append(f"<div class='{page_class}'>{_report_header(m['tanggal'], m)}")
         h.append(_draft_banner(m))
         h.append(f"<h2 class='sec'><span class='num'>{number}.</span> "
-                 f"{html.escape(b['judul'])}</h2>")
+                 f"{html.escape(_lbl(b['judul']))}</h2>")
         h.append(_render_page_content(b))
         h.append("</div>")
 
-    disclosure = ("Laporan ini memuat rekomendasi model bersyarat berdasarkan "
-                  "asumsi dan sumber yang dinyatakan; keputusan investasi menjadi "
-                  "tanggung jawab pembaca. Kinerja masa lalu tidak menjamin hasil ke depan."
+    disclosure = (_say("Laporan ini memuat rekomendasi model bersyarat berdasarkan "
+                       "asumsi dan sumber yang dinyatakan; keputusan investasi menjadi "
+                       "tanggung jawab pembaca. Kinerja masa lalu tidak menjamin hasil ke depan.",
+                       "This report carries a conditional model recommendation based on the "
+                       "stated assumptions and sources; investment decisions are the reader's "
+                       "responsibility. Past performance does not guarantee future results.")
                   if m.get("rating") else
-                  "Dokumen ini adalah bahan riset dalam peninjauan. Rating dan target "
-                  "harga belum diterbitkan karena syarat data atau model belum terpenuhi. "
-                  "Keputusan investasi menjadi tanggung jawab pembaca.")
+                  _say("Dokumen ini adalah bahan riset dalam peninjauan. Rating dan target "
+                       "harga belum diterbitkan karena syarat data atau model belum terpenuhi. "
+                       "Keputusan investasi menjadi tanggung jawab pembaca.",
+                       "This document is research material under review. The Rating and Target "
+                       "Price are not published because data or model requirements are not yet "
+                       "met. Investment decisions are the reader's responsibility."))
     if SHOW_SOURCE_APPENDIX:
         h.append(_source_appendix(_NOTES.get(), m))
     h.append(f"<div class='page'>{_report_header(m['tanggal'], m)}"
              f"{_draft_banner(m)}"
-             "<h2 class='sec'>Pengungkapan</h2>"
+             f"<h2 class='sec'>{_say('Pengungkapan', 'Disclosures')}</h2>"
              f"<p class='small'>{html.escape(disclosure)}</p>"
-             "<h3 class='sub'>Catatan metodologi</h3><ul>")
+             f"<h3 class='sub'>{_say('Catatan metodologi', 'Methodology notes')}</h3><ul>")
     for c in doc["catatan_metodologi"]:
-        h.append(f"<li class='small'>{html.escape(c)}</li>")
+        h.append(f"<li class='small'>{html.escape(report_lang.note(c, lang))}</li>")
     h.append("</ul></div></body></html>")
     out = "\n".join(h)
-    return out.replace("\u2014", " - ").replace("\u2013", "-")
+    return out.replace("—", " - ").replace("–", "-")
