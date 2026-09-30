@@ -16,6 +16,7 @@ from . import exhibit_ids
 from . import methodnote
 from . import rnav
 from .prose_lang import t as _t
+from . import prose_lang
 from . import scrub
 from . import valtables
 from . import scenario_value
@@ -1593,7 +1594,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "judul": "Batas bukti kontrak, beban bunga, dan capex",
                     "layout": "stack",
                     "paragraf": [
-                        "Ada bukti offtake cathode sampai akhir 2027 dan customer prepayment, tetapi volume pengiriman dan formula harga tidak diungkap. Beban bunga serta pembayaran pinjaman Q2 kini dapat direkonsiliasi sebagai actual; keduanya belum menjadi jadwal H2. Capex akrual dan capex kas H1/Q2 juga tidak menggantikan anggaran sisa proyek."
+                        _t("Ada bukti offtake cathode sampai akhir 2027 dan customer prepayment, tetapi volume pengiriman dan formula harga tidak diungkap. Beban bunga serta pembayaran pinjaman Q2 kini dapat direkonsiliasi sebagai actual; keduanya belum menjadi jadwal H2. Capex akrual dan capex kas H1/Q2 juga tidak menggantikan anggaran sisa proyek.",
+                           "There is evidence of a cathode offtake to the end of 2027 and a customer prepayment, but delivery volumes and the price formula are not disclosed. Interest expense and Q2 loan repayments can now be reconciled as actuals; neither is yet an H2 schedule. Accrued capex and H1/Q2 cash capex do not replace the remaining project budget either.")
                     ],
                     "exhibit": [debt_contract_exhibit]})
                 if h1_debt_cash:
@@ -1624,9 +1626,12 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                         "judul": "Arus kas pinjaman dan pelunasan utang",
                         "layout": "stack",
                         "paragraf": [
-                            "Rekonsiliasi H1 menunjukkan arus kas bank bersih keluar US$520,0m, bukan pembayaran pokok bruto. "
-                            "Setelah arus kas perubahan kas dibatasi US$57,5m, total kas bersih aktivitas pendanaan adalah US$462,4m keluar. "
-                            "Headline pelunasan US$588m pada presentasi H1 berbeda secara nominal US$7,134m dari pembayaran pokok jangka panjang rinci; sumber tidak mengonfirmasi bahwa basis keduanya sama atau memberi bridge selisih."
+                            _t("Rekonsiliasi H1 menunjukkan arus kas bank bersih keluar US$520,0m, bukan pembayaran pokok bruto. "
+                               "Setelah arus kas perubahan kas dibatasi US$57,5m, total kas bersih aktivitas pendanaan adalah US$462,4m keluar. "
+                               "Headline pelunasan US$588m pada presentasi H1 berbeda secara nominal US$7,134m dari pembayaran pokok jangka panjang rinci; sumber tidak mengonfirmasi bahwa basis keduanya sama atau memberi bridge selisih.",
+                               "The H1 reconciliation shows a net bank-borrowing cash outflow of US$520,0m, not gross principal repayments. "
+                               "After the US$57,5m restricted-cash cash flow, net cash used in financing activities totals US$462,4m. "
+                               "The US$588m repayment headline in the H1 presentation differs in nominal terms by US$7,134m from the detailed long-term principal repayments; the source neither confirms that the two share a basis nor bridges the gap.")
                         ],
                         "exhibit": [h1_debt_flow_exhibit],
                     })
@@ -1709,10 +1714,13 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     contingent_volume = (h1_conc["h1_sold"] *
                                          concentrate_scenario["conditional_case_h2_sales_to_h1"])
                     contingent_value = contingent_volume * q2_concentrate["revenue_per_sold_unit_proxy"]
-                    contingent_text = (
+                    contingent_text = _t(
                         f" Jika ada izin/kanal dan kontrak yang berlaku, {_volume_text(contingent_volume, 'dmt')} penjualan konsentrat (volume H1) "
                         f"pada proxy revenue Q2 sekitar US${fmt._id(contingent_value/1e6, 1)} juta akan menutup hampir "
-                        "seluruh gap. Ini sensitivitas, bukan asumsi base atau bukti penjualan.")
+                        "seluruh gap. Ini sensitivitas, bukan asumsi base atau bukti penjualan.",
+                        f" With a valid permit/channel and contract, {_volume_text(contingent_volume, 'dmt')} of concentrate sales (the H1 volume) "
+                        f"at the Q2 revenue proxy, about US${fmt._id(contingent_value/1e6, 1)} juta, would close almost "
+                        "all of the gap. This is a sensitivity, not a base assumption or evidence of sales.")
             delivery_commitment = ((intake.get("official_evidence") or {}).get(
                 "customer_delivery_commitment") or {})
             commitment_text = ""
@@ -1721,24 +1729,36 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 opening_advance = advance.get("balance_2025_12_31")
                 received_advance = advance.get("received_2026_04")
                 closing_advance = advance.get("balance_2026_06_30")
-                commitment_text = (
+                commitment_text = _t(
                     " Kontrak Glencore mendukung keberadaan kanal penjualan katoda dengan komitmen "
                     f"pengiriman sampai {delivery_commitment.get('delivery_commitment_until')}; uang muka "
                     "dipotong proporsional dari pengiriman bulanan, dan kegagalan memenuhi komitmen "
-                    "mewajibkan pembayaran kembali uang muka terkait beserta bunga. "
+                    "mewajibkan pembayaran kembali uang muka terkait beserta bunga. ",
+                    " The Glencore contract supports the existence of a cathode sales channel, with delivery "
+                    f"commitments until {delivery_commitment.get('delivery_commitment_until')}; the advance "
+                    "is deducted pro rata from monthly deliveries, and failing to meet the commitment "
+                    "requires repaying the related advance with interest. "
                 )
                 if all(value is not None for value in
                        (opening_advance, received_advance, closing_advance)):
-                    commitment_text += (
+                    commitment_text += _t(
                         f"Penerimaan uang muka April adalah US${fmt._id(received_advance/1000, 1)} juta; "
                         f"saldo naik bersih dari US${fmt._id(opening_advance/1000, 1)} juta pada akhir 2025 "
-                        f"menjadi US${fmt._id(closing_advance/1000, 1)} juta pada akhir Juni. "
+                        f"menjadi US${fmt._id(closing_advance/1000, 1)} juta pada akhir Juni. ",
+                        f"The April advance received was US${fmt._id(received_advance/1000, 1)} juta; "
+                        f"the balance rose net from US${fmt._id(opening_advance/1000, 1)} juta at end-2025 "
+                        f"to US${fmt._id(closing_advance/1000, 1)} juta at end-June. "
                     )
-                commitment_text += (
+                commitment_text += _t(
                     "Catatan tidak mengungkap volume tersisa per kuartal, formula harga, atau rekonsiliasi "
                     "penerimaan dan potongan atas pengiriman. Kontrak ini tidak memvalidasi volume katoda H2 "
                     "atau harga pada bridge. Sumber: "
                     f"{delivery_commitment.get('source_title')}, hlm. {delivery_commitment.get('source_page')}; "
+                    f"{delivery_commitment.get('source_url')}.",
+                    "The notes do not disclose the remaining volume per quarter, the price formula, or a "
+                    "reconciliation of receipts and deductions against deliveries. The contract does not validate "
+                    "H2 cathode volumes or the prices in the bridge. Source: "
+                    f"{delivery_commitment.get('source_title')}, p. {delivery_commitment.get('source_page')}; "
                     f"{delivery_commitment.get('source_url')}."
                 )
             export_report = (((intake.get("official_evidence") or {}).get(
@@ -1746,7 +1766,7 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "reported_export_realization") or {})
             export_text = ""
             if export_report:
-                export_text = (
+                export_text = _t(
                     f" Data terpisah yang Bloomberg Technoz atribusikan kepada pejabat Kemendag menyebut "
                     f"ekspor sementara {fmt._id(export_report.get('volume', 0)/1000, 0)} ribu "
                     f"{export_report.get('unit')} sampai menjelang izin berakhir pada April 2026; "
@@ -1754,15 +1774,26 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "direkonsiliasi langsung dengan rekomendasi kuota 480 ribu DMT AMMAN karena konversi "
                     "kadar air tidak tersedia, tidak sama dengan revenue sales, dan tidak membuktikan izin H2. "
                     f"Sumber laporan bertanggal {export_report.get('published_date')}: "
+                    f"{export_report.get('source_url')}.",
+                    f" Separate data that Bloomberg Technoz attributes to Trade Ministry officials put "
+                    f"temporary exports at {fmt._id(export_report.get('volume', 0)/1000, 0)} thousand "
+                    f"{export_report.get('unit')} up to shortly before the permit expired in April 2026; "
+                    "joint verification with Customs was still under way at the time. This WMT figure cannot "
+                    "be reconciled directly with AMMAN's recommended quota of 480 thousand DMT because the "
+                    "moisture conversion is not available; it is not sales revenue and does not prove an H2 permit. "
+                    f"Source report dated {export_report.get('published_date')}: "
                     f"{export_report.get('source_url')}."
                 )
             illustrative_pages.append({
                 "halaman": 0, "judul": "Uji monetisasi produksi terhadap revenue H2",
                 "layout": "stack",
-                "paragraf": [
+                "paragraf": [_t(
                     f"Product bridge pada asumsi penjualan dasar menghasilkan US${fmt._id(product_bridge['base_sum']/1e6, 1)} juta, dibanding top-down US${fmt._id(product_bridge['h2_topdown']/1e6, 1)} juta. "
                     f"Gap US${fmt._id(product_bridge['residual']/1e6, 1)} juta masih belum dijelaskan.{contingent_text}{commitment_text}{export_text} "
-                    "Karena belum ada konfirmasi volume H2, realized price forward, atau jadwal stockpile/umpan smelter, kedua angka tetap skenario internal dan release gate tetap draft."],
+                    "Karena belum ada konfirmasi volume H2, realized price forward, atau jadwal stockpile/umpan smelter, kedua angka tetap skenario internal dan release gate tetap draft.",
+                    f"On base sales assumptions the product bridge yields US${fmt._id(product_bridge['base_sum']/1e6, 1)} juta, against a top-down US${fmt._id(product_bridge['h2_topdown']/1e6, 1)} juta. "
+                    f"A gap of US${fmt._id(product_bridge['residual']/1e6, 1)} juta remains unexplained.{contingent_text}{commitment_text}{export_text} "
+                    "With no confirmation yet of H2 volumes, forward realized prices, or the stockpile/smelter-feed schedule, both figures remain internal scenarios and the release gate stays at draft.")],
                 "exhibit": [product_exhibit]})
 
             h1_price_rows = []
@@ -1812,11 +1843,14 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 "halaman": 0,
                 "judul": "Uji realized price terhadap revenue aktual H1",
                 "layout": "stack",
-                "paragraf": [
+                "paragraf": [_t(
                     "Volume kali harga realisasi memberi cross-check revenue tiap produk. "
                     "Selisih kecil terhadap revenue segmen berasal dari presisi publikasi "
                     "yang dibulatkan dan tidak dipakai untuk menambah atau mengurangi "
-                    "asumsi H2."],
+                    "asumsi H2.",
+                    "Volume times realized price gives a revenue cross-check for each product. "
+                    "The small gaps to segment revenue come from rounded published figures "
+                    "and are not used to raise or lower the H2 assumptions.")],
                 "exhibit": [h1_price_exhibit]})
 
             capacity = evidence.get("processing_capacity") or {}
@@ -1876,11 +1910,15 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "halaman": 0,
                     "judul": "Uji kapasitas terhadap sisa panduan produksi",
                     "layout": "stack",
-                    "paragraf": [
+                    "paragraf": [_t(
                         "Panduan logam olahan FY26 menyiratkan produksi untuk seluruh periode H2 yang lebih tinggi "
                         "daripada output H1, tetapi masih di bawah setengah kapasitas desain "
                         "tahunan. Ini mendukung kemungkinan fisik ramp-up; angka tersebut "
-                        "tetap panduan produksi, bukan volume penjualan atau forecast revenue."],
+                        "tetap panduan produksi, bukan volume penjualan atau forecast revenue.",
+                        "FY26 refined-metal guidance implies production across H2 above H1 output, "
+                        "but still below half of annual design capacity. This supports the physical "
+                        "feasibility of the ramp-up; the figures remain production guidance, not "
+                        "sales volumes or a revenue forecast.")],
                     "exhibit": [capacity_exhibit]})
 
         agent_case = fc.get("interim_scenario")
@@ -1941,10 +1979,14 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             illustrative_pages.append({
                 "halaman": 0, "judul": "Skenario FY26 dari rilis terbaru",
                 "layout": "stack",
-                "paragraf": ["Hasil 1H26 dan panduan operasi digunakan untuk "
-                             "membentuk skenario 2H26. Konversi ke rupiah pada "
-                             "halaman nilai berikutnya hanya untuk cross-check, "
-                             "bukan dasar target harga."],
+                "paragraf": [_t("Hasil 1H26 dan panduan operasi digunakan untuk "
+                                "membentuk skenario 2H26. Konversi ke rupiah pada "
+                                "halaman nilai berikutnya hanya untuk cross-check, "
+                                "bukan dasar target harga.",
+                                "1H26 results and operating guidance are used to "
+                                "build the 2H26 scenario. The rupiah conversion on "
+                                "the following value page is only a cross-check, "
+                                "not the basis for a Target Price.")],
                 "exhibit": [case_exhibit, ratio_exhibit]})
             crosscheck = valuation_mod.scenario_ev_ebitda_crosscheck(intake, fc)
             if crosscheck:
@@ -1986,9 +2028,12 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 illustrative_pages.append({
                     "halaman": 0, "judul": "Cross-check nilai FY26 dari hasil terbaru",
                     "layout": "stack",
-                    "paragraf": ["EBITDA skenario FY26 diuji pada tiga multiple EV/EBITDA. "
-                                 "Angka per saham ini sensitif pada harga komoditas, "
-                                 "kurs, utang, dan multiple; bukan target harga."],
+                    "paragraf": [_t("EBITDA skenario FY26 diuji pada tiga multiple EV/EBITDA. "
+                                    "Angka per saham ini sensitif pada harga komoditas, "
+                                    "kurs, utang, dan multiple; bukan target harga.",
+                                    "FY26 scenario EBITDA is tested at three EV/EBITDA multiples. "
+                                    "These per-share figures are sensitive to commodity prices, "
+                                    "the exchange rate, debt and the multiple; they are not a Target Price.")],
                     "exhibit": [value_exhibit, inputs_exhibit]})
         annual_cache = (intake.get("annuals") or [])[-5:]
         if annual_cache:
@@ -2039,10 +2084,14 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             illustrative_pages.append({
                 "halaman": 0, "judul": "Konteks historis dan kepemilikan",
                 "layout": "stack",
-                "paragraf": ["Tabel historis berikut membantu membaca siklus operasi dan pendanaan. "
-                             "Angka Sectors dalam rupiah dan angka rilis interim dalam mata uang "
-                             "pelaporan ditampilkan terpisah; perbedaan definisi belum "
-                             "direkonsiliasi."],
+                "paragraf": [_t("Tabel historis berikut membantu membaca siklus operasi dan pendanaan. "
+                                "Angka Sectors dalam rupiah dan angka rilis interim dalam mata uang "
+                                "pelaporan ditampilkan terpisah; perbedaan definisi belum "
+                                "direkonsiliasi.",
+                                "The historical tables below help read the operating and funding cycle. "
+                                "Sectors figures in rupiah and interim-release figures in the reporting "
+                                "currency are shown separately; differences in definition are not yet "
+                                "reconciled.")],
                 "exhibit": history_page_exhibits})
 
         screen = fc.get("rows") or []
@@ -2114,18 +2163,25 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             illustrative_pages.append({
                 "halaman": 0, "judul": "Skenario operasi ilustratif",
                 "layout": "stack",
-                "paragraf": ["Screen rupiah ini memperlihatkan perhitungan historis "
-                             "dan perubahan driver yang ditautkan ke berita. Skenario "
-                             "interim US$ pada halaman lain belum dijembatani ke model "
-                             "rupiah ini."],
+                "paragraf": [_t("Screen rupiah ini memperlihatkan perhitungan historis "
+                                "dan perubahan driver yang ditautkan ke berita. Skenario "
+                                "interim US$ pada halaman lain belum dijembatani ke model "
+                                "rupiah ini.",
+                                "This rupiah screen shows the historical calculation "
+                                "and the driver changes linked to news. The US$ interim "
+                                "scenario on another page is not yet bridged to this "
+                                "rupiah model.")],
                 "exhibit": page_exhibits})
             if news_assumptions:
                 illustrative_pages.append({
                     "halaman": 0, "judul": "Berita dan keputusan asumsi",
                     "layout": "stack",
-                    "paragraf": ["Setiap berita bertanggal diuji terhadap driver forecast. "
-                                 "Angka nol menunjukkan berita tidak memberi dasar "
-                                 "untuk mengubah asumsi operasi atau valuasi."],
+                    "paragraf": [_t("Setiap berita bertanggal diuji terhadap driver forecast. "
+                                    "Angka nol menunjukkan berita tidak memberi dasar "
+                                    "untuk mengubah asumsi operasi atau valuasi.",
+                                    "Each dated news item is tested against the forecast drivers. "
+                                    "A zero means the news gives no basis for changing "
+                                    "operating or valuation assumptions.")],
                     "exhibit": [news_exhibit]})
 
             wi = va.get("wacc_inputs") or {}
@@ -2166,10 +2222,14 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 illustrative_pages.append({
                     "halaman": 0, "judul": "Valuasi ilustratif dan keterbatasannya",
                     "layout": "stack",
-                    "paragraf": ["Dua metode lama ditampilkan terpisah agar dampak asumsi "
-                                 "terlihat. Metode ini belum menghitung arus kas sampai "
-                                 "akhir umur tambang maupun nilai tiap aset, sehingga "
-                                 "hasilnya tidak menjadi rekomendasi atau target harga."],
+                    "paragraf": [_t("Dua metode lama ditampilkan terpisah agar dampak asumsi "
+                                    "terlihat. Metode ini belum menghitung arus kas sampai "
+                                    "akhir umur tambang maupun nilai tiap aset, sehingga "
+                                    "hasilnya tidak menjadi rekomendasi atau target harga.",
+                                    "The two legacy methods are shown separately so the effect of the "
+                                    "assumptions is visible. They do not yet compute cash flows to the "
+                                    "end of mine life or the value of each asset, so the results are "
+                                    "not a rating or a Target Price.")],
                     "exhibit": [value_exhibit, grid_exhibit]})
 
     if mining:
