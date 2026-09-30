@@ -19,6 +19,12 @@ chain rows ``decision_code`` (``report_extras.decision_code``), the primary
 method ``method`` and the release the raw ``tp_value``/``upside_pct``.
 Recorded runs stored before codes existed get them on replay (``coded``),
 read back from their labels and data.
+
+Every event also carries its English where there is one (``label_en``,
+``detail_en``, see ``app.progress``): host-written words from
+``app.host_lang``, agent prose from the agent's own twin (#34). A run recorded
+before events carried English gets it on replay (``englished``); agent prose
+without a twin stays Indonesian.
 """
 from __future__ import annotations
 
@@ -26,7 +32,7 @@ import math
 import re
 from pathlib import Path
 
-from . import exhibit_ids, gallery, outputs, progress, report_extras, trace_view
+from . import exhibit_ids, gallery, host_lang, outputs, progress, report_extras, trace_view
 from .jobs import text
 
 GATES = ((0, "Model bisnis"), (1, "Kelayakan data"), (2, "Struktur kepemilikan"),
@@ -239,6 +245,37 @@ def coded(event: dict, doc: dict | None = None) -> dict:
     return {**event, "data": {**data, **missing}} if missing else event
 
 
+def prose_twins(audit: dict) -> dict:
+    """The analyst's English twins of the prose events quote as their detail
+    (plan question, hypotheses, step reasons, headline, verdict reasons), keyed
+    by the Indonesian as an event stores it."""
+    intel = audit.get("analyst") if isinstance(audit, dict) and isinstance(audit.get("analyst"), dict) else {}
+    plan = intel.get("plan") if isinstance(intel.get("plan"), dict) else {}
+    synthesis = intel.get("synthesis") if isinstance(intel.get("synthesis"), dict) else {}
+    pairs = [(plan.get("question"), plan.get("question_en")),
+             (synthesis.get("headline"), synthesis.get("headline_en"))]
+    if isinstance(plan.get("hypotheses"), list) and isinstance(plan.get("hypotheses_en"), list):
+        pairs += zip(plan["hypotheses"], plan["hypotheses_en"])
+    pairs += [(s.get("why"), s.get("why_en")) for s in intel.get("steps") or [] if isinstance(s, dict)]
+    pairs += [(h.get("reason"), h.get("reason_en")) for h in synthesis.get("hypotheses") or []
+              if isinstance(h, dict)]
+    return {a[:400]: b for a, b in pairs
+            if isinstance(a, str) and a and isinstance(b, str) and b.strip()}
+
+
+def englished(event: dict, twins: dict, doc: dict | None = None) -> dict:
+    """``event`` with the English of its detail when it was recorded without it:
+    the agent's twin (``prose_twins``) or, for a Method Chain row, the English
+    of the row's whole reason in ``doc`` (the recorded detail is cut)."""
+    if event.get("detail_en") or not event.get("detail"):
+        return event
+    english = twins.get(str(event["detail"]))
+    if english is None and event.get("tool") == "chain_step" and isinstance(doc, dict):
+        english = next((host_lang.english(row["reason"]) for row in _chain_rows(doc)
+                        if row["method"][:80] == event.get("label")), None)
+    return {**event, "detail_en": english} if english else event
+
+
 class _Clock:
     """Estimated run time for derived replays (model turns take seconds, tools less)."""
 
@@ -271,14 +308,18 @@ def derive(audit: dict, doc: dict) -> list[dict]:
         add(0.2, "plan", "Agent menyusun rencana riset", status="run")
         agent_plan = plan.get("source") == "agent"
         add(8.4, "plan", "Rencana siap" if agent_plan else "Rencana standar host dipakai",
-            plan.get("question"), status="ok" if agent_plan else "warn")
-        for i, hypothesis in enumerate(h for h in plan.get("hypotheses") or [] if h):
+            plan.get("question"), status="ok" if agent_plan else "warn",
+            detail_en=plan.get("question_en"))
+        english = plan.get("hypotheses_en") if isinstance(plan.get("hypotheses_en"), list) else []
+        shown = [(h, english[i] if i < len(english) else None)
+                 for i, h in enumerate(plan.get("hypotheses") or []) if h]
+        for i, (hypothesis, hypothesis_en) in enumerate(shown):
             add(0.1, "plan", f"Hipotesis {i + 1}", hypothesis, tool="hypothesis",
-                data={"kind": "hypothesis", "index": i + 1})
+                data={"kind": "hypothesis", "index": i + 1}, detail_en=hypothesis_en)
         for step in analyst.get("steps") or []:
             tool = step.get("tool") or "tool"
             add(3.6, "tool", f"Menjalankan {tool}", step.get("why"), status="run", tool=tool,
-                data={"kind": "tool_start"})
+                data={"kind": "tool_start"}, detail_en=step.get("why_en"))
             if step.get("status") == "error":
                 add(0.9, "tool", f"{tool}: data tidak tersedia", step.get("summary"), status="warn", tool=tool,
                     data={"kind": "tool_empty"})
@@ -291,14 +332,16 @@ def derive(audit: dict, doc: dict) -> list[dict]:
         add(0.2, "synthesis", "Agent menguji hipotesis dan menulis temuan", status="run")
         agent_synthesis = synthesis.get("source") == "agent"
         add(13.5, "synthesis", "Temuan tervalidasi" if agent_synthesis else "Ringkasan host dipakai",
-            synthesis.get("headline"), status="ok" if agent_synthesis else "warn")
+            synthesis.get("headline"), status="ok" if agent_synthesis else "warn",
+            detail_en=synthesis.get("headline_en"))
         for h in synthesis.get("hypotheses") or []:
             if isinstance(h.get("index"), int) and h.get("verdict"):
                 number = h["index"] + 1  # synthesis indexes from 0, the plan from 1
                 add(0.1, "synthesis", f"H{number} {h['verdict']}", h.get("reason"), tool="verdict",
                     data={"kind": "hypothesis", "index": number, "verdict": h["verdict"],
                           "verdict_code": (h["verdict_code"] if h.get("verdict_code") in VERDICT_CODES
-                                           else hypothesis_code(h["verdict"], h.get("reason")))})
+                                           else hypothesis_code(h["verdict"], h.get("reason")))},
+                    detail_en=h.get("reason_en"))
         add(0.3, "memory", "Memori riset diperbarui")
 
     research = view.get("research") or {}
@@ -369,7 +412,8 @@ def replay(folder, ticker: str) -> dict | None:
         return None
     recorded = outputs.load(outputs.EVENTS, folder, t)
     events = progress.public(recorded) if isinstance(recorded, list) and recorded else []
-    events = progress.public([coded(e, doc) for e in events])
+    twins = prose_twins(audit)
+    events = progress.public([englished(coded(e, doc), twins, doc) for e in events])
     source = "recorded" if events else "derived"
     if not events:
         events = derive(audit, doc)

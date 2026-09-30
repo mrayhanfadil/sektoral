@@ -255,13 +255,114 @@ def test_replay_endpoint_prefers_recorded_events(tmp_path):
         recorded = client.get("/api/reports/AAAA/run").json()
         assert recorded["source"] == "recorded"
         assert recorded["events"] == [{"stage": "plan", "label": "Rencana siap", "status": "ok", "t": 1.2,
-                                       "detail": "Q", "agent": "analis"}]
+                                       "label_en": "Plan ready", "detail": "Q", "agent": "analis"}]
         outputs.save(outputs.EVENTS, reports, "AAAA", OLD_EVENTS)
         old = client.get("/api/reports/AAAA/run").json()["events"]
         release = next(e for e in old if e.get("tool") == "release")
         assert release["data"]["tp_value"] == 12350 and release["data"]["upside_pct"] == -20.9
         assert client.get("/api/reports/ZZZZ/run").status_code == 404
         assert client.get("/api/reports/..%2Fx/run").status_code == 404
+
+
+def test_events_carry_english_beside_their_indonesian():
+    seen = []
+    with progress.capture(seen.append):
+        progress.emit("signals", "38 sinyal dihitung, 3 bertanda")
+        progress.emit("plan", "Rencana siap", "Apa yang berubah?", detail_en="What changed?")
+        progress.emit("plan", "Hipotesis 1", "Laba naik karena harga.")  # agent prose, no twin
+    assert [e["label"] for e in seen] == ["38 sinyal dihitung, 3 bertanda", "Rencana siap", "Hipotesis 1"]
+    assert [e["label_en"] for e in seen] == ["38 signals computed, 3 flagged", "Plan ready", "Hypothesis 1"]
+    assert seen[1]["detail"] == "Apa yang berubah?" and seen[1]["detail_en"] == "What changed?"
+    assert seen[2]["detail"] == "Laba naik karena harga." and "detail_en" not in seen[2]
+    bounded = progress.event("plan", "x", "d", label_en="E" * 300, detail_en="F" * 900)
+    assert len(bounded["label_en"]) == 160 and len(bounded["detail_en"]) == 400
+    # Stored English passes through a replay's re-validation as it is.
+    assert progress.public([{**seen[1], "label_en": "Ready"}])[0]["label_en"] == "Ready"
+
+
+def test_valuation_events_carry_english():
+    seen = []
+    with progress.capture(seen.append):
+        run_events.emit_valuation(_doc())
+        run_events.emit_valuation(_doc(published=False))
+    held = seen.pop()
+    english = {e["label"]: (e.get("label_en"), e.get("detail_en")) for e in seen}
+    assert english["Gerbang metode menilai emiten"] == (
+        "Method Gates assess the issuer",
+        "Method Gates 0-5 choose the method before any value is computed")
+    assert english["Model bisnis"] == (
+        "Business model", "primary method DDM / Excess Return, comparison Relative Valuation")
+    assert english["Kelayakan data"] == (
+        "Data eligibility", "a financial institution is valued on equity; this gate is skipped")
+    assert english["PER FY skenario"][0] == "Scenario FY PER"
+    assert english["Status rilis: dapat didistribusikan, berbasis asumsi analis"] == (
+        "Release status: distributable, Assumption-Led", "rating and Target Price published")
+    assert held["detail_en"] == "2 checks hold back the rating and Target Price"
+
+
+def test_derived_replay_has_english_for_host_text_and_agent_twins():
+    audit = _audit()
+    analyst = audit["analyst"]
+    analyst["plan"].update(question_en="Q in English?", hypotheses_en=["H1: one", "H2: two"])
+    analyst["steps"][0]["why_en"] = "peers"
+    analyst["synthesis"]["headline_en"] = "Headline"
+    analyst["synthesis"]["hypotheses"][0]["reason_en"] = "the reason"
+    events = run_events.derive(audit, _doc())
+    before = [e["label"] for e in run_events.derive(_audit(), _doc())]
+    assert [e["label"] for e in events] == before  # the Indonesian is unchanged
+    by_label = {e["label"]: e for e in events}
+    assert by_label["Membaca memori riset"]["label_en"] == "Reading the research memory"
+    assert by_label["Membaca memori riset"]["detail_en"] == "no earlier research"
+    assert by_label["Rencana siap"]["detail_en"] == "Q in English?"
+    assert by_label["Hipotesis 2"]["label_en"] == "Hypothesis 2"
+    assert by_label["Hipotesis 2"]["detail_en"] == "H2: two"
+    assert by_label["Menjalankan find_peers"]["detail_en"] == "peers"
+    assert by_label["foreign_flow: data tidak tersedia"]["label_en"] == "foreign_flow: data not available"
+    assert by_label["2 sinyal dihitung, 1 bertanda"]["label_en"] == "2 signals computed, 1 flagged"
+    assert by_label["Temuan tervalidasi"]["detail_en"] == "Headline"
+    assert by_label["H1 didukung"]["label_en"] == "H1 supported"
+    assert by_label["H1 didukung"]["detail_en"] == "the reason"
+    assert by_label["1 artikel relevan, 1 ditolak"]["label_en"] == "1 relevant article, 1 rejected"
+    assert by_label["Subagent Dampak berita"]["label_en"] == "Subagent News impact"
+    assert by_label["Skenario interim ditolak validator"]["label_en"] == (
+        "Interim scenario rejected by the validator")
+    assert by_label["Selesai"]["label_en"] == "Done"
+
+
+def test_old_recorded_events_get_english_on_replay(tmp_path):
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    _report(reports, "AAAA")
+    doc = outputs.load(outputs.REPORT, reports, "AAAA")
+    doc["exhibits"][0]["data"]["rows"][1][3] = ("EPS FY adalah skenario analis dari aktual 1H + "
+                                                "asumsi H2, bukan forecast driver terekonsiliasi; "
+                                                "peer dianggap sebanding")
+    outputs.save(outputs.REPORT, reports, "AAAA", doc)
+    audit = _audit()
+    audit["analyst"]["plan"]["hypotheses_en"] = ["H1: one", "H2: two"]
+    outputs.save(outputs.TRACE, reports, "AAAA", audit)
+    approve(reports, "AAAA")
+    outputs.save(outputs.EVENTS, reports, "AAAA", OLD_EVENTS + [
+        {"stage": "plan", "label": "Hipotesis 2", "tool": "hypothesis", "detail": "H2: dua", "t": 0.2},
+        {"stage": "gate", "label": "PER FY skenario", "tool": "chain_step", "agent": "gerbang",
+         "detail": "EPS FY adalah skenario analis dari aktual 1H + asumsi H2, bukan forecast driver "
+                   "terek", "t": 6.2}])
+    replay = run_events.replay(reports, "AAAA")
+    assert replay["source"] == "recorded"
+    by_label = {e["label"]: e for e in replay["events"]}
+    assert [e["label"] for e in replay["events"]] == [e["label"] for e in OLD_EVENTS] + [
+        "Hipotesis 2", "PER FY skenario"]
+    assert by_label["Menjalankan find_peers"]["label_en"] == "Running find_peers"
+    assert by_label["Kelayakan data"]["label_en"] == "Data eligibility"
+    assert by_label["Status rilis: siap produksi"]["label_en"] == "Release status: Production-Ready"
+    assert by_label["Hipotesis 2"]["detail"] == "H2: dua"
+    assert by_label["Hipotesis 2"]["detail_en"] == "H2: two"  # the analyst's own twin
+    # A chain row's recorded detail is cut; its English comes from the whole reason.
+    assert by_label["PER FY skenario"]["detail_en"] == (
+        "FY EPS is an Analyst Scenario from 1H actuals + H2 assumptions, not a reconciled driver "
+        "forecast; peers taken as comparable")
+    # Agent prose without a twin stays Indonesian only.
+    assert "detail_en" not in by_label["H1 belum terjawab"]
 
 
 def test_a_research_run_stores_its_events_with_its_outputs(monkeypatch, tmp_path):

@@ -358,7 +358,8 @@ def _run_tool(ticker, name, args, why, origin, state, steps, all_signals, why_en
     step = {"n": len(steps) + 1, "tool": name, "args": args, "why": why, "origin": origin}
     if why_en:
         step["why_en"] = why_en
-    emit("tool", f"Menjalankan {name}", why, status="run", tool=name, data={"kind": "tool_start"})
+    emit("tool", f"Menjalankan {name}", why, status="run", tool=name, data={"kind": "tool_start"},
+         detail_en=why_en)
     try:
         result, found = tools.execute(name, ticker, args, state)
     except tools.ToolError as error:
@@ -782,10 +783,13 @@ def run(ticker, *, chat=None, db=None, persist=True):
     emit("plan", "Agent menyusun rencana riset", status="run")
     plan, messages = _make_plan(chat, ticker, info, previous, problems)
     emit("plan", "Rencana siap" if plan["source"] == "agent" else "Rencana standar host dipakai",
-         plan["question"], status="ok" if plan["source"] == "agent" else "warn")
+         plan["question"], status="ok" if plan["source"] == "agent" else "warn",
+         detail_en=plan.get("question_en"))
+    hypotheses_en = plan.get("hypotheses_en") if isinstance(plan.get("hypotheses_en"), list) else []
     for i, hypothesis in enumerate(plan["hypotheses"], 1):
         emit("plan", f"Hipotesis {i}", hypothesis, tool="hypothesis",
-             data={"index": i, "kind": "hypothesis"})
+             data={"index": i, "kind": "hypothesis"},
+             detail_en=hypotheses_en[i - 1] if i <= len(hypotheses_en) else None)
 
     state, steps, all_signals = _execute(chat, ticker, plan, messages, info["available"], problems)
     flagged = sum(1 for s in all_signals if s.get("flag"))
@@ -802,14 +806,16 @@ def run(ticker, *, chat=None, db=None, persist=True):
     synthesis = _synthesize(chat, ticker, plan, all_signals, headlines, changes, problems)
     emit("synthesis", "Temuan tervalidasi" if synthesis["source"] == "agent"
          else "Ringkasan host dipakai", synthesis.get("headline"),
-         status="ok" if synthesis["source"] == "agent" else "warn")
+         status="ok" if synthesis["source"] == "agent" else "warn",
+         detail_en=synthesis.get("headline_en"))
     for verdict in synthesis.get("hypotheses") or []:
         if isinstance(verdict, dict) and isinstance(verdict.get("index"), int) and verdict.get("verdict"):
             # Synthesis indexes hypotheses from 0; the plan events number them from 1.
             number = verdict["index"] + 1
             emit("synthesis", f"H{number} {verdict['verdict']}", verdict.get("reason"),
                  tool="verdict", data={"index": number, "verdict": verdict["verdict"],
-                                       "kind": "hypothesis", "verdict_code": verdict_code(verdict)})
+                                       "kind": "hypothesis", "verdict_code": verdict_code(verdict)},
+                 detail_en=verdict.get("reason_en"))
 
     peers = state.get("peers") or {}
     result = {

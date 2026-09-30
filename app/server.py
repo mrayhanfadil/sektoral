@@ -27,8 +27,8 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import (assumption_review, gallery, outputs, publication_archive, release_policy,
-               reviewer_auth, run_events, trace_view)
+from . import (assumption_review, gallery, host_lang, outputs, publication_archive,
+               release_policy, report_lang, reviewer_auth, run_events, trace_view)
 from .jobs import ResearchJobs, TICKER, available_tickers
 from agents.analyst import memory as agent_memory
 
@@ -108,8 +108,22 @@ def _history(reports: Path) -> list[dict]:
 
 def _audit_appendix(doc) -> list[dict]:
     """Report sections kept out of the printed report (``lampiran_audit``):
-    their prose and tables, as plain text, bounded."""
+    their prose and tables, as plain text, bounded.
+
+    Each carries its English as the English Company Update would print it:
+    headings and cells through ``report_lang``, prose and source notes from
+    the report's English twins (``paragraf_en``, ``catatan_sumber_en``; a
+    report built before them has none) or a known sentence (``host_lang``)."""
     cell = lambda v: str(v if v is not None else "")[:300]
+    label = lambda v: cell(report_lang.label(cell(v), "en"))
+
+    def prose(id_text, en_text, limit):
+        """The report's English twin (figures in English), else a known sentence."""
+        if isinstance(en_text, str) and en_text.strip():
+            return report_lang.plain(en_text)[:limit]
+        found = host_lang.english(id_text)
+        return found[:limit] if found else None
+
     out = []
     for page in ((doc or {}).get("lampiran_audit") or [])[:40]:
         if not isinstance(page, dict):
@@ -119,14 +133,24 @@ def _audit_appendix(doc) -> list[dict]:
             data = e.get("data") if isinstance(e.get("data"), dict) else {}
             if e.get("tipe") != "tabel" or not isinstance(data.get("rows"), list):
                 continue
+            rows = [row[:12] for row in data["rows"][:60] if isinstance(row, list)]
             exhibits.append({"title": cell(e.get("judul")),
+                             "title_en": cell(report_lang.title(e, "en")),
                              "cols": [cell(c) for c in (data.get("cols") or [])[:12]],
-                             "rows": [[cell(c) for c in row[:12]] for row in data["rows"][:60]
-                                      if isinstance(row, list)],
-                             "note": str(e.get("catatan_sumber") or "")[:1500]})
+                             "cols_en": [label(c) for c in (data.get("cols") or [])[:12]],
+                             "rows": [[cell(c) for c in row] for row in rows],
+                             "rows_en": [[label(c) for c in row] for row in rows],
+                             "note": str(e.get("catatan_sumber") or "")[:1500],
+                             "note_en": prose(e.get("catatan_sumber"), e.get("catatan_sumber_en"),
+                                              1500)})
+        paragraphs = [(i, x) for i, x in enumerate((page.get("paragraf") or [])[:8])
+                      if isinstance(x, str)]
+        english = page.get("paragraf_en") if isinstance(page.get("paragraf_en"), list) else []
         out.append({"title": cell(page.get("judul")),
-                    "paragraphs": [str(x)[:2000] for x in (page.get("paragraf") or [])[:8]
-                                   if isinstance(x, str)],
+                    "title_en": label(page.get("judul")),
+                    "paragraphs": [str(x)[:2000] for _i, x in paragraphs],
+                    "paragraphs_en": [prose(x, english[i] if i < len(english) else None, 2000)
+                                      for i, x in paragraphs],
                     "exhibits": exhibits})
     return out
 

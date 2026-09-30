@@ -643,7 +643,8 @@ def test_public_intel_passes_twins_and_serves_old_results():
                "next_checks": ["N"]}}
     public = public_intel(old)
     assert public["plan"]["question_en"] is None and public["plan"]["hypotheses_en"] is None
-    assert public["steps"][0]["why_en"] is None and public["signals"][0]["label_en"] is None
+    assert public["steps"][0]["why_en"] is None
+    assert public["signals"][0]["label_en"] == "ROE"  # the host's label for the signal id
     assert public["synthesis"]["headline_en"] is None and public["synthesis"]["next_checks_en"] is None
     assert public["synthesis"]["findings"][0]["title_en"] is None
     assert [h["verdict_code"] for h in public["synthesis"]["hypotheses"]] == ["partly_supported",
