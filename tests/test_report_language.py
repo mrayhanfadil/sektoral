@@ -1,5 +1,5 @@
 """The Company Update in two languages: Indonesian unchanged, English labels,
-English files kept off public routes until #34."""
+English files public only as part of the published bundle (ADR 0015)."""
 from __future__ import annotations
 
 import copy
@@ -204,23 +204,30 @@ def test_exhibits_are_found_by_id_and_old_reports_by_title():
                                   exhibit_ids.REVENUE_PANEL)
 
 
-def test_english_files_stay_off_public_routes(tmp_path, monkeypatch):
+def _client(tmp_path, reports):
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
     from app import server
+    return TestClient(server.create_app(tmp_path / "jobs", reports, static_dir=None))
+
+
+def test_english_files_outside_the_bundle_stay_off_public_routes(tmp_path, monkeypatch):
     from test_gallery import _report
 
     reports = tmp_path / "reports"
     reports.mkdir()
     _report(reports, "AAAA")
+    # Written after the bundle was finalized and approved: not part of it.
     (reports / "AAAA.en.html").write_text("<html lang='en'>report</html>")
     (reports / "AAAA.en.pdf").write_bytes(b"%PDF-1.4 english")
     item = gallery.load(reports)[0]
     assert item["published"] and item["languages"] == ["id"]
-    assert set(item["files"]) == {"pdf", "html", "trace", "trace_json"}
+    assert item["publication_state"] == "published"
+    assert set(item["files"]) == {"pdf", "html", "trace", "trace_json", "html_en", "pdf_en"}
+    assert item["files"]["html_en"] is False and item["files"]["pdf_en"] is False
     assert gallery.public_artifact(reports, "AAAA", "html_en") is None
-    client = TestClient(server.create_app(tmp_path / "jobs", reports, static_dir=None))
+    client = _client(tmp_path, reports)
     assert client.get("/files/reports/AAAA.html").status_code == 200
     for name in ("AAAA.en.html", "AAAA.en.pdf"):
         assert client.get(f"/files/reports/{name}").status_code == 404
@@ -235,11 +242,73 @@ def test_english_files_stay_off_public_routes(tmp_path, monkeypatch):
     assert preview.status_code == 200 and "lang='en'" in preview.text
 
 
+def test_english_in_the_approved_bundle_is_public_until_its_bytes_change(tmp_path, monkeypatch):
+    from test_gallery import _report
+
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    _report(reports, "AAAA", english=True)
+    item = gallery.load(reports)[0]
+    assert item["publication_basis"] == "analyst_reviewed"
+    assert item["languages"] == ["id", "en"]
+    assert item["files"]["html_en"] and item["files"]["pdf_en"]
+    client = _client(tmp_path, reports)
+    listed = client.get("/api/reports").json()["items"][0]
+    assert listed["languages"] == ["id", "en"]
+    assert listed["files"]["html_en"] is True and listed["files"]["pdf_en"] is True
+    english = client.get("/files/reports/AAAA.en.html")
+    assert english.status_code == 200 and "lang='en'" in english.text
+    pdf = client.get("/files/reports/AAAA.en.pdf")
+    assert pdf.status_code == 200 and pdf.content == b"%PDF-1.4 english"
+
+    # A changed English file is no longer the approved bundle: the approval
+    # goes stale, and the English file is served by no public route.
+    (reports / "AAAA.en.html").write_text("<html lang='en'>edited</html>")
+    assert client.get("/files/reports/AAAA.en.html").status_code == 404
+    item = gallery.load(reports)[0]
+    assert item["review"]["state"] == "pending" and item["languages"] == ["id"]
+    assert item["publication_basis"] == "automatic"  # ADR 0014: the gates still pass
+    monkeypatch.setenv("SECTORAL_AUTO_PUBLISH", "0")
+    assert gallery.load(reports)[0]["languages"] == []
+    for name in ("AAAA.html", "AAAA.en.html", "AAAA.en.pdf"):
+        assert client.get(f"/files/reports/{name}").status_code == 404
+
+
+def test_automatic_publication_serves_english_from_its_run_manifest(tmp_path):
+    from app import outputs
+    from test_gallery import _report
+
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    _report(reports, "AAAA", reviewed=False, english=True)
+    item = gallery.load(reports)[0]
+    assert item["publication_basis"] == "automatic" and item["languages"] == ["id", "en"]
+    client = _client(tmp_path, reports)
+    assert client.get("/files/reports/AAAA.en.pdf").status_code == 200
+
+    # The run manifest is the automatic bundle: a changed English PDF is not served.
+    (reports / "AAAA.en.pdf").write_bytes(b"%PDF-1.4 replaced")
+    assert client.get("/files/reports/AAAA.en.pdf").status_code == 404
+    assert client.get("/files/reports/AAAA.en.html").status_code == 200
+    assert gallery.load(reports)[0]["files"]["pdf_en"] is False
+
+    # A manifest finalized without English publishes none, whatever file exists.
+    manifest = outputs.load(outputs.MANIFEST, reports, "AAAA")
+    manifest["artifacts"] = {kind: row for kind, row in manifest["artifacts"].items()
+                             if not kind.endswith("_en")}
+    outputs.save(outputs.MANIFEST, reports, "AAAA", manifest)
+    item = gallery.load(reports)[0]
+    assert item["published"] and item["languages"] == ["id"]
+    assert client.get("/files/reports/AAAA.en.html").status_code == 404
+
+
 def test_a_draft_lists_no_language(tmp_path):
     from test_gallery import _report
 
-    _report(tmp_path, "BBBB", published=False)
-    assert gallery.load(tmp_path)[0]["languages"] == []
+    _report(tmp_path, "BBBB", published=False, english=True)
+    item = gallery.load(tmp_path)[0]
+    assert item["languages"] == [] and not item["files"]["html_en"]
+    assert gallery.public_artifact(tmp_path, "BBBB", "html_en") is None
 
 
 def test_indonesian_render_does_not_depend_on_the_english_one(monkeypatch):

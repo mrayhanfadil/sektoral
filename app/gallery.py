@@ -7,6 +7,10 @@ report and audit-trace documents in the app database under that folder
 document (rating, target, method, status, headline, method chain); the server
 serves the HTML, PDF and trace HTML as files, the trace only through its public
 view, and a cover thumbnail rendered from the PDF.
+
+The English edition (``{T}.en.html``/``.en.pdf``) is public only as part of the
+published bundle (ADR 0015): its kind must be in the bundle and the file on
+disk must still carry the bundle's SHA-256.
 """
 from __future__ import annotations
 
@@ -16,7 +20,7 @@ import subprocess
 from pathlib import Path
 
 from . import (assumption_review, exhibit_ids, outputs, publication_archive, publication_monitor,
-               release_policy)
+               release_policy, run_manifest)
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
@@ -25,14 +29,13 @@ FILES = {"pdf": ("{t}.pdf", "application/pdf"),
          "html": ("{t}.html", "text/html; charset=utf-8"),
          "trace": ("{t}-trace.html", "text/html; charset=utf-8")}
 # The English Company Update (app.report_lang) sits beside the Indonesian
-# files. It is not part of the hash-verified publication bundle (ADR 0009,
-# app.run_manifest), so only an authenticated reviewer preview serves it;
-# no public route does until #34 decides how both languages publish.
-PREVIEW_FILES = {**FILES,
-                 "html_en": ("{t}.en.html", "text/html; charset=utf-8"),
+# files. A public route serves it only when it is in the published bundle and
+# unchanged since (ADR 0015); a reviewer preview serves whatever file exists.
+ENGLISH_FILES = {"html_en": ("{t}.en.html", "text/html; charset=utf-8"),
                  "pdf_en": ("{t}.en.pdf", "application/pdf")}
+PREVIEW_FILES = {**FILES, **ENGLISH_FILES}
 # Languages a reader may open from a public route, with their HTML kind.
-PUBLIC_LANGUAGES = {"id": "html"}
+PUBLIC_LANGUAGES = {"id": "html", "en": "html_en"}
 ANALYTICALLY_ELIGIBLE = frozenset({"production_ready", "distributable",
                                    "distributable_assumption_led"})
 RELEASE_STATUSES = ANALYTICALLY_ELIGIBLE | frozenset({"draft_non_distributable"})
@@ -107,12 +110,38 @@ def _publication(doc, folder: Path, stored_ticker: str, db=None) -> dict:
                 return {"analytically_eligible": analytical,
                         "publication_state": publication_state,
                         "review": review, "published": False}
+    published = analytical and (approved or automatic)
     return {"analytically_eligible": analytical,
             "publication_state": publication_state,
             "review": review,
-            "published": analytical and (approved or automatic),
+            "published": published,
             "basis": ("analyst_reviewed" if analytical and approved else
-                      "automatic" if automatic else None)}
+                      "automatic" if automatic else None),
+            "bundle": (_bundle(review, folder, ticker, db, approved=approved)
+                       if published else {})}
+
+
+def _bundle(review, folder, ticker, db=None, *, approved) -> dict:
+    """{kind: sha256} of the bundle a published report stands on (ADR 0015).
+
+    Analyst-reviewed: the approved record's ``artifact_hashes``. Automatic
+    (ADR 0014): the finalized run manifest's ``artifacts``, the files the
+    build hashed when it finished."""
+    if approved:
+        hashes = (review.get("record") or {}).get("artifact_hashes")
+        return dict(hashes) if isinstance(hashes, dict) else {}
+    manifest = outputs.load(outputs.MANIFEST, folder, ticker, db)
+    listed = manifest.get("artifacts") if isinstance(manifest, dict) else None
+    return {kind: row["sha256"] for kind, row in (listed or {}).items()
+            if isinstance(row, dict) and run_manifest.re_full_sha(row.get("sha256"))}
+
+
+def _english_ok(folder, ticker: str, kind: str, bundle: dict) -> bool:
+    """Whether an English file is in the bundle and still has its bundle bytes."""
+    expected = bundle.get(kind)
+    found = artifact(folder, ticker, kind)
+    return (found is not None and isinstance(expected, str)
+            and run_manifest.file_sha256(found[0]) == expected)
 
 
 def is_publishable(folder, ticker: str, db=None) -> bool:
@@ -143,6 +172,12 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
     published = publication["published"]
     reviewed = review.get("record") or {}
     method = str(doc.get("method") or "")
+    bundle = publication.get("bundle") or {}
+    files = {**{kind: published and (folder / pattern.format(t=ticker)).is_file()
+                for kind, (pattern, _) in FILES.items()},
+             "trace_json": published and outputs.exists(outputs.TRACE, folder, ticker),
+             **{kind: published and _english_ok(folder, ticker, kind, bundle)
+                for kind in ENGLISH_FILES}}
     return {
         "ticker": ticker,
         "name": str(meta.get("emiten") or ticker),
@@ -185,12 +220,9 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
                    "reviewed_at": reviewed.get("reviewed_at"),
                    "decision": reviewed.get("decision"),
                    "edits": len(assumption_review.plan_edits(reviewed))},
-        "files": {**{kind: published and (folder / pattern.format(t=ticker)).is_file()
-                      for kind, (pattern, _) in FILES.items()},
-                  "trace_json": published and outputs.exists(outputs.TRACE, folder, ticker)},
+        "files": files,
         # Report languages a reader can open now (see PUBLIC_LANGUAGES).
-        "languages": [lang for lang, kind in PUBLIC_LANGUAGES.items()
-                      if published and (folder / FILES[kind][0].format(t=ticker)).is_file()],
+        "languages": [lang for lang, kind in PUBLIC_LANGUAGES.items() if files[kind]],
     }
 
 
@@ -219,8 +251,18 @@ def artifact(folder, ticker: str, kind: str) -> tuple[Path, str] | None:
 
 
 def public_artifact(folder, ticker: str, kind: str, db=None) -> tuple[Path, str] | None:
-    """A file from the currently approved, analytically eligible report bundle."""
-    if kind not in FILES or not is_publishable(folder, ticker, db):
+    """A file from the currently published, analytically eligible report bundle.
+
+    An English file also has to be in that bundle with its bytes unchanged."""
+    ticker = str(ticker).upper()
+    if kind not in PREVIEW_FILES or not TICKER.fullmatch(ticker):
+        return None
+    doc = outputs.load(outputs.REPORT, folder, ticker, db)
+    publication = _publication(doc, folder, ticker, db)
+    if not publication["published"]:
+        return None
+    if kind in ENGLISH_FILES and not _english_ok(folder, ticker, kind,
+                                                 publication.get("bundle") or {}):
         return None
     return artifact(folder, ticker, kind)
 
