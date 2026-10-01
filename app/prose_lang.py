@@ -185,7 +185,7 @@ _ENGLISH = re.compile(
 # "baru", "tambang", "listrik", "utama", "antara") stay out too. Checked against
 # every English twin stored in Oct 2026: none of them reads Indonesian by it.
 _INDONESIAN_CONTENT = frozenset("""
-    di ke juga lagi telah sedang bisa dapat harus perlu boleh bukan tanpa agar
+    rilis di ke juga lagi telah sedang bisa dapat harus perlu boleh bukan tanpa agar
     namun tetapi tapi sehingga sejak hingga sampai setelah sebelum saat ketika
     sementara seiring sejalan meski walau maupun bahwa apakah tersebut menuju
     atas bawah dekat jauh luar depan akhir awal tiap setiap semua seluruh

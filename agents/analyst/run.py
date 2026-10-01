@@ -406,7 +406,8 @@ def _execute(chat, ticker, plan, messages, available, problems):
             "Jalankan riset. Setiap giliran balas {\"calls\": [{\"tool\": ..., \"args\": {...}, "
             f"\"why\": ..., \"why_en\": \"the same reason in English\"}}]}} (maksimal "
             f"{MAX_CALLS_PER_TURN} panggilan) atau "
-            "{\"done\": true, \"why\": \"...\"} bila bukti sudah cukup. Kamu boleh menyimpang "
+            "{\"done\": true, \"why\": \"...\", \"why_en\": \"the same reason in English\"} bila "
+            "bukti sudah cukup. Kamu boleh menyimpang "
             "dari rencana jika hasil sebelumnya menunjukkan hal lain yang perlu dicek.")}]
     while messages is not None and turns < MAX_TURNS and len(steps) < MAX_TOOL_CALLS:
         turns += 1
@@ -417,7 +418,10 @@ def _execute(chat, ticker, plan, messages, available, problems):
             break
         messages.append({"role": "assistant", "content": raw[:4000]})
         if action.get("done"):
-            emit("tool", "Agent menilai bukti sudah cukup", _clean(action.get("why")))
+            why = _clean(action.get("why"))
+            why_en = _clean(action.get("why_en")) if isinstance(action.get("why_en"), str) else None
+            why_en = why_en if why_en and _english_note(why_en, why) is None else None
+            emit("tool", "Agent menilai bukti sudah cukup", why, detail_en=why_en)
             break
         calls = action.get("calls") if isinstance(action.get("calls"), list) else []
         if not calls:

@@ -239,7 +239,12 @@ def test_a_code_or_name_may_be_its_own_english(text):
 
 
 @pytest.mark.parametrize("text", ["Penurunan suku bunga", "Kredit naik pada 3Q26",
-                                  "rilis earnings 3Q26", "Loans rise in 3Q26"])
+                                  "rilis earnings 3Q26"])
 def test_prose_may_not_repeat_as_its_own_english(text):
     assert not prose_lang.language_neutral(text)
     assert "repeats the Indonesian instead of translating it" in scrub.english_problems(text, text)
+
+
+@pytest.mark.parametrize("text", ["Loans rise in 3Q26", "2H26 (forecast)"])
+def test_source_text_already_english_may_repeat_as_its_twin(text):
+    assert "repeats the Indonesian instead of translating it" not in scrub.english_problems(text, text)

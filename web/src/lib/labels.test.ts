@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { featuredReport, problemNotes, progressStep, ratingLabel, ratingTone, selectedStep, validatorNote } from "./labels";
 import { pct, rp } from "./format";
-import { hasEnglish, readerFiles, type ReportItem } from "./api";
+import { hasEnglish, jobFiles, readerFiles, type ReportItem } from "./api";
 
 const item = (over: Partial<ReportItem>): ReportItem => ({
   ticker: "AAAA", name: "PT A", date: "2026-09-24", release_status: "distributable",
@@ -66,6 +66,17 @@ describe("report files", () => {
     expect(readerFiles(item({}), "en").html).toBe("/files/reports/AAAA.html");
     expect(hasEnglish(item({ files: { pdf: true, html: true, trace: true, trace_json: true, html_en: true } }))).toBe(true);
     expect(readerFiles(en, "en").traceHtml).toBe("/files/reports/AAAA-trace.html");
+  });
+  it("links a finished job to its gallery bundle, in English for an English reader", () => {
+    const job = { ticker: "AAAA", report_url: "/files/reports/AAAA.html", pdf_url: "/files/reports/AAAA.pdf" };
+    expect(jobFiles(job, en, "en")).toEqual({ html: "/files/reports/AAAA.en.html", pdf: "/files/reports/AAAA.en.pdf" });
+    expect(jobFiles(job, en, "id")).toEqual({ html: "/files/reports/AAAA.html", pdf: "/files/reports/AAAA.pdf" });
+    // Without the gallery entry, or with an Indonesian-only one, the snapshot's own links.
+    expect(jobFiles(job, undefined, "en").html).toBe("/files/reports/AAAA.html");
+    expect(jobFiles(job, item({ languages: ["id"] }), "en").html).toBe("/files/reports/AAAA.html");
+    // No link the snapshot does not give: the job's report is not published (yet).
+    expect(jobFiles({ ticker: "AAAA" }, en, "en")).toEqual({ html: undefined, pdf: undefined });
+    expect(jobFiles({ ...job, pdf_url: undefined }, en, "en").pdf).toBeUndefined();
   });
 });
 

@@ -5,15 +5,16 @@ fields the standalone trace HTML shows (see ``research._trace_html``), each
 typed and length-bounded; nothing else leaves the server.
 
 Indonesian text the host wrote gets an English twin, ``<field>_en`` (#34),
-also for traces stored before twins existed (``app.host_lang``); source data
-(news titles, search queries, article text) and agent prose without its own
-twin stay Indonesian.
+also for traces stored before twins existed (``app.host_lang``), and so does
+curated source text with its English in ``data/source_text_en``
+(``prose_lang.known``); source data (news titles, search queries, article
+text) and agent prose without its own twin stay Indonesian.
 """
 from __future__ import annotations
 
 import re
 
-from . import host_lang
+from . import host_lang, prose_lang, report_lang
 from .jobs import http_url, public_intel, text
 
 
@@ -118,9 +119,28 @@ def _news(sources: dict) -> dict:
     }
 
 
+def _category_en(category) -> str | None:
+    """A key risk's category in English ("Pendanaan" -> "Funding"), as the
+    English report tags it; None when the word has none."""
+    if not isinstance(category, str) or not category.strip():
+        return None
+    word = category.strip()
+    english = host_lang.english(word) or report_lang.label(word.lower(), "en")
+    return english[:1].upper() + english[1:] if english and english.lower() != word.lower() else None
+
+
+def _plan_en(value, limit):
+    """An agent's English twin with its figures in English format, as the
+    English report prints them; agents write the Indonesian figures as they
+    stand ("12,4%", "Rp1.234,5 miliar"). Curated source English is not passed
+    here: it may already write English figures."""
+    return text(report_lang.plain(value), limit) if isinstance(value, str) and value.strip() else None
+
+
 def _forecast(result: dict) -> dict:
     plan = result.get("plan") if isinstance(result.get("plan"), dict) else {}
     interim = plan.get("interim_scenario") if isinstance(plan.get("interim_scenario"), dict) else {}
+    scenario = plan.get("earnings_scenario") if isinstance(plan.get("earnings_scenario"), dict) else {}
 
     def number(value):
         return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
@@ -136,13 +156,17 @@ def _forecast(result: dict) -> dict:
             "url": http_url(e.get("source_url")), "factual_basis": text(e.get("factual_basis"), 400),
             "mechanism": text(e.get("mechanism"), 400), "uncertainty": text(e.get("uncertainty"), 300),
             # English twins (#34); None for plans written before them.
-            "rationale_en": text(e.get("rationale_en"), 600),
-            "factual_basis_en": text(e.get("factual_basis_en"), 400),
-            "mechanism_en": text(e.get("mechanism_en"), 400),
-            "uncertainty_en": text(e.get("uncertainty_en"), 300),
+            "rationale_en": _plan_en(e.get("rationale_en"), 600),
+            "factual_basis_en": _plan_en(e.get("factual_basis_en"), 400),
+            "mechanism_en": _plan_en(e.get("mechanism_en"), 400),
+            "uncertainty_en": _plan_en(e.get("uncertainty_en"), 300),
         } for e in _list(plan.get("news_effects"))[:12]],
-        "interim": {"rationale": text(interim.get("rationale"), 900),
-                    "rationale_en": text(interim.get("rationale_en"), 900),
+        # A curated rationale (data/analyst_scenarios) replaces the agent's and
+        # its twin; its English, when there is one, is in data/source_text_en.
+        # Curated text runs past the agent's 1400 characters: it is shown whole.
+        "interim": {"rationale": text(interim.get("rationale"), 2400),
+                    "rationale_en": (_plan_en(interim.get("rationale_en"), 2400)
+                                     or text(prose_lang.known(interim.get("rationale")), 2400)),
                     "published_at": text(interim.get("published_at"), 30),
                     "url": http_url(interim.get("source_url"))} if interim else None,
         "outyears": [{
@@ -152,9 +176,30 @@ def _forecast(result: dict) -> dict:
             "net_income_margin_pct": number(r.get("net_income_margin_pct")),
             "capex_to_revenue_pct": number(r.get("capex_to_revenue_pct")),
             "rationale": text(r.get("rationale"), 600),
-            "rationale_en": text(r.get("rationale_en"), 600),
+            "rationale_en": _plan_en(r.get("rationale_en"), 600),
             "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
         } for r in _list(plan.get("outyear_scenario"))[:6]],
+        # Spec §5.4 key risks and the catalyst table of the earnings scenario,
+        # with the agent's English twins; the category and the direction are
+        # codes whose English is the report's own label.
+        "key_risks": [{
+            "category": text(r.get("category"), 40),
+            "category_en": text(_category_en(r.get("category")), 40),
+            "headline": text(r.get("headline"), 120),
+            "headline_en": _plan_en(r.get("headline_en"), 120),
+            "explanation": text(r.get("explanation"), 600),
+            "explanation_en": _plan_en(r.get("explanation_en"), 600),
+            "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
+        } for r in _list(scenario.get("key_risks"))[:8]],
+        "catalysts": [{
+            "item": text(c.get("item"), 160), "item_en": _plan_en(c.get("item_en"), 160),
+            "timing": text(c.get("timing"), 160), "timing_en": _plan_en(c.get("timing_en"), 160),
+            "driver_path": text(c.get("driver_path"), 400),
+            "driver_path_en": _plan_en(c.get("driver_path_en"), 400),
+            "direction": text(c.get("direction"), 20),
+            "direction_en": text(host_lang.english(c.get("direction")), 20),
+            "source_ids": [text(s, 40) for s in (c.get("source_ids") or [])[:8]],
+        } for c in _list(scenario.get("catalysts_risks"))[:10]],
         # Bank Driver Scenario (financial_ddm): the interim-year H2 drivers and
         # the four out-years, in percent.
         "bank_drivers": [{
@@ -163,7 +208,7 @@ def _forecast(result: dict) -> dict:
                 "loan_growth_pct", "nim_pct", "non_ii_to_nii_pct", "cost_to_income_pct",
                 "cost_of_credit_pct", "deposit_growth_pct")},
             "rationale": text(r.get("rationale"), 600),
-            "rationale_en": text(r.get("rationale_en"), 600),
+            "rationale_en": _plan_en(r.get("rationale_en"), 600),
             "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
         } for r in [(plan.get("earnings_scenario") or {}).get("bank_drivers")]
             + _list(plan.get("bank_outyear_scenario"))[:4] if isinstance(r, dict)],
