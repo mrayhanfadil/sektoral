@@ -331,6 +331,22 @@ def test_automatic_publication_serves_english_from_its_run_manifest(tmp_path):
     assert client.get("/files/reports/AAAA.en.html").status_code == 404
 
 
+def test_the_english_cover_route_serves_the_english_pdf_cover(tmp_path, monkeypatch):
+    from test_gallery import _render_covers, _report
+
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    _render_covers(monkeypatch)
+    _report(reports, "AAAA", reviewed=False, english=True)
+    _report(reports, "BBBB", reviewed=False)
+    client = _client(tmp_path, reports)
+    english = client.get("/files/reports/AAAA/cover.en.png")
+    assert english.status_code == 200 and english.content == b"%PDF-1.4 english"
+    assert english.headers["content-type"] == "image/png"
+    assert client.get("/files/reports/AAAA/cover.png").content == b"%PDF-1.4 test"
+    assert client.get("/files/reports/BBBB/cover.png").status_code == 200
+    assert client.get("/files/reports/BBBB/cover.en.png").status_code == 404
+
 def test_a_draft_lists_no_language(tmp_path):
     from test_gallery import _report
 

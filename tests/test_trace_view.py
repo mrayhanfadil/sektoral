@@ -1,12 +1,14 @@
 """Browser trace only exposes a bounded provenance manifest projection."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from app import prose_lang, scrub  # noqa: E402
 from app.trace_view import build  # noqa: E402
 
 
@@ -139,6 +141,59 @@ def test_trace_view_passes_the_forecast_english_twins_through():
     assert view["outyears"][0]["rationale_en"] == "Later."
 
 
+def test_trace_view_shows_the_key_risks_and_catalysts_with_their_english():
+    scenario = {
+        "key_risks": [
+            {"category": "Pendanaan", "headline": "Tekanan biaya dana naik",
+             "headline_en": "Rising cost of funds",
+             "explanation": "CoF FY2025 sudah 3,51%.", "explanation_en": "CoF in FY2025 is already 3,51%.",
+             "source_ids": ["official"]},
+            {"category": "Tata kelola", "headline": "Risiko konsentrasi kredit UMKM",
+             "explanation": "Segmen UMKM dominan.", "source_ids": []}],
+        "catalysts_risks": [
+            {"item": "Biaya kredit naik bertahap ke 3,10% H2", "timing": "2H26 (forecast)",
+             "driver_path": "Provisi naik → laba tertekan", "direction": "Negatif",
+             "source_ids": ["official"], "item_en": "Cost of credit rises gradually to 3,10% in H2",
+             "driver_path_en": "Provisions rise → profit under pressure"}]}
+    view = build({"ticker": "BBRI", "forecast_assumptions": {
+        "plan": {"earnings_scenario": scenario}}})["forecast"]
+    funding, governance = view["key_risks"]
+    assert funding == {"category": "Pendanaan", "category_en": "Funding",
+                       "headline": "Tekanan biaya dana naik", "headline_en": "Rising cost of funds",
+                       "explanation": "CoF FY2025 sudah 3,51%.",
+                       "explanation_en": "CoF in FY2025 is already 3.51%.", "source_ids": ["official"]}
+    assert governance["category_en"] == "Governance"
+    assert governance["headline_en"] is None and governance["explanation_en"] is None
+    catalyst, = view["catalysts"]
+    assert catalyst["item_en"] == "Cost of credit rises gradually to 3.10% in H2"
+    assert catalyst["timing"] == "2H26 (forecast)" and catalyst["timing_en"] is None
+    assert catalyst["driver_path_en"] == "Provisions rise → profit under pressure"
+    assert catalyst["direction"] == "Negatif" and catalyst["direction_en"] == "Negative"
+    empty = build({"ticker": "BBRI"})["forecast"]
+    assert empty["key_risks"] == [] and empty["catalysts"] == []
+
+
+def test_a_curated_interim_rationale_gets_its_english_from_the_source_text():
+    # AMMN's interim rationale comes from data/analyst_scenarios, which drops the
+    # agent's twin; its English is kept in data/source_text_en/AMMN.json.
+    curated = json.loads((ROOT / "data" / "analyst_scenarios" / "AMMN.json").read_text())[
+        "forecast_rationale"]
+    view = build({"ticker": "AMMN", "forecast_assumptions": {
+        "plan": {"interim_scenario": {"rationale": curated}}}})["forecast"]
+    english = view["interim"]["rationale_en"]
+    assert english.startswith("As of 24 September 2026, Q2 actuals can be derived")
+    # The same figures as the Indonesian, written as there.
+    assert prose_lang.figures(english) == prose_lang.figures(curated)
+    assert scrub.english_problems(curated, english) == []
+    # A twin the plan has wins; Indonesian without one stays without.
+    own = build({"ticker": "AMMN", "forecast_assumptions": {"plan": {"interim_scenario": {
+        "rationale": curated, "rationale_en": "Own twin."}}}})["forecast"]
+    assert own["interim"]["rationale_en"] == "Own twin."
+    unknown = build({"ticker": "AMMN", "forecast_assumptions": {"plan": {"interim_scenario": {
+        "rationale": "Asumsi interim yang belum diterjemahkan."}}}})["forecast"]
+    assert unknown["interim"]["rationale_en"] is None
+
+
 # An analyst result stored before English twins, with the host fallback synthesis.
 OLD_ANALYST = {
     "ticker": "AMMN", "status": "partial",
@@ -231,3 +286,13 @@ def test_the_trace_gives_the_method_and_research_brief_their_english():
     forecast = build({"ticker": "BBRI", "forecast_assumptions": {
         "problems": ["news_effects[1] years are invalid"]}})["forecast"]
     assert forecast["problems_en"] == [None] and empty["forecast"]["problems_en"] == []
+
+
+def test_forecast_twins_reach_the_web_with_english_figures():
+    plan = {"news_effects": [{"rationale": "Laba naik 12,4% ke Rp1.234,5 miliar.",
+                              "rationale_en": "Profit rose 12,4% to Rp1.234,5 miliar."}],
+            "interim_scenario": {"rationale": "Revenue H2 top-down US$2.975bn."}}
+    view = build({"ticker": "TEST", "forecast_assumptions": {"plan": plan}})["forecast"]
+    assert view["news_effects"][0]["rationale_en"] == "Profit rose 12.4% to Rp1,234.5bn."
+    # Curated source English is shown as written (it may already use English figures).
+    assert view["interim"]["rationale_en"] is None or "2.975" in view["interim"]["rationale_en"]
