@@ -1,12 +1,14 @@
 """Browser trace only exposes a bounded provenance manifest projection."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from app import prose_lang, scrub  # noqa: E402
 from app.trace_view import build  # noqa: E402
 
 
@@ -137,6 +139,27 @@ def test_trace_view_passes_the_forecast_english_twins_through():
     assert view["news_effects"][0]["uncertainty_en"] is None
     assert view["interim"]["rationale_en"] == "Interim EN."
     assert view["outyears"][0]["rationale_en"] == "Later."
+
+
+def test_a_curated_interim_rationale_gets_its_english_from_the_source_text():
+    # AMMN's interim rationale comes from data/analyst_scenarios, which drops the
+    # agent's twin; its English is kept in data/source_text_en/AMMN.json.
+    curated = json.loads((ROOT / "data" / "analyst_scenarios" / "AMMN.json").read_text())[
+        "forecast_rationale"]
+    view = build({"ticker": "AMMN", "forecast_assumptions": {
+        "plan": {"interim_scenario": {"rationale": curated}}}})["forecast"]
+    english = view["interim"]["rationale_en"]
+    assert english.startswith("As of 24 September 2026, Q2 actuals can be derived")
+    # The same figures as the Indonesian, written as there.
+    assert prose_lang.figures(english) == prose_lang.figures(curated)
+    assert scrub.english_problems(curated, english) == []
+    # A twin the plan has wins; Indonesian without one stays without.
+    own = build({"ticker": "AMMN", "forecast_assumptions": {"plan": {"interim_scenario": {
+        "rationale": curated, "rationale_en": "Own twin."}}}})["forecast"]
+    assert own["interim"]["rationale_en"] == "Own twin."
+    unknown = build({"ticker": "AMMN", "forecast_assumptions": {"plan": {"interim_scenario": {
+        "rationale": "Asumsi interim yang belum diterjemahkan."}}}})["forecast"]
+    assert unknown["interim"]["rationale_en"] is None
 
 
 # An analyst result stored before English twins, with the host fallback synthesis.
