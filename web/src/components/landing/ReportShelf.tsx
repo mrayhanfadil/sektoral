@@ -4,10 +4,10 @@
 import { Link } from "react-router-dom";
 import { FileText, Play } from "lucide-react";
 import { readerFiles, type ReportItem } from "../../lib/api";
-import { pct, rp } from "../../lib/format";
+import { idr, pct } from "../../lib/format";
 import { twin, useLang, type Lang } from "../../lib/i18n";
 import { selectedStep } from "../../lib/labels";
-import { RatingBadge } from "../Reports";
+import { formatDay, RatingBadge } from "../Reports";
 
 const signed = (v: number | null) => (typeof v === "number" && v > 0 ? "+" : "") + pct(v);
 const upTone = (v: number | null) => (typeof v !== "number" ? "text-ink-faint" : v < 0 ? "text-err-ink" : "text-ok-ink");
@@ -15,6 +15,18 @@ const upTone = (v: number | null) => (typeof v !== "number" ? "text-ink-faint" :
 function selected(item: ReportItem, lang: Lang) {
   const step = selectedStep(item.chain);
   return step ? twin(step, "step", lang) : item.published ? twin(item, "method", lang) : "";
+}
+
+/** The close the upside is measured against, and its date: "harga Rp9.150, 24 Sep 2026". */
+function PriceBasis({ item }: { item: ReportItem }) {
+  const { t, lang } = useLang();
+  if (item.price == null) return null;
+  return (
+    <span className="block font-sans text-[12px] font-normal whitespace-nowrap text-ink-soft">
+      {t({ id: "harga", en: "price" })} <span className="font-mono">{idr(item.price, lang)}</span>
+      {item.price_date && <>, <time dateTime={item.price_date}>{formatDay(item.price_date, lang)}</time></>}
+    </span>
+  );
 }
 
 function Actions({ item }: { item: ReportItem }) {
@@ -65,10 +77,11 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
               <td className="px-4 py-3 text-ink-soft max-xl:hidden">{twin(item, "profile", lang)}</td>
               <td className="px-4 py-3"><RatingBadge item={item} /></td>
               <td className="px-4 py-3 text-right font-mono font-semibold whitespace-nowrap text-ink-strong tabular-nums">
-                {item.published ? `Rp${rp(item.tp)}` : <span className="font-sans font-normal text-ink-faint">{held}</span>}
+                {item.published ? idr(item.tp, lang) : <span className="font-sans font-normal text-ink-faint">{held}</span>}
               </td>
               <td className={`px-4 py-3 text-right font-mono whitespace-nowrap tabular-nums ${upTone(item.upside)}`}>
                 {item.published ? signed(item.upside) : "-"}
+                {item.published && <PriceBasis item={item} />}
               </td>
               <td className="px-4 py-3">
                 {item.published
@@ -96,7 +109,7 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
             <dl className="m-0 mt-2.5 grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-5 text-[13px]">
               <div>
                 <dt className="text-ink-soft">Target</dt>
-                <dd className="m-0 font-mono font-semibold text-ink-strong tabular-nums">{item.published ? `Rp${rp(item.tp)}` : held}</dd>
+                <dd className="m-0 font-mono font-semibold text-ink-strong tabular-nums">{item.published ? idr(item.tp, lang) : held}</dd>
               </div>
               <div>
                 <dt className="text-ink-soft">{t({ id: "Potensi", en: "Upside" })}</dt>
@@ -107,6 +120,7 @@ export function ReportShelf({ items }: { items: ReportItem[] }) {
                 <dd className="m-0 truncate font-mono text-ink">{item.published ? selected(item, lang) : held}</dd>
               </div>
             </dl>
+            {item.published && <p className="m-0 mt-1.5"><PriceBasis item={item} /></p>}
             <div className="mt-3"><Actions item={item} /></div>
           </li>
         ))}

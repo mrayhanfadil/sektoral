@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowDown, ArrowUp, ChevronRight, FileDown, FileText, Footprints, Play } from "lucide-react";
 import { api, readerFiles, reportFiles, type ArchivedPublication, type ChainStep, type ReportItem } from "../lib/api";
 import { DECISION_WORD, decisionCode } from "../lib/codes";
-import { pct, rp } from "../lib/format";
+import { idr, pct } from "../lib/format";
 import { getLang, LOCALE, twin, useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone, selectedStep, type RatingTone } from "../lib/labels";
 import { IssuerLogo } from "./IssuerLogo";
@@ -99,21 +99,43 @@ export function signedPct(value: number | null | undefined): string {
 const upsideTone = (v: number | null | undefined) => (typeof v !== "number" ? "text-ink-soft" : v < 0 ? "text-err-ink" : "text-ok-ink");
 
 export function Stats({ item }: { item: ReportItem }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   return (
     <dl className="m-0 grid grid-cols-3 divide-x divide-rule rounded-md border border-rule bg-surface">
-      {[
-        ["Target", `Rp${rp(item.tp)}`, "text-ink-strong"],
+      {([
+        ["Target", idr(item.tp, lang), "text-ink-strong"],
         [t({ id: "Potensi", en: "Upside" }), signedPct(item.upside), upsideTone(item.upside)],
-        [t({ id: "Harga", en: "Price" }), `Rp${rp(item.price)}`, "text-ink-strong"],
-      ].map(([label, value, cls]) => (
+        [t({ id: "Harga", en: "Price" }), idr(item.price, lang), "text-ink-strong", <PriceDate key="date" item={item} />],
+      ] as [string, string, string, React.ReactNode?][]).map(([label, value, cls, note]) => (
         <div key={label} className="min-w-0 px-3 py-2">
           <dt className="text-[12px] text-ink-soft">{label}</dt>
           <dd className={`m-0 font-mono text-[14.5px] font-semibold tabular-nums ${cls}`}>{value}</dd>
+          {note}
         </div>
       ))}
     </dl>
   );
+}
+
+/** The date of the close behind the price and the upside, small, under the price; nothing when the server omits it. */
+export function PriceDate({ item, className = "" }: { item: Pick<ReportItem, "price" | "price_date">; className?: string }) {
+  const { t, lang } = useLang();
+  if (!item.price_date || item.price == null) return null;
+  return (
+    <dd className={`m-0 text-[11.5px] leading-4 text-ink-soft ${className}`}>
+      {t({ id: "per", en: "as of" })} <time dateTime={item.price_date}>{formatDay(item.price_date, lang)}</time>
+    </dd>
+  );
+}
+
+/** Why a report is not public. A draft is never published (ADR 0014); review-gated mode holds one for review. */
+export function unpublishedNote(item: Pick<ReportItem, "publication_state" | "release_status">): Bi {
+  if (item.publication_state === "withdrawn") return { id: "Company Update dicabut", en: "Company Update withdrawn" };
+  if (item.publication_state === "review_pending") {
+    return { id: "Lolos gerbang otomatis, menunggu review analis sebelum terbit", en: "Cleared the automatic gates, awaiting analyst review before publication" };
+  }
+  if (item.release_status === "draft_non_distributable") return { id: "Draf, tidak diterbitkan", en: "Draft, not published" };
+  return { id: "Belum diterbitkan", en: "Not published" };
 }
 
 /** The audit trace: the React view when the trace JSON exists, else the standalone HTML. */
@@ -181,14 +203,15 @@ export function MethodChain({ chain, className = "" }: { chain: ChainStep[]; cla
         // Other decisions show in the reader's words when their code is known, else as the API gave them.
         const decision = kind !== "other" ? t(DECISION_LABEL[kind]) : code ? t(DECISION_WORD[code]) : s.decision;
         const step = twin(s, "step", lang);
+        const value = twin(s, "value", lang);
         return (
-          <li key={`${s.step}-${i}`} title={`${step}: ${decision}${hasValue(s) ? `, ${s.value}` : ""}`}
+          <li key={`${s.step}-${i}`} title={`${step}: ${decision}${hasValue(s) ? `, ${value}` : ""}`}
             className={`flex items-center gap-1 ${kind === "skip" ? "max-sm:hidden" : ""}`}>
             {i > 0 && <ChevronRight aria-hidden className="size-3 flex-none text-ink-faint" strokeWidth={2.2} />}
             <StepMark kind={kind}>
               <span className="sr-only">{decision}: </span>
               {step}
-              {hasValue(s) && <span className="font-mono text-[12px] tabular-nums">{s.value}</span>}
+              {hasValue(s) && <span className="font-mono text-[12px] tabular-nums">{value}</span>}
             </StepMark>
           </li>
         );
@@ -442,11 +465,12 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
         className="m-0 mt-2.5 grid grid-cols-3 gap-x-3 border-t border-rule-soft pt-2 lg:contents">
         <div className={`${figure} lg:[grid-area:tp]`}>
           <dt className={label}>Target</dt>
-          <dd className={value}>Rp{rp(item.tp)}</dd>
+          <dd className={value}>{idr(item.tp, lang)}</dd>
         </div>
         <div className={`${figure} lg:[grid-area:px]`}>
           <dt className={label}>{t({ id: "Harga", en: "Price" })}</dt>
-          <dd className={`${value} !text-ink`}>Rp{rp(item.price)}</dd>
+          <dd className={`${value} !text-ink`}>{idr(item.price, lang)}</dd>
+          <PriceDate item={item} />
         </div>
         <div className={`${figure} lg:[grid-area:up]`}>
           <dt className={label}>{t({ id: "Potensi", en: "Upside" })}</dt>
@@ -461,7 +485,7 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
 
       <div style={{ gridArea: "l2" }} className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2.5 lg:mt-2">
         {item.published ? <MethodChain chain={item.chain} className="min-w-[200px] flex-1 basis-0" />
-          : <span className="text-[13px] text-ink-faint">{t({ id: "Company Update menunggu publikasi", en: "Company Update awaiting publication" })}</span>}
+          : <span className="text-[13px] text-ink-faint">{t(unpublishedNote(item))}</span>}
         <time dateTime={item.date} className="data hidden text-ink-soft lg:block xl:hidden">{formatDay(item.date)}</time>
         <ReportActions item={item} className="max-sm:basis-full" />
       </div>
