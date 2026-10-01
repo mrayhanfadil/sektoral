@@ -1568,12 +1568,24 @@ def _capital(text):
     return [] if text.strip()[:1].isupper() else ["must start with a capital letter"]
 
 
+# English often runs longer than the Indonesian it translates: a twin may be
+# this much longer than its Indonesian field's limit (BBRI's 430-character bank
+# driver rationale came back over the 450 the Indonesian field allows).
+ENGLISH_SLACK = 1.3
+
+
+def _en_bounds(bounds):
+    """The length bounds of an English twin: the Indonesian field's, with room."""
+    lower, upper = bounds
+    return lower, (math.ceil(upper * ENGLISH_SLACK) if upper < math.inf else upper)
+
+
 def _twin_reasons(text, twin, bounds, rule):
     """Why `twin` cannot be the English of the Indonesian prose `text`."""
     reasons = english_problems(text, twin)
     if reasons:
         return reasons
-    lower, upper = bounds
+    lower, upper = _en_bounds(bounds)
     if not lower <= len(twin.strip()) <= upper:
         reasons.append(f"must be {lower}-{upper} characters" if upper < math.inf
                        else f"must be at least {lower} characters")
@@ -1689,7 +1701,7 @@ class _CutOff(ValueError):
 
 def _ask(chat, fields, follow_up=()):
     """One translation call for ``fields``: ``{path: English}``, or it raises."""
-    limits = {f.path: (f"{f.bounds[0]}-{f.bounds[1]}" if f.bounds[1] < math.inf
+    limits = {f.path: (f"{_en_bounds(f.bounds)[0]}-{_en_bounds(f.bounds)[1]}" if f.bounds[1] < math.inf
                        else f"at least {f.bounds[0]}") for f in fields}
     messages = [{"role": "system", "content": _TRANSLATOR + json.dumps(limits)},
                 {"role": "user", "content": json.dumps({f.path: f.text for f in fields},
