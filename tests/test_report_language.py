@@ -166,6 +166,25 @@ def test_english_tables_keep_the_indonesian_layout_marks(monkeypatch):
     assert "<tr class='total-row'><td class='cell-text'>Net operating cash flow</td>" in html
 
 
+def test_english_method_chain_states_its_reasons_in_english(monkeypatch):
+    """A reason joins release limitations with "; "; each part has English."""
+    monkeypatch.setattr(render, "_price_window", lambda *_args: None)
+    doc = _doc()
+    chain = exhibit_ids.find(doc["exhibits"], exhibit_ids.METHOD_CHAIN)
+    reason = ("driver ke depan (pertumbuhan kredit, NIM, pendapatan non-bunga, CIR, biaya kredit) "
+              "adalah panduan manajemen untuk tahun pertama dan asumsi analis berlabel sesudahnya; "
+              "belum Production-Ready: house-assumption policy became effective after the Report Date")
+    chain["data"]["rows"][0][3] = reason
+    html = render.render(doc, lang="en")
+    assert ("forward drivers (loan growth, NIM, non-interest income, CIR, cost of credit) are "
+            "management guidance for the first year and labelled Analyst Assumptions after it; not "
+            "yet Production-Ready: house-assumption policy became effective after the Report Date"
+            in html)
+    assert "belum Production-Ready" not in html
+    assert "fewer than three valid peer PERs" in html
+    assert reason in render.render(doc)
+
+
 def test_unknown_language_is_refused(monkeypatch):
     with pytest.raises(ValueError):
         _render(monkeypatch, "fr")
