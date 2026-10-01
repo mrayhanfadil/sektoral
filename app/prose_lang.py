@@ -146,14 +146,14 @@ def label(id_text, en_text=None):
 
 
 # Units a model value carries ("US$13.002/t", "4.455 US$/oz", "50 bp").
-_UNITS = {"t", "oz", "lb", "dmt", "kt", "koz", "ha", "bp", "pp", "x", "m2"}
+_AMOUNT_UNITS = {"t", "oz", "lb", "dmt", "kt", "koz", "ha", "bp", "pp", "x", "m2"}
 
 
 def _amount(text):
     """True for a figure with its units and nothing else to translate."""
     words = _LETTERS.findall(text)
-    return bool(_FIGURE.search(text)) and all(w in _UNITS or w[0].isupper() for w in words) \
-        and not _INDONESIAN.search(text)
+    return (bool(_FIGURE.search(text)) and not _INDONESIAN.search(text)
+            and all(w in _AMOUNT_UNITS or w[0].isupper() for w in words))
 
 
 def known(id_text) -> str | None:
