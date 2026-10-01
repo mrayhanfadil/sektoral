@@ -75,3 +75,24 @@ def test_decision_summary_reads_the_price_and_the_rating_band_from_the_tested_ra
     # 9M26 is the next filing once 1H26 is out; its OJK deadline is a month after quarter end.
     assert S.next_filing("2026-09-26", "2026-06-30") == {
         "label": "9M26", "period_end": "2026-09-30", "deadline": "2026-10-31"}
+
+
+def test_driver_figures_are_written_in_the_reports_indonesian_form():
+    """The Indonesian document carries 8,5 and US$13.002; the English edition
+    localizes them (fmt.localize), so neither language shows the other's form."""
+    from app import fmt
+    assert DV._path([8.5, 8.5, 8.0, 8.0]) == "8,5/8,5/8/8%"
+    assert DV._path([3.1, 3.0, 2.25]) == "3,1/3/2,25%"
+    assert fmt.localize(DV._path([5, 4.5, 4, 3.5]), "en") == "5/4.5/4/3.5%"
+
+
+def test_the_mining_deck_and_discount_rate_use_the_report_format(monkeypatch):
+    from app import fmt, reference_lom
+    monkeypatch.setattr(reference_lom, "value", lambda *a, **k: {"per_share": 1000.0})
+    inp = {"cu_price": 13002.4, "au_price": 4455.0, "discount": 0.107, "elang_risk": 0.65,
+           "utilization": 0.9}
+    base = {r["driver"]: r["base"] for r in DV.mining(inp, {}, 17837.3)["rows"]}
+    assert base["Harga tembaga"] == "US$13.002/t" and base["Harga emas"] == "US$4.455/oz"
+    assert base["Tingkat diskonto US$"] == "10,7%"
+    assert fmt.localize(base["Harga tembaga"], "en") == "US$13,002/t"
+    assert fmt.localize(base["Tingkat diskonto US$"], "en") == "10.7%"
