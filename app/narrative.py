@@ -264,6 +264,16 @@ def _replace_interest_causality(text, net_margin_pct):
     return " ".join(out), replaced
 
 
+def _then(text, more):
+    """``text`` and then ``more``, one space between however ``text`` ends.
+
+    Sentence pieces built separately end either with '. ' or with '.'; adding
+    them blindly runs two sentences together or doubles the space."""
+    if not text or not more:
+        return text + more
+    return text.rstrip(" ") + " " + more.lstrip(" ")
+
+
 def _trim(s, cap=30):
     w = s.split()
     return " ".join(w[:cap]) if len(w) > cap else s
@@ -3685,7 +3695,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             q2_conc_value = q2_conc.get("revenue_per_sold_unit_proxy")
             conditional_revenue = conditional_volume * q2_conc_value if q2_conc_value else None
             if conditional_revenue is not None:
-                bridge_paragraph += _t(
+                bridge_paragraph = _then(bridge_paragraph, _t(
                     f"Sebagai uji bersyarat, penjualan konsentrat { _volume_text(conditional_volume, 'dmt')} "
                     f"pada proxy revenue Q2 US$ {fmt._id(q2_conc_value, 0)}/dmt memberi sekitar "
                     f"US$ {fmt._id(conditional_revenue/1e6, 1)} juta. Nilai itu hampir menutup gap, "
@@ -3693,7 +3703,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                     f"As a conditional test, concentrate sales of {_volume_text(conditional_volume, 'dmt')} "
                     f"at the Q2 revenue proxy of US$ {fmt._id(q2_conc_value, 0)}/dmt give about "
                     f"US$ {fmt._id(conditional_revenue/1e6, 1)} juta. That nearly closes the gap, "
-                    "but it is not a realized netback and depends on permits/channels and contracts not yet evidenced.")
+                    "but it is not a realized netback and depends on permits/channels and contracts not yet evidenced."))
         delivery_commitment = ((intake.get("official_evidence") or {}).get(
             "customer_delivery_commitment") or {})
         if delivery_commitment:
@@ -3738,7 +3748,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                 f"{delivery_commitment.get('source_title')}, p. "
                 f"{delivery_commitment.get('source_page')}; {delivery_commitment.get('source_url')}."
             )
-            bridge_paragraph += " " + commitment_text
+            bridge_paragraph = _then(bridge_paragraph, commitment_text)
         new_pages.append({
             "halaman": 0, "judul": "Jembatan revenue H2 menurut produk",
             "layout": "stack", "paragraf": [bridge_paragraph],
@@ -5290,10 +5300,10 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
             "Figures beyond the actual period are analyst assumptions, not company guidance. ")
     doc["cover"]["paragraf"][1] = {
         "judul": "Asumsi skenario dan batasannya",
-        # The bank basis ends without a space (the Indonesian keeps that as is).
-        "isi": (scenario_basis + _t(f"Laba bersih {label} model {fy_money}.",
-                                    ("" if scenario_basis.endswith(" ") else " ")
-                                    + f"Model {label} net profit is {fy_money}.") + path + priced)}
+        # The bank basis ends without a space, the non-bank one with it.
+        "isi": (_then(scenario_basis, _t(f"Laba bersih {label} model {fy_money}.",
+                                         f"Model {label} net profit is {fy_money}."))
+                + path + priced)}
     skipped = [_t(t["short"], _SHORT_EN.get(t["key"], t["short"]))
                for t in va["method_chain"]["trace"] if t["decision"] == "skipped"]
     # Struktur paragraph 3: method, forecast linkage, trading multiple (risk is

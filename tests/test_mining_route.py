@@ -125,3 +125,24 @@ def test_ammn_audit_appendix_has_english_for_its_template_text(tmp_path):
                for cell in cells)
     assert any(cell.startswith("Against detailed long-term principal repayments of US$")
                for cell in cells)
+
+
+# Two sentences run together: a full stop straight into the next sentence.
+_RUN_ON = re.compile(r"[a-z)]\.[A-Z][a-z]")
+
+
+def test_ammn_h2_bridge_sentences_are_spaced(tmp_path):
+    """The H2 revenue bridge appends its gold and conditional-concentrate
+    sentences separately; each starts after a space in both languages."""
+    store.put(commodity.COLLECTION, "Copper", COPPER)
+    store.put(fx.COLLECTION, fx.KEY, USD_IDR)
+    store.put(rates.COLLECTION, rates.UST10Y, UST_10Y)
+    doc = build.build("AMMN", tmp_path, as_of="2026-09-24", assumption_plan=PLAN,
+                      assumption_status="validated")
+    pages = [p for p in (doc.get("bagian") or []) + (doc.get("lampiran_audit") or [])
+             if p.get("judul") == "Jembatan revenue H2 menurut produk"]
+    assert pages
+    for page in pages:
+        for text in page["paragraf"] + (page.get("paragraf_en") or []):
+            assert "Sebagai uji bersyarat" in text or "As a conditional test" in text
+            assert not _RUN_ON.search(_URL.sub("", text)), _RUN_ON.search(text)

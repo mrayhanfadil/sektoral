@@ -641,3 +641,29 @@ def test_bank_scenario_publishes_ddm_without_ebitda(tmp_path):
     assert all(v is not None for v in equity["data"]["series"][0]["bars"])
     assert not any(p["judul"].startswith("EBITDA") for p in panels)
     assert "Rpn.a." not in json.dumps(doc, ensure_ascii=False)
+
+
+def test_bank_cover_basis_and_profit_are_two_spaced_sentences(tmp_path):
+    """The bank H2 basis ends with a bare full stop; the cover joins the model
+    profit after one space in both languages (#38). Dated after the sourced
+    BBRI driver file, the plan's bank drivers run the bank model."""
+    stored = json.loads((FIXTURES / "bbri_scenario_plan.json").read_text())
+    plan = {**stored["plan"], "earnings_scenario": {**stored["plan"]["earnings_scenario"],
+                                                    "bank_drivers": {"year": 2026}}}
+    doc = B.build("BBRI", tmp_path / "BBRI", as_of="2026-09-26",
+                  assumption_plan=plan, assumption_status=stored["status"])
+    basis = doc["cover"]["paragraf"][1]
+    assert basis["isi"].startswith("Asumsi semester kedua")
+    assert "bukan panduan emiten. Laba bersih FY26F model Rp" in basis["isi"]
+    assert "not issuer guidance. Model FY26F net profit is Rp" in basis["isi_en"]
+    for text in (basis["isi"], basis["isi_en"]):
+        assert not re.search(r"[a-z]\.[A-Z]", text), text
+
+
+def test_then_joins_sentences_with_one_space():
+    assert narrative._then("Satu.", "Dua.") == "Satu. Dua."
+    assert narrative._then("Satu. ", "Dua.") == "Satu. Dua."
+    assert narrative._then("Satu. ", " Dua.") == "Satu. Dua."
+    assert narrative._then("", "Dua.") == "Dua."
+    assert narrative._then("Satu. ", "") == "Satu. "
+
