@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import house_assumptions, release_policy
@@ -339,6 +340,9 @@ def build_manifest(*, ticker, as_of, intake=None, forecast=None,
         "source_tree_sha256": source_tree_hash(),
         "working_tree": working_tree_identity(),
         "as_of": str(as_of or intake.get("as_of") or "")[:10],
+        # When the document was built; the report says so when it differs
+        # from the Report Date (app.render.build_note).
+        "built_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         "profile": intake.get("model_profile"),
         "model": {"forecast_agent": os.getenv("SEKTORAL_LLM_MODEL", "MiniMax-M3"),
                   "agent_effort": "high", "schema_version": 1},

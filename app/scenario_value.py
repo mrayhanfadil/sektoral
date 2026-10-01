@@ -26,6 +26,7 @@ from datetime import date
 from statistics import median
 
 from . import bank_model, fmt, house_assumptions, period_basis, share_basis
+from .fx import dated as fx_dated
 
 _IDR_POLICY = house_assumptions.discount_inputs("IDR")
 _USD_POLICY = house_assumptions.discount_inputs("USD")
@@ -442,7 +443,7 @@ def nwc_intensity(intake):
     if ratio < 0:
         return 0.0, (f"modal kerja non-kas FY{a['year']} negatif ({ratio * 100:.0f}% pendapatan); "
                      "tidak dihitung sebagai sumber kas")
-    return ratio, f"modal kerja non-kas FY{a['year']} data Sectors ({ratio * 100:.1f}% pendapatan)"
+    return ratio, f"modal kerja non-kas FY{a['year']} data Sectors ({fmt.pct(ratio)} pendapatan)"
 
 
 def _schedule(rows, valuation_date, h2_share, dividends):
@@ -798,11 +799,12 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=
               "distributions_basis": link.get("distributions_basis"),
               "debt_basis": link.get("debt_basis"),
               "nci_basis": link.get("nci_basis") or (
-                  f"porsi induk {share_parent * 100:.1f}% dari laba 1H resmi"
+                  f"porsi induk {fmt.pct(share_parent)} dari laba 1H resmi"
                   if share_parent < 1 else "tidak dilaporkan terpisah; dianggap tidak material"),
               "attributable_share": share_parent, "shares": shares,
               "shares_basis": link.get("shares_basis"), "fx": fx if fx != 1.0 else None,
               "fx_date": (intake.get("fx_spot") or {}).get("date") if fx != 1.0 else None,
+              "fx_label": fx_dated(intake.get("fx_spot")) if fx != 1.0 else None,
               "per_share": per_share,
               "tv_share": base["pv_tv"] / base["ev"] if base["ev"] else None,
               "implied_exit": (base["tv"] / lines[-1]["ebitda"]

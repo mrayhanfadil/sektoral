@@ -159,6 +159,8 @@ def test_rebuild_archives_approved_destination_and_clears_old_pdf(tmp_path, monk
         return doc
 
     monkeypatch.setattr(build, "build", fake_build)
+    # The rebuild renders its final document (the manifest records the rebuild).
+    monkeypatch.setattr(rebuild.render, "render", lambda doc, lang="id": "new rebuilt html")
     monkeypatch.setattr(rebuild, "_build_once",
                         lambda ticker, out, kwargs, pins: (fake_build(ticker, out, **kwargs),
                                                             [], "", {}, {}))

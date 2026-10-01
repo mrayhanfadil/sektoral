@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -352,3 +354,111 @@ def test_advice_problem_names_the_phrase_for_the_repair():
                                thesis["thesis_points"][1]]
     problems = agent._validate_thesis(thesis, {"official", "news:0"})
     assert any("found 'hold'" in p for p in problems)
+
+
+@pytest.fixture
+def curated(monkeypatch):
+    """The real BBCA driver file stands in as UJIB's curated, sourced file."""
+    from app import bank_drivers
+    data = bank_drivers.load("BBCA", "2026-12-31")
+    assert data is not None and not bank_drivers.validate(data)
+    monkeypatch.setattr(agent.bank_drivers, "load",
+                        lambda ticker, as_of: copy.deepcopy(data) if ticker == "UJIB" else None)
+    return data
+
+
+def _risky(explanation, driver_path=None):
+    scenario = copy.deepcopy(_thesis())
+    scenario["key_risks"][0]["explanation"] = explanation
+    if driver_path:
+        scenario["catalysts_risks"][0]["driver_path"] = driver_path
+    return scenario
+
+
+def test_the_earnings_role_sees_the_driver_file_the_model_runs(curated):
+    source = _source()
+    model = source["bank"]["model"]
+    assert model["file"] == "data/bank_drivers/UJIB.json"
+    assert model["payout_pct"] == [72.0] * 5
+    assert [r["nim_pct"] for r in model["drivers"]] == [5.4, 5.4, 5.4, 5.3, 5.3]
+    role, payload = agent._bank_earnings_role(source)
+    assert payload["model_drivers"] == model
+    assert "relative to those drivers" in role
+    # The driver file is not evidence: a stored plan stays reusable.
+    _spec, sha = agent._spec_sections()
+    plain = agent._source_payload(_intake())
+    plain["bank"].pop("model")
+    assert agent.evidence_fingerprint(source, sha) == agent.evidence_fingerprint(plain, sha)
+
+
+def test_without_a_driver_file_the_role_is_unchanged():
+    source = _source()
+    assert "model" not in source["bank"]
+    role, payload = agent._bank_earnings_role(source)
+    assert "model_drivers" not in payload and "model_drivers" not in role
+
+
+def test_a_risk_quoting_another_payout_or_nim_than_the_model_is_flagged(curated):
+    model = _source()["bank"]["model"]
+    flagged = agent.model_figure_problems(_risky(
+        "Jika kredit tumbuh 9% dan laba ditahan pasca payout 81%, CAR bisa terkoreksi; NIM "
+        "bisa jatuh di bawah asumsi 5,7% dan menekan NII serta laba bersih tahun berjalan.",
+        "Laba 1H26 -> payout 81% -> dividen tunai -> arus kas pemegang saham"), model)
+    assert len(flagged) == 3 and all(p.endswith(agent.MODEL_SOFT) for p in flagged)
+    assert "key_risks[0].explanation states payout 81% but the model runs payout 72%" in flagged[0]
+    assert "states NIM 5,7% but the model runs NIM 5.4/5.3%" in flagged[1]
+    assert "catalysts_risks[0].driver_path" in flagged[2]
+    # The model's own figures, and reported figures that name their period, pass.
+    assert agent.model_figure_problems(_risky(
+        "Payout 72% atas laba FY2026 dan NIM 5,4% menahan modal; payout FY2025 81% dan NIM 1H26 "
+        "5,47% adalah realisasi, sedangkan payout historis 81,3% tidak dipakai model."), model) == []
+    assert agent.model_figure_problems(_thesis(), None) == []
+
+
+def test_a_contradicting_risk_is_repaired_and_one_that_stays_is_listed(monkeypatch, curated):
+    bad = _earnings()
+    bad["earnings_scenario"]["key_risks"][0]["explanation"] = (
+        "Ekspansi kredit dengan payout 92% mengencerkan CAR bila laba ditahan lebih kecil dari "
+        "pertumbuhan aset tertimbang menurut risiko, sehingga ruang ekspansi menyempit.")
+    chat, calls = _scripted({
+        "NEWS DRIVER ANALYST": [NEWS], "BANK DRIVER SCENARIO ANALYST": [bad, _earnings()],
+        "STAGE CLASSIFIER": [STAGE], "BANK DRIVER OUTYEAR ANALYST": [_outyears()]})
+    monkeypatch.setattr(agent, "_chat", chat)
+    result = agent.run_live(_intake())
+    assert result["status"] == "validated" and result["problems"] == []
+    earnings = [m for role, m in calls if role == "BANK DRIVER SCENARIO ANALYST"]
+    assert len(earnings) == 2 and "the model runs payout 72%" in earnings[1][-1]["content"]
+
+    chat, calls = _scripted({
+        "NEWS DRIVER ANALYST": [NEWS], "BANK DRIVER SCENARIO ANALYST": [bad],
+        "STAGE CLASSIFIER": [STAGE], "BANK DRIVER OUTYEAR ANALYST": [_outyears()]})
+    monkeypatch.setattr(agent, "_chat", chat)
+    result = agent.run_live(_intake())
+    # Prose that still contradicts the model keeps the scenario, listed in problems.
+    assert result["status"] == "validated" and result["earnings_status"] == "validated"
+    assert result["plan"]["earnings_scenario"]["key_risks"][0]["explanation"].startswith(
+        "Ekspansi kredit dengan payout 92%")
+    assert len(result["problems"]) == 1 and result["problems"][0].startswith(
+        "earnings: earnings_scenario.key_risks[0].explanation states payout 92%")
+
+
+def test_a_reused_plan_lists_its_contradictions_without_a_new_call(monkeypatch, tmp_path):
+    """A plan stored before the agent saw the driver file is reused as it is
+    (its prose changes only on a paid re-run) and lists what contradicts it."""
+    stored = _earnings()
+    stored["earnings_scenario"]["key_risks"][0]["explanation"] = (
+        "Ekspansi kredit dengan payout 92% mengencerkan CAR bila laba ditahan lebih kecil dari "
+        "pertumbuhan aset tertimbang menurut risiko, sehingga ruang ekspansi menyempit.")
+    chat, calls = _scripted({
+        "NEWS DRIVER ANALYST": [NEWS], "BANK DRIVER SCENARIO ANALYST": [stored],
+        "STAGE CLASSIFIER": [STAGE], "BANK DRIVER OUTYEAR ANALYST": [_outyears()]})
+    monkeypatch.setattr(agent, "_chat", chat)
+    first = agent.run_cached(_intake(), db=tmp_path)  # no driver file yet: nothing to flag
+    assert first["problems"] == [] and first["reused"] is False
+    from app import bank_drivers
+    data = bank_drivers.load("BBCA", "2026-12-31")
+    monkeypatch.setattr(agent.bank_drivers, "load", lambda ticker, as_of: copy.deepcopy(data))
+    before = len(calls)
+    again = agent.run_cached(_intake(), db=tmp_path)
+    assert again["reused"] is True and len(calls) == before
+    assert len(again["problems"]) == 1 and "the model runs payout 72%" in again["problems"][0]
