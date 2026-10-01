@@ -54,8 +54,8 @@ export function ReviewPanel({ ticker, reviewToken, bundleKinds = [], onApproved 
             <h2 id="review-title" className="text-[20px]">{t({ id: "Review dan attestation publikasi", en: "Publication review and attestation" })}</h2>
             <p className="text-[14px] text-ink-soft">
               {t({
-                id: "Publication Bundle hanya dapat diterbitkan sesudah reviewer menguji bukti, model, sensitivitas, dan disclosure untuk versi yang dibekukan.",
-                en: "A Publication Bundle can be published only after a reviewer has tested the evidence, model, sensitivities and disclosures for the frozen version.",
+                id: "Laporan yang lolos gerbang otomatis terbit langsung dengan label belum direview analis; draf tidak pernah terbit. Persetujuan reviewer atas bukti, model, sensitivitas, dan disclosure versi yang dibekukan menambah label direview analis dan mengarsipkan bundle-nya.",
+                en: "A report that clears the automatic gates publishes at once, labelled not analyst-reviewed; a draft is never published. A reviewer's approval of the frozen version's evidence, model, sensitivities and disclosures adds the analyst-reviewed label and archives the bundle.",
               })}
             </p>
           </div>

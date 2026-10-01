@@ -229,8 +229,8 @@ function resultParts(step: Step, lang: Lang): { label?: string; detail?: string 
 }
 
 function Stamp({ at }: { at: number }) {
-  const { t } = useLang();
-  return <span className="data pt-[3px] text-ink-faint" title={t({ id: "Waktu sejak run dimulai", en: "Time since the run started" })}>{clock(at)}</span>;
+  const { t, lang } = useLang();
+  return <span className="data pt-[3px] text-ink-faint" title={t({ id: "Waktu sejak run dimulai", en: "Time since the run started" })}>{clock(at, lang)}</span>;
 }
 
 /** The result of a call or task, springing open when it comes back. */
@@ -354,11 +354,11 @@ function CompactRow({ step, state, showAgent }: { step: Step; state: DeckState; 
   } else if (step.kind === "gate") {
     const g = { verdict: str(d.verdict), code: gateCode(d.verdict_code, d.verdict) };
     lead = `G${d.gate ?? ""}`;
-    text = <>{step.title} <span className={`text-[12.5px] font-medium ${step.status === "ok" ? "text-done" : g.code === "not_applicable" ? "text-ink-soft" : "text-warn-ink"}`}>{gateWord(g, lang)}</span></>;
+    text = <>{step.title} <span className={`text-[12.5px] font-medium ${step.status === "ok" && g.code !== "flagged" ? "text-done" : g.code === "not_applicable" ? "text-ink-soft" : "text-warn-ink"}`}>{gateWord(g, lang)}</span></>;
   } else if (step.kind === "chain") {
     const c = { decision: str(d.decision) ?? "", code: decisionCode(d.decision_code, d.decision) };
     text = <><code className="font-mono text-[13px] font-semibold text-ink-strong">{step.title}</code> <span className={c.code === "selected" ? "font-bold text-brand-ink" : "text-ink-soft"}>{decisionWord(c, lang)}</span></>;
-    side = <span className="data text-ink-strong">{d.value}</span>;
+    side = <span className="data text-ink-strong">{(lang === "en" ? str(d.value_en) : undefined) ?? d.value}</span>;
   } else if (step.kind === "release") {
     side = d.rating ? <span className="data text-ink-strong">{d.rating} {releaseFigures(d, lang).tp}</span> : null;
   }

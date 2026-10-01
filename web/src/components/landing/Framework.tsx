@@ -10,13 +10,14 @@ import { GATE_TONE, GateMeter } from "./GateMeter";
 
 /** What each gate decides (PRODUCT.md, CONTEXT.md). */
 const DECIDES: Record<number, Bi> = {
-  0: { id: "Memilih keluarga metode: bank ke DDM atau P/BV, tambang ke NAV, holding ke SOTP.",
-    en: "Picks the method family: banks to DDM or P/BV, miners to NAV, holding companies to SOTP." },
+  0: { id: "Memilih keluarga metode: bank ke DDM / Excess Return, tambang ke NAV, holding ke SOTP.",
+    en: "Picks the method family: banks to DDM / Excess Return, miners to NAV, holding companies to SOTP." },
   1: { id: "Memeriksa riwayat laporan, laba usaha, leverage, dan ekuitas.", en: "Checks the reporting history, operating profit, leverage, and equity." },
   2: { id: "Kepemilikan minoritas 15–40% mewajibkan silang cek SOTP.", en: "A 15–40% minority holding requires a SOTP cross-check." },
   3: { id: "Menandai emiten komoditas atau aset yang baru ramp-up.", en: "Flags commodity issuers or assets still ramping up." },
   4: { id: "Membaca tahap usaha: tumbuh, matang, atau turnaround.", en: "Reads the business stage: growth, mature, or turnaround." },
-  5: { id: "Potensi di atas +100% atau di bawah −50% menjadi Review Required.", en: "Upside above +100% or below −50% becomes Review Required." },
+  5: { id: "Menilai hasil: potensi di atas +100% atau di bawah −50% menjadi Review Required; multiple keluar di luar rentang atau nilai terminal di atas 80% EV ditandai, rating tidak ditahan.",
+    en: "Judges the result: upside above +100% or below −50% becomes Review Required; an exit multiple out of range or a terminal value above 80% of EV is flagged, the rating not held." },
 };
 
 export function GateInstruments({ gates, ticker }: { gates?: GateState[]; ticker?: string }) {
@@ -71,22 +72,22 @@ const RULES: [term: Bi, body: Bi][] = [
   [{ id: "Fallback", en: "Fallback" },
     { id: "hanya bila metode sebelumnya tidak memadai, bukan karena hasilnya tidak disukai.", en: "only when the method before it is insufficient, never because its result is disliked." }],
   [{ id: "Silang cek", en: "Cross-check" },
-    { id: "wajib: PER peer, P/S, atau SOTP, dengan alasan tercatat. Hanya metode terpilih yang menetapkan target harga; silang cek tidak pernah dirata-rata.",
-      en: "required: peer PER, P/S, or SOTP, with the reason logged. Only the selected method sets the target price; cross-checks are never averaged in." }],
+    { id: "setiap metode berikutnya yang datanya cukup ikut dihitung dan ditampilkan; bila tidak ada, tidak ada silang cek. Hanya metode terpilih yang menetapkan target harga; silang cek tidak pernah dirata-rata.",
+      en: "every later method with enough data is also computed and shown; when none has, there is no cross-check. Only the selected method sets the target price; cross-checks are never averaged in." }],
   [{ id: "Rating ditahan", en: "Rating held" }, { id: "bila tidak ada metode yang lolos.", en: "when no method passes." }],
 ];
 
 export function MethodChain({ item, chain }: { item?: ReportItem; chain?: ChainState[] }) {
   const { lang, t } = useLang();
   const rows: ChainRow[] = chain?.length ? chain : (item?.chain ?? []).map((s) => ({
-    method: twin(s, "step", lang), decision: s.decision, code: decisionCode(s.decision_code, s.decision), value: s.value,
+    method: twin(s, "step", lang), decision: s.decision, code: decisionCode(s.decision_code, s.decision), value: twin(s, "value", lang),
   }));
   return (
     <div className="grid gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <div>
         <h3 className="text-[20px]">{t({ id: "Rantai metode", en: "Method Chain" })}</h3>
         <p className="m-0 mt-2 text-[15px] text-ink-soft">
-          {t({ id: "Urutan metode ditetapkan dari putusan gerbang sebelum nilai apa pun dihitung.", en: "The gates' verdicts fix the method order before any value is computed." })}
+          {t({ id: "Putusan gerbang 0 sampai 4 menetapkan urutan metode sebelum nilai apa pun dihitung; gerbang 5 lalu menguji hasilnya.", en: "The verdicts of gates 0 to 4 fix the method order before any value is computed; Gate 5 then checks the result." })}
         </p>
         <ol className="m-0 mt-5 list-none p-0 text-[15px]">
           {RULES.map(([term, body], i) => (

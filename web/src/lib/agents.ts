@@ -4,7 +4,7 @@
 // (app/progress.py), so a live job and a replayed run render the same way.
 import type { EventData, Intel, JobEvent } from "./api";
 import { decisionCode, eventKind, gateCode, num, str, verdictCode, type DecisionCode, type EventKind, type GateCode, type VerdictCode } from "./codes";
-import { pct, rp } from "./format";
+import { idr, pct } from "./format";
 import { getLang, twin, type Bi, type Lang } from "./i18n";
 
 export type AgentId = "memori" | "analis" | "riset" | "berita" | "forecast" | "gerbang" | "laporan";
@@ -251,14 +251,17 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
         const verdict = str(e.data?.verdict) ?? "";
         const code = gateCode(e.data?.verdict_code, verdict);
         Object.assign(g, {
-          status: code === "not_applicable" ? "skip" : e.status === "ok" ? "ok" : "warn",
+          // A flagged check is disclosed, not passed: it reads as a warning even if its event said ok.
+          status: code === "not_applicable" ? "skip" : code === "flagged" ? "warn" : e.status === "ok" ? "ok" : "warn",
           verdict, code, detail,
         });
       }
     } else if (kind === "chain") {
       const decision = str(e.data?.decision) ?? "";
+      // The value in the reader's format: the English `value_en` ("Rp3,490") where the server sent one.
+      const value = (lang === "en" ? str(e.data?.value_en) : undefined) ?? str(e.data?.value) ?? "-";
       chain.push({ method: label, decision, code: decisionCode(e.data?.decision_code, decision),
-        value: str(e.data?.value) ?? "-", reason: detail, order: chain.length });
+        value, reason: detail, order: chain.length });
     } else if (kind === "release") {
       release = e.data;
     }
@@ -350,7 +353,7 @@ export function derive(events: JobEvent[], opts: { finished?: boolean; failed?: 
 export function releaseFigures(release: EventData | undefined, lang: Lang = getLang()): { tp?: string; upside?: string; down: boolean } {
   const tpValue = num(release?.tp_value);
   const upsideValue = num(release?.upside_pct);
-  const tp = tpValue !== undefined ? `Rp${rp(tpValue, lang)}` : str(release?.tp);
+  const tp = tpValue !== undefined ? idr(tpValue, lang) : str(release?.tp);
   const upside = upsideValue !== undefined ? `${upsideValue > 0 ? "+" : ""}${pct(upsideValue, lang)}` : str(release?.upside);
   const down = upsideValue !== undefined ? upsideValue < 0 : /^[−-]/.test(upside ?? "");
   return { tp, upside, down };
@@ -391,13 +394,36 @@ const UNIT: Bi<{ s: string; m: string; comma: boolean }> = {
 export function duration(seconds: number | undefined, lang: Lang = getLang()): string {
   if (seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return "";
   const unit = UNIT[lang];
-  if (seconds < 60) {
-    const text = seconds.toFixed(1);
+  // Round once, then split: 59.96 s reads "1 min 00 s" and 119.6 s "2 min 00 s", never "60 s".
+  const tenths = Math.round(seconds * 10);
+  if (tenths < 600) {
+    const text = (tenths / 10).toFixed(1);
     return `${unit.comma ? text.replace(".", ",") : text} ${unit.s}`;
   }
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
+  const whole = Math.round(seconds);
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
   return `${m} ${unit.m} ${String(s).padStart(2, "0")} ${unit.s}`;
+}
+
+/**
+ * How many Method Gates a run actually assessed: a gate that does not apply
+ * to the issuer, or could not be assessed, is counted apart, not as assessed.
+ */
+export function gateTally(gates: GateState[]) {
+  const read = gates.filter((g) => g.status !== "idle");
+  const notApplicable = read.filter((g) => g.code === "not_applicable" || (!g.code && g.status === "skip")).length;
+  const notAssessable = read.filter((g) => g.code === "not_assessable").length;
+  return { total: gates.length, read: read.length, assessed: read.length - notApplicable - notAssessable, notApplicable, notAssessable };
+}
+
+/** "4/6 dinilai, 2 tidak berlaku" ("4/6 assessed, 2 not applicable"). */
+export function gateTallyText(gates: GateState[], lang: Lang = getLang()): string {
+  const { total, assessed, notApplicable, notAssessable } = gateTally(gates);
+  const parts = [lang === "en" ? `${assessed}/${total} assessed` : `${assessed}/${total} dinilai`];
+  if (notApplicable) parts.push(lang === "en" ? `${notApplicable} not applicable` : `${notApplicable} tidak berlaku`);
+  if (notAssessable) parts.push(lang === "en" ? `${notAssessable} cannot be assessed` : `${notAssessable} tidak dapat dinilai`);
+  return parts.join(", ");
 }
 
 /** Status words of the deck (from the Command Deck: ANTRI / JALAN / SELESAI). */
