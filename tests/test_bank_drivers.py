@@ -78,3 +78,11 @@ def test_a_binding_capital_floor_is_not_compared_silently():
 
 def test_a_file_published_after_the_report_date_is_not_known():
     assert BD.load("BBRI", "2026-08-30") is None
+
+
+def test_the_run_manifest_hashes_the_driver_files_the_model_runs():
+    from app import run_manifest
+    hashes = run_manifest.issuer_source_hashes("BBRI")
+    assert hashes["data/bank_drivers/BBRI.json"] == run_manifest.file_sha256(BD.ROOT / "BBRI.json")
+    assert "data/operating_drivers/POWR.json" in run_manifest.issuer_source_hashes("POWR")
+
