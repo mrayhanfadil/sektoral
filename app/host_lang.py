@@ -570,6 +570,16 @@ def _english(text: str) -> str | None:
     return None
 
 
+def raw(text) -> str | None:
+    """The English of host-written `text` with its figures as the Indonesian
+    writes them, for a template the English edition localizes when it renders
+    (``prose_lang.label``); None when it is not known host text."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    found = _english(text)
+    return found if found != text else None
+
+
 def english(text) -> str | None:
     """The English of host-written Indonesian `text`, figures in English format;
     None when it is not known host text."""

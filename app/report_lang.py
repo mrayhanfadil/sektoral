@@ -234,7 +234,7 @@ TERMS = {
     "Laju penjualan": "Sales rate",
     "Langkah": "Step",
     "kumulatif": "cumulative",
-    "Liabilitas/ekuitas": "Liabilities/equity",
+    "Liabilitas/ekuitas": "Liabilities/equity", "liabilitas/ekuitas": "liabilities/equity",
     "Margin bersih": "Net margin",
     "Metode": "Method",
     "Metrik": "Metric",
@@ -1118,3 +1118,193 @@ def note(text, lang: str = DEFAULT):
         if found:
             return template.format(*(fmt.localize(g or "", lang) for g in found.groups()))
     return text
+
+
+# The reason a table prints n.m. (render's ``_nm_note``): the n.m. part of an
+# exhibit's source note, written by app.report_extras, app.forecast_statements
+# and app.bank_model. Each part is a whole sentence or clause; one this table
+# does not know leaves the note Indonesian whole.
+_NM_PARTS = {
+    "n.m. pada kolom yoy: perubahan dari/ke angka negatif tidak bermakna sebagai persentase":
+        "n.m. in the yoy column: a change from or to a negative figure is not meaningful as a "
+        "percentage",
+    "di atas 500% ditulis >500% dan di bawah -500% ditulis n.m. karena basis rendah atau negatif":
+        "above 500% is shown as >500% and below -500% as n.m., on a low or negative base",
+    "Penjualan persediaan 1H tidak dimodelkan terpisah": "1H inventory sales are not modelled separately",
+    "rasio di atas 500% ditulis n.m. karena basis pendapatan atau ekuitas sangat kecil":
+        "ratios above 500% are shown as n.m. on a very small revenue or equity base",
+    "Multiple di atas 100x ditulis n.m. karena basis laba atau ekuitas sangat kecil":
+        "Multiples above 100x are shown as n.m. on a very small earnings or equity base",
+    "Perbedaan OLC 54/60 km belum dimodelkan sebagai capex":
+        "The 54/60 km OLC difference is not yet modelled as capex",
+    "PER dan PBV di atas 100x atau dengan basis tidak positif ditulis n.m":
+        "PER and PBV above 100x or on a non-positive base are shown as n.m",
+    "DPS dan dividend yield n.m.: model ini tidak memproyeksikan dividen":
+        "DPS and dividend yield n.m.: this model does not project dividends",
+    "median P/E dan P/B memakai rentang yang sama dengan valuasi":
+        "the median P/E and P/B use the same range as the valuation",
+    "Emiten yang dibahas disorot '(emiten)'": "The issuer under discussion is marked '(issuer)'",
+    "P/E dan P/B peer bukan EV/EBITDA dan berbeda struktur modal":
+        "Peer P/E and P/B are not EV/EBITDA and reflect different capital structures",
+    "nilai negatif ditampilkan dalam kurung": "negative values are shown in brackets",
+    "kolom kini dan harga implisit ditulis n.m. (tanpa basis positif saat ini)":
+        "the current and implied price columns are shown as n.m. (no positive current base)",
+    "pembiayaan sebenarnya (utang bank, obligasi atau penundaan capex) belum dimodelkan":
+        "the actual financing (bank debt, bonds or deferred capex) is not yet modelled",
+}
+# Why a line is n.m. in a column: "n.m. pada <lines> (kolom <columns>): <reason>".
+_NM_REASONS = {
+    # app.report_extras
+    "skenario forecast belum tervalidasi, sehingga kolom forecast belum dimodelkan":
+        "the forecast scenario is not validated, so the forecast columns are not yet modelled",
+    "pos ini tidak dihasilkan model forecast": "the forecast model does not produce this line",
+    "tidak bermakna karena basis pembanding nol, negatif, atau tidak tersedia":
+        "not meaningful: the comparison base is zero, negative or unavailable",
+    "tahun ini di luar horizon skenario tervalidasi": "this year is beyond the validated scenario horizon",
+    "tidak dilaporkan di data Sectors untuk tahun ini": "not reported in Sectors data for this year",
+    "rilis tahunan resmi US$ hanya memuat pendapatan, EBITDA, laba dan ekuitas; data Sectors untuk "
+    "pos ini hanya tersedia dalam rupiah hasil konversi":
+        "the official US$ annual release carries only revenue, EBITDA, earnings and equity; Sectors "
+        "data for this line exists only in converted rupiah",
+    "tahun sebelumnya tidak ada di rilis tahunan resmi US$":
+        "the prior year is not in the official US$ annual release",
+    "Sectors tidak memisahkan piutang usaha; nilainya termasuk aset lancar lainnya":
+        "Sectors does not separate trade receivables; the value sits in other current assets",
+    "Sectors tidak memisahkan utang usaha; nilainya termasuk liabilitas lancar lainnya":
+        "Sectors does not separate trade payables; the value sits in other current liabilities",
+    "Sectors tidak memisahkan pendapatan bunga emiten non-bank; nilainya termasuk pendapatan "
+    "(beban) lain-lain":
+        "Sectors does not separate interest income for non-bank issuers; the value sits in other "
+        "income (expense)",
+    "Sectors hanya memuat total arus kas operasi; perubahan modal kerja termasuk pos operasi lainnya":
+        "Sectors carries only total operating cash flow; the change in working capital sits in "
+        "other operating items",
+    "Sectors hanya memuat total arus kas pendanaan tanpa rincian":
+        "Sectors carries only total financing cash flow, without a breakdown",
+    "Sectors tidak memisahkan obligasi pemerintah dan surat berharga":
+        "Sectors does not separate government bonds and securities",
+    "Sectors tidak memuat kredit bermasalah (NPL)": "Sectors carries no non-performing loans (NPL)",
+    "Sectors tidak memuat dividen tahunan pada laporan keuangan historis":
+        "Sectors carries no annual dividends in the historical financial statements",
+    "pinjaman penyeimbang kas adalah pos model forecast; utang aktual seluruhnya di utang jangka "
+    "pendek dan jangka panjang":
+        "cash-balancing borrowing is a forecast model line; actual debt sits entirely in short- and "
+        "long-term debt",
+    "pinjaman penyeimbang kas adalah pos model forecast; utang aktual seluruhnya di penarikan "
+    "(pembayaran) utang":
+        "cash-balancing borrowing is a forecast model line; actual debt flows sit entirely in debt "
+        "drawn (repaid)",
+    "laporan resmi mereklasifikasi pendapatan tahun ini; angka Sectors untuk pos ini masih sebelum "
+    "reklasifikasi":
+        "the official report reclassified this year's revenue; the Sectors figure for this line "
+        "predates the reclassification",
+    "multiple historis memerlukan harga akhir tahun dan jumlah saham tahun itu; data harga IDX "
+    "lokal tidak mencakup tahun ini":
+        "a historical multiple needs the year-end price and that year's share count; local IDX "
+        "price data does not cover this year",
+    "multiple di atas 100x tidak bermakna karena basis laba, ekuitas atau EBITDA sangat kecil":
+        "a multiple above 100x is not meaningful on a very small earnings, equity or EBITDA base",
+    "laba bersih tahun itu tidak positif": "net profit for the year is not positive",
+    "EPS forecast tidak positif": "forecast EPS is not positive",
+    "ekuitas tahun itu tidak positif": "equity for the year is not positive",
+    "BVPS forecast tidak positif": "forecast BVPS is not positive",
+    "EBITDA atau utang bersih tahun itu tidak tersedia di data Sectors":
+        "EBITDA or net debt for the year is not in Sectors data",
+    "jembatan EV (kas, utang, saham) valuasi tidak lengkap":
+        "the valuation's EV bridge (cash, debt, shares) is incomplete",
+    "tidak tersedia pada data aktual tabel ini": "not available in this table's actual data",
+    "basis tahun sebelumnya nol, negatif, atau tidak tersedia":
+        "the prior-year base is zero, negative or unavailable",
+    "laba atau jumlah saham tidak tersedia": "earnings or share count unavailable",
+    "ekuitas atau jumlah saham tidak tersedia": "equity or share count unavailable",
+    "laba atau ekuitas tahun itu tidak tersedia di data Sectors":
+        "earnings or equity for the year is not in Sectors data",
+    "data Sectors mencatat dividen per tanggal ex-date, bukan per tahun buku":
+        "Sectors data records dividends by ex-date, not by financial year",
+}
+_NM_PATTERNS = [(re.compile(p), t) for p, t in (
+    (r"n\.m\. pada multiple (\S+): di atas (\d+)x, basis laba atau ekuitas sangat kecil",
+     "n.m. on {0} multiples: above {1}x, on a very small earnings or equity base"),
+    (r"n\.m\.: (.+?) ((?:\d[HQ]\d+|FY\d+F?)(?:, (?:\d[HQ]\d+|FY\d+F?))*) \(rilis resmi tidak memuat "
+     r"EBITDA periode itu\)",
+     "n.m.: {0} {1} (the official release has no EBITDA for that period)"),
+    (r"Pertumbuhan FCFF (FY\S+) n\.m\.: EBIT, D&A dan capex (FY\d+) dalam US\$ tidak tersedia",
+     "{0} FCFF growth n.m.: {1} EBIT, D&A and capex in US$ are not available"),
+    (r"(\S+) menggantikan band (\S+) karena (\S+) (FY\d+) tidak positif sejak (\S+), sehingga "
+     r"(\S+) kini tidak bermakna",
+     "{0} replaces the {1} band because {2} {3} has not been positive since {4}, so the current "
+     "{5} is not meaningful"),
+)]
+_NM_PEERS = re.compile(r"n\.m\.: kurang dari tiga peer valid \((.+)\)")
+_NM_SEGMENT = re.compile(r"(.+) \((kolom [^()]+)\): (.+)")
+_NM_COLUMNS = {"kolom aktual": "actual columns", "kolom forecast": "forecast columns"}
+
+
+def _nm_labels(text):
+    """Line labels joined by ", " (a comma inside parentheses belongs to its label)."""
+    parts, depth, start = [], 0, 0
+    for i, ch in enumerate(text):
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth == 0 and text[i + 1:i + 2] == " ":
+            parts.append(text[start:i])
+            start = i + 2
+    return ", ".join(_en(p) for p in parts + [text[start:]])
+
+
+def _nm_reason(text):
+    """A reason from app.report_extras (here), or a statement model's own note
+    (``forecast_statements`` / ``bank_model``, whose English is in
+    ``app.source_patterns``)."""
+    text = text.strip().rstrip(".")
+    hit = _NM_REASONS.get(text)
+    if hit is not None:
+        return hit
+    from . import prose_lang  # it imports this module
+    found = prose_lang.known(text + ".")
+    return found.rstrip(".") if found else None
+
+
+def _nm_part(text):
+    """English of one n.m. sentence or clause (no final period), or None."""
+    hit = _NM_PARTS.get(text)
+    if hit is not None:
+        return hit
+    two = re.fullmatch(r"(.+?[^m])\. ([a-z].*)", text)
+    if two:  # "<sentence>. n.m.: <reason>", or a clause that runs on in lower case
+        first, second = _nm_part(two[1]), _nm_part(two[2])
+        return None if first is None or second is None else f"{first}. {second}"
+    if text.startswith("n.m. pada ") and not text.startswith("n.m. pada multiple "):
+        out = []
+        # A segment starts where "<lines> (kolom ...): " follows "; ".
+        for segment in re.split(r"; (?=[^;]*? \(kolom [^()]+\): )", text[len("n.m. pada "):]):
+            found = _NM_SEGMENT.fullmatch(segment)
+            reason = _nm_reason(found[3]) if found else None
+            if reason is None:
+                return None
+            column = _NM_COLUMNS.get(found[2]) or f"{found[2][len('kolom '):]} columns"
+            out.append(f"{_nm_labels(found[1])} ({column}): {reason}")
+        return "n.m. in " + "; ".join(out)
+    peers = _NM_PEERS.fullmatch(text)
+    if peers:  # "P/E 2 peer, liabilitas/ekuitas 1 peer"
+        counts = []
+        for item in peers[1].split(", "):
+            found = re.fullmatch(r"(.+) (\d+) peer", item)
+            if not found:
+                return None
+            counts.append(f"{_en(found[1])} {found[2]} peer{'' if found[2] == '1' else 's'}")
+        return f"n.m.: fewer than three valid peers ({', '.join(counts)})"
+    for pattern, template in _NM_PATTERNS:
+        found = pattern.fullmatch(text)
+        if found:
+            return template.format(*(_en(g) if g else "" for g in found.groups()))
+    return None
+
+
+def nm_note(parts, lang: str = DEFAULT):
+    """The n.m. reasons printed under a table, one sentence or clause per part,
+    in `lang`; in English None when a part is not known, so the caller keeps
+    the Indonesian whole rather than mix the languages."""
+    if lang == DEFAULT:
+        return parts
+    out = [_nm_part(part.strip().rstrip(".")) for part in parts]
+    return None if any(p is None for p in out) else out

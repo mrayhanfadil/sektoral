@@ -843,7 +843,12 @@ def _nm_note(ex):
             parts.append(sentence[at:])
         else:
             parts.extend(c.strip() for c in sentence.split(";") if _NM_REASON.search(c))
-    text = " ".join(part.strip().rstrip(".") + "." for part in parts if part.strip())
+    parts = [part for part in parts if part.strip()]
+    english = report_lang.nm_note(parts, "en") if _english() else None
+    if english:
+        text = " ".join(report_lang.plain(part).strip().rstrip(".") + "." for part in english)
+        return f"<p class='nm-note'>{html.escape(_bracketed(text))}</p>"
+    text = " ".join(part.strip().rstrip(".") + "." for part in parts)
     return f"<p class='nm-note'>{html.escape(fmt.bracket_negatives(text))}</p>" if text else ""
 
 
@@ -925,6 +930,14 @@ def _row_marks(ex, cols, rows):
     return marks
 
 
+def _cell(row, i, english):
+    if i >= len(row):
+        return ""
+    if isinstance(english, list) and i < len(english) and isinstance(english[i], str):
+        return english[i]
+    return _lbl(str(row[i]))
+
+
 def _table(ex, context="full"):
     """Exhibit table; `context` is where it sits (full width, cover column, half grid).
 
@@ -934,7 +947,11 @@ def _table(ex, context="full"):
     cols, rows = data["cols"], data["rows"]
     kinds = _column_kinds(cols, rows)
     shown_cols = [_lbl(str(col)) for col in cols]
-    shown = [[_lbl(str(row[i])) if i < len(row) else "" for i in range(len(cols))] for row in rows]
+    # A cell the English prose run wrote itself (app.prose_lang ``rows_en``)
+    # is printed as written; any other through its report_lang label.
+    english = (data.get("rows_en") if _english() else None) or []
+    shown = [[_cell(row, i, english[r] if r < len(english) else None) for i in range(len(cols))]
+             for r, row in enumerate(rows)]
     if _english() and exhibit_ids.is_exhibit(ex, exhibit_ids.METHOD_CHAIN):
         # A Method Chain reason joins release limitations with "; ": the
         # host's English for them (app.host_lang), as the web app shows it.

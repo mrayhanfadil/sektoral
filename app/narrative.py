@@ -5565,6 +5565,16 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     catalyst_rows = [[x["item"], f"{x['timing']}. Sumber: {cite(x.get('source_ids'))}",
                       x["driver_path"], x["direction"]]
                      for x in a.get("catalysts_risks") or [] if isinstance(x, dict)]
+    # The rows stay Indonesian in the English run too: report_extras matches
+    # them to model drivers by their words. Their English (the agent's twins)
+    # rides in rows_en (app.prose_lang).
+    catalyst_rows_en = [
+        [prose_lang.label(x["item"], x.get("item_en")),
+         f"{prose_lang.label(x['timing'], x.get('timing_en'))}. Source: {cite(x.get('source_ids'))}",
+         prose_lang.label(x["driver_path"], x.get("driver_path_en")),
+         prose_lang.label(x["direction"], x.get("direction_en"))]
+        for x in a.get("catalysts_risks") or [] if isinstance(x, dict)
+    ] if prose_lang.english() else None
     for page in doc["bagian"]:
         title = page.get("judul", "")
         if title == "Hasil terbaru dan jembatan laba":
@@ -5602,6 +5612,8 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                 exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
                                             "Driver dan jalur dampak", "Arah"],
                                    "rows": catalyst_rows}
+                if catalyst_rows_en:
+                    exhibit["data"]["rows_en"] = catalyst_rows_en
                 exhibit["catatan_sumber"] = (
                     "Sumber fakta: rilis resmi dan berita bertanggal yang disebut per baris; "
                     "kolom driver dan arah adalah analisis Sektoral.")
