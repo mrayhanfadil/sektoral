@@ -9,13 +9,14 @@ import {
   api, ApiError, jobFiles, readerFiles, reportFiles, type Intel, type Job, type JobEvent, type ReportItem, type RunReplay,
 } from "../lib/api";
 import { primaryMethodOf, str } from "../lib/codes";
-import { pct, rp } from "../lib/format";
+import { idr, pct } from "../lib/format";
 import { useRunIntel } from "../lib/useRunIntel";
 import { twin, useLang, type Bi, type Lang } from "../lib/i18n";
 import { ratingLabel, ratingTone } from "../lib/labels";
 import { useReplay } from "../lib/replay";
 import { useJob } from "../lib/useJob";
 import { IntelPanel } from "../components/Intel";
+import { formatDay } from "../components/Reports";
 import { useLoad } from "../components/State";
 import { DeckView } from "../components/deck/DeckView";
 import { LaunchPanel } from "../components/deck/LaunchPanel";
@@ -109,9 +110,10 @@ function fromRelease(state: DeckState, lang: Lang): ResultData | undefined {
 function fromReport(report: ReportItem, state: DeckState, lang: Lang): ResultData {
   return {
     rating: ratingLabel(report), tone: ratingTone(report),
-    tp: report.published && report.tp !== null ? `Rp${rp(report.tp, lang)}` : WITHHELD[lang],
+    tp: report.published && report.tp !== null ? idr(report.tp, lang) : WITHHELD[lang],
     upside: report.published ? signed(report.upside, lang) : "-",
-    price: report.price !== null ? `Rp${rp(report.price, lang)}` : undefined,
+    price: report.price !== null ? idr(report.price, lang) : undefined,
+    priceDate: report.price_date ? formatDay(report.price_date, lang) : undefined,
     method: twin(report, "method", lang) || methodOf(state),
     release: words(str(state.release?.status), lang) ?? (report.published ? undefined : words("draft_non_distributable", lang)),
   };
@@ -217,7 +219,7 @@ export function DeckJob() {
     return (
       <Page>
         <DeckView state={IDLE} live={false} loading
-          top={<RunHeader ticker="" phase="pending" clock={clock(0)} counts={IDLE.counts} loading />}
+          top={<RunHeader ticker="" phase="pending" clock={clock(0, lang)} counts={IDLE.counts} loading />}
           notice={error ? (
             <Notice tone="warn">
               {t({ id: `Status riset belum tersedia (${error}). Deck mencoba lagi otomatis.`, en: `Research status is not available yet (${error}). The Deck retries automatically.` })}
@@ -324,7 +326,7 @@ export function DeckReplay() {
     return (
       <Page>
         <DeckView state={IDLE} live={false} loading
-          top={<RunHeader ticker={T} phase="pending" clock={clock(0)} counts={IDLE.counts} loading />} />
+          top={<RunHeader ticker={T} phase="pending" clock={clock(0, lang)} counts={IDLE.counts} loading />} />
       </Page>
     );
   }
@@ -348,7 +350,7 @@ export function DeckReplay() {
       <DeckView state={state} live={playing} paused={!playing && !finished}
         top={
           <RunHeader ticker={run.ticker} name={run.name ?? report?.name} phase={phase} counts={state.counts}
-            clock={<Tweened value={state.elapsed} format={clock} />}
+            clock={<Tweened value={state.elapsed} format={(v) => clock(v, lang)} />}
             clockNote={run.source === "derived" ? t({ id: "durasi diperkirakan dari jejak audit", en: "durations estimated from the Audit Trace" }) : undefined}
             action={finished && links.report ? <OpenReport href={links.report} /> : undefined}
             controls={<ReplayControls replay={replay} events={events} source={run.source} />} />

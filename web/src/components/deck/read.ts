@@ -32,12 +32,12 @@ export function useChangeCount(value: unknown): number {
   return seen.n;
 }
 
-/** Run seconds as a console clock, "01:39,1". */
-export function clock(seconds: number): string {
+/** Run seconds as a console clock in the reader's decimal mark, "01:39,1" ("01:39.1" in English). */
+export function clock(seconds: number, lang: Lang = getLang()): string {
   const tenths = Math.max(0, Math.floor(seconds * 10 + 1e-6));
   const m = Math.floor(tenths / 600);
   const s = Math.floor((tenths % 600) / 10);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${tenths % 10}`;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}${lang === "en" ? "." : ","}${tenths % 10}`;
 }
 
 /**

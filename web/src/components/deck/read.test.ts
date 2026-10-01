@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Step } from "../../lib/agents";
-import { decisionWord, gateWord, isJudged, stepLine, valuationLabel, verdictGlyph, verdictOf, verdictTone, verdictWord, words } from "./read";
+import { clock, decisionWord, gateWord, isJudged, stepLine, valuationLabel, verdictGlyph, verdictOf, verdictTone, verdictWord, words } from "./read";
 
 describe("hypothesis verdicts", () => {
   it("counts only real verdicts as judged", () => {
@@ -34,6 +34,19 @@ describe("gate and chain words", () => {
     expect(gateWord({ verdict: "tidak dapat dinilai" }, "en")).toBe("cannot be assessed");
     expect(decisionWord({ decision: "Terpilih, ekstrem (rantai berhenti)", code: "stop_extreme" }, "en")).toBe("Selected, extreme (chain stops)");
     expect(decisionWord({ decision: "Dipakai ulang" }, "en")).toBe("Dipakai ulang");
+  });
+  it("names a flagged check in both languages", () => {
+    expect(gateWord({ verdict: "ditandai", code: "flagged" }, "en")).toBe("flagged");
+    expect(gateWord({ verdict: "ditandai", code: "flagged" }, "id")).toBe("ditandai");
+    expect(words("ditandai", "en")).toBe("flagged");
+  });
+});
+
+describe("run clock", () => {
+  it("uses the reader's decimal mark", () => {
+    expect(clock(99.14, "id")).toBe("01:39,1");
+    expect(clock(99.14, "en")).toBe("01:39.1");
+    expect(clock(0, "en")).toBe("00:00.0");
   });
 });
 

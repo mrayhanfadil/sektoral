@@ -2,7 +2,7 @@
 // Method Gates as fixed instruments, the method chain, and the result.
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useSpring } from "motion/react";
-import { GATES, type DeckState, type GateState, type Hypothesis } from "../../lib/agents";
+import { gateTallyText, type DeckState, type GateState, type Hypothesis } from "../../lib/agents";
 import { useLang, type Bi } from "../../lib/i18n";
 import { Clamp, Glyph, Hold, HoldLight, RegionHead } from "./kit";
 import {
@@ -77,21 +77,23 @@ function HypothesisRow({ h }: { h: Hypothesis }) {
 }
 
 /** Each verdict word keeps one look and one needle position: the gate's single truth. */
-type Reading = "idle" | "pass" | "fail" | "unknown" | "skip";
+type Reading = "idle" | "pass" | "flagged" | "fail" | "unknown" | "skip";
 function reading(g: GateState): Reading {
   if (g.status === "idle") return "idle";
   if (g.code === "pass") return "pass";
+  if (g.code === "flagged") return "flagged";
   if (g.code === "fail") return "fail";
   if (g.code === "not_applicable" || g.status === "skip") return "skip";
   if (g.code === "not_assessable") return "unknown";
   return g.status === "ok" ? "pass" : "fail";
 }
 const READING_INK: Record<Reading, string> = {
-  idle: "text-ink-faint", pass: "text-done", fail: "text-warn-ink", unknown: "text-warn-ink", skip: "text-ink-soft",
+  idle: "text-ink-faint", pass: "text-done", flagged: "text-warn-ink", fail: "text-warn-ink", unknown: "text-warn-ink", skip: "text-ink-soft",
 };
 const READING_WORD: Record<Reading, Bi> = {
   idle: { id: "belum dinilai", en: "not yet assessed" },
   pass: { id: "lolos", en: "pass" },
+  flagged: { id: "ditandai", en: "flagged" },
   fail: { id: "gagal", en: "fail" },
   unknown: { id: "tidak dapat dinilai", en: "cannot be assessed" },
   skip: { id: "tidak berlaku", en: "not applicable" },
@@ -107,11 +109,10 @@ const GATE_SHORT: Bi<string[]> = {
  * scrolling plan and chain so every gate stays in view for the whole run.
  */
 export function GateBoard({ state }: { state: DeckState }) {
-  const { t } = useLang();
-  const settled = state.gates.filter((g) => g.status !== "idle").length;
+  const { lang } = useLang();
   return (
     <section aria-labelledby="gates-title" className="border-b border-rule px-5 pt-3 pb-3.5 max-sm:px-4">
-      <RegionHead id="gates-title" title="Method Gates" reading={`${settled}/${GATES.length} ${t({ id: "dinilai", en: "assessed" })}`} />
+      <RegionHead id="gates-title" title="Method Gates" reading={gateTallyText(state.gates, lang)} />
       <ol className="m-0 mt-2.5 grid list-none grid-cols-6 gap-px overflow-hidden rounded-md border border-rule bg-rule p-0 max-sm:grid-cols-3">
         {state.gates.map((g) => <Gate key={g.n} g={g} />)}
       </ol>
@@ -141,8 +142,8 @@ function Gate({ g }: { g: GateState }) {
 }
 
 /*
- * The dial: a half scale of four segments, left to right gagal, tidak dapat
- * dinilai, tidak berlaku, lolos. The needle rests flat on the left until the
+ * The dial: a half scale of five segments, left to right gagal, tidak dapat
+ * dinilai, tidak berlaku, ditandai, lolos. The needle rests flat on the left until the
  * gate is judged, then settles on the centre of its verdict's segment on an
  * overdamped spring (no bounce), and that segment takes the verdict's colour.
  */
@@ -150,15 +151,16 @@ const CX = 32;
 const CY = 30;
 const R = 24;
 const SEGMENTS: { r: Exclude<Reading, "idle">; from: number; to: number; stroke: string; dash?: string }[] = [
-  { r: "fail", from: -90, to: -45, stroke: "var(--color-warn-rule)" },
-  { r: "unknown", from: -45, to: 0, stroke: "var(--color-warn-rule)", dash: "2.2 2" },
-  { r: "skip", from: 0, to: 45, stroke: "var(--color-ink-faint)" },
-  { r: "pass", from: 45, to: 90, stroke: "var(--color-teal)" },
+  { r: "fail", from: -90, to: -54, stroke: "var(--color-warn-rule)" },
+  { r: "unknown", from: -54, to: -18, stroke: "var(--color-warn-rule)", dash: "2.2 2" },
+  { r: "skip", from: -18, to: 18, stroke: "var(--color-ink-faint)" },
+  { r: "flagged", from: 18, to: 54, stroke: "var(--color-warn-rule)" },
+  { r: "pass", from: 54, to: 90, stroke: "var(--color-teal)" },
 ];
-const ANGLE: Record<Reading, number> = { idle: -90, fail: -67.5, unknown: -22.5, skip: 22.5, pass: 67.5 };
+const ANGLE: Record<Reading, number> = { idle: -90, fail: -72, unknown: -36, skip: 0, flagged: 36, pass: 72 };
 const NEEDLE_INK: Record<Reading, string> = {
   idle: "var(--color-rule-strong)", fail: "var(--color-warn-ink)", unknown: "var(--color-warn-ink)",
-  skip: "var(--color-ink-soft)", pass: "var(--color-done)",
+  skip: "var(--color-ink-soft)", flagged: "var(--color-warn-ink)", pass: "var(--color-done)",
 };
 
 function point(deg: number, radius = R): string {
@@ -206,8 +208,8 @@ export function ChainTable({ state }: { state: DeckState }) {
         reading={chain.length ? t({ id: `${chain.length} metode`, en: `${chain.length} ${chain.length === 1 ? "method" : "methods"}` }) : undefined} />
       {chain.length === 0 ? (
         <Empty>{t({
-          id: "Rantai metode muncul setelah keenam gerbang selesai menilai emiten: gerbang menentukan urutan metode sebelum nilai dihitung.",
-          en: "The Method Chain appears once all six Method Gates have assessed the issuer: the gates fix the order of methods before any value is computed.",
+          id: "Rantai metode muncul setelah gerbang 0 sampai 4 menilai emiten: gerbang itu menentukan urutan metode sebelum nilai dihitung, lalu gerbang 5 menguji hasilnya.",
+          en: "The Method Chain appears once Method Gates 0 to 4 have assessed the issuer: they fix the order of methods before any value is computed, then Gate 5 checks the result.",
         })}</Empty>
       ) : (
         <table className="mt-2 w-full border-collapse text-[13.5px]">
@@ -249,6 +251,8 @@ export type ResultData = {
   tp: string;
   upside: string;
   price?: string;
+  /** The close the upside is measured against, as a localized date. */
+  priceDate?: string;
   method?: string;
   release?: string;
 };
@@ -263,7 +267,10 @@ export function ResultBlock({ result, actions }: { result?: ResultData; actions?
     ["Rating", <span className={RATING_INK[result.tone]}>{result.rating}</span>],
     [t({ id: "Target harga", en: "Target price" }), result.tp],
     ["Upside", result.upside],
-    ...(result.price ? [[t({ id: "Harga", en: "Price" }), result.price] as [string, ReactNode]] : []),
+    ...(result.price ? [[t({ id: "Harga", en: "Price" }), <>
+      {result.price}
+      {result.priceDate && <span className="block truncate font-sans text-[11.5px] font-normal text-ink-soft">{t({ id: "per", en: "as of" })} {result.priceDate}</span>}
+    </>] as [string, ReactNode]] : []),
   ] : [];
   return (
     <motion.section aria-labelledby="result-title" className={`${REGION} @container`}
