@@ -13,9 +13,14 @@ English twin beside it (``question_en``, ``hypotheses_en``, ``why_en``,
 the same rules, and must read English. A twin that is still missing or invalid
 after the repair attempt is dropped, never failing the run: readers then see
 the Indonesian for that field.
+
+A result stored before the agent wrote twins gets them afterwards from
+``translate_intel`` (``app.rebuild --translate-analyst``), in calls of their
+own checked by the same rules; no Indonesian value changes.
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 from datetime import datetime, timezone
@@ -766,6 +771,267 @@ def _synthesize(chat, ticker, plan, all_signals, headlines, changes, problems):
         # The repair did not produce a better draft: keep the Indonesian that passed.
         return _accepted(*kept, labels, labels_en, problems)
     return _fallback_synthesis(all_signals, plan["hypotheses"])
+
+
+# ------------------------------------------------- translate a stored result
+#
+# Results stored before the agent wrote its own English (#39) have no twins.
+# ``translate_intel`` asks for them afterwards, in calls of their own, and
+# checks each one with the rules a twin from the run itself passes.
+
+
+class _Prose:
+    """One Indonesian prose value of a stored result: ``host[key]``, or item
+    ``index`` of the list ``host[key]``. ``cited`` marks conclusion prose, whose
+    twin holds no numbers (it cites signals); other twins state exactly the
+    figures of their Indonesian. ``limit`` is the length the run keeps."""
+
+    def __init__(self, path, host, key, index=None, cited=False, limit=400):
+        self.path, self.host, self.key, self.index = path, host, key, index
+        self.cited, self.limit = cited, limit
+
+    @property
+    def text(self):
+        value = self.host[self.key]
+        return value[self.index] if self.index is not None else value
+
+
+def _host_text(text):
+    """The host's own English of host-written text (``app.host_lang``), or None."""
+    from app import host_lang  # imports this package's signal tables
+    return host_lang.english(text)
+
+
+def _has_twin(holder, key, count=None):
+    twin = holder.get(f"{key}_en")
+    if count is None:
+        return isinstance(twin, str) and bool(twin.strip())
+    return (isinstance(twin, list) and len(twin) == count and
+            all(isinstance(x, str) and x.strip() for x in twin))
+
+
+def _intel_prose(intel):
+    """Every analyst prose field of a stored result that has no English twin
+    yet and is not host-written text, in result order."""
+    fields = []
+
+    def add(host, key, path, cited=False, limit=400):
+        if (isinstance(host, dict) and isinstance(host.get(key), str) and host[key].strip()
+                and not _has_twin(host, key) and not _host_text(host[key])):
+            fields.append(_Prose(f"{path}.{key}" if path else key, host, key, cited=cited,
+                                 limit=limit))
+
+    def add_list(host, key, path, cited=False, limit=240):
+        items = host.get(key) if isinstance(host, dict) else None
+        if (isinstance(items, list) and items and
+                all(isinstance(x, str) and x.strip() for x in items) and
+                not _has_twin(host, key, len(items))):
+            fields.extend(_Prose(f"{path}.{key}[{i}]", host, key, index=i, cited=cited,
+                                 limit=limit)
+                          for i, x in enumerate(items) if not _host_text(x))
+
+    if not isinstance(intel, dict):
+        return fields
+    plan = intel.get("plan") if isinstance(intel.get("plan"), dict) else {}
+    add(plan, "question", "plan", limit=300)
+    add_list(plan, "hypotheses", "plan", limit=240)
+    for i, step in enumerate(plan.get("steps") or []):
+        add(step, "why", f"plan.steps[{i}]", limit=200)
+    for i, step in enumerate(intel.get("steps") or []):
+        add(step, "why", f"steps[{i}]", limit=200)
+    synthesis = intel.get("synthesis") if isinstance(intel.get("synthesis"), dict) else {}
+    add(synthesis, "headline", "synthesis", cited=True, limit=400)
+    for i, item in enumerate(synthesis.get("findings") or []):
+        for key, limit in (("title", 200), ("interpretation", 900), ("caveat", 400)):
+            add(item, key, f"synthesis.findings[{i}]", cited=True, limit=limit)
+    for i, item in enumerate(synthesis.get("hypotheses") or []):
+        add(item, "reason", f"synthesis.hypotheses[{i}]", cited=True, limit=400)
+    add_list(synthesis, "next_checks", "synthesis", limit=200)
+    return fields
+
+
+_TRANSLATOR = (
+    "Role: ANALYST TRANSLATOR. You translate the Indonesian prose of a validated equity "
+    "research analysis (plan, tool-step reasons, findings, hypothesis verdicts, next checks) "
+    "into English for the English edition of the same page. This is information, not "
+    "investment advice. The user message is one JSON object {path: Indonesian text}. Return "
+    "ONE JSON object {path: English text} with exactly the same paths and nothing else: no "
+    "reasoning text, no other keys. Every English text says the same thing in plain English, "
+    "with no Indonesian word or clause and no Chinese, Japanese or Korean characters. It "
+    "states exactly the figures of its Indonesian, adding none, written exactly as in the "
+    "Indonesian (12,4%, 1H26, 20 sesi becomes 20 sessions); findings, headlines and verdict "
+    "reasons hold no figures at all beyond those of a signal name or a date. Never write buy, "
+    "sell, hold, accumulate, price target, target price, recommend, 'attractive valuation' "
+    "or 'buying opportunity', even in another sense (write 'keep' or 'maintain', not 'hold'). "
+    "A reason starting 'Sebagian didukung:' starts 'Partly supported:'. Codes and names (ROE, "
+    "P/B, IHSG, FY2025) stay as written. Name the signals with these English names "
+    "{Indonesian name: English name}: ")
+# Indonesian characters per translation call, as for the Forecast Plan.
+TRANSLATE_BATCH_CHARS = 6000
+
+
+def _batches(fields):
+    batch, size = [], 0
+    for field in fields:
+        if batch and size + len(field.text) > TRANSLATE_BATCH_CHARS:
+            yield batch
+            batch, size = [], 0
+        batch.append(field)
+        size += len(field.text)
+    if batch:
+        yield batch
+
+
+class _CutOff(ValueError):
+    """A translation reply cut off at the completion budget."""
+
+
+def _ask(chat, glossary, fields, follow_up=()):
+    """One translation call for ``fields``: ``{path: English}``, or it raises."""
+    messages = [{"role": "system", "content": _TRANSLATOR + json.dumps(glossary, ensure_ascii=False)},
+                {"role": "user", "content": json.dumps({f.path: f.text for f in fields},
+                                                       ensure_ascii=False)},
+                *follow_up]
+    raw, finish_reason = _response_text(chat(messages, max_tokens=16384, reasoning_effort="low"))
+    if finish_reason == "length":
+        raise _CutOff("translation cut off (finish_reason=length)")
+    answer = _parse_json(raw)
+    if not isinstance(answer, dict):
+        raise ValueError("translation is not an object")
+    return answer
+
+
+def translate_intel(intel, chat=None):
+    """The English twins of a stored analyst result, from calls of their own.
+
+    Returns ``(intel_with_twins, notes)``. Every analyst prose field without a
+    twin (``_intel_prose``: plan question, hypotheses and step reasons, the
+    executed steps' reasons, headline, findings, verdict reasons and next
+    checks) goes out as ``{path: Indonesian}`` in as few calls as fit
+    ``TRANSLATE_BATCH_CHARS`` (the same text once) and comes back as ``{path:
+    English}``. Each answer passes the checks a twin from the run itself
+    passes (``_english_note``): the figures of its Indonesian, or none beyond
+    signal names and dates for conclusion prose; no advice wording; English
+    only. Signal ids in a conclusion twin read as their English labels, as in
+    a new run. The failing paths get one repair call; a twin still wrong after
+    it is left out. A parallel list (``hypotheses``, ``next_checks``) gets its
+    twin whole or not at all; its host-written items take the host's English.
+    Host-written text (``app.host_lang``) and twins the result already has are
+    left as they are.
+
+    No Indonesian value changes. A failed call (an exception, a reply that is
+    not a JSON object, one cut off at ``finish_reason == "length"``, which is
+    first asked again in halves) leaves its fields without twins, and when
+    nothing could be attached the result comes back unchanged. ``notes``:
+    ``status`` (``translated``, ``partial``, ``failed`` or
+    ``nothing_to_translate``), ``fields``, ``attached``, ``calls``,
+    ``dropped`` (twins that failed their checks) and ``problems`` (failed
+    calls)."""
+    chat = chat or _chat
+    out = copy.deepcopy(intel)
+    fields = _intel_prose(out)
+    notes = {"status": "nothing_to_translate", "fields": len(fields), "attached": 0,
+             "calls": 0, "dropped": [], "problems": []}
+    if not fields:
+        return intel, notes
+    signals = [s for s in out.get("signals") or [] if isinstance(s, dict) and s.get("id")]
+    signal_ids = {s["id"] for s in signals}
+    labels_en = {s["id"]: s.get("label_en") or S.label_en(s) for s in signals}
+    labels_en = {k: v for k, v in labels_en.items() if v}
+    label_numbers = frozenset(n for s in signals if s.get("kind") != "web"
+                              for n in re.findall(r"\d+", f"{s.get('label') or ''} "
+                                                          f"{labels_en.get(s['id']) or ''}"))
+    glossary = {str(s.get("label")).lower(): labels_en[s["id"]] for s in signals
+                if s.get("label") and s["id"] in labels_en and s.get("kind") != "web"}
+    swap_en = {k: _lower_first(v) for k, v in labels_en.items()}
+
+    def note(field, twin):
+        if not field.cited:
+            return _english_note(twin, field.text)
+        # What the Indonesian itself states (a signal name's number, a date) is allowed.
+        allowed = label_numbers | {re.sub(r"\D", "", t) for t in _DIGIT.findall(field.text)}
+        found = _english_note(twin, signal_ids=signal_ids, label_numbers=allowed)
+        if found is None and any(i in twin for i in signal_ids if i not in labels_en):
+            found = "id sinyal tanpa label bahasa Inggris; tulis tanpa id itu"
+        return found
+
+    def finish(field, twin):
+        if field.cited:
+            for signal_id in sorted(swap_en, key=len, reverse=True):
+                twin = twin.replace(signal_id, swap_en[signal_id])
+        return _clean(twin, field.limit)
+
+    # The same text is asked once (a plan step's reason is the executed step's).
+    first = {}
+    for field in fields:
+        first.setdefault((field.text, field.cited), field)
+    unique = list(first.values())
+    english, reasons = {}, {}
+
+    def ask(batch, follow_up=(), label=""):
+        notes["calls"] += 1
+        try:
+            answer = _ask(chat, glossary, batch, follow_up)
+        except _CutOff:
+            # The model's thinking shares the budget: a reply cut off is asked
+            # again in halves, down to one field, before its fields go without.
+            if len(batch) > 1 and not follow_up:
+                half = len(batch) // 2
+                ask(batch[:half], label=label)
+                ask(batch[half:], label=label)
+                return
+            notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
+                                     "ValueError: translation cut off (finish_reason=length)")
+            return
+        except Exception as error:  # noqa: BLE001 — the result stands without these twins
+            notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
+                                     f"{type(error).__name__}: {str(error)[:180]}")
+            return
+        for field in batch:
+            twin = answer.get(field.path)
+            found = note(field, twin)
+            if found:
+                reasons[field.path] = found
+            else:
+                english[field.path] = finish(field, twin)
+                reasons.pop(field.path, None)
+
+    for batch in _batches(unique):
+        ask(batch)
+    for batch in _batches([f for f in unique if f.path in reasons]):
+        errors = json.dumps({f.path: str(reasons[f.path]) for f in batch}, ensure_ascii=False)
+        previous = json.dumps({f.path: english.get(f.path) for f in batch}, ensure_ascii=False)
+        ask(batch, ({"role": "assistant", "content": previous},
+                    {"role": "user", "content":
+                     "These English texts failed the checks. Return ONE JSON object {path: "
+                     "English text} for exactly these paths, fixing every error: " + errors}),
+            label="repair ")
+    notes["dropped"] = [f"{path}: {found}" for path, found in reasons.items()]
+
+    def twin_of(field):
+        return english.get(first[(field.text, field.cited)].path)
+    lists = {}
+    for field in fields:
+        if field.index is not None:
+            lists.setdefault((id(field.host), field.key), []).append(field)
+        elif twin_of(field) is not None:
+            field.host[f"{field.key}_en"] = twin_of(field)
+            notes["attached"] += 1
+    for items in lists.values():
+        host, key = items[0].host, items[0].key
+        asked = {f.index: twin_of(f) for f in items}
+        whole = [asked[i] if i in asked else _host_text(x) for i, x in enumerate(host[key])]
+        if all(whole):
+            host[f"{key}_en"] = whole
+            notes["attached"] += len(items)
+        elif any(first[(f.text, f.cited)].path in reasons for f in items):
+            notes["dropped"].append(f"{items[0].path.rsplit('[', 1)[0]}: every item needs its "
+                                    "English, so the list stays Indonesian")
+    if not notes["attached"]:
+        notes["status"] = "failed"
+        return intel, notes
+    notes["status"] = "translated" if notes["attached"] == len(fields) else "partial"
+    return out, notes
 
 
 # -------------------------------------------------------------------- run
