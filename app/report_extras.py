@@ -270,11 +270,14 @@ def landbank_exhibits(va):
     ]
     appraisal = ev.get("appraisal") or {}
     if appraisal.get("fair_value_idr") and appraisal.get("area_m2"):
+        per_m2 = fmt._id(appraisal['fair_value_idr'] / appraisal['area_m2'] / 1000, 0)
         rows.append(["Cross-check penilai independen",
-                     f"Rp{fmt._id(appraisal['fair_value_idr'] / appraisal['area_m2'] / 1000, 0)} "
-                     "ribu/m2 bruto",
-                     f"{fmt._id(appraisal.get('area_ha'), 0)} ha, {appraisal.get('method')}, "
-                     f"{appraisal.get('appraisal_date')} (tanah mentah, sebelum pengembangan)"])
+                     _t(f"Rp{per_m2} ribu/m2 bruto", f"Rp{per_m2} thousand/m2 gross"),
+                     _t(f"{fmt._id(appraisal.get('area_ha'), 0)} ha, {appraisal.get('method')}, "
+                        f"{appraisal.get('appraisal_date')} (tanah mentah, sebelum pengembangan)",
+                        f"{fmt._id(appraisal.get('area_ha'), 0)} ha, "
+                        f"{prose_lang.label(appraisal.get('method'))}, "
+                        f"{appraisal.get('appraisal_date')} (raw land, before development)")])
     growths = sorted({g for (_, g) in land["grid"]})
     # The base pace joins the grid (same landbank.nav as the valuation) so the
     # base row and column can be marked and highlighted.

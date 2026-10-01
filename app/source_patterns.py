@@ -649,6 +649,9 @@ _DRIVER_UNITS = [
      _Call(lambda name, record, years:
            f"{'LDR' if name == 'LDR' else 'loan share of earning assets'} above its historical "
            f"Sectors record ({record}): {years}; loans grow faster than scenario funding")),
+    (r"CAR di bawah target jangka menengah manajemen \(" + PCT + r"\), di atas batas regulator: "
+     r"(.+)",
+     "CAR below management's medium-term target ({0}), above the regulatory floor: {1}"),
 ] + _fixed([
     ("tidak dilaporkan terpisah; dianggap tidak material",
      "not reported separately; taken as immaterial"),

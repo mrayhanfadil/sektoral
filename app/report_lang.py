@@ -1051,12 +1051,46 @@ TERMS.update({
         "No concentrate export permit (feed capped at smelter capacity)",
     "Izin ekspor konsentrat diperpanjang (umpan penuh 85 Mtpa, sesuai jadwal tambang emiten)":
         "Concentrate export permit extended (full 85 Mtpa feed, per the issuer's mine plan)",
+    # The LoM reconciliation walk (app.lom) and the cost tables.
+    "Target SOTP/LoM": "SOTP/LoM target",
+    "Izin ekspor konsentrat diperpanjang": "Concentrate export permit extended",
+    "Tanpa izin ekspor konsentrat": "No concentrate export permit",
+    "Elang dinilai penuh (probabilitas pengembangan 100%)":
+        "Elang valued in full (100% development probability)",
+    "Lalu dek harga +20% (alternatif penutup sisa selisih)":
+        "Then a +20% price deck (alternative to close the remaining gap)",
+    "Biaya operasi, sebelum adjustment": "Operating costs, before adjustments",
+    "Kredit produk sampingan": "By-product credits",
+    "Biaya treatment smelting/refining": "Smelting/refining treatment costs",
+    "Unit cash cost dilaporkan": "Reported unit cash cost",
+    "Pelunasan utang Q3": "Q3 debt repayment", "dilaporkan aktual": "reported actual",
+    "US$/ton bijih": "US$/t ore",
+    "Ekuitas": "Equity",
+    "harga komoditas Sectors": "Sectors commodity prices",
+    "Beban material": "Material expenses",
+    # DCF and holding SOTP bridges, landbank RNAV (app.report_extras).
+    "Saham": "Shares", "Porsi induk": "Parent share", "nilai pasar": "market value",
+    "Dividen dibagikan sesudah tanggal neraca": "Dividends paid after the balance-sheet date",
+    "Porsi dapat dijual": "Saleable share",
+    "Harga jual awal": "Initial selling price",
+    "RNAV landbank": "Landbank RNAV",
+    "Cross-check penilai independen": "Independent appraiser cross-check",
 })
 _PATTERNS += [(re.compile(p), t) for p, t in (
     (r"NAV Elang x probabilitas pengembangan (\S+)", "Elang NAV x {0} development probability"),
     (r"Elang ditambang sampai cadangan habis \((\d{4})\), bukan (\d{4})",
      "Elang mined until reserves run out ({0}), not {1}"),
     (r"Kurs USD/IDR (\S+)", "USD/IDR rate {0}"),
+    (r"Penambangan sampai cadangan habis, bukan batas (\d{4})",
+     "Mining until reserves run out, not the {0} limit"),
+    (r"Lalu tingkat diskonto -2pp ke (\S+) \(alternatif penutup sisa selisih\)",
+     "Then a discount rate 2pp lower, at {0} (alternative to close the remaining gap)"),
+    (r"(\S+) forecast", "{0} forecast"),
+    (r"miliar, (.+)", "bn, {0}"),
+    (r"(.+?) \((dividen tunai .+)\)", "{0} ({1})"),
+    (r"Ekuitas pemilik induk per (\S+)", "Parent equity at {0}"),
+    (r"Dikurangi porsi (\S+) atas ekuitas buku (\S+)", "Less the {0} share of {1} book equity"),
+    (r"Tambahan nilai porsi (\S+)", "Value added to the {0} share"),
 )]
 _PATTERNS += [(re.compile(p), t) for p, t in (
     (r"(.+): harga terealisasi", "{0}: realised price"),
@@ -1069,6 +1103,7 @@ _PATTERNS += [(re.compile(p), t) for p, t in (
 
 # Checked before the general patterns above, which they narrow.
 _PATTERNS[:0] = [(re.compile(p), t) for p, t in (
+    (r"tarif efektif (\S+) resmi", "official {0} effective rate"),
     (r"Target harga: PER peer x EPS (.+)", "Target Price: peer PER x EPS {0}"),
     (r"Target harga: P/BV wajar dari ROE (.+) \(sensitivitas CoE x g\)", "Target Price: fair P/BV from ROE {0} (CoE x g sensitivity)"),
     (r"Target harga (FY\d+F?) EV/EBITDA", "{0} EV/EBITDA Target Price"),

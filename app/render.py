@@ -1551,6 +1551,13 @@ def _draft_banner(meta):
                 "withheld until the data and model are validated.</div>")
 
 
+def _risk_source(risk):
+    """A risk's source: document titles as published, a fixed wording in the
+    render's language."""
+    source = str(risk.get("sumber") or "-")
+    return (report_lang.known(source) or source) if _english() else source
+
+
 def _risk_block(risks):
     """Spec §5.4 'Risiko utama': named, categorised risks in the thesis-card
     style, each with the source of its number."""
@@ -1561,7 +1568,7 @@ def _risk_block(risks):
                    + (f" <span class='risk-tag'>({html.escape(_lbl(str(risk.get('kategori')).strip().lower()))})</span>"
                       if risk.get("kategori") else "") + "</div>"
                    f"<div class='card-text'>{html.escape(str(risk.get('isi') or ''))}</div>"
-                   f"<div class='risk-src'>{_say('Sumber', 'Source')}: {html.escape(str(risk.get('sumber') or '-'))}</div>"
+                   f"<div class='risk-src'>{_say('Sumber', 'Source')}: {html.escape(_risk_source(risk))}</div>"
                    "</div></div>")
     res.append("</div>")
     return "".join(res)
