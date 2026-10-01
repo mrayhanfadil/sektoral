@@ -161,11 +161,11 @@ def test_trace_view_shows_the_key_risks_and_catalysts_with_their_english():
     assert funding == {"category": "Pendanaan", "category_en": "Funding",
                        "headline": "Tekanan biaya dana naik", "headline_en": "Rising cost of funds",
                        "explanation": "CoF FY2025 sudah 3,51%.",
-                       "explanation_en": "CoF in FY2025 is already 3,51%.", "source_ids": ["official"]}
+                       "explanation_en": "CoF in FY2025 is already 3.51%.", "source_ids": ["official"]}
     assert governance["category_en"] == "Governance"
     assert governance["headline_en"] is None and governance["explanation_en"] is None
     catalyst, = view["catalysts"]
-    assert catalyst["item_en"] == "Cost of credit rises gradually to 3,10% in H2"
+    assert catalyst["item_en"] == "Cost of credit rises gradually to 3.10% in H2"
     assert catalyst["timing"] == "2H26 (forecast)" and catalyst["timing_en"] is None
     assert catalyst["driver_path_en"] == "Provisions rise → profit under pressure"
     assert catalyst["direction"] == "Negatif" and catalyst["direction_en"] == "Negative"
@@ -286,3 +286,13 @@ def test_the_trace_gives_the_method_and_research_brief_their_english():
     forecast = build({"ticker": "BBRI", "forecast_assumptions": {
         "problems": ["news_effects[1] years are invalid"]}})["forecast"]
     assert forecast["problems_en"] == [None] and empty["forecast"]["problems_en"] == []
+
+
+def test_forecast_twins_reach_the_web_with_english_figures():
+    plan = {"news_effects": [{"rationale": "Laba naik 12,4% ke Rp1.234,5 miliar.",
+                              "rationale_en": "Profit rose 12,4% to Rp1.234,5 miliar."}],
+            "interim_scenario": {"rationale": "Revenue H2 top-down US$2.975bn."}}
+    view = build({"ticker": "TEST", "forecast_assumptions": {"plan": plan}})["forecast"]
+    assert view["news_effects"][0]["rationale_en"] == "Profit rose 12.4% to Rp1,234.5bn."
+    # Curated source English is shown as written (it may already use English figures).
+    assert view["interim"]["rationale_en"] is None or "2.975" in view["interim"]["rationale_en"]

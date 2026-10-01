@@ -601,3 +601,10 @@ def test_translate_assumptions_needs_named_tickers(tmp_path):
     with pytest.raises(SystemExit):
         rebuild.main(["--from", str(tmp_path / "src"), "--out", str(tmp_path / "out"),
                       "--translate-assumptions", "--refresh-assumptions", "BBRI"])
+
+
+def test_a_source_text_already_english_is_its_own_twin():
+    from app import scrub
+    assert scrub.english_problems("2H26 (forecast)", "2H26 (forecast)") == []
+    assert "repeats the Indonesian instead of translating it" in scrub.english_problems(
+        "Kualitas aset kredit UMKM", "Kualitas aset kredit UMKM")
