@@ -135,12 +135,20 @@ def _audit_appendix(doc) -> list[dict]:
             if e.get("tipe") != "tabel" or not isinstance(data.get("rows"), list):
                 continue
             rows = [row[:12] for row in data["rows"][:60] if isinstance(row, list)]
+            # Cells the English prose run wrote itself (``rows_en``), as render._cell prints them.
+            written = data.get("rows_en") if isinstance(data.get("rows_en"), list) else []
+
+            def english(r, i, value):
+                row_en = written[r] if r < len(written) and isinstance(written[r], list) else []
+                own = row_en[i] if i < len(row_en) else None
+                return cell(own) if isinstance(own, str) else label(value)
             exhibits.append({"title": cell(e.get("judul")),
                              "title_en": cell(report_lang.title(e, "en")),
                              "cols": [cell(c) for c in (data.get("cols") or [])[:12]],
                              "cols_en": [label(c) for c in (data.get("cols") or [])[:12]],
                              "rows": [[cell(c) for c in row] for row in rows],
-                             "rows_en": [[label(c) for c in row] for row in rows],
+                             "rows_en": [[english(r, i, c) for i, c in enumerate(row)]
+                                         for r, row in enumerate(rows)],
                              "note": str(e.get("catatan_sumber") or "")[:1500],
                              "note_en": prose(e.get("catatan_sumber"), e.get("catatan_sumber_en"),
                                               1500)})
