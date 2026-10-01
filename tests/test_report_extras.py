@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from app import build as B, narrative, render, report_extras as X
+from app import build as B, narrative, prose_lang, render, report_extras as X
 
 
 def _doc(tmp_path):
@@ -667,3 +667,16 @@ def test_then_joins_sentences_with_one_space():
     assert narrative._then("", "Dua.") == "Dua."
     assert narrative._then("Satu. ", "") == "Satu. "
 
+
+def test_deck_path_follows_the_lom_escalation():
+    basis = "inflasi AS jangka panjang 2,2% per tahun (IMF WEO Apr 2026)"
+    escalated = {"escalation": 0.022, "escalation_basis": basis}
+    flat = {"escalation": 0.0, "escalation_basis": None}
+    assert narrative._deck_path(escalated) == (
+        f"menjadi dek 2026 dan sesudahnya dieskalasi {basis}, bersama biaya dan capex")
+    assert narrative._deck_path(flat) == "dibuat datar"
+    with prose_lang.building("en"):
+        assert narrative._deck_path(escalated) == (
+            "is the 2026 deck and is escalated after that by long-run US inflation of 2,2% a "
+            "year (IMF WEO Apr 2026), as are costs and capex")
+        assert narrative._deck_path(flat) == "is held flat"

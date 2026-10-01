@@ -354,7 +354,8 @@ def deck_basis(mineops):
 
 
 def deck(inp, name="base"):
-    """(copper USD/t, gold USD/oz) held flat over the life of mine."""
+    """(copper USD/t, gold USD/oz) for 2026, the deck year; ``schedule``
+    escalates it with US inflation after that (``escalation_inputs``)."""
     if name == "reserve":
         return inp["reserve_cu_price"], inp["reserve_au_price"]
     scale = {"base": 1.0, "down20": 0.8, "up20": 1.2}[name]
