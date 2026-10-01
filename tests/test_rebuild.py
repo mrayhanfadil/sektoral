@@ -365,6 +365,33 @@ def test_a_pinned_rate_recorded_as_a_yahoo_close_is_corrected(tmp_path, monkeypa
     assert quote == fx.implied_quote(17893.0, AS_OF)
 
 
+def test_a_bank_plan_quoting_another_payout_than_the_model_is_flagged(tmp_path, monkeypatch):
+    """The stored plan's prose is not rewritten (that needs a paid re-run);
+    the rebuilt trace lists what it gets wrong against the driver file."""
+    from agents.forecast_assumptions import run as agent
+    source, out = tmp_path / "src", tmp_path / "out"
+    _stored_run(source)
+    trace = outputs.load(outputs.TRACE, source, "AAAA")
+    trace["forecast_assumptions"]["plan"] = {"earnings_scenario": {"key_risks": [{
+        "headline": "Penurunan CAR", "explanation": "Kredit 10% dengan payout 92% menekan CAR."}]}}
+    outputs.save(outputs.TRACE, source, "AAAA", trace)
+
+    def bank_doc(ticker, _kwargs):
+        doc = _doc(ticker)
+        doc["meta"]["model_profile"] = "financial_ddm"
+        return doc
+
+    monkeypatch.setattr(build, "build", FakeBuild(bank_doc))
+    monkeypatch.setattr(agent, "sourced_bank_model", lambda intake: {
+        "file": "data/bank_drivers/AAAA.json", "payout_pct": [70.0, 60.0],
+        "drivers": [{"year": 2026, "nim_pct": 7.5}, {"year": 2027, "nim_pct": 7.4}]})
+    assert rebuild.main(["--from", str(source), "--out", str(out)]) == 0
+    problems = outputs.load(outputs.TRACE, out, "AAAA")["forecast_assumptions"]["problems"]
+    assert problems == ["earnings: earnings_scenario.key_risks[0].explanation states payout 92% "
+                        "but the model runs payout 70/60% (data/bank_drivers/AAAA.json); "
+                        "describe the risk relative to the model's drivers (model)"]
+
+
 def test_pinned_fx_leaves_a_market_quote_alone():
     close = {"pair": "USD/IDR", "rate": 17837.3, "date": AS_OF, "source": "Yahoo"}
     assert rebuild.pinned_fx(close, {**close, "rate": 1.0}, AS_OF) == (close, None)

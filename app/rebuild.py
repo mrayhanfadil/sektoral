@@ -336,6 +336,25 @@ def rebuilt_trace(stored: dict, doc: dict) -> dict:
     return trace
 
 
+def _flag_model_figures(trace: dict, doc: dict, ticker: str, as_of) -> None:
+    """List in the plan's problems a bank risk or catalyst whose payout or NIM
+    contradicts the curated driver file the model ran. A stored plan's prose
+    changes only on a paid re-run (--refresh-assumptions); until then the
+    trace says what it gets wrong."""
+    if (doc.get("meta") or {}).get("model_profile") != "financial_ddm":
+        return
+    fa = trace.get("forecast_assumptions")
+    scenario = ((fa or {}).get("plan") or {}).get("earnings_scenario") \
+        if isinstance(fa, dict) else None
+    if not isinstance(scenario, dict):
+        return
+    from agents.forecast_assumptions.run import model_figure_problems, sourced_bank_model
+    notes = [f"earnings: {p}" for p in model_figure_problems(
+        scenario, sourced_bank_model({"ticker": ticker, "as_of": as_of}))]
+    if notes:
+        fa["problems"] = list(dict.fromkeys(list(fa.get("problems") or []) + notes))
+
+
 def _valuation_event(event: dict) -> bool:
     return isinstance(event, dict) and (event.get("stage") == "gate" or event.get("tool") == "release")
 
@@ -650,6 +669,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         fa["plan"] = (doc.get("forecast_assumptions") or {}).get("plan") or plan_override
         fa["agent_plan_raw"] = copy.deepcopy(plan_override)
         trace["forecast_assumptions"] = fa
+    _flag_model_figures(trace, doc, t, kwargs["as_of"])
     trace.update(copy.deepcopy(trace_extra or {}))
     outputs.save(outputs.TRACE, out, t, trace, db)
     stored_events = outputs.load(outputs.EVENTS, source, t, db)

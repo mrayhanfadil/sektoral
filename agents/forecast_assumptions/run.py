@@ -14,7 +14,7 @@ from pathlib import Path
 
 from agents.analyst.run import _FLOW_PHRASES
 from agents.estimator.run import _chat, _response_text
-from app import bank_model, store
+from app import bank_drivers, bank_model, store
 from app.progress import emit
 from app.scrub import english_problems, normalize_prose
 
@@ -159,8 +159,31 @@ def _bank_source(intake, actual, evidence):
     reference = bank_model.reference(rows, actual, balance)
     if not reference:
         return None
-    return {"reference": reference, "history_rows": rows, "balance_sheet": balance,
-            "payout": intake.get("payout"), "payout_basis": intake.get("payout_basis")}
+    out = {"reference": reference, "history_rows": rows, "balance_sheet": balance,
+           "payout": intake.get("payout"), "payout_basis": intake.get("payout_basis")}
+    model = sourced_bank_model(intake)
+    if model:
+        out["model"] = model
+    return out
+
+
+def sourced_bank_model(intake):
+    """The curated, sourced bank driver file the valuation runs instead of the
+    agent's drivers (``app.forecast`` -> ``bank_drivers.model_drivers``), as the
+    earnings role reads it: yearly drivers and payout in percent. None when no
+    valid file applies at the Report Date. Not part of the evidence
+    fingerprint, so a stored plan stays reusable."""
+    ticker = str(intake.get("ticker") or "").upper()
+    data = bank_drivers.load(ticker, intake.get("as_of")) if ticker else None
+    if data is None or bank_drivers.validate(data):
+        return None
+    payout = data["payout_path"]
+    return {"file": f"data/bank_drivers/{ticker}.json",
+            "drivers": [{"year": int(row["year"]),
+                         **{key: row[key]["value"] for key in bank_drivers.DRIVER_KEYS}}
+                        for row in data["drivers"]],
+            "payout_pct": [round(v * 100, 1) for v in payout["values"]],
+            "payout_rationale": payout.get("rationale")}
 
 
 def _bank_mode(source):
@@ -680,6 +703,73 @@ def _validate_bank_earnings(scenario, source):
         scenario.get("bank_drivers"), source, source["bank"]["reference"]["interim_year"],
         "earnings_scenario.bank_drivers"))
     problems.extend(_validate_thesis(scenario, allowed))
+    problems.extend(model_figure_problems(scenario, source["bank"].get("model")))
+    return problems
+
+
+# A risk or catalyst that quotes a payout or NIM states the model's: a figure
+# further than this from every year of the curated driver file (or from the
+# year it names) contradicts the valuation (BBRI's risk said "payout 92%", the
+# FY2025 history, while the model pays out 70%).
+MODEL_SOFT = " (model)"
+MODEL_FIGURE_TOLERANCE_PP = {"payout": 5.0, "nim": 0.2}
+_MODEL_FIGURES = {
+    "payout": re.compile(r"\b(?:payout|dividend payout|rasio pembayaran dividen)\b"
+                         r"(?P<gap>[^%;.\d]{0,30}?(?:(?:FY|tahun\s)?\d{2,4}[^%;.\d]{0,12})?)"
+                         r"(?P<value>\d+(?:,\d+)?)\s?%", re.I),
+    "nim": re.compile(r"\b(?:NIM|margin bunga bersih)\b"
+                      r"(?P<gap>[^%;.\d]{0,30}?(?:(?:FY|tahun\s)?\d{2,4}[^%;.\d]{0,12})?)"
+                      r"(?P<value>\d+(?:,\d+)?)\s?%", re.I),
+}
+# Another metric between the name and the figure: the figure is not this one's.
+_OTHER_METRIC = re.compile(r"\b(?:CAR|CIR|LDR|NPL|CASA|ROE|LAR|biaya|kredit|DPK|laba)\b", re.I)
+# A past period names a reported figure, which may differ from the forecast.
+_PAST = re.compile(r"\b(?:[1-4]Q\d{2}|[12]H\d{2}|9M\d{2}|historis|sebelumnya|tahun lalu)\b",
+                   re.I)
+_YEAR = re.compile(r"\b(?:FY)?(20\d{2})\b")
+
+
+def model_figure_problems(scenario, model):
+    """Payout and NIM figures in key_risks and catalysts_risks that contradict
+    the curated bank driver file the model runs (``sourced_bank_model``)."""
+    if not isinstance(model, dict) or not isinstance(scenario, dict):
+        return []
+    years = [row["year"] for row in model.get("drivers") or []]
+    values = {"payout": dict(zip(years, model.get("payout_pct") or [])),
+              "nim": {row["year"]: row.get("nim_pct") for row in model.get("drivers") or []}}
+    texts = []
+    for i, risk in enumerate(scenario.get("key_risks") or []):
+        if isinstance(risk, dict):
+            texts += [(f"key_risks[{i}].{f}", risk.get(f)) for f in ("headline", "explanation")]
+    for i, item in enumerate(scenario.get("catalysts_risks") or []):
+        if isinstance(item, dict):
+            texts += [(f"catalysts_risks[{i}].{f}", item.get(f))
+                      for f in ("item", "timing", "driver_path")]
+    problems = []
+    for path, text in texts:
+        if not isinstance(text, str):
+            continue
+        for metric, pattern in _MODEL_FIGURES.items():
+            for found in pattern.finditer(text):
+                gap = found.group("gap")
+                if _OTHER_METRIC.search(gap) or _PAST.search(gap):
+                    continue
+                stated = float(found.group("value").replace(",", "."))
+                year = _YEAR.search(gap)
+                year = int(year.group(1)) if year else None
+                if year is not None and year < min(years, default=year):
+                    continue  # a reported year, not the forecast
+                model_values = ([values[metric][year]] if year in values[metric]
+                                else list(values[metric].values()))
+                model_values = [v for v in model_values if isinstance(v, (int, float))]
+                tolerance = MODEL_FIGURE_TOLERANCE_PP[metric]
+                if model_values and all(abs(stated - v) > tolerance for v in model_values):
+                    label = "payout" if metric == "payout" else "NIM"
+                    shown = "/".join(f"{v:g}" for v in dict.fromkeys(model_values))
+                    problems.append(
+                        f"earnings_scenario.{path} states {label} {found.group('value')}% but "
+                        f"the model runs {label} {shown}% ({model['file']}); describe the "
+                        "risk relative to the model's drivers" + MODEL_SOFT)
     return problems
 
 
@@ -1012,6 +1102,16 @@ def _bank_earnings_role(source):
         "harga' must not appear anywhere in the prose, even in another sense (write "
         "'mempertahankan' or 'menjaga', not 'hold'). "
         "Return null if the evidence cannot support a full-year view.")
+    model = source["bank"].get("model")
+    if model:
+        role += (
+            " model_drivers is the curated, sourced driver file the valuation runs in place "
+            "of your bank_drivers: its yearly loan growth, NIM, non-interest ratio, "
+            "cost-to-income and cost of credit, and payout_pct (the payout on each forecast "
+            "year's profit). Write thesis_points, catalysts_risks and key_risks relative to "
+            "those drivers: a payout or NIM you quote for the forecast is model_drivers' "
+            "(within 5pp for payout, 0.2pp for NIM), never the historical payout_pct or "
+            "another figure; a reported figure names its period (FY2025, 1H26).")
     official = source["official"]
     payload = {"ticker": source["ticker"], "as_of": source["as_of"],
                "model_profile": source["model_profile"],
@@ -1046,6 +1146,8 @@ def _bank_earnings_role(source):
                                         "source_ids": ["official"]}],
                    "key_risks": [{"category": "Pendanaan", "headline": "text",
                                   "explanation": "text", "source_ids": ["official"]}]}}}
+    if model:
+        payload["model_drivers"] = model
     return role, payload
 
 
@@ -1532,18 +1634,22 @@ def _run_subagent(name, source, spec, interim_anchor=None, news_effects=None):
                           "Do not invent sources.")
             messages.append({"role": "user", "content":
                              repair})
+    # A figure that still contradicts the curated bank model after the repairs
+    # does not discard the scenario: it stays listed in the plan's problems.
+    notes = [p for p in problems if str(p).endswith(MODEL_SOFT)]
+    problems = [p for p in problems if not str(p).endswith(MODEL_SOFT)]
     if problems and fragment and all(str(p).endswith(DCF_SOFT) for p in problems):
         _drop_dcf_fields(name, fragment, problems)
         problems = []
     if problems:
-        return {"status": "invalid", "fragment": None, "problems": problems}
+        return {"status": "invalid", "fragment": None, "problems": problems + notes}
     binding = ("official_evidence" if name == "interim" else
                "official_evidence_and_dated_news" if name == "earnings" else
                "official_evidence_and_dated_news" if name == "outyears" else
                "official_evidence_and_annuals" if name == "stage" else
                "sectors_and_tavily_news")
     fragment = _normalize_prose(fragment)
-    return {"status": "validated", "fragment": fragment, "problems": [],
+    return {"status": "validated", "fragment": fragment, "problems": notes,
             "provenance_binding": binding}
 
 
@@ -1938,10 +2044,12 @@ def run_live(intake):
     plan = {"news_effects": [], "interim_scenario": None,
             "outyear_scenario": None, "earnings_scenario": None,
             "stage_classification": None}
-    problems = []
+    problems, notes = [], []
     for name, result in results.items():
         if result["status"] == "validated":
             plan.update(result["fragment"])
+            # Model-figure notes of a validated scenario (MODEL_SOFT).
+            notes.extend(f"{name}: {item}" for item in result["problems"])
         else:
             problems.extend(f"{name}: {item}" for item in result["problems"])
     if not results:
@@ -1963,7 +2071,7 @@ def run_live(intake):
         # their own; a failure leaves the plan Indonesian only.
         plan, translation = translate_plan(plan, official=source.get("official"))
         _translation_event(translation)
-    outcome = {"status": status, "plan": plan, "problems": problems,
+    outcome = {"status": status, "plan": plan, "problems": problems + notes,
                "interim_status": (results.get("interim") or {}).get("status", "not_run"),
                "earnings_status": (results.get("earnings") or {}).get("status", "not_run"),
                "outyears_status": (results.get("outyears") or {}).get("status", "not_run"),
@@ -2031,6 +2139,15 @@ def run_cached(intake, refresh=False, db=None):
                     stored["plan"] = plan
                     store.put(PLAN_COLLECTION, key, stored, db)
             stored["reused"] = True
+            # A plan stored before the agent saw the curated bank driver file
+            # keeps its prose until a paid re-run; its contradictions are listed.
+            bank = (_source_payload(intake).get("bank") or {}) \
+                if intake.get("model_profile") == "financial_ddm" else {}
+            notes = [f"earnings: {p}" for p in model_figure_problems(
+                (stored["plan"] or {}).get("earnings_scenario"), bank.get("model"))]
+            if notes:
+                stored["problems"] = list(dict.fromkeys(list(stored.get("problems") or [])
+                                                        + notes))
             emit("forecast", "Rencana forecast dipakai ulang", "bukti sama dengan run sebelumnya")
             for name, sub in (stored.get("subagents") or {}).items():
                 if isinstance(sub, dict):
