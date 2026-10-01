@@ -16,6 +16,12 @@ export function rp(value: number | null | undefined, lang: Lang = getLang()): st
   return typeof value === "number" && Number.isFinite(value) ? whole[lang].format(value) : "n.a.";
 }
 
+/** A rupiah amount with its symbol, "Rp9.150"; "n.a." alone when missing (never "Rpn.a."). */
+export function idr(value: number | null | undefined, lang: Lang = getLang()): string {
+  const text = rp(value, lang);
+  return text === "n.a." ? text : `Rp${text}`;
+}
+
 /** ``value`` is already in percent (e.g. -20.9 for -20,9%). */
 export function pct(value: number | null | undefined, lang: Lang = getLang()): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";

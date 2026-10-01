@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Play } from "lucide-react";
 import { api } from "../lib/api";
-import { derive } from "../lib/agents";
+import { derive, gateTallyText } from "../lib/agents";
 import { str } from "../lib/codes";
 import { featuredReport } from "../lib/labels";
 import { useLoad } from "../components/State";
@@ -21,17 +21,23 @@ const SOURCES: [kind: Bi, name: Bi, body: Bi][] = [
   [{ id: "Rilis resmi", en: "Official filings" }, { id: "Laporan emiten", en: "Issuer filings" },
     { id: "Laporan keuangan interim dan daftar pemegang saham dari IDX dan situs emiten.", en: "Interim financial statements and shareholder registers from IDX and issuer websites." }],
   [{ id: "Perdagangan", en: "Trading" }, { id: "IDX", en: "IDX" },
-    { id: "Harga penutupan harian dan IHSG 24 bulan untuk grafik dan band valuasi.", en: "Daily closing prices and 24 months of the JCI for charts and valuation bands." }],
+    { id: "Harga penutupan harian dan IHSG: 24 bulan untuk grafik harga, 12 bulan untuk band valuasi.",
+      en: "Daily closing prices and the JCI: 24 months for the price charts, 12 months for the valuation bands." }],
+  [{ id: "Pasar", en: "Market" }, { id: "Yahoo Finance", en: "Yahoo Finance" },
+    { id: "Harga penutupan bertanggal di balik potensi, kurs USD/IDR, harga tembaga dan emas, yield UST 10Y, dan fundamental peer yang tidak ada di Sectors. Diberi label Yahoo Finance di setiap exhibit.",
+      en: "The dated close behind the upside, the USD/IDR rate, copper and gold prices, the UST 10Y yield, and peer fundamentals Sectors lacks. Labelled Yahoo Finance in every exhibit." }],
+  [{ id: "Konsensus", en: "Consensus" }, { id: "Agregator konsensus", en: "Consensus aggregator" },
+    { id: "Target harga konsensus analis dari agregator publik, bertanggal dan bersumber; dipakai hanya bila diambil paling lambat pada tanggal laporan.",
+      en: "Analyst target-price consensus from a public aggregator, dated and sourced; used only when retrieved on or before the Report Date." }],
   [{ id: "Konteks", en: "Context" }, { id: "Berita bertanggal", en: "Dated news" },
-    { id: "Artikel dibaca utuh; dampak ke laba hanya bila ada driver terukur.", en: "Articles are read in full; an earnings impact only where there is a measurable driver." }],
-  [{ id: "Kurs", en: "FX" }, { id: "USD/IDR", en: "USD/IDR" },
-    { id: "Kurs penutupan harian untuk emiten yang melapor dalam dolar.", en: "Daily closing rate for issuers that report in dollars." }],
+    { id: "Dicari lewat Tavily. Artikel dibaca utuh bila teksnya bisa diambil, selain itu hanya cuplikan pencariannya; dampak ke laba hanya bila ada driver terukur.",
+      en: "Found through Tavily web search. An article is read in full when its text can be fetched, otherwise only its search snippet; an earnings impact only where there is a measurable driver." }],
 ];
 
 const LIMITS: [title: Bi, body: Bi][] = [
   [{ id: "Data bertanggal, bukan siaran langsung", en: "Dated data, not a live feed" },
-    { id: "Riset membaca data Sectors yang tersimpan beserta tanggalnya, tanpa panggilan data pasar langsung. Harga penutupan dan rilis resmi yang terbit sesudah tanggal laporan tidak dipakai.",
-      en: "Research reads stored Sectors data with its dates, with no live market-data calls. Closing prices and official filings published after the Report Date are not used." }],
+    { id: "Riset membaca data tersimpan beserta tanggalnya (snapshot Sectors dan paket berlabel dari sumber lain), tanpa panggilan data pasar langsung. Harga penutupan dan rilis resmi yang terbit sesudah tanggal laporan tidak dipakai.",
+      en: "Research reads stored data with its dates (the Sectors Snapshot and labelled packs from other sources), with no live market-data calls. Closing prices and official filings published after the Report Date are not used." }],
   [{ id: "LLM untuk nalar, bukan data", en: "An LLM for reasoning, not for data" },
     { id: "Model bahasa menyusun rencana, asumsi, dan narasi bersumber. Angka finansial, rasio valuasi, dan tanggal laporan selalu diambil dari data terstruktur.",
       en: "The language model drafts the plan, assumptions, and sourced narrative. Financial figures, valuation ratios, and the Report Date always come from structured data." }],
@@ -124,8 +130,8 @@ export default function Landing() {
             </h1>
             <p className="m-0 mt-5 max-w-[46ch] text-[17.5px] leading-relaxed text-ink-soft">
               {t({
-                id: "Setiap panggilan tool tercatat bersama alasan dan hasilnya, dan rating di company update hanya terbit bila setiap pemeriksaan lolos.",
-                en: "Every tool call is logged with its reason and result, and a company update carries a rating only when every check passes.",
+                id: "Setiap panggilan tool tercatat bersama alasan dan hasilnya. Company update hanya memuat rating bila pemeriksaan yang memblokir lolos; asumsi dan temuan yang ditandai diberi label.",
+                en: "Every tool call is logged with its reason and result. A company update carries a rating only when the blocking checks pass; assumptions and flagged findings are labelled.",
               })}
             </p>
             <div className="mt-8">
@@ -168,17 +174,15 @@ export default function Landing() {
         </div>
       </Section>
 
-      <ConsoleSection id="framework" title={t({ id: "Enam Method Gates memilih metode sebelum angka dihitung.", en: "Six Method Gates choose the method before any number is computed." })}
+      <ConsoleSection id="framework"
+        title={t({ id: "Lima gerbang memilih metode sebelum nilai dihitung; gerbang keenam menguji hasilnya.", en: "Five gates choose the method before any value is computed; the sixth checks the result." })}
         lede={t({
-          id: "DCF bukan jawaban untuk semua emiten. Gerbang membaca model bisnis, kualitas data, kepemilikan, siklus, dan tahap usaha, lalu mengurutkan metode utama, fallback, dan silang cek.",
-          en: "DCF is not the answer for every issuer. The gates read the business model, data quality, ownership, cycle, and business stage, then rank the primary method, fallbacks, and cross-checks.",
+          id: "DCF bukan jawaban untuk semua emiten. Gerbang 0 sampai 4 membaca model bisnis, kualitas data, kepemilikan, siklus, dan tahap usaha, lalu mengurutkan metode utama, fallback, dan silang cek. Gerbang 5 menilai hasil yang sudah dihitung.",
+          en: "DCF is not the answer for every issuer. Gates 0 to 4 read the business model, data quality, ownership, cycle, and business stage, then rank the primary method, fallbacks, and cross-checks. Gate 5 judges the computed result.",
         })}
         region="Method Gates"
         reading={final?.gates.some((g) => g.status !== "idle")
-          ? t({
-            id: `${final.gates.filter((g) => g.status !== "idle").length}/${final.gates.length} dinilai, run ${ticker}`,
-            en: `${final.gates.filter((g) => g.status !== "idle").length}/${final.gates.length} assessed, ${ticker} run`,
-          })
+          ? t({ id: `${gateTallyText(final.gates, lang)}, run ${ticker}`, en: `${gateTallyText(final.gates, lang)}, ${ticker} run` })
           : t({ id: "6 gerbang, urut 0 sampai 5", en: "6 gates, in order 0 to 5" })}>
         <GateInstruments gates={final?.gates} ticker={ticker} />
         <div className="mt-12 border-t border-rule pt-10">

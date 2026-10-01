@@ -167,8 +167,8 @@ export default function Gallery() {
           {!loading && !error && !all.length && (
             <Notice>
               <p><strong className="text-ink">{t({ id: "Belum ada company update.", en: "No company updates yet." })}</strong> {t({ id: "Jalankan", en: "Run" })}{" "}
-                <code className="rounded-[4px] border border-rule bg-raised px-1.5 py-0.5 text-[13px] text-ink">python -m app.batch BBCA JPFA --out out/reports --pdf</code>{" "}
-                {t({ id: "lalu muat ulang halaman ini.", en: "then reload this page." })}</p>
+                <code className="rounded-[4px] border border-rule bg-raised px-1.5 py-0.5 text-[13px] text-ink">python -m app.batch BBCA JPFA --as-of YYYY-MM-DD --out out/reports --pdf</code>{" "}
+                {t({ id: "dengan tanggal laporan sebagai YYYY-MM-DD, lalu muat ulang halaman ini.", en: "with the Report Date as YYYY-MM-DD, then reload this page." })}</p>
             </Notice>
           )}
 

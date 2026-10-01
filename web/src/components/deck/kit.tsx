@@ -113,8 +113,9 @@ export function LiveClock({ lastT, running }: { lastT: number; running: boolean 
     const id = window.setInterval(() => setNow(performance.now() / 1000), 100);
     return () => window.clearInterval(id);
   }, [running]);
+  const { lang } = useLang();
   const value = running && start.current !== null ? Math.max(lastT, now - start.current) : lastT;
-  return <>{clock(value)}</>;
+  return <>{clock(value, lang)}</>;
 }
 
 /** Text clamped to a few lines, with a toggle only when it actually overflows. */
