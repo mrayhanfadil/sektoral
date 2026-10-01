@@ -390,3 +390,15 @@ def test_live_runs_can_require_a_token(make_client, tmp_path, monkeypatch):
     assert client.post("/api/jobs", json={"ticker": "AMMN"}, headers={"X-Run-Token": "rahasia"}).status_code == 201
     monkeypatch.setenv("SECTORAL_LIVE_RUNS", "off")
     assert client.post("/api/jobs", json={"ticker": "AMMN"}, headers={"X-Run-Token": "rahasia"}).status_code == 403
+
+
+def test_the_audit_appendix_takes_the_cells_the_english_run_wrote():
+    table = {"tipe": "tabel", "judul": "Rekonsiliasi",
+             "data": {"cols": ["Baris", "Nilai"],
+                      "rows": [["Selisih tidak dijelaskan", "1,2"], ["Pendapatan", "3,4"]],
+                      "rows_en": [["Unexplained difference", None]]}}
+    (shown,) = server._audit_appendix({"lampiran_audit": [{"judul": "Lampiran", "exhibit": [table]}]})
+    rows_en = shown["exhibits"][0]["rows_en"]
+    assert rows_en[0][0] == "Unexplained difference"       # the report's own English cell
+    assert rows_en[1][0] == "Revenue"                       # no written cell: the report's label
+    assert shown["exhibits"][0]["rows"][0][0] == "Selisih tidak dijelaskan"
