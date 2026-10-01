@@ -318,3 +318,18 @@ def test_sotp_bridge_translates_at_the_reports_one_usd_idr_close():
     assert bridge["cash_idr"]["fx_rate"] == FX and "IDR=X" in bridge["cash_idr"]["source"]
     # Without the stored close the pack's dated reference is the fallback.
     assert intake_mod._sotp_bridge_inputs(evidence, "2026-09-24")["cash_idr"]["fx_rate"] == 17803.0
+    # A rate a rebuild recovered from its source report is not a Yahoo close.
+    from app import fx
+    implied = intake_mod._sotp_bridge_inputs(evidence, "2026-09-24",
+                                             fx.implied_quote(17893.0, "2026-09-24"))
+    assert implied["cash_idr"]["fx_rate"] == 17893.0
+    assert "IDR=X" not in implied["cash_idr"]["source"]
+    assert "tersirat dari report sumber" in implied["cash_idr"]["source"]
+    assert narrative._lom_fx_source({"fx_spot": fx.implied_quote(17893.0, "2026-09-24"),
+                                     "sotp_bridge": implied}) == \
+        "kurs tersirat dari report sumber, 2026-09-24"
+    assert narrative._dcf_fx_source({"fx_date": "2026-09-24", "fx_label": fx.dated(
+        fx.implied_quote(17893.0, "2026-09-24"))}) == \
+        "tersirat dari report sumber, harga 2026-09-24"
+    assert narrative._dcf_fx_source({"fx_date": "2026-09-24", "fx_label": "2026-09-24"}) == \
+        "Yahoo Finance IDR=X, 2026-09-24"
