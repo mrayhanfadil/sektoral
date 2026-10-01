@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 
-from . import host_lang, prose_lang
+from . import host_lang, prose_lang, report_lang
 from .jobs import http_url, public_intel, text
 
 
@@ -119,9 +119,20 @@ def _news(sources: dict) -> dict:
     }
 
 
+def _category_en(category) -> str | None:
+    """A key risk's category in English ("Pendanaan" -> "Funding"), as the
+    English report tags it; None when the word has none."""
+    if not isinstance(category, str) or not category.strip():
+        return None
+    word = category.strip()
+    english = host_lang.english(word) or report_lang.label(word.lower(), "en")
+    return english[:1].upper() + english[1:] if english and english.lower() != word.lower() else None
+
+
 def _forecast(result: dict) -> dict:
     plan = result.get("plan") if isinstance(result.get("plan"), dict) else {}
     interim = plan.get("interim_scenario") if isinstance(plan.get("interim_scenario"), dict) else {}
+    scenario = plan.get("earnings_scenario") if isinstance(plan.get("earnings_scenario"), dict) else {}
 
     def number(value):
         return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
@@ -160,6 +171,27 @@ def _forecast(result: dict) -> dict:
             "rationale_en": text(r.get("rationale_en"), 600),
             "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
         } for r in _list(plan.get("outyear_scenario"))[:6]],
+        # Spec §5.4 key risks and the catalyst table of the earnings scenario,
+        # with the agent's English twins; the category and the direction are
+        # codes whose English is the report's own label.
+        "key_risks": [{
+            "category": text(r.get("category"), 40),
+            "category_en": text(_category_en(r.get("category")), 40),
+            "headline": text(r.get("headline"), 120),
+            "headline_en": text(r.get("headline_en"), 120),
+            "explanation": text(r.get("explanation"), 600),
+            "explanation_en": text(r.get("explanation_en"), 600),
+            "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
+        } for r in _list(scenario.get("key_risks"))[:8]],
+        "catalysts": [{
+            "item": text(c.get("item"), 160), "item_en": text(c.get("item_en"), 160),
+            "timing": text(c.get("timing"), 160), "timing_en": text(c.get("timing_en"), 160),
+            "driver_path": text(c.get("driver_path"), 400),
+            "driver_path_en": text(c.get("driver_path_en"), 400),
+            "direction": text(c.get("direction"), 20),
+            "direction_en": text(host_lang.english(c.get("direction")), 20),
+            "source_ids": [text(s, 40) for s in (c.get("source_ids") or [])[:8]],
+        } for c in _list(scenario.get("catalysts_risks"))[:10]],
         # Bank Driver Scenario (financial_ddm): the interim-year H2 drivers and
         # the four out-years, in percent.
         "bank_drivers": [{

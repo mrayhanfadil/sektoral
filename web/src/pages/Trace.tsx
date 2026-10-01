@@ -37,7 +37,11 @@ const FORECAST: [string, Bi][] = [
   ["interim", { id: "Skenario interim", en: "Interim scenario" }],
   ["tahun-lanjutan", { id: "Tahun lanjutan", en: "Out-years" }],
   ["driver-bank", { id: "Driver bank", en: "Bank drivers" }],
+  ["katalis", { id: "Katalis", en: "Catalysts" }],
+  ["risiko", { id: "Risiko utama", en: "Key risks" }],
 ];
+/** A catalyst's direction code, as the forecast agent writes it, in tone. */
+const DIRECTION_TONE: Record<string, ChipTone> = { Positif: "ok", Negatif: "err", "Dua arah": "neutral" };
 const BANK_COLS: [keyof NonNullable<TraceView["forecast"]["bank_drivers"]>[number], Bi][] = [
   ["loan_growth_pct", { id: "Pertumbuhan kredit", en: "Loan growth" }],
   ["nim_pct", { id: "NIM", en: "NIM" }],
@@ -706,6 +710,43 @@ function TraceBody({ trace }: { trace: TraceView }) {
                     </tbody>
                   ))}
                 </table>
+              </div>
+            </Section>
+          )}
+          {(forecast.catalysts?.length ?? 0) > 0 && (
+            <Section id="katalis" title={t(LABEL.katalis)} count={forecast.catalysts!.length}>
+              <div className="grid divide-y divide-rule-soft">
+                {forecast.catalysts!.map((c, i) => (
+                  <article key={i} className="grid gap-1.5 py-4 first:pt-0 last:pb-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <strong className="text-[15px] font-medium text-ink-strong">{twin(c, "item", lang)}</strong>
+                      {c.direction && <Chip tone={DIRECTION_TONE[c.direction] ?? "neutral"}>{twin(c, "direction", lang)}</Chip>}
+                      {c.timing && <span className="ml-auto text-[13px] text-ink-soft">{twin(c, "timing", lang)}</span>}
+                    </div>
+                    {c.driver_path && <p className="max-w-[80ch] text-[14px] text-ink">{twin(c, "driver_path", lang)}</p>}
+                    {c.source_ids.length > 0 && (
+                      <span className="flex flex-wrap gap-1">{c.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}</span>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </Section>
+          )}
+          {(forecast.key_risks?.length ?? 0) > 0 && (
+            <Section id="risiko" title={t(LABEL.risiko)} count={forecast.key_risks!.length}>
+              <div className="grid gap-x-6 gap-y-4 lg:grid-cols-2">
+                {forecast.key_risks!.map((r, i) => (
+                  <article key={i} className="grid min-w-0 content-start gap-1.5 border-t border-rule-soft pt-3">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <h4 className="text-[15.5px]">{twin(r, "headline", lang)}</h4>
+                      {r.category && <Chip>{twin(r, "category", lang)}</Chip>}
+                    </div>
+                    {r.explanation && <p className="text-[14px] text-ink">{twin(r, "explanation", lang)}</p>}
+                    {r.source_ids.length > 0 && (
+                      <span className="flex flex-wrap gap-1">{r.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}</span>
+                    )}
+                  </article>
+                ))}
               </div>
             </Section>
           )}

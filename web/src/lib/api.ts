@@ -368,6 +368,13 @@ export type TraceView = {
     bank_drivers?: { year: string | null; loan_growth_pct: number | null; nim_pct: number | null; non_ii_to_nii_pct: number | null;
       cost_to_income_pct: number | null; cost_of_credit_pct: number | null; deposit_growth_pct: number | null;
       rationale: string | null; rationale_en?: string | null; source_ids: string[] }[];
+    /** Spec §5.4 key risks of the earnings scenario; older servers omit them. */
+    key_risks?: { category: string | null; category_en?: string | null; headline: string | null; headline_en?: string | null;
+      explanation: string | null; explanation_en?: string | null; source_ids: string[] }[];
+    /** What could move the scenario, when, through which drivers and which way (`direction`: Positif, Negatif, Dua arah). */
+    catalysts?: { item: string | null; item_en?: string | null; timing: string | null; timing_en?: string | null;
+      driver_path: string | null; driver_path_en?: string | null; direction: string | null; direction_en?: string | null;
+      source_ids: string[] }[];
   };
   deepdive: { title: string | null; date: string | null; url: string | null; status: string | null; length: number; preview: string | null }[];
 };

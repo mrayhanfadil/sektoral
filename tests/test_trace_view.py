@@ -141,6 +141,38 @@ def test_trace_view_passes_the_forecast_english_twins_through():
     assert view["outyears"][0]["rationale_en"] == "Later."
 
 
+def test_trace_view_shows_the_key_risks_and_catalysts_with_their_english():
+    scenario = {
+        "key_risks": [
+            {"category": "Pendanaan", "headline": "Tekanan biaya dana naik",
+             "headline_en": "Rising cost of funds",
+             "explanation": "CoF FY2025 sudah 3,51%.", "explanation_en": "CoF in FY2025 is already 3,51%.",
+             "source_ids": ["official"]},
+            {"category": "Tata kelola", "headline": "Risiko konsentrasi kredit UMKM",
+             "explanation": "Segmen UMKM dominan.", "source_ids": []}],
+        "catalysts_risks": [
+            {"item": "Biaya kredit naik bertahap ke 3,10% H2", "timing": "2H26 (forecast)",
+             "driver_path": "Provisi naik → laba tertekan", "direction": "Negatif",
+             "source_ids": ["official"], "item_en": "Cost of credit rises gradually to 3,10% in H2",
+             "driver_path_en": "Provisions rise → profit under pressure"}]}
+    view = build({"ticker": "BBRI", "forecast_assumptions": {
+        "plan": {"earnings_scenario": scenario}}})["forecast"]
+    funding, governance = view["key_risks"]
+    assert funding == {"category": "Pendanaan", "category_en": "Funding",
+                       "headline": "Tekanan biaya dana naik", "headline_en": "Rising cost of funds",
+                       "explanation": "CoF FY2025 sudah 3,51%.",
+                       "explanation_en": "CoF in FY2025 is already 3,51%.", "source_ids": ["official"]}
+    assert governance["category_en"] == "Governance"
+    assert governance["headline_en"] is None and governance["explanation_en"] is None
+    catalyst, = view["catalysts"]
+    assert catalyst["item_en"] == "Cost of credit rises gradually to 3,10% in H2"
+    assert catalyst["timing"] == "2H26 (forecast)" and catalyst["timing_en"] is None
+    assert catalyst["driver_path_en"] == "Provisions rise → profit under pressure"
+    assert catalyst["direction"] == "Negatif" and catalyst["direction_en"] == "Negative"
+    empty = build({"ticker": "BBRI"})["forecast"]
+    assert empty["key_risks"] == [] and empty["catalysts"] == []
+
+
 def test_a_curated_interim_rationale_gets_its_english_from_the_source_text():
     # AMMN's interim rationale comes from data/analyst_scenarios, which drops the
     # agent's twin; its English is kept in data/source_text_en/AMMN.json.
