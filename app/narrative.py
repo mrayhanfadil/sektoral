@@ -4975,16 +4975,16 @@ def _bank_driver_text(model, label, money, unit, eps_of, cite, a, forward_rows=(
     capped = (isinstance(effective_loan, (int, float)) and
               isinstance(requested_loan, (int, float)) and
               abs(effective_loan * 100 - requested_loan) > 0.05)
-    loan_text = (f"input pertumbuhan kredit bruto {pct(requested_loan)}; setelah batas model "
+    loan_text = (f"kredit bruto dengan input pertumbuhan {pct(requested_loan)}; setelah batas model "
                  f"pertumbuhan FY {fmt.pct(effective_loan)}"
                  if capped else
-                 f"pertumbuhan kredit bruto {pct(requested_loan)} setahun")
+                 f"kredit bruto tumbuh {pct(requested_loan)} setahun")
     loan_text_en = (f"gross loans at input growth of {pct(requested_loan)}, FY growth of "
                     f"{fmt.pct(effective_loan)} after the model cap"
                     if capped else
                     f"gross loan growth of {pct(requested_loan)} for the year")
     h2_text = _t(
-        f"Asumsi semester kedua: kredit bruto tumbuh "
+        f"Asumsi semester kedua: "
         f"{loan_text}, NIM H2 {pct(d['nim_pct'])}, pendapatan "
         f"non-bunga {pct(d['non_ii_to_nii_pct'])} dari NII, rasio biaya terhadap "
         f"pendapatan {pct(d['cost_to_income_pct'])} dan biaya kredit "

@@ -658,6 +658,11 @@ def test_bank_cover_basis_and_profit_are_two_spaced_sentences(tmp_path):
     assert "not issuer guidance. Model FY26F net profit is Rp" in basis["isi_en"]
     for text in (basis["isi"], basis["isi_en"]):
         assert not re.search(r"[a-z]\.[A-Z]", text), text
+    # The loan clause names loan growth once (it read "kredit bruto tumbuh
+    # pertumbuhan kredit bruto …").
+    assert "tumbuh pertumbuhan" not in basis["isi"]
+    assert re.search(r"Asumsi semester kedua: kredit bruto (tumbuh|dengan input pertumbuhan) ",
+                     basis["isi"]), basis["isi"]
 
 
 def test_then_joins_sentences_with_one_space():
