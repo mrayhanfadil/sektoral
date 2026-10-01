@@ -25,8 +25,10 @@ def _url_key(value):
     return f"{host}{path}?{query}" if query else f"{host}{path}"
 
 
-def _issuer_match(ticker, company_name, item):
-    text = " ".join(str(item.get(field) or "") for field in ("title", "snippet"))
+def _mentions(ticker, company_name, text):
+    """True when ``text`` names the issuer: its ticker, or the first two words
+    of its name without PT/Tbk ("Japfa Comfeed", "Bank Rakyat")."""
+    text = str(text or "")
     if re.search(rf"(?<!\w){re.escape(ticker)}(?!\w)", text, re.I):
         return True
     name = re.sub(r"\b(?:PT|Tbk)\.?\b", "", str(company_name or ""), flags=re.I)
@@ -34,16 +36,44 @@ def _issuer_match(ticker, company_name, item):
     return bool(len(words) >= 2 and " ".join(words[:2]) in text.lower())
 
 
-# Topic, tag, search and quote pages list many stories under one headline
-# ("Berita BBRI Terkini dan Terbaru Hari Ini | Bisnis.com"): no single dated
-# event, so they are rejected rather than read as an article.
+def _issuer_match(ticker, company_name, item, fields=("title", "snippet")):
+    return _mentions(ticker, company_name,
+                     " ".join(str(item.get(field) or "") for field in fields))
+
+
+# A market roundup (foreign flows, top movers) tags every issuer it lists; one
+# named only in passing in such a list is not what the article is about (JPFA's
+# only "relevant" article was a foreign-flow list headlined by BBRI).
+ROUNDUP_ISSUERS = 4
+_LISTED_ISSUER = re.compile(r"\bPT\s+(?:[A-Z][\w&.'-]*\s+){1,7}?Tbk\b")
+
+
+def roundup(ticker, company_name, title, body, symbols=()):
+    """Why an article that names the issuer only in its body is a multi-issuer
+    roundup, or None. An issuer in the title is never a passing mention."""
+    if _mentions(ticker, company_name, title):
+        return None
+    listed = max(len({str(s).upper() for s in symbols or []}),
+                 len(set(_LISTED_ISSUER.findall(str(body or "")))))
+    if listed >= ROUNDUP_ISSUERS:
+        return (f"market roundup naming {listed} issuers; the issuer is not in the title "
+                "(passing mention)")
+    return None
+
+
+# Topic, tag, search, quote and company-profile pages list many stories (or
+# a price) under one headline ("Berita BBRI Terkini dan Terbaru Hari Ini |
+# Bisnis.com", "(B2O.F) | Stock Price & Latest News | Reuters"): no single
+# dated event, so they are rejected rather than read as an article.
 _INDEX_PATH = re.compile(
     r"/(?:topic|topik|tag|tags|search|cari|indeks|index|kategori|category|categories|"
-    r"quote|quotes|symbols?|saham-hari-ini|terpopuler|berita-terkini)(?:/|$)", re.I)
+    r"quote|quotes|symbols?|saham-hari-ini|terpopuler|berita-terkini|market-data|"
+    r"profile|key-metrics)(?:/|$)", re.I)
 _INDEX_TITLE = re.compile(
     r"\b(?:berita\s+(?:\S+\s+){0,2}(?:terkini|terbaru)|terkini\s+dan\s+terbaru|"
     r"terbaru\s+hari\s+ini|kumpulan\s+berita|arsip\s+berita|latest\s+news\s+(?:on|about)|"
-    r"news\s+and\s+updates|stock\s+price\s+today)\b", re.I)
+    r"news\s+and\s+updates|stock\s+price\s+today|stock\s+price\s+(?:&|and)\s+latest\s+news|"
+    r"harga,\s+analisis,\s+dan\s+berita)\b", re.I)
 
 
 def index_page(url, title):
@@ -112,6 +142,16 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
         if page:
             _reject(row, page)
             continue
+        # Sectors tags an article with every ticker it lists: the issuer must
+        # be named in the title or body, and be more than a passing mention.
+        if not _issuer_match(str(ticker).upper(), company_name, row, ("title", "body")):
+            _reject(row, "issuer identity not verified in title/body")
+            continue
+        passing = roundup(str(ticker).upper(), company_name, row.get("title"), row.get("body"),
+                          row.get("symbols"))
+        if passing:
+            _reject(row, passing)
+            continue
         candidates.append({**row, "origin": "sectors", "origins": ["sectors"],
                            "event_key": _event_key(row.get("title"))})
     for item in tavily_items or []:
@@ -133,6 +173,11 @@ def build_register(ticker, company_name, as_of, sectors_rows, tavily_items,
         page = index_page(item.get("url"), item.get("title"))
         if page:
             _reject(item, page)
+            continue
+        passing = roundup(str(ticker).upper(), company_name, item.get("title"),
+                          item.get("snippet"))
+        if passing:
+            _reject(item, passing)
             continue
         candidates.append({"title": item["title"], "timestamp": item["date"],
                            "source": item["url"], "body": item.get("snippet") or "",
