@@ -201,6 +201,36 @@ def test_reads_english_rejects_indonesian_the_mixed_guard_lets_through():
     assert prose_lang.reads_english("Rising funding costs")
 
 
+# Short Indonesian with no function word: before #43 every one passed as English.
+@pytest.mark.parametrize("text", [
+    "Kualitas aset kredit UMKM", "Tekanan biaya dana naik", "Harga emas", "Harga Emas",
+    "Emas murni", "Katoda tembaga", "Pendapatan", "akhir 2026", "Dividen interim kuartalan",
+    "Pemangkasan suku bunga kebijakan", "Pertumbuhan kredit menopang NII",
+    "Rugi selisih kurs membengkak", "Lonjakan capex membebani FCF", "Efisiensi biaya berlanjut",
+    "Utang jangka panjang", "Konsentrasi Garuda Group 67% revenue",
+    "Laba bersih model FY26F Rp847,0 miliar; margin bersih 24,1%."])
+def test_reads_english_rejects_short_indonesian_without_function_words(text):
+    assert not prose_lang.reads_english(text)
+    assert "must be English only" in scrub.english_problems(f"Ringkasan: {text}", text)
+
+
+# Terse English, English sharing words with Indonesian, names, codes and URLs.
+@pytest.mark.parametrize("text", [
+    "Rising funding costs", "Recent price moves follow foreign investor flows.",
+    "SME portfolio concentration exposed to asset quality pressure", "Bank Indonesia rate cut",
+    "3Q26", "FY2026", "Capex", "EBITDA", "NIM", "Gross margin", "Capex intensity eases",
+    "Net margin 28,5% near the historical median", "Land sales of Rp84,3miliar",
+    "Quasi-reorganisation leaves thin equity", "Antara reports higher copper exports",
+    "The largest shareholder is PT Sumber Gemilang Persada with 32,2% of shares.",
+    "Panin Sekuritas analysts highlighted the risk of rising funding costs",
+    "POWR serves five Bekasi industrial estates",
+    "Palapa Ring Tengah 1.807 km with PT Len Telekomunikasi Indonesia",
+    "Source: https://www.detik.com/bali/bisnis/d-8477778/amnt-ajukan-perpanjangan-ekspor-konsentrat-ke-esdm",
+    "Semester II 2026"])
+def test_reads_english_keeps_terse_english_names_and_codes(text):
+    assert prose_lang.reads_english(text)
+
+
 @pytest.mark.parametrize("text", ["3Q26", "FY2026", "2H26", "1H26-2H26", "Bank Indonesia",
                                   "BI-Rate", "Semester II 2026"])
 def test_a_code_or_name_may_be_its_own_english(text):
