@@ -296,3 +296,204 @@ def test_forecast_twins_reach_the_web_with_english_figures():
     assert view["news_effects"][0]["rationale_en"] == "Profit rose 12.4% to Rp1,234.5bn."
     # Curated source English is shown as written (it may already use English figures).
     assert view["interim"]["rationale_en"] is None or "2.975" in view["interim"]["rationale_en"]
+
+
+# The agent's Bank Driver Scenario and the curated driver file the bank model ran.
+AGENT_BANK = {
+    "earnings_scenario": {"bank_drivers": {
+        "year": 2026, "loan_growth_pct": 10.0, "nim_pct": 7.55, "non_ii_to_nii_pct": 36.0,
+        "cost_to_income_pct": 42.0, "cost_of_credit_pct": 3.1, "deposit_growth_pct": 14.0,
+        "rationale": "Pertumbuhan kredit FY2026 kami proyeksikan 10,0%.", "source_ids": ["official"]}},
+    "bank_outyear_scenario": [{
+        "year": 2027, "loan_growth_pct": 10.5, "nim_pct": 7.4, "non_ii_to_nii_pct": 35.5,
+        "cost_to_income_pct": 42.0, "cost_of_credit_pct": 3.2, "deposit_growth_pct": 7.5,
+        "rationale": "Kredit 10,5% sebagai skenario analis.", "source_ids": ["official", "news:1"]}]}
+
+
+def _driver(value, kind, why, refs=None):
+    return {"value": value, "kind": kind, "rationale": why,
+            **({"source_refs": refs} if refs else {})}
+
+
+CURATED_BANK = {
+    "ticker": "BBRI", "reviewed_at": "2026-09-26",
+    "payout_path": {"values": [0.7, 0.6], "rationale": "Payout sekitar 70% lalu 60%.",
+                    "source_refs": ["bbri-call"]},
+    "drivers": [
+        {"year": 2026, "loan_growth_pct": _driver(9.0, "company_guidance", "Tetap.", ["bbri-call"]),
+         "nim_pct": _driver(7.5, "sourced", "Tetap.", ["bbri-fs", "bbri-call"]),
+         "non_ii_to_nii_pct": _driver(34.0, "sourced", "Tetap.", ["bbri-fs"]),
+         "cost_to_income_pct": _driver(42.0, "company_guidance", "Tetap.", ["bbri-call"]),
+         "cost_of_credit_pct": _driver(3.1, "company_guidance", "Tetap.", ["bbri-call"])},
+        {"year": 2027, **{key: _driver(value, "analyst_assumption", "Menuju pertumbuhan nominal.")
+                          for key, value in (("loan_growth_pct", 9.0), ("nim_pct", 7.4),
+                                             ("non_ii_to_nii_pct", 34.0),
+                                             ("cost_to_income_pct", 42.0),
+                                             ("cost_of_credit_pct", 3.0))}}]}
+
+
+def _bank_doc(drivers=CURATED_BANK):
+    return {"meta": {"ticker": "BBRI"},
+            "model_inputs": {"kind": "bank", "drivers": drivers, "valuation": {}},
+            "forecast_assumptions": {"outyear_scenario": {
+                "status": "validated_bank_driver_scenario", "rows": []}}}
+
+
+def test_the_bank_drivers_the_model_ran_come_from_the_report_not_the_agent():
+    audit = {"ticker": "BBRI", "forecast_assumptions": {"plan": AGENT_BANK}}
+    view = build(audit, _bank_doc())["forecast"]
+    # The agent's proposal stays as it was proposed.
+    assert [r["loan_growth_pct"] for r in view["bank_drivers"]] == [10.0, 10.5]
+    assert view["bank_drivers_used"] is False
+    assert view["bank_drivers_note"] == (
+        "Model bank tidak memakai driver usulan agent ini: neraca, laba dan dividen dihitung dari "
+        "berkas driver kurasi data/bank_drivers/BBRI.json (ditinjau 2026-09-26).")
+    assert view["bank_drivers_note_en"].startswith(
+        "The bank model did not use the agent's proposed drivers")
+    first, second = view["bank_drivers_model"]
+    assert first["year"] == "2026" and first["loan_growth_pct"] == 9.0 and first["nim_pct"] == 7.5
+    assert first["deposit_growth_pct"] is None and first["payout_pct"] == 70.0
+    assert first["kinds"]["loan_growth_pct"] == "company_guidance"
+    assert first["source_ids"] == ["bbri-call", "bbri-fs"]
+    assert first["source"] == "data/bank_drivers/BBRI.json"
+    assert first["rationale"].startswith("Kredit: Tetap.; NIM: Tetap.")
+    assert first["rationale_en"].startswith("Loans: Unchanged.; NIM: Unchanged.")
+    assert second["payout_pct"] == 60.0 and second["source_ids"] == []
+    assert second["kinds"] == {key: "analyst_assumption" for key in (
+        "loan_growth_pct", "nim_pct", "non_ii_to_nii_pct", "cost_to_income_pct",
+        "cost_of_credit_pct")}
+    assert view["bank_payout_rationale"] == "Payout sekitar 70% lalu 60%."
+    # A row the agent wrote as an analyst scenario is not tagged official.
+    proposed, scenario = view["bank_drivers"]
+    assert proposed["source_ids"] == ["official"] and proposed["analyst_assumption"] is False
+    assert scenario["source_ids"] == ["news:1"] and scenario["analyst_assumption"] is True
+
+
+def test_the_agent_bank_drivers_are_used_when_the_model_ran_them():
+    same = {**CURATED_BANK, "drivers": [
+        {"year": row["year"], **{key: _driver(row[key], "analyst_assumption", "Tetap.")
+                                 for key in ("loan_growth_pct", "nim_pct", "non_ii_to_nii_pct",
+                                             "cost_to_income_pct", "cost_of_credit_pct")}}
+        for row in [AGENT_BANK["earnings_scenario"]["bank_drivers"]]
+        + AGENT_BANK["bank_outyear_scenario"]]}
+    audit = {"ticker": "BBRI", "forecast_assumptions": {"plan": AGENT_BANK}}
+    view = build(audit, _bank_doc(same))["forecast"]
+    assert view["bank_drivers_used"] is True
+    assert view["bank_drivers_model"] is None and view["bank_drivers_note"] is None
+    # Without a driver file the report's bank scenario is the agent's table.
+    plain = {"forecast_assumptions": {"outyear_scenario": {
+        "status": "validated_bank_driver_scenario",
+        "rows": [{"year": 2027, **{k: v for k, v in AGENT_BANK["bank_outyear_scenario"][0].items()
+                                   if k.endswith("_pct")}}]}}}
+    assert build(audit, plain)["forecast"]["bank_drivers_used"] is True
+    # A trace without its report says nothing about what the model ran.
+    alone = build(audit)["forecast"]
+    assert alone["bank_drivers_used"] is None and alone["bank_drivers_model"] is None
+
+
+def test_out_years_from_the_model_own_schedule_say_the_agent_table_was_not_used():
+    plan = {"outyear_scenario": [
+        {"year": 2027, "revenue_growth_pct": 8, "rationale": "Skenario analis: kapasitas penuh.",
+         "source_ids": ["official"]},
+        {"year": 2028, "revenue_growth_pct": 4, "rationale": "Mengikuti panduan emiten.",
+         "source_ids": ["official"]}]}
+    audit = {"ticker": "AMMN", "forecast_assumptions": {"plan": plan}}
+    lom = {"meta": {"ticker": "AMMN"}, "forecast_assumptions": {"outyear_scenario": {
+        "status": "lom_schedule", "rows": [
+            {"year": 2027, "revenue_growth_pct": 29.9, "ebitda_margin_pct": 68.1,
+             "rationale": "Jadwal LoM: umpan 54 Mt.", "source_ids": ["official"]},
+            {"year": 2030, "revenue_growth_pct": 2.2, "rationale": "Jadwal LoM.",
+             "source_ids": ["official"]}]}}}
+    view = build(audit, lom)["forecast"]
+    assert view["outyears_used"] is False
+    assert view["outyears_note"] == ("Model tidak memakai tabel tahun lanjutan agent ini: forecast "
+                                     "FY27F-FY30F mengikuti jadwal Life-of-Mine (LoM) tambang.")
+    assert view["outyears_note_en"] == ("The model did not use the agent's out-year table: the "
+                                        "FY27F-FY30F forecast follows the mine's Life-of-Mine (LoM) "
+                                        "schedule.")
+    assert [r["revenue_growth_pct"] for r in view["outyears_model"]] == [29.9, 2.2]
+    assumed, guided = view["outyears"]
+    assert assumed["source_ids"] == [] and assumed["analyst_assumption"] is True
+    assert guided["source_ids"] == ["official"] and guided["analyst_assumption"] is False
+    operating = {"meta": {"ticker": "POWR"}, "forecast_assumptions": {"outyear_scenario": {
+        "status": "operating_driver_model", "rows": [{"year": 2027}, {"year": 2030}]}}}
+    assert build(audit, operating)["forecast"]["outyears_note"].endswith(
+        "mengikuti Operating Model (data/operating_drivers/POWR.json).")
+    scenario = {"forecast_assumptions": {"outyear_scenario": {
+        "status": "validated_analyst_scenario", "rows": []}}}
+    used = build(audit, scenario)["forecast"]
+    assert used["outyears_used"] is True and used["outyears_model"] is None
+    assert build(audit)["forecast"]["outyears_used"] is None
+
+
+def _analyst(members, **extra):
+    return {"plan": {"question": "Q"}, "market_date": "2026-09-22", "signals": [],
+            "peers": {"basis": "peer dipilih menurut model bisnis; alasan tiap peer dan yang "
+                               "dikeluarkan ada di paket grup", "group": "Perawatan pesawat (MRO)",
+                      "source": "grup peer kurasi Sektoral data/peer_groups/GMFI.json",
+                      "members": [{"symbol": "GMFI", "is_self": True}]
+                      + [{"symbol": s, "is_self": False} for s in members]}, **extra}
+
+
+PEER_DOC = {"exhibits": [
+    {"judul": "Grup peer: alasan pemilihan", "data": {"rows": []},
+     "catatan_sumber": "Sumber: data/peer_groups/GMFI.json (kurasi Sektoral, 2026-09-25). "
+                       "Peer hanya emiten BEI."},
+    {"judul": "Perbandingan peer Jasa penerbangan di BEI, diperlebar dari MRO pesawat",
+     "data": {"rows": [["Garuda Indonesia (GIAA)", "1"], ["Garuda Maintenance (GMFI) (emiten)", "2"],
+                       ["Cahaya Aero Services (CASS)", "3"], ["Median peer (tanpa emiten)", "4"]]},
+     "catatan_sumber": "Sumber: grup peer kurasi Sektoral data/peer_groups/GMFI.json (tabel peer "
+                       "Sectors GMFI) (peer dipilih menurut model bisnis); per 2026-09-24; kriteria"}]}
+
+
+def test_a_research_run_on_another_peer_group_is_marked_stale():
+    view = build({"ticker": "GMFI", "analyst": _analyst(["S59.SI", "S63.SI", "AIR"])},
+                 PEER_DOC)["analyst"]
+    assert view["peers_stale"] is True
+    assert view["peers_current"] == {
+        "group": "Jasa penerbangan di BEI, diperlebar dari MRO pesawat",
+        "group_en": "IDX-listed aviation services, widened from aircraft MRO",
+        "basis": "Peer hanya emiten BEI.", "basis_en": None, "as_of": "2026-09-25",
+        "source": "data/peer_groups/GMFI.json", "members": ["GIAA", "CASS"]}
+    assert view["market_date"] == "2026-09-22"
+    # The run's peer table has no date of its own: null, and a note saying so.
+    assert view["peers"]["as_of"] is None
+    assert view["peers"]["as_of_note"] == ("Sumber tabel peer riset ini tidak mencantumkan tanggal "
+                                           "snapshot; data pasar riset per 2026-09-22.")
+    assert view["peers"]["as_of_note_en"] == ("The research run's peer table source states no "
+                                              "snapshot date; the run's market data are as of "
+                                              "2026-09-22.")
+    same = build({"ticker": "GMFI", "analyst": _analyst(["GIAA", "CASS"])}, PEER_DOC)["analyst"]
+    assert same["peers_stale"] is False and same["peers_current"] is None
+    unknown = build({"ticker": "GMFI", "analyst": _analyst(["GIAA"])})["analyst"]
+    assert unknown["peers_stale"] is None and unknown["peers_current"] is None
+    dated = _analyst(["GIAA"])
+    dated["peers"]["as_of"] = "2026-09-25"
+    peers = build({"ticker": "GMFI", "analyst": dated})["analyst"]["peers"]
+    assert peers["as_of"] == "2026-09-25" and peers["as_of_note"] is None
+
+
+def test_every_signal_is_shown_up_to_the_bound_with_its_total():
+    signals = [{"id": f"web.{i}", "kind": "web", "label": f"Berita {i}",
+                "url": f"https://example.com/{i}"} for i in range(130)]
+    items = [{"title": f"T{i}", "url": f"https://example.com/{i}"} for i in range(45)]
+    view = build({"ticker": "AMMN", "analyst": _analyst(
+        [], signals=signals, web_news={"items": items})})["analyst"]
+    assert len(view["signals"]) == 120 and view["signals_total"] == 130
+    assert len(view["web_news"]["items"]) == 40 and view["web_news"]["total"] == 45
+
+
+def test_a_positive_pe_beside_negative_earnings_is_an_outlier():
+    pe = {"id": "peer.pe", "kind": "peer", "label": "P/E", "display": "38,6x",
+          "peers": [{"symbol": "MDKA", "value": 9141.67, "display": "9.141,7x"},
+                    {"symbol": "ANTM", "value": 8.6, "display": "8,6x"}]}
+    roe = {"id": "peer.roe", "kind": "peer", "label": "ROE", "display": "4,6%",
+           "peers": [{"symbol": "MDKA", "value": -0.021, "display": "-2,1%"},
+                     {"symbol": "ANTM", "value": 0.1, "display": "10,0%"}]}
+    view = build({"ticker": "AMMN", "analyst": _analyst([], signals=[pe, roe])})["analyst"]
+    mdka, antm = view["signals"][0]["peers"]
+    assert mdka["outlier"] is True and antm["outlier"] is False
+    assert mdka["outlier_note_en"].startswith("A positive P/E while the earnings")
+    assert antm["outlier_note"] is None
+    # A negative ROE is the data itself, not an outlier.
+    assert all(p["outlier"] is False for p in view["signals"][1]["peers"])
