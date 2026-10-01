@@ -469,6 +469,10 @@ def _driver_unit_examples():
          "kredit tumbuh lebih cepat dari pendanaan skenario",
          "LDR above its historical Sectors record (97,8%): FY26F 98,4%, FY27F 98,4%; loans grow "
          "faster than scenario funding"),
+        ("CAR di bawah target jangka menengah manajemen (20,0%), di atas batas regulator: FY27F "
+         "19,6%, FY28F 19,7%",
+         "CAR below management's medium-term target (20,0%), above the regulatory floor: FY27F "
+         "19,6%, FY28F 19,7%"),
     ]
 
 

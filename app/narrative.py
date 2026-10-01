@@ -2115,7 +2115,8 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "h2_net_margin_pct": h2["net_profit"] / h2["revenue"] * 100 if h2["revenue"] else 0.0,
                     "h2_capex_to_h1": (h2["capital_expenditure"] / h1["capital_expenditure"]
                                        if h1["capital_expenditure"] else 0.0)}
-            lom_note = "Hasil jadwal LoM, bukan asumsi terpisah."
+            lom_note = _t("Hasil jadwal LoM, bukan asumsi terpisah.",
+                          "From the LoM schedule, not a separate assumption.")
             ratio_exhibit = add(
                 ("Rasio 2H26 dari jadwal LoM" if lom_basis else
                  "Asumsi eksplisit untuk skenario 2H26"),
