@@ -951,6 +951,38 @@ TERMS.update({
     "Discount Rate per Aset": "Discount rate by asset",
     "Sensitivitas RNAV (diskon x harga)": "RNAV sensitivity (discount x price)",
 })
+# Model drivers, their bases and test units (app.driver_value), quoted in the
+# decision summary and the catalyst thresholds; rating moves (app.rating_history).
+TERMS.update({
+    "Tingkat diskonto US$": "US$ discount rate",
+    "Utilisasi smelter dan PMR 2027+": "Smelter and PMR utilisation 2027+",
+    "Capex pemeliharaan": "Maintenance capex",
+    "Beban bahan bakar: biaya per unit": "Fuel expense: unit cost",
+    "Laju penjualan lahan": "Land sales pace",
+    "Pertumbuhan harga lahan": "Land price growth",
+    "Tingkat diskonto landbank": "Landbank discount rate",
+    "Porsi lahan dapat dijual": "Saleable land share",
+    "Harga saham anak usaha tercatat (NRCA)": "Listed subsidiary share price (NRCA)",
+    "kebijakan rumah": "house policy",
+    "asumsi analis (dek 12 bulan)": "Analyst Assumption (12M deck)",
+    "rata-rata marketing sales historis": "historical average marketing sales",
+    "CAGR harga marketing historis": "historical marketing price CAGR",
+    "Cost of Equity kebijakan": "policy Cost of Equity",
+    "harga penutupan bertanggal": "dated closing price",
+    "harga penutupan": "closing price",
+    "level 1H": "1H level",
+    "level harga": "price level",
+    "level biaya": "cost level",
+    "per tahun": "per year",
+})
+_PATTERNS += [(re.compile(p), t) for p, t in (
+    (r"(.+): harga terealisasi", "{0}: realised price"),
+    (r"(.+): pertumbuhan volume", "{0}: volume growth"),
+    (r"laju (\S+ \d{4}) \(emiten\)", "{0} run-rate (issuer)"),
+    (r"Naik dari (Buy|Hold|Sell)", "Upgraded from {0}"),
+    (r"Turun dari (Buy|Hold|Sell)", "Downgraded from {0}"),
+)]
+
 # Checked before the general patterns above, which they narrow.
 _PATTERNS[:0] = [(re.compile(p), t) for p, t in (
     (r"Target harga: PER peer x EPS (.+)", "Target Price: peer PER x EPS {0}"),

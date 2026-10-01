@@ -2053,50 +2053,83 @@ def mining_catalysts(doc, intake):
     balance = evidence.get("balance_sheet") or {}
     published = actual.get("published_at") or "-"
     period = actual.get("period") or "periode terakhir"
-    rows = []
+    rows, rows_en = [], []
+
+    def add(*cells):
+        """A row of (Indonesian, English) cells. The rows stay Indonesian in the
+        English run too (link_catalysts matches their words); the English rides
+        in rows_en (app.prose_lang)."""
+        rows.append([c[0] for c in cells])
+        rows_en.append([c[1] for c in cells])
+
     if operating:
-        rows.append(["Volume dan kadar tambang", f"{operating[0]['fact']} (rilis {published})",
-                     "Volume konsentrat dan kadar menentukan pendapatan serta EBITDA tahun berjalan.",
-                     "Positif; turun bila kadar kembali melemah"])
+        add(("Volume dan kadar tambang", "Mine volume and grade"),
+            (f"{operating[0]['fact']} (rilis {published})",
+             f"{prose_lang.label(operating[0]['fact'])} (release {published})"),
+            ("Volume konsentrat dan kadar menentukan pendapatan serta EBITDA tahun berjalan.",
+             "Concentrate volume and grade set revenue and EBITDA for the current year."),
+            ("Positif; turun bila kadar kembali melemah", "Positive; down if grades weaken again"))
     if len(operating) > 1:
-        rows.append(["Ramp-up pemrosesan", f"{operating[1]['fact']} (rilis {published})",
-                     "Utilisasi smelter dan PMR menaikkan porsi produk olahan dan margin.",
-                     "Positif bila utilisasi naik; negatif bila terjadi gangguan"])
+        add(("Ramp-up pemrosesan", "Processing ramp-up"),
+            (f"{operating[1]['fact']} (rilis {published})",
+             f"{prose_lang.label(operating[1]['fact'])} (release {published})"),
+            ("Utilisasi smelter dan PMR menaikkan porsi produk olahan dan margin.",
+             "Smelter and PMR utilisation raise the share of refined products and margins."),
+            ("Positif bila utilisasi naik; negatif bila terjadi gangguan",
+             "Positive if utilisation rises; negative on disruptions"))
     attainment = guidance_attainment(evidence)
     if attainment:
         low = min(r[3] for r in attainment)
         high = max(r[3] for r in attainment)
-        rows.append([f"Pencapaian panduan {_guidance_period(evidence)}",
-                     f"Realisasi {period} {fmt.pct(low)} sampai {fmt.pct(high)} dari panduan volume.",
-                     "Volume semester kedua menentukan EBITDA forecast dan target harga.",
-                     "Negatif bila semester kedua di bawah laju yang disiratkan panduan"])
+        add((f"Pencapaian panduan {_guidance_period(evidence)}",
+             f"{_guidance_period(evidence)} guidance attainment"),
+            (f"Realisasi {period} {fmt.pct(low)} sampai {fmt.pct(high)} dari panduan volume.",
+             f"{prose_lang.label(period)} delivery of {fmt.pct(low)} to {fmt.pct(high)} of volume "
+             "guidance."),
+            ("Volume semester kedua menentukan EBITDA forecast dan target harga.",
+             "Second-half volumes set forecast EBITDA and the Target Price."),
+            ("Negatif bila semester kedua di bawah laju yang disiratkan panduan",
+             "Negative if the second half runs below the pace guidance implies"))
     for name in _commodities(intake):
         points = _series(name, intake.get("as_of"))
         change = _change_12m(points)
         if change is None:
             continue
-        rows.append([f"Harga {COMMODITY_UNITS[name][0].lower()}",
-                     f"{'Naik' if change >= 0 else 'Turun'} {fmt.pct(abs(change))} dalam 12 bulan "
-                     f"(data s.d. {points[-1][0].isoformat()}).",
-                     "Harga realisasi langsung mengalir ke pendapatan; lihat tabel sensitivitas.",
-                     "Dua arah"])
+        add((f"Harga {COMMODITY_UNITS[name][0].lower()}", f"{name} price"),
+            (f"{'Naik' if change >= 0 else 'Turun'} {fmt.pct(abs(change))} dalam 12 bulan "
+             f"(data s.d. {points[-1][0].isoformat()}).",
+             f"{'Up' if change >= 0 else 'Down'} {fmt.pct(abs(change))} over 12 months "
+             f"(data to {points[-1][0].isoformat()})."),
+            ("Harga realisasi langsung mengalir ke pendapatan; lihat tabel sensitivitas.",
+             "Realised prices flow straight into revenue; see the sensitivity table."),
+            ("Dua arah", "Two-way"))
     debt, cash = balance.get("total_debt"), balance.get("cash")
     if debt is not None and cash is not None:
-        rows.append(["Utang bersih dan capex",
-                     f"Utang bersih US${fmt._id((debt - cash) / 1e6, 0)} juta per "
-                     f"{balance.get('period_end', '-')}.",
-                     "Beban bunga dan capex memengaruhi laba bersih dan nilai ekuitas.",
-                     "Negatif bila capex pengembangan dipercepat"])
+        add(("Utang bersih dan capex", "Net debt and capex"),
+            (f"Utang bersih US${fmt._id((debt - cash) / 1e6, 0)} juta per "
+             f"{balance.get('period_end', '-')}.",
+             f"Net debt US${fmt._id((debt - cash) / 1e6, 0)} juta at "
+             f"{balance.get('period_end', '-')}."),
+            ("Beban bunga dan capex memengaruhi laba bersih dan nilai ekuitas.",
+             "Interest expense and capex affect net profit and equity value."),
+            ("Negatif bila capex pengembangan dipercepat",
+             "Negative if development capex is brought forward"))
     if life.get("elang_fid_target") or life.get("elang_first_ore"):
-        rows.append(["Pengembangan Elang",
-                     f"Target keputusan investasi {life.get('elang_fid_target', '-')}; "
-                     f"bijih pertama {life.get('elang_first_ore', '-')}.",
-                     "Capex pengembangan menekan arus kas bebas; nilai aset baru masuk setelah LoM tersedia.",
-                     "Dua arah"])
+        add(("Pengembangan Elang", "Elang development"),
+            (f"Target keputusan investasi {life.get('elang_fid_target', '-')}; "
+             f"bijih pertama {life.get('elang_first_ore', '-')}.",
+             f"Final investment decision targeted {life.get('elang_fid_target', '-')}; "
+             f"first ore {life.get('elang_first_ore', '-')}."),
+            ("Capex pengembangan menekan arus kas bebas; nilai aset baru masuk setelah LoM tersedia.",
+             "Development capex weighs on free cash flow; the asset value enters once the LoM is "
+             "available."),
+            ("Dua arah", "Two-way"))
     for exhibit in doc["exhibits"]:
         if exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS) and rows:
             exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
                                         "Driver dan jalur dampak", "Arah"], "rows": rows}
+            if prose_lang.english():
+                exhibit["data"]["rows_en"] = rows_en
             exhibit["catatan_sumber"] = (
                 f"Sumber fakta: {actual.get('source_title')} (terbit {published}); Sectors untuk "
                 "harga komoditas. Kolom driver dan arah adalah analisis Sektoral.")
@@ -2245,7 +2278,8 @@ def drop_screening_values(doc):
                     continue
                 label = str(row[0]).strip().lower()
                 if label.startswith("keputusan rilis") and len(row) > 1:
-                    row[1] = "Rating dan target harga ditahan sampai seluruh pemeriksaan selesai."
+                    row[1] = _t("Rating dan target harga ditahan sampai seluruh pemeriksaan selesai.",
+                                "Rating and Target Price are withheld until every check is complete.")
                 if re.search(r"nilai (?:wajar|model) per saham|nilai per saham|target harga", label):
                     for index in range(1, len(row)):
                         row[index] = "Ditahan"

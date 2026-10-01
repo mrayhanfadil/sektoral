@@ -22,6 +22,19 @@ from pathlib import Path
 from statistics import covariance, variance
 
 from . import fmt, idx_history, release_policy
+from . import prose_lang  # app.valuation imports this module while prose_lang loads
+
+
+def _t(id_text, en_text):
+    return prose_lang.t(id_text, en_text)
+
+
+def _src(text):
+    return prose_lang.label(text)
+
+
+# A benchmark the Report Date predates.
+_MISSING = ("tidak tersedia pada tanggal laporan", "not available at the Report Date")
 
 PATH = Path(__file__).resolve().parent.parent / "data" / "rate_benchmarks.json"
 TITLE = "Parameter tingkat diskonto: kebijakan vs pembanding"
@@ -133,41 +146,50 @@ def exhibit(ticker, as_of, va, data=None):
     local_rf = rf["value"] - crp["default_spread"] if rf and crp else None
     if not usd:
         rows.append(["Risk-free IDR (house policy)", pct(rates["rf"]),
-                     (f"{pct(rf['value'], 2)} ({rf['label']})"
-                      + (f"; dikurangi default spread {pct(crp['default_spread'], 2)} = "
-                         f"{pct(local_rf, 2)} bebas risiko rupiah" if local_rf is not None else ""))
-                     if rf else "tidak tersedia pada tanggal laporan",
+                     (f"{pct(rf['value'], 2)} ({_src(rf['label'])})"
+                      + (_t(f"; dikurangi default spread {pct(crp['default_spread'], 2)} = "
+                            f"{pct(local_rf, 2)} bebas risiko rupiah",
+                            f"; less the default spread of {pct(crp['default_spread'], 2)} = "
+                            f"{pct(local_rf, 2)} rupiah risk-free") if local_rf is not None else ""))
+                     if rf else _t(*_MISSING),
                      " + ".join(x["short_source"] for x in (rf, crp if local_rf is not None else None)
                                 if x) or "-"])
         if rf:
             sources.append(f"Rf: {rf['source_title']}")
     else:
-        rows.append(["Risk-free (UST 10Y)", pct(rates["rf"]), "sama dengan nilai kebijakan",
-                     "Yahoo Finance (UST 10Y), tanggal laporan"])
+        rows.append(["Risk-free (UST 10Y)", pct(rates["rf"]),
+                     _t("sama dengan nilai kebijakan", "same as the policy value"),
+                     _t("Yahoo Finance (UST 10Y), tanggal laporan",
+                        "Yahoo Finance (UST 10Y), Report Date")])
     if usd and isinstance(rates.get("crp"), (int, float)):
         rows.append(["Country risk premium Indonesia", pct(rates["crp"]),
-                     crp["label"] if crp else "tidak tersedia pada tanggal laporan",
+                     _src(crp["label"]) if crp else _t(*_MISSING),
                      crp["short_source"] if crp else "-"])
     if crp:
         sources.append(f"CRP dan default spread: {crp['source_title']}")
     rows.append(["Beta", fmt._id(rates["beta"], 2),
-                 (f"{fmt._id(b['adjusted'], 2)} (Blume; regresi {fmt._id(b['raw'], 2)}, "
-                  f"{b['weeks']} return mingguan terhadap IHSG sejak {b['start']})")
-                 if b else "riwayat harga IDX kurang dari satu tahun",
+                 _t(f"{fmt._id(b['adjusted'], 2)} (Blume; regresi {fmt._id(b['raw'], 2)}, "
+                    f"{b['weeks']} return mingguan terhadap IHSG sejak {b['start']})",
+                    f"{fmt._id(b['adjusted'], 2)} (Blume; regression {fmt._id(b['raw'], 2)}, "
+                    f"{b['weeks']} weekly returns against the JCI since {b['start']})")
+                 if b else _t("riwayat harga IDX kurang dari satu tahun",
+                              "less than one year of IDX price history"),
                  f"regresi Sektoral, harga IDX s.d. {b['end']}" if b else "-"])
     if b:
         sources.append(f"beta: regresi Sektoral atas {b['source']}")
     if usd:
         rows.append(["Equity risk premium (mature market)", pct(rates["erp"]),
-                     f"{pct(erp['value'], 2)}: {erp['label']}" if erp else
-                     "tidak tersedia pada tanggal laporan", erp["short_source"] if erp else "-"])
+                     f"{pct(erp['value'], 2)}: {_src(erp['label'])}" if erp else
+                     _t(*_MISSING), erp["short_source"] if erp else "-"])
     else:
         rows.append(["Equity risk premium (tanpa CRP terpisah)", pct(rates["erp"]),
-                     (f"{pct(erp['value'] + crp['value'], 2)} ERP total Indonesia = "
-                      f"{pct(erp['value'], 2)} {erp['label']} + {pct(crp['value'], 2)} CRP")
+                     _t(f"{pct(erp['value'] + crp['value'], 2)} ERP total Indonesia = "
+                        f"{pct(erp['value'], 2)} {_src(erp['label'])} + {pct(crp['value'], 2)} CRP",
+                        f"{pct(erp['value'] + crp['value'], 2)} total Indonesia ERP = "
+                        f"{pct(erp['value'], 2)} {_src(erp['label'])} + {pct(crp['value'], 2)} CRP")
                      if erp and crp else
-                     f"{pct(erp['value'], 2)}: {erp['label']}" if erp else
-                     "tidak tersedia pada tanggal laporan",
+                     f"{pct(erp['value'], 2)}: {_src(erp['label'])}" if erp else
+                     _t(*_MISSING),
                      " + ".join(x["short_source"] for x in (erp, crp) if x) or "-"])
     if erp:
         sources.append(f"ERP: {erp['source_title']}")
@@ -176,9 +198,11 @@ def exhibit(ticker, as_of, va, data=None):
     nominal = ((1 + series["real"]) * (1 + series["inflation"]) - 1) if series else None
     if rates.get("terminal"):
         rows.append([f"Pertumbuhan terminal g ({'US$' if usd else 'Rp'})", pct(rates["g"]),
-                     (f"{pct(nominal)} PDB nominal {series['country']} {series['year']} "
-                      f"(riil {pct(series['real'])}, inflasi {pct(series['inflation'])})")
-                     if series else "tidak tersedia pada tanggal laporan",
+                     _t(f"{pct(nominal)} PDB nominal {series['country']} {series['year']} "
+                        f"(riil {pct(series['real'])}, inflasi {pct(series['inflation'])})",
+                        f"{pct(nominal)} nominal GDP, {_src(series['country'])} {series['year']} "
+                        f"(real {pct(series['real'])}, inflation {pct(series['inflation'])})")
+                     if series else _t(*_MISSING),
                      growth["short_source"] if series else "-"])
         if series:
             sources.append(f"g: {growth['source_title']}")
@@ -193,9 +217,11 @@ def exhibit(ticker, as_of, va, data=None):
         coe_bench = ((local_rf if local_rf is not None else rf["value"] if rf else rates["rf"])
                      + bench_beta * (bench_erp + (crp["value"] if crp else 0.0)))
     rows.append(["Cost of equity (CAPM)", pct(coe_policy),
-                 f"{pct(coe_bench)} pada input pembanding ({'+' if coe_bench >= coe_policy else ''}"
-                 f"{fmt._id((coe_bench - coe_policy) * 1e4, 0)} bp); memo",
-                 "baris di atas"])
+                 _t(f"{pct(coe_bench)} pada input pembanding ({'+' if coe_bench >= coe_policy else ''}"
+                    f"{fmt._id((coe_bench - coe_policy) * 1e4, 0)} bp); memo",
+                    f"{pct(coe_bench)} on the benchmark inputs ({'+' if coe_bench >= coe_policy else ''}"
+                    f"{fmt._id((coe_bench - coe_policy) * 1e4, 0)} bp); memo"),
+                 _t("baris di atas", "rows above")])
     return {"n": 0, "judul": TITLE, "tipe": "tabel",
             "data": {"cols": ["Parameter", "Kebijakan", "Pembanding", "Sumber, tanggal"],
                      "rows": rows},

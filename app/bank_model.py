@@ -42,9 +42,29 @@ ratios are fractions in rows and percent in drivers.
 """
 from __future__ import annotations
 
+import re
 from statistics import median
 
 from . import fmt
+from . import prose_lang  # app.valuation reaches this module while prose_lang loads
+
+
+def _t(id_text, en_text):
+    return prose_lang.t(id_text, en_text)
+
+
+def _driver_reasons(text):
+    """English of a driver row's reasons ("loan_growth_pct: <reason>; nim_pct: ..."),
+    each reason through ``prose_lang.label`` (the issuer file's words are in
+    data/source_text_en); Indonesian outside an English build."""
+    if not prose_lang.english():
+        return text
+    parts = re.split(r"; (?=[a-z_]+_pct: )", text)
+    out = []
+    for part in parts:
+        key, sep, reason = part.partition(": ")
+        out.append(f"{key}{sep}{prose_lang.label(reason)}" if sep else prose_lang.label(part))
+    return "; ".join(out)
 
 # Drivers the Bank Driver Scenario sets for every year, and one optional.
 DRIVERS = ("loan_growth_pct", "nim_pct", "non_ii_to_nii_pct", "cost_to_income_pct",
@@ -709,6 +729,11 @@ def project(rows, official, balance, drivers, *, payout, payout_basis, shares=No
             "constraints": constraints,
             "assumptions": _assumptions(anchor, p, base, drivers, payout, payout_basis,
                                         shares, shares_basis, nci0, nci_basis, constraints),
+            # The same sentences for the English edition: the model is built once,
+            # before the prose stage runs in each language (app.forecast_statements).
+            "assumptions_en": _english_assumptions(anchor, p, base, drivers, payout,
+                                                   payout_basis, shares, shares_basis, nci0,
+                                                   nci_basis, constraints),
             "notes": notes, "checks": checks(out, anchor, h2, base, payout, rows, constraints)}
 
 
@@ -855,33 +880,54 @@ def _official_assumptions(anchor, p, drivers, constraints, shares, shares_basis)
     """Sentences for a bank model built on a sourced driver file."""
     period = anchor["period"]
     first = f"FY{anchor['year'] % 100:02d}F"
+    label = prose_lang.label
     out = [
-        (f"Model bank bersumber: {first} = aktual {period} resmi (NII, pendapatan lain, beban "
-         "operasional, cadangan, pajak dan laba dari laporan laba rugi) + H2 model; saldo awal "
-         "dan rasio neraca (cakupan cadangan, LDR, komposisi DPK, liabilitas berbunga lain, "
-         "porsi kredit dalam aset produktif, rasio modal terhadap ekuitas dan ATMR per kredit) "
-         f"dari neraca 31 Desember dan 30 Juni resmi, definisi yang sama untuk kedua tanggal."),
-        (f"Mekanika model: NII = NIM x rata-rata aset produktif; biaya kredit atas rata-rata "
-         "kredit bruto; beban operasional = CIR x pendapatan; aset produktif selain kredit "
-         "menyeimbangkan neraca; ekuitas induk = saldo awal + laba induk - dividen; dividen "
-         "tahun t = payout x laba induk tahun t-1."),
-        (f"Pajak {_pct(anchor['tax_rate'])} ({anchor['tax_rate_basis']}); biaya dana "
-         f"{_pct(p['cost_of_funds'])} untuk pemisahan pendapatan dan beban bunga."),
-        (f"Batas modal: CAR {_pct(constraints.get('car_floor'))} "
-         f"({constraints.get('car_floor_basis')}); tahun yang akan turun di bawahnya menurunkan "
-         "payout, lalu pertumbuhan kredit."),
+        _t(f"Model bank bersumber: {first} = aktual {period} resmi (NII, pendapatan lain, beban "
+           "operasional, cadangan, pajak dan laba dari laporan laba rugi) + H2 model; saldo awal "
+           "dan rasio neraca (cakupan cadangan, LDR, komposisi DPK, liabilitas berbunga lain, "
+           "porsi kredit dalam aset produktif, rasio modal terhadap ekuitas dan ATMR per kredit) "
+           f"dari neraca 31 Desember dan 30 Juni resmi, definisi yang sama untuk kedua tanggal.",
+           f"Sourced bank model: {first} = official {period} actuals (NII, other income, operating "
+           "expenses, provisions, tax and profit from the income statement) + model H2; opening "
+           "balances and balance-sheet ratios (allowance coverage, LDR, deposit mix, other "
+           "interest-bearing liabilities, loan share of earning assets, capital-to-equity ratio "
+           "and RWA per loan) from the official 31 December and 30 June balance sheets, one "
+           "definition for both dates."),
+        _t("Mekanika model: NII = NIM x rata-rata aset produktif; biaya kredit atas rata-rata "
+           "kredit bruto; beban operasional = CIR x pendapatan; aset produktif selain kredit "
+           "menyeimbangkan neraca; ekuitas induk = saldo awal + laba induk - dividen; dividen "
+           "tahun t = payout x laba induk tahun t-1.",
+           "Model mechanics: NII = NIM x average earning assets; cost of credit on average gross "
+           "loans; operating expenses = CIR x revenue; earning assets other than loans balance "
+           "the balance sheet; parent equity = opening balance + parent profit - dividends; "
+           "dividends in year t = payout x parent profit of year t-1."),
+        _t(f"Pajak {_pct(anchor['tax_rate'])} ({anchor['tax_rate_basis']}); biaya dana "
+           f"{_pct(p['cost_of_funds'])} untuk pemisahan pendapatan dan beban bunga.",
+           f"Tax {_pct(anchor['tax_rate'])} ({label(anchor['tax_rate_basis'])}); cost of funds "
+           f"{_pct(p['cost_of_funds'])} to split interest income and expense."),
+        _t(f"Batas modal: CAR {_pct(constraints.get('car_floor'))} "
+           f"({constraints.get('car_floor_basis')}); tahun yang akan turun di bawahnya menurunkan "
+           "payout, lalu pertumbuhan kredit.",
+           f"Capital floor: CAR {_pct(constraints.get('car_floor'))} "
+           f"({label(constraints.get('car_floor_basis'))}); a year that would fall below it cuts "
+           "the payout first, then loan growth."),
     ]
     payouts = constraints.get("payouts") or []
     if payouts:
-        out.append("Payout atas laba tiap tahun forecast: "
+        out.append(_t("Payout atas laba tiap tahun forecast: ",
+                      "Payout on each forecast year's profit: ")
                    + ", ".join(f"FY{(anchor['year'] + i) % 100:02d}F {_pct(v)}"
                                for i, v in enumerate(payouts)) + ".")
     for row in drivers:
         if row.get("rationale"):
-            out.append(f"Driver FY{row['year'] % 100:02d}F: {row['rationale']}")
+            out.append(_t(f"Driver FY{row['year'] % 100:02d}F: {row['rationale']}",
+                          f"FY{row['year'] % 100:02d}F drivers: "
+                          f"{_driver_reasons(row['rationale'])}"))
     if shares:
-        out.append(f"Asumsi valuasi: jumlah saham {fmt._id(shares / 1e9, 2)} miliar lembar "
-                   f"({shares_basis or 'sumber tidak tercatat'}), flat.")
+        out.append(_t(f"Asumsi valuasi: jumlah saham {fmt._id(shares / 1e9, 2)} miliar lembar "
+                      f"({shares_basis or 'sumber tidak tercatat'}), flat.",
+                      f"Valuation assumption: share count {fmt._id(shares / 1e9, 2)} miliar shares "
+                      f"({label(shares_basis or 'sumber tidak tercatat')}), flat."))
     return out
 
 
@@ -965,6 +1011,15 @@ def _assumptions(anchor, p, base, drivers, payout, payout_basis, shares, shares_
                    f"({shares_basis or 'sumber tidak tercatat'}), flat; EPS = laba induk, BVPS = "
                    "ekuitas induk per saham.")
     return out
+
+
+def _english_assumptions(*args):
+    """``_assumptions`` built in English, or None where it has no English
+    (the screening model without a sourced driver file)."""
+    if not args[0].get("official_inputs"):
+        return None
+    with prose_lang.building("en"):
+        return _assumptions(*args)
 
 
 def _constraint_text(constraints, first):

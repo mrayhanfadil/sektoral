@@ -351,15 +351,18 @@ def _method_chain_text(va):
     trace = chain.get("trace") or []
     if not trace:
         return None
-    parts = [f"{t['short']} dilewati ({method_chain.reader_reason(t['reasons'][0])})"
+    label = prose_lang.label
+    parts = [_t(f"{t['short']} dilewati ({method_chain.reader_reason(t['reasons'][0])})",
+                f"{label(t['short'])} skipped ({label(method_chain.reader_reason(t['reasons'][0]))})")
              for t in trace if t["decision"] == "skipped"]
     sel = next((t for t in trace if t["decision"] in ("selected", "stop_extreme")), None)
     if sel:
-        parts.append(f"dasar nilai {sel['short']}" +
-                     (" tetapi hasilnya ekstrem sehingga rantai berhenti"
+        parts.append(_t(f"dasar nilai {sel['short']}", f"value basis {label(sel['short'])}") +
+                     (_t(" tetapi hasilnya ekstrem sehingga rantai berhenti",
+                         " but the result is extreme, so the chain stops")
                       if sel["decision"] == "stop_extreme" else ""))
     else:
-        parts.append("belum ada metode yang memadai")
+        parts.append(_t("belum ada metode yang memadai", "no adequate method yet"))
     return "; ".join(parts) + "."
 
 
@@ -2378,11 +2381,16 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
     if mining:
         bridge_exhibit = None
         release_rows = [
-            ["Hasil interim resmi", ("Tersedia: " + actual["period"] + " dengan data keuangan dan operasi.")
-             if actual else "Belum ada hasil interim resmi yang memenuhi tanggal laporan."],
-            ["Forecast fisik", "Perlu jadwal produksi, pemrosesan dan penjualan, harga, biaya, pajak dan capex per tahun."],
-            ["SOTP", "Kas, utang finansial, NCI dan saham sudah bersumber; NAV aset LoM, overhead PV, serta rekonsiliasi uang muka pelanggan ke delivery/arus kas belum tersedia."],
-            ["Keputusan rilis", "Rating dan target harga ditahan sampai forecast dan SOTP dapat direkonsiliasi."]]
+            ["Hasil interim resmi", _t("Tersedia: " + actual["period"] + " dengan data keuangan dan operasi.",
+                                       "Available: " + actual["period"] + " with financial and operating data.")
+             if actual else _t("Belum ada hasil interim resmi yang memenuhi tanggal laporan.",
+                               "No official interim results yet meet the Report Date.")],
+            ["Forecast fisik", _t("Perlu jadwal produksi, pemrosesan dan penjualan, harga, biaya, pajak dan capex per tahun.",
+                                  "Needs an annual schedule of production, processing and sales, prices, costs, tax and capex.")],
+            ["SOTP", _t("Kas, utang finansial, NCI dan saham sudah bersumber; NAV aset LoM, overhead PV, serta rekonsiliasi uang muka pelanggan ke delivery/arus kas belum tersedia.",
+                        "Cash, financial debt, NCI and shares are sourced; LoM asset NAV, PV of overhead and the reconciliation of customer advances to deliveries/cash flow are not yet available.")],
+            ["Keputusan rilis", _t("Rating dan target harga ditahan sampai forecast dan SOTP dapat direkonsiliasi.",
+                                   "Rating and Target Price are withheld until the forecast and SOTP can be reconciled.")]]
         chain_text = _method_chain_text(va)
         if chain_text:
             release_rows.insert(-1, ["Rantai metode", chain_text])
@@ -2396,19 +2404,27 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             cash_ev = bridge.get("cash_idr") or {}
             fx_text = (f"{_lom_fx_source(intake)} Rp{fmt.rp(cash_ev.get('fx_rate'))}/USD"
                        if cash_ev.get("fx_rate") else "kurs bertanggal")
+            fx_en = (f"{prose_lang.label(_lom_fx_source(intake))} Rp{fmt.rp(cash_ev.get('fx_rate'))}/USD"
+                     if cash_ev.get("fx_rate") else "a dated FX rate")
             bridge_rows = [
                 ["Kas dan setara kas", f"Rp{fmt._id(cash_value / 1e12, 2)} triliun" if cash_value is not None else "-",
-                 f"Financial Statements 30 Jun 2026, hlm. 1; diterjemahkan pada {fx_text}."],
+                 _t(f"Financial Statements 30 Jun 2026, hlm. 1; diterjemahkan pada {fx_text}.",
+                    f"Financial Statements 30 Jun 2026, p. 1; translated at {fx_en}.")],
                 ["Utang finansial", f"Rp{fmt._id(debt_value / 1e12, 2)} triliun" if debt_value is not None else "-",
-                 f"Pinjaman bank neto + lease/pembiayaan; hlm. 2, 89, 98; diterjemahkan pada {fx_text}."],
+                 _t(f"Pinjaman bank neto + lease/pembiayaan; hlm. 2, 89, 98; diterjemahkan pada {fx_text}.",
+                    f"Net bank loans + leases/financing; pp. 2, 89, 98; translated at {fx_en}.")],
                 ["Kepentingan nonpengendali", f"Rp{fmt._id(minority_value / 1e12, 2)} triliun" if minority_value is not None else "-",
-                 f"Financial Statements 30 Jun 2026, hlm. 3; diterjemahkan pada {fx_text}."],
+                 _t(f"Financial Statements 30 Jun 2026, hlm. 3; diterjemahkan pada {fx_text}.",
+                    f"Financial Statements 30 Jun 2026, p. 3; translated at {fx_en}.")],
                 ["Saham beredar", f"{fmt._id(shares_value / 1e6, 1)} juta" if shares_value is not None else "-",
-                 "Financial Statements 30 Jun 2026, hlm. 101; sesudah saham treasuri."],
+                 _t("Financial Statements 30 Jun 2026, hlm. 101; sesudah saham treasuri.",
+                    "Financial Statements 30 Jun 2026, p. 101; after treasury shares.")],
                 ["PV overhead korporat", "Belum tersedia",
-                 "Tidak ada proyeksi overhead dan dasar kapitalisasi yang bersumber."],
+                 _t("Tidak ada proyeksi overhead dan dasar kapitalisasi yang bersumber.",
+                    "There is no sourced overhead projection or capitalisation basis.")],
                 ["Uang muka pelanggan", f"US${fmt._id((bridge.get('customer_advance_excluded_usd_thousand') or 0) / 1000, 1)} juta",
-                 "Tidak dimasukkan ke utang finansial; volume delivery, harga, dan alokasi arus kas kontrak belum dipetakan."],
+                 _t("Tidak dimasukkan ke utang finansial; volume delivery, harga, dan alokasi arus kas kontrak belum dipetakan.",
+                    "Not included in financial debt; contract delivery volumes, prices and cash-flow allocation are not yet mapped.")],
             ]
             bridge_exhibit = add("Jembatan korporat SOTP yang terverifikasi, masih parsial",
                 ["Komponen", "Nilai / status", "Basis dan batas bukti"], bridge_rows,
@@ -2419,14 +2435,22 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
         financial_ddm = intake.get("model_profile") == "financial_ddm"
         release_rows = [
             ["Hasil interim resmi", ("Tersedia: " + actual["period"])
-             if actual else "Belum ada rilis resmi yang tervalidasi untuk tanggal laporan."],
-            ["Forecast operasi", ("Perlu proyeksi laba, kredit, NIM, kualitas aset, biaya kredit, dan modal "
-                                  "yang direkonsiliasi." if financial_ddm else
-                                  "Perlu driver volume, harga/mix, margin, capex, modal kerja, pajak dan utang.")],
-            ["Valuasi", ("Perlu DDM yang direkonsiliasi dengan payout, kebutuhan modal, dan sensitivitas CoE/g."
+             if actual else _t("Belum ada rilis resmi yang tervalidasi untuk tanggal laporan.",
+                               "No validated official release yet for the Report Date.")],
+            ["Forecast operasi", (_t("Perlu proyeksi laba, kredit, NIM, kualitas aset, biaya kredit, dan modal "
+                                     "yang direkonsiliasi.",
+                                     "Needs reconciled projections of earnings, loans, NIM, asset quality, "
+                                     "cost of credit and capital.") if financial_ddm else
+                                  _t("Perlu driver volume, harga/mix, margin, capex, modal kerja, pajak dan utang.",
+                                     "Needs drivers for volume, price/mix, margins, capex, working capital, tax "
+                                     "and debt."))],
+            ["Valuasi", (_t("Perlu DDM yang direkonsiliasi dengan payout, kebutuhan modal, dan sensitivitas CoE/g.",
+                            "Needs a DDM reconciled with payout, capital needs and CoE/g sensitivity.")
                          if financial_ddm else
-                         "Perlu FCFF yang direkonsiliasi dan sensitivitas terminal yang konsisten.")],
-            ["Keputusan rilis", "Rating dan target harga ditahan sampai seluruh pemeriksaan lolos."]]
+                         _t("Perlu FCFF yang direkonsiliasi dan sensitivitas terminal yang konsisten.",
+                            "Needs a reconciled FCFF and a consistent terminal sensitivity."))],
+            ["Keputusan rilis", _t("Rating dan target harga ditahan sampai seluruh pemeriksaan lolos.",
+                                   "Rating and Target Price are withheld until every check passes.")]]
         chain_text = _method_chain_text(va)
         if chain_text:
             release_rows.insert(-1, ["Rantai metode", chain_text])
@@ -3344,7 +3368,8 @@ def _lom_reconciliation(intake, lom_res):
         # The consensus average as published (not rounded to a price tick), so
         # it reads the same as in the consensus table.
         table.append([f"Rata-rata target konsensus ({doc['analysts']} analis, {doc['as_of']})",
-                      f"Rp{fmt.rp(avg)}", f"sisa sesudah tiga langkah {step(avg - walked)}"])
+                      f"Rp{fmt.rp(avg)}", _t(f"sisa sesudah tiga langkah {step(avg - walked)}",
+                                             f"remainder after three steps {step(avg - walked)}")])
     else:
         table.append(["Rata-rata target konsensus", "n.a.", why])
     return {"n": 0, "judul": "Rekonsiliasi target ke asumsi pasar dan konsensus", "tipe": "tabel",
@@ -3998,9 +4023,11 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
         title = exhibit["judul"]
         if lom_page and title == "Pemeriksaan sebelum rating dan target harga":
             exhibit["judul"] = "Bukti lanjutan untuk menguji target harga"
-            exhibit["data"]["rows"][-1][1] = (
+            exhibit["data"]["rows"][-1][1] = _t(
                 "Target berbasis SOTP/LoM diterbitkan; capex Elang, izin ekspor konsentrat dan "
-                "jadwal tambang tahunan emiten akan menguji ulang nilai aset.")
+                "jadwal tambang tahunan emiten akan menguji ulang nilai aset.",
+                "The SOTP/LoM-based target is published; Elang capex, the concentrate export "
+                "permit and the issuer's annual mine plan will retest the asset value.")
             continue
         if lom_page:
             continue
@@ -4023,9 +4050,11 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                 "utang sesudah tanggal neraca.")
         elif title == "Pemeriksaan sebelum rating dan target harga":
             exhibit["judul"] = "Bukti lanjutan untuk menguji target harga"
-            exhibit["data"]["rows"][-1][1] = (
+            exhibit["data"]["rows"][-1][1] = _t(
                 "Target berbasis multiple diterbitkan; LoM/SOTP tetap perlu "
-                "direkonsiliasi sebelum dipakai sebagai metode aset.")
+                "direkonsiliasi sebelum dipakai sebagai metode aset.",
+                "The multiple-based target is published; the LoM/SOTP still needs "
+                "reconciliation before it serves as the asset method.")
             exhibit["catatan_sumber"] = (
                 "Sumber: pemeriksaan model Sektoral; kelengkapan LoM/SOTP "
                 "dicatat terpisah dari skenario FY EV/EBITDA.")
@@ -4992,13 +5021,19 @@ def _bank_driver_text(model, label, money, unit, eps_of, cite, a, forward_rows=(
                  "rows": [[name, money(h1_values[k1]) + ("*" if k1 in screened else ""),
                            money(h2_values[k1]), money(first[k2])]
                           for name, k1, k2 in fy_lines]
-                 + [["Driver H2", "aktual resmi",
-                     f"NIM {pct(d['nim_pct'])}; CIR {pct(d['cost_to_income_pct'])}; biaya kredit "
-                     f"{pct(d['cost_of_credit_pct'])}; non-bunga/NII "
-                     f"{pct(d['non_ii_to_nii_pct'])}",
-                     f"kredit input {pct(d['loan_growth_pct'])}; efektif FY "
-                     f"{fmt.pct(first['loan_growth'])}; NIM FY "
-                     f"{fmt.pct(first['net_interest_margin'])}"]]},
+                 + [["Driver H2", _t("aktual resmi", "official actuals"),
+                     _t(f"NIM {pct(d['nim_pct'])}; CIR {pct(d['cost_to_income_pct'])}; biaya kredit "
+                        f"{pct(d['cost_of_credit_pct'])}; non-bunga/NII "
+                        f"{pct(d['non_ii_to_nii_pct'])}",
+                        f"NIM {pct(d['nim_pct'])}; CIR {pct(d['cost_to_income_pct'])}; cost of "
+                        f"credit {pct(d['cost_of_credit_pct'])}; non-interest/NII "
+                        f"{pct(d['non_ii_to_nii_pct'])}"),
+                     _t(f"kredit input {pct(d['loan_growth_pct'])}; efektif FY "
+                        f"{fmt.pct(first['loan_growth'])}; NIM FY "
+                        f"{fmt.pct(first['net_interest_margin'])}",
+                        f"input loan growth {pct(d['loan_growth_pct'])}; effective FY "
+                        f"{fmt.pct(first['loan_growth'])}; FY NIM "
+                        f"{fmt.pct(first['net_interest_margin'])}")]]},
         "catatan_sumber": (
             f"Sumber: rilis {period} resmi (pendapatan, NII dan laba); H2 adalah model driver "
             f"bank dengan asumsi analis ({cite((a.get('bank_drivers') or {}).get('source_ids'))}), "
@@ -5017,15 +5052,20 @@ def _bank_driver_text(model, label, money, unit, eps_of, cite, a, forward_rows=(
             loan_cap = next((c for c in applied if c.get("year") == r["year"] and
                              c.get("lever") == "loan_growth"), None)
             if loan_cap:
-                bound = ("batas pendanaan LDR" if "ldr" in str(loan_cap.get("rule") or "").lower()
-                         else "batas kecukupan modal")
-                rationale = (f"Kredit efektif dibatasi dari {pct(loan_cap.get('from_pct'))} "
-                             f"ke {pct(loan_cap.get('to_pct'))} oleh {bound}.")
+                ldr = "ldr" in str(loan_cap.get("rule") or "").lower()
+                bound = _t("batas pendanaan LDR" if ldr else "batas kecukupan modal",
+                           "the LDR funding cap" if ldr else "the capital adequacy floor")
+                rationale = _t(f"Kredit efektif dibatasi dari {pct(loan_cap.get('from_pct'))} "
+                               f"ke {pct(loan_cap.get('to_pct'))} oleh {bound}.",
+                               f"Effective loan growth is capped from "
+                               f"{pct(loan_cap.get('from_pct'))} to {pct(loan_cap.get('to_pct'))} "
+                               f"by {bound}.")
             else:
-                rationale = "Tidak ada batas kredit yang mengikat pada tahun ini."
+                rationale = _t("Tidak ada batas kredit yang mengikat pada tahun ini.",
+                               "No loan constraint binds this year.")
             cited = cite(why.get("source_ids"))
             if cited:
-                rationale += f" Sumber asumsi: {cited}."
+                rationale += _t(f" Sumber asumsi: {cited}.", f" Assumption source: {cited}.")
             body.append([r["label"], pct(x["loan_growth_pct"]),
                          fmt.pct(r["loan_growth"]), pct(x["nim_pct"]),
                          pct(x["cost_of_credit_pct"]), pct(x["cost_to_income_pct"]),
@@ -5605,9 +5645,11 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
                 selected_short = next(
                     (t["short"] for t in va["method_chain"]["trace"]
                      if t["key"] == va["method_chain"].get("selected")), "metode terpilih")
-                exhibit["data"]["rows"][-1][1] = (
+                exhibit["data"]["rows"][-1][1] = _t(
                     f"Skenario nilai memakai {selected_short}; tinjau batas bukti pada tabel "
-                    "dan catatan metode sebelum menggunakannya.")
+                    "dan catatan metode sebelum menggunakannya.",
+                    f"The value scenario uses {prose_lang.label(selected_short)}; review the "
+                    "evidence limits in the tables and method notes before using it.")
             elif exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS) and catalyst_rows:
                 exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
                                             "Driver dan jalur dampak", "Arah"],
