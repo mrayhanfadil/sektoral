@@ -792,9 +792,11 @@ def peer_page(intake, valuation_inputs=None):
     exhibits = [_exhibit(
         "Grup peer: alasan pemilihan",
         ["Emiten", "Bursa", "Status", "Alasan"],
-        [[p.get("name") or p["symbol"], p.get("market") or "-", "dipakai", p["reason"]]
-         for p in curated["peers"]]
-        + [[x["symbol"], "BEI", "dikeluarkan", x["reason"]] for x in curated.get("excluded") or []],
+        # The curation file's reasons, English in data/source_text_en.
+        [[p.get("name") or p["symbol"], p.get("market") or "-", "dipakai",
+          prose_lang.source(p["reason"])] for p in curated["peers"]]
+        + [[x["symbol"], "BEI", "dikeluarkan", prose_lang.source(x["reason"])]
+           for x in curated.get("excluded") or []],
         f"Sumber: data/peer_groups/{ticker}.json (kurasi Sektoral, {curated.get('as_of')}). "
         + curated["basis"])] if curated else []
     exhibits += [_exhibit(
