@@ -67,6 +67,12 @@ from __future__ import annotations
 import re
 
 from . import cache, fmt, release_policy, scenario_value, share_basis
+from . import prose_lang  # app.valuation reaches this module while prose_lang loads
+
+
+def _t(id_text, en_text):
+    """The assumption sentence for the language being built (app.prose_lang)."""
+    return prose_lang.t(id_text, en_text)
 
 MODE_FULL = "laporan lengkap"
 # Full statements opened from the official interim balance sheet (spec §4.1a):
@@ -219,6 +225,12 @@ def _source(text):
     return text.replace("(", "").replace(")", "")
 
 
+def _src(text):
+    """``_source`` of a basis the model wrote, in English (``app.source_patterns``)
+    for an English template."""
+    return _source(prose_lang.label(text or "sumber tidak tercatat"))
+
+
 def _label(year):
     return f"FY{int(year) % 100:02d}F"
 
@@ -339,13 +351,17 @@ def _minimum_cash(history, base_year, cash0, cap_label=None):
         if cash is not None and revenue and revenue > 0:
             points.append((cash / revenue, row["year"]))
     if not points or cash0 is None or cash0 <= 0:
-        return 0.0, "kas minimum nol (rasio kas historis tidak tersedia)"
+        return 0.0, _t("kas minimum nol (rasio kas historis tidak tersedia)",
+                       "zero minimum cash (no historical cash ratio)")
     ratio, year = min(points)
     years = sorted(y for _, y in points)
     span = f"FY{years[0]}-FY{years[-1]}" if len(years) > 1 else f"FY{years[0]}"
-    return ratio, (f"yang lebih rendah dari {cap_label or f'kas FY{base_year}'} {_bn(cash0)} dan "
-                   f"rasio kas terhadap pendapatan terendah {span} ({fmt.pct(ratio)}, FY{year}) x "
-                   "pendapatan tahun itu")
+    return ratio, _t(
+        f"yang lebih rendah dari {cap_label or f'kas FY{base_year}'} {_bn(cash0)} dan "
+        f"rasio kas terhadap pendapatan terendah {span} ({fmt.pct(ratio)}, FY{year}) x "
+        "pendapatan tahun itu",
+        f"the lower of {cap_label or f'FY{base_year} cash'} {_bn(cash0)} and the lowest "
+        f"cash-to-revenue ratio of {span} ({fmt.pct(ratio)}, FY{year}) x that year's revenue")
 
 
 def _trace_detail(va, keys, need):
@@ -369,39 +385,64 @@ def _earnings_quality_notes(intake, fc):
     norm = scenario.get("normalization") or {}
     label = _label(scenario["year"]) if scenario.get("year") else "FY1"
     if norm.get("status") == "assessed" and norm.get("adjustments"):
-        items = "; ".join(f"{a['description']} {_native(a['effect'], currency)}"
+        # Line items as the issuer's statements name them (data/source_text_en).
+        items = "; ".join(f"{prose_lang.label(a['description'])} {_native(a['effect'], currency)}"
                           for a in norm["adjustments"])
-        out.append(
+        out.append(_t(
             f"Laba inti {label}: {_native(norm['normalized_attributable'], currency)} "
             f"(dilaporkan {_native(norm['reported_attributable'], currency)}); penyesuaian "
             f"satu kali {norm['period']} setelah pajak dan kepentingan nonpengendali: {items}. "
-            "PER dan ROE valuasi memakai laba inti; laporan laba rugi tetap angka dilaporkan.")
+            "PER dan ROE valuasi memakai laba inti; laporan laba rugi tetap angka dilaporkan.",
+            f"Core profit {label}: {_native(norm['normalized_attributable'], currency)} "
+            f"(reported {_native(norm['reported_attributable'], currency)}); one-off adjustments "
+            f"in {norm['period']} after tax and minorities: {items}. Valuation PER and ROE use "
+            "core profit; the income statement keeps the reported figures."))
     elif norm.get("status") == "assessed":
-        out.append(f"Normalisasi laba {norm.get('period')}: tidak ada pos satu kali; laba inti "
-                   f"{label} sama dengan laba dilaporkan.")
+        out.append(_t(f"Normalisasi laba {norm.get('period')}: tidak ada pos satu kali; laba inti "
+                      f"{label} sama dengan laba dilaporkan.",
+                      f"Earnings normalisation {norm.get('period')}: no one-off items; {label} "
+                      "core profit equals reported profit."))
     elif norm:
+        unreviewed = norm.get("status") == "not_assessed"
         why = norm.get("note") or ("ledger normalisasi laba yang ditinjau belum tersedia"
-                                   if norm.get("status") == "not_assessed"
-                                   else "ledger normalisasi laba belum lolos pemeriksaan")
-        out.append(f"Normalisasi laba {label} belum lengkap: {why.rstrip('.')}; PER dan ROE "
-                   "memakai laba dilaporkan.")
+                                   if unreviewed else
+                                   "ledger normalisasi laba belum lolos pemeriksaan")
+        why_en = (prose_lang.label(norm["note"]) if norm.get("note") else
+                  "no reviewed earnings normalisation ledger yet" if unreviewed else
+                  "the earnings normalisation ledger has not passed its checks")
+        out.append(_t(f"Normalisasi laba {label} belum lengkap: {why.rstrip('.')}; PER dan ROE "
+                      "memakai laba dilaporkan.",
+                      f"Earnings normalisation {label} incomplete: {why_en.rstrip('.')}; PER and "
+                      "ROE use reported profit."))
     record = intake.get("share_basis") or {}
     weighted = record.get("fy_weighted_average") or {}
     if record.get("status") == "assessed" and weighted.get("shares"):
-        basis = ("dari aksi korporasi bertanggal" if weighted.get("h1_basis") ==
-                 "derived_from_dated_actions" else "memakai angka tertimbang 1H emiten")
-        out.append(
+        derived = weighted.get("h1_basis") == "derived_from_dated_actions"
+        basis = _t("dari aksi korporasi bertanggal" if derived else
+                   "memakai angka tertimbang 1H emiten",
+                   "from dated corporate actions" if derived else
+                   "using the issuer's 1H weighted figure")
+        out.append(_t(
             f"Jumlah saham tertimbang FY{weighted['year'] % 100:02d} (PSAK 56) "
             f"{fmt._id(weighted['shares'] / 1e9, 2)} miliar lembar, {basis}; dicatat untuk "
             "rekonsiliasi EPS tahunan emiten, sedangkan EPS model memakai jumlah saham pada "
-            "tanggal laporan.")
+            "tanggal laporan.",
+            f"FY{weighted['year'] % 100:02d} weighted share count (PSAK 56) "
+            f"{fmt._id(weighted['shares'] / 1e9, 2)} miliar shares, {basis}; recorded to "
+            "reconcile the issuer's annual EPS, while model EPS uses the share count at the "
+            "Report Date."))
     if weighted.get("h1_basis") == "derived_from_dated_actions" and weighted.get("issuer_reported"):
-        out.append(
+        out.append(_t(
             f"Catatan register saham: rata-rata tertimbang {weighted['period']} yang dilaporkan "
             f"emiten ({fmt._id(weighted['issuer_reported'] / 1e9, 2)} miliar lembar) tidak "
             f"rekonsiliasi dengan register dan aksi korporasi bertanggal "
             f"({fmt._id(weighted['derived'] / 1e9, 2)} miliar lembar); angka turunan dipakai "
-            "dan angka emiten ditandai untuk ditinjau.")
+            "dan angka emiten ditandai untuk ditinjau.",
+            f"Share register note: the issuer-reported {weighted['period']} weighted average "
+            f"({fmt._id(weighted['issuer_reported'] / 1e9, 2)} miliar shares) does not reconcile "
+            f"with the register and dated corporate actions "
+            f"({fmt._id(weighted['derived'] / 1e9, 2)} miliar shares); the derived figure is "
+            "used and the issuer's is flagged for review."))
     return out
 
 
@@ -595,9 +636,15 @@ def _official_usd_base(intake, base, fx):
         out["earnings"] = parent * fx
     parent_equity = _num(official.get("equity_attributable"))
     source = evidence.get("annual_source_title") or "rilis tahunan resmi"
-    note = (f"neraca awal FY{base['year']} dari ekuitas US${fmt._id(equity_usd / 1e6, 1)} juta "
-            f"({source}); pos neraca lain data Sectors dinyatakan ulang dari kurs Sectors "
-            f"Rp{fmt._id(rate, 0)}/US$ (tersirat dari ekuitas) ke kurs yang sama")
+    # A release title is quoted as it is; the generic wording has its English.
+    source_en = evidence.get("annual_source_title") or "official annual release"
+    note = _t(f"neraca awal FY{base['year']} dari ekuitas US${fmt._id(equity_usd / 1e6, 1)} juta "
+              f"({source}); pos neraca lain data Sectors dinyatakan ulang dari kurs Sectors "
+              f"Rp{fmt._id(rate, 0)}/US$ (tersirat dari ekuitas) ke kurs yang sama",
+              f"opening FY{base['year']} balance sheet from equity of "
+              f"US${fmt._id(equity_usd / 1e6, 1)} juta ({source_en}); other Sectors balance-sheet "
+              f"lines restated from the Sectors rate of Rp{fmt._id(rate, 0)}/US$ (implied by "
+              "equity) to the same rate")
     nci = (equity_usd - parent_equity) * fx if parent_equity is not None else None
     return out, {"note": note, "nci": nci,
                  "nci_basis": f"nilai buku FY{base['year']}, {source}" if nci is not None else None}
@@ -607,22 +654,35 @@ def _official_usd_base(intake, base, fx):
 
 def _scenario_sentence(basis, span, period, path, lom, bank):
     if basis == "forecast produksi":
-        return (f"Forecast produksi: pendapatan, EBITDA, D&A, capex dan laba {span} dari forecast "
-                "driver yang direkonsiliasi; angka yang sama dipakai Key Financials dan valuasi.")
+        return _t(f"Forecast produksi: pendapatan, EBITDA, D&A, capex dan laba {span} dari "
+                  "forecast driver yang direkonsiliasi; angka yang sama dipakai Key Financials "
+                  "dan valuasi.",
+                  f"Production forecast: {span} revenue, EBITDA, D&A, capex and profit from the "
+                  "reconciled driver forecast; Key Financials and the valuation use the same "
+                  "figures.")
+    n = len(path) - 1
     if len(path) == 1:
-        outyears = "tanpa tahun lanjutan tervalidasi"
+        outyears = _t("tanpa tahun lanjutan tervalidasi", "no validated out-years")
     elif lom:
-        outyears = (f"{len(path) - 1} tahun lanjutan dari jadwal LoM yang dinilai (pendapatan, "
-                    "EBITDA, capex, D&A, bunga, pajak dan PNBP)")
+        outyears = _t(f"{n} tahun lanjutan dari jadwal LoM yang dinilai (pendapatan, "
+                      "EBITDA, capex, D&A, bunga, pajak dan PNBP)",
+                      f"{n} out-years from the valued LoM schedule (revenue, EBITDA, capex, "
+                      "D&A, interest, tax and PNBP)")
     elif bank:
-        outyears = (f"{len(path) - 1} tahun lanjutan tervalidasi (pertumbuhan pendapatan dan "
-                    "margin laba bersih)")
+        outyears = _t(f"{n} tahun lanjutan tervalidasi (pertumbuhan pendapatan dan "
+                      "margin laba bersih)",
+                      f"{n} validated out-years (revenue growth and net margin)")
     else:
-        outyears = (f"{len(path) - 1} tahun lanjutan tervalidasi (pertumbuhan pendapatan, margin "
-                    "EBITDA, margin laba bersih dan intensitas capex)")
-    lines = "pendapatan dan laba" if bank else "pendapatan, EBITDA, capex dan laba"
-    return (f"Skenario analis: {span} dari aktual {period} resmi ditambah asumsi H2 dan "
-            f"{outyears}; {lines} yang sama dipakai Key Financials dan valuasi.")
+        outyears = _t(f"{n} tahun lanjutan tervalidasi (pertumbuhan pendapatan, margin "
+                      "EBITDA, margin laba bersih dan intensitas capex)",
+                      f"{n} validated out-years (revenue growth, EBITDA margin, net margin and "
+                      "capex intensity)")
+    lines = _t("pendapatan dan laba" if bank else "pendapatan, EBITDA, capex dan laba",
+               "revenue and profit" if bank else "revenue, EBITDA, capex and profit")
+    return _t(f"Skenario analis: {span} dari aktual {period} resmi ditambah asumsi H2 dan "
+              f"{outyears}; {lines} yang sama dipakai Key Financials dan valuasi.",
+              f"Analyst Scenario: {span} from official {period} actuals plus H2 assumptions and "
+              f"{outyears}; Key Financials and the valuation use the same {lines}.")
 
 
 def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
@@ -662,13 +722,19 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
     base, usd_base = _official_usd_base(intake, base, fx)
     if fx and fx != 1.0:
         spot = intake.get("fx_spot") or {}
-        assumptions.append(
+        assumptions.append(_t(
             f"Skenario dalam US$ dikonversi ke Rupiah pada kurs Rp{fmt._id(fx, 0)}/US$ "
             f"({spot.get('date') or 'tanggal kurs tidak tercatat'}), sama dengan Key Financials, "
             "grafik dan DCF US$; "
             + (f"{usd_base['note']}." if usd_base else
                "neraca awal dari data Sectors dalam Rupiah (rilis tahunan resmi US$ tanpa "
-               "ekuitas tahun dasar)."))
+               "ekuitas tahun dasar)."),
+            f"The US$ scenario is converted to Rupiah at Rp{fmt._id(fx, 0)}/US$ "
+            f"({spot.get('date') or 'FX date not recorded'}), as in Key Financials, the charts "
+            "and the US$ DCF; "
+            + (f"{usd_base['note']}." if usd_base else
+               "opening balance sheet from Sectors data in Rupiah (the official US$ annual "
+               "release has no base-year equity).")))
 
     # --- share count and payout: the valuation's own
     dcf = None if bank else _trace_detail(va, ("fcff_dcf", "dcf_reference"),
@@ -683,10 +749,13 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
     if shares is None and _num(intake.get("shares")):
         shares, shares_basis = intake["shares"], "data Sectors"
     if shares:
-        assumptions.append(
+        assumptions.append(_t(
             f"Asumsi valuasi: jumlah saham {fmt._id(shares / 1e9, 2)} miliar lembar, sumber "
             f"{_source(shares_basis)}, flat; EPS memakai laba induk dan BVPS ekuitas induk atas "
-            "jumlah saham yang sama dengan valuasi dan PER.")
+            "jumlah saham yang sama dengan valuasi dan PER.",
+            f"Valuation assumption: share count {fmt._id(shares / 1e9, 2)} miliar shares, source "
+            f"{_src(shares_basis)}, flat; EPS uses parent profit and BVPS parent equity over the "
+            "same share count as the valuation and PER."))
     assumptions.extend(_earnings_quality_notes(intake, fc))
     payout = _num((ddm or {}).get("payout"))
     payout_basis = (ddm or {}).get("payout_basis")
@@ -721,17 +790,22 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             tax_basis = (f"PPh {fmt.pct(lom['tax'])} dan PNBP {fmt.pct(lom['ntgr'])} efektif "
                          f"{period} resmi, digabung")
             interest = _lom_interest(intake, fx)
-            assumptions.append(
+            assumptions.append(_t(
                 "Jadwal LoM: D&A per tahun dari jadwal tambang yang dinilai "
-                f"({first['label']} = D&A {period} resmi + D&A H2 jadwal LoM).")
+                f"({first['label']} = D&A {period} resmi + D&A H2 jadwal LoM).",
+                "LoM schedule: annual D&A from the valued mine schedule "
+                f"({first['label']} = official {period} D&A + H2 D&A from the LoM schedule)."))
         elif basis == "forecast produksi" and all(r.get("da") is not None for r in path):
             da_list = [r["da"] for r in path]
-            assumptions.append("Forecast produksi: D&A per tahun dari forecast yang sama.")
+            assumptions.append(_t("Forecast produksi: D&A per tahun dari forecast yang sama.",
+                                  "Production forecast: annual D&A from the same forecast."))
         elif (dcf or {}).get("operating_model") and len((dcf or {}).get("lines") or []) == len(path):
             # The operating model's own D&A, the lines the DCF values.
             da_list = [line["da"] for line in dcf["lines"]]
-            assumptions.append("Model operasional: D&A per tahun = tarif penyusutan x aset tetap "
-                               "neto awal, sama dengan DCF.")
+            assumptions.append(_t("Model operasional: D&A per tahun = tarif penyusutan x aset "
+                                  "tetap neto awal, sama dengan DCF.",
+                                  "Operating Model: annual D&A = depreciation rate x opening net "
+                                  "fixed assets, as in the DCF."))
         else:
             da_ratio = _num((dcf or {}).get("da_ratio"))
             da_basis = (dcf or {}).get("da_basis")
@@ -739,9 +813,11 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 da_ratio, da_basis = scenario_value.da_intensity(intake)
             if da_ratio is not None:
                 da_list = [r["revenue"] * da_ratio for r in path]
-                assumptions.append(
+                assumptions.append(_t(
                     f"Asumsi screening: D&A {fmt.pct(da_ratio)} dari pendapatan, sumber "
-                    f"{_source(da_basis)}; sama dengan DCF skenario.")
+                    f"{_source(da_basis)}; sama dengan DCF skenario.",
+                    f"Screening assumption: D&A {fmt.pct(da_ratio)} of revenue, source "
+                    f"{_src(da_basis)}; as in the scenario DCF."))
             else:
                 da_reason = (
                     f"{da_basis} (aturan yang sama dengan DCF skenario); tanpa penyusutan "
@@ -755,32 +831,48 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             tax_basis = (dcf or {}).get("tax_basis")
             if tax is None:
                 tax, tax_basis = scenario_value.tax_rate(intake)
-        assumptions.append(
-            ("Jadwal LoM" if lom else "Model operasional" if (dcf or {}).get("operating_model")
+        operating = (dcf or {}).get("operating_model")
+        assumptions.append(_t(
+            ("Jadwal LoM" if lom else "Model operasional" if operating
              else "Asumsi screening") +
             f": tarif pajak efektif {fmt.pct(tax)}, sumber {_source(tax_basis)}; sama dengan "
             "valuasi. Laba sebelum pajak = laba bersih konsolidasi skenario / (1 - tarif); "
-            "pajak = selisihnya.")
+            "pajak = selisihnya.",
+            ("LoM schedule" if lom else "Operating Model" if operating
+             else "Screening assumption") +
+            f": effective tax rate {fmt.pct(tax)}, source {_src(tax_basis)}; as in the "
+            "valuation. Pre-tax profit = scenario consolidated net profit / (1 - rate); tax = the "
+            "difference."))
         if lom and lom.get("dnwc"):
             # The LoM's working capital; the first year holds the H2 change only
             # (the 1H change is in the official interim cash flow).
             dnwc_list = lom["dnwc"]
-            nwc_sentence = (
+            nwc_sentence = _t(
                 "Jadwal LoM: perubahan modal kerja dari hari piutang, persediaan produk dan utang "
                 "operasi 30 Jun 2026 atas pendapatan tahunan, ditambah penyelesaian uang muka "
-                "pelanggan dengan produk, sama dengan valuasi; tahun pertama memuat perubahan H2.")
+                "pelanggan dengan produk, sama dengan valuasi; tahun pertama memuat perubahan H2.",
+                "LoM schedule: working-capital change from receivable, product-inventory and "
+                "operating-payable days at 30 Jun 2026 over annual revenue, plus the settlement "
+                "of customer advances in product, as in the valuation; the first year holds the "
+                "H2 change.")
         elif mining:
             # The mining last step without a LoM schedule does not model working capital.
             dnwc_list = [0.0] * len(path)
-            nwc_sentence = (
+            nwc_sentence = _t(
                 "Asumsi valuasi: jadwal LoM dan metode tambang tidak memodelkan perubahan modal "
                 "kerja (persediaan dinilai terpisah di SOTP); modal kerja non-kas dijaga pada "
-                f"saldo FY{base_year or first['year'] - 1}.")
+                f"saldo FY{base_year or first['year'] - 1}.",
+                "Valuation assumption: the LoM schedule and mining method do not model "
+                "working-capital changes (inventory is valued separately in the SOTP); non-cash "
+                f"working capital is held at the FY{base_year or first['year'] - 1} balance.")
         elif (dcf or {}).get("operating_model") and len((dcf or {}).get("lines") or []) == len(path):
             dnwc_list = [line["dnwc"] for line in dcf["lines"]]
-            nwc_sentence = ("Model operasional: kenaikan modal kerja dari hari piutang atas "
-                            "pendapatan serta hari persediaan dan utang usaha atas biaya variabel, "
-                            "sama dengan DCF.")
+            nwc_sentence = _t("Model operasional: kenaikan modal kerja dari hari piutang atas "
+                              "pendapatan serta hari persediaan dan utang usaha atas biaya "
+                              "variabel, sama dengan DCF.",
+                              "Operating Model: working-capital increase from receivable days on "
+                              "revenue and inventory and payable days on variable costs, as in "
+                              "the DCF.")
         else:
             nwc_ratio = _num((dcf or {}).get("nwc_ratio"))
             nwc_basis = (dcf or {}).get("nwc_basis")
@@ -793,21 +885,28 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             for row in path:
                 dnwc_list.append(nwc_ratio * (row["revenue"] - previous) if previous else 0.0)
                 previous = row["revenue"]
-            nwc_sentence = (
+            nwc_sentence = _t(
                 f"Asumsi screening: modal kerja non-kas {fmt.pct(nwc_ratio)} dari pendapatan, "
                 f"sumber {_source(nwc_basis)}; kenaikan modal kerja = intensitas x kenaikan "
                 "pendapatan, sama dengan DCF skenario; persediaan, aset lancar lain dan "
-                "liabilitas lancar non-utang bergerak proporsional.")
+                "liabilitas lancar non-utang bergerak proporsional.",
+                f"Screening assumption: non-cash working capital {fmt.pct(nwc_ratio)} of revenue, "
+                f"source {_src(nwc_basis)}; working-capital increase = intensity x revenue "
+                "increase, as in the scenario DCF; inventory, other current assets and non-debt "
+                "current liabilities move proportionally.")
             if nwc_ratio == 0 and any(term in str(nwc_basis or "").lower()
                                       for term in ("negatif", "tidak tersedia")):
-                nwc_sentence += (
+                nwc_sentence += _t(
                     " Basis historis negatif atau tidak tersedia tidak membuktikan kebutuhan "
                     "modal kerja masa depan tetap nol; arus kas bebas dapat lebih rendah jika "
-                    "pertumbuhan operasi memerlukan modal kerja positif.")
+                    "pertumbuhan operasi memerlukan modal kerja positif.",
+                    " A negative or unavailable historical basis does not prove that future "
+                    "working-capital needs stay at zero; free cash flow can be lower if operating "
+                    "growth needs positive working capital.")
     income_ok = da_list is not None and has_ebitda
     fcff_ok = income_ok and has_capex and dnwc_list is not None
     if income_ok:
-        assumptions.append(
+        assumptions.append(_t(
             "Mekanika model: EBIT = EBITDA skenario - D&A; pos non-operasional bersih (beban "
             "bunga dan lain-lain bersih) = laba sebelum pajak - EBIT, implisit dari margin laba "
             "bersih skenario, bukan asumsi terpisah"
@@ -818,7 +917,18 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                if interest is not None else "")
             + (f"; pendapatan bunga = penghasilan keuangan {period} resmi disetahunkan, flat "
                f"({_bn(interest_income)} per tahun), dipisahkan dengan cara yang sama"
-               if interest_income is not None else "") + ".")
+               if interest_income is not None else "") + ".",
+            "Model mechanics: EBIT = scenario EBITDA - D&A; net non-operating items (interest "
+            "expense and other, net) = pre-tax profit - EBIT, implied by the scenario net "
+            "margin, not a separate assumption"
+            + ("; interest expense = 2x official 1H finance costs, as in the LoM schedule"
+               if interest is not None and lom else
+               f"; interest expense = official {interest_period} finance costs annualised, flat, "
+               "split from other non-operating items without changing pre-tax profit"
+               if interest is not None else "")
+            + (f"; interest income = official {period} finance income annualised, flat "
+               f"({_bn(interest_income)} a year), split the same way"
+               if interest_income is not None else "") + "."))
 
     # --- which statements can be built
     needs_bs = ("total_assets", "total_liabilities", "total_equity", "current_assets",
@@ -842,10 +952,13 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         short = [name for name, key in (("D&A", "da_h2"), ("capex", "capex_h2"))
                  if interim[key] < 0]
         if short:
-            assumptions.append(
+            assumptions.append(_t(
                 f"Mekanika model: neraca interim resmi {interim['period_end']} tidak dipakai "
                 f"sebagai neraca awal karena {' dan '.join(short)} FY skenario lebih kecil dari "
-                f"{period} resmi, sehingga arus H2 akan negatif.")
+                f"{period} resmi, sehingga arus H2 akan negatif.",
+                f"Model mechanics: the official {interim['period_end']} interim balance sheet is "
+                f"not the opening balance sheet because scenario FY {' and '.join(short)} is "
+                f"below official {period}, so H2 flows would be negative."))
             interim = None
     full = (not bank and fcff_ok and payout is not None and
             (interim is not None or (not moved and bs_complete)))
@@ -862,12 +975,16 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         official_equity = balance["equity_attributable"] + (
             _num(balance.get("non_controlling_interest")) or 0.0)
     official_fx = _fx(intake)
-    opening, equity_reason, moved_text = None, None, None
+    opening, equity_reason, moved_text, moved_en = None, None, None, None
     h2_net = _num(((anchor or {}).get("h2") or {}).get("net_profit"))
     if moved:
         moved_text = (f"jumlah saham berubah {fmt.pct(official_shares / year_shares - 1)} sejak "
                       f"akhir FY{first['year'] - 1} (aksi korporasi); neraca akhir tahun tidak "
                       "lagi mewakili dan skenario tidak memuat arus dana aksi korporasi")
+        moved_en = (f"the share count has changed {fmt.pct(official_shares / year_shares - 1)} "
+                    f"since the end of FY{first['year'] - 1} (corporate action); the year-end "
+                    "balance sheet no longer represents it and the scenario holds no corporate-"
+                    "action fund flows")
     if payout is None:
         equity_reason = ("Payout tidak tersedia di data Sectors maupun asumsi forecast, "
                          "sehingga dividen dan ekuitas tidak dapat diproyeksikan.")
@@ -906,48 +1023,72 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         paid_1h = interim["flows"]["dividends_paid"]
         if paid_1h > 0:
             interim["div_h2"] = 0.0
-            interim["div_text"] = (
+            interim["div_text"] = _t(
                 f"{first['label']}: dividen final FY{first['year'] - 1} {_bn(paid_1h)} sudah "
                 f"dibayar pada {period} (arus kas resmi) dan tercermin di ekuitas neraca interim "
-                f"{interim['period_end']}; dividen H2 nol karena dividen interim tidak dimodelkan")
+                f"{interim['period_end']}; dividen H2 nol karena dividen interim tidak dimodelkan",
+                f"{first['label']}: the FY{first['year'] - 1} final dividend of {_bn(paid_1h)} was "
+                f"paid in {period} (official cash flow) and is reflected in equity on the "
+                f"{interim['period_end']} interim balance sheet; H2 dividends are zero because "
+                "interim dividends are not modelled")
         else:
             interim["div_h2"] = payout * max(prior_earnings or 0.0, 0.0)
-            interim["div_text"] = (
+            interim["div_text"] = _t(
                 f"{first['label']}: arus kas {period} resmi tidak mencatat dividen, sehingga "
                 f"dividen final FY{first['year'] - 1} = payout x laba induk FY"
-                f"{first['year'] - 1} dibayar pada H2")
+                f"{first['year'] - 1} dibayar pada H2",
+                f"{first['label']}: the official {period} cash flow records no dividend, so the "
+                f"FY{first['year'] - 1} final dividend = payout x FY{first['year'] - 1} parent "
+                "profit is paid in H2")
     if opening:
-        assumptions.append(
+        assumptions.append(_t(
             f"Skenario analis: porsi laba pemilik induk {fmt.pct(share_parent)}, sumber "
             f"{_source(attributable_basis)}; laba non-pengendali menambah ekuitas NCI dengan "
             f"saldo awal {_bn(nci0)}, sumber {_source(nci_basis)}; dividen ke NCI tidak "
-            "dimodelkan.")
+            "dimodelkan.",
+            f"Analyst Scenario: parent share of profit {fmt.pct(share_parent)}, source "
+            f"{_src(attributable_basis)}; minority profit adds to NCI equity from an opening "
+            f"{_bn(nci0)}, source {_src(nci_basis)}; dividends to NCI are not modelled."))
         if interim:
             timing = interim["div_text"]
         elif opening["interim"]:
-            timing = (f"{first['label']}: dividen tahun berjalan sudah tercermin di ekuitas "
-                      f"neraca interim {opening['when']}")
+            timing = _t(f"{first['label']}: dividen tahun berjalan sudah tercermin di ekuitas "
+                        f"neraca interim {opening['when']}",
+                        f"{first['label']}: the current year's dividend is already reflected in "
+                        f"equity on the {opening['when']} interim balance sheet")
         elif prior_earnings is not None:
-            timing = (f"{first['label']} memakai laba FY{base_year} aktual "
-                      + ("rilis tahunan resmi US$" if usd_base else "data Sectors"))
+            timing = _t(f"{first['label']} memakai laba FY{base_year} aktual "
+                        + ("rilis tahunan resmi US$" if usd_base else "data Sectors"),
+                        f"{first['label']} uses actual FY{base_year} profit from "
+                        + ("the official US$ annual release" if usd_base else "Sectors data"))
         else:
-            timing = (f"{first['label']} memakai laba tahun yang sama karena laba FY sebelumnya "
-                      "tidak tersedia")
+            timing = _t(f"{first['label']} memakai laba tahun yang sama karena laba FY "
+                        "sebelumnya tidak tersedia",
+                        f"{first['label']} uses the same year's profit because the prior FY "
+                        "profit is not available")
         if payout_sourced:
-            assumptions.append(
+            assumptions.append(_t(
                 f"Asumsi screening: payout {fmt.pct(payout)}, sumber {_source(payout_basis)}, "
                 "flat; DPS tahun t = payout x EPS tahun t (baris DPS DDM); dividen tunai yang "
                 "dibayar tahun t = payout x laba induk tahun t-1 karena dividen final dibagi "
-                f"sesudah RUPS; {timing}.")
+                f"sesudah RUPS; {timing}.",
+                f"Screening assumption: payout {fmt.pct(payout)}, source {_src(payout_basis)}, "
+                "flat; DPS in year t = payout x EPS in year t (the DDM's DPS line); cash dividends "
+                "paid in year t = payout x parent profit of year t-1, as the final dividend "
+                f"follows the AGM; {timing}."))
         else:
-            assumptions.append(
+            assumptions.append(_t(
                 f"Asumsi analis tanpa sumber: payout {fmt.pct(payout)}, {_source(payout_basis)}, "
                 "hanya dipakai untuk roll-forward kas dan ekuitas, sama dengan forecast "
                 f"screening; dividen tunai tahun t = payout x laba induk tahun t-1; {timing}. "
                 "DPS dan payout tidak ditampilkan karena payout historis tidak tersedia "
-                "di data Sectors.")
+                "di data Sectors.",
+                f"Unsourced Analyst Assumption: payout {fmt.pct(payout)}, {_src(payout_basis)}, "
+                "used only to roll cash and equity forward, as in the screening forecast; cash "
+                f"dividends in year t = payout x parent profit of year t-1; {timing}. DPS and "
+                "payout are not shown because Sectors data has no historical payout."))
         if interim:
-            assumptions.append(
+            assumptions.append(_t(
                 "Mekanika model: "
                 + (f"jumlah saham berubah {fmt.pct(official_shares / year_shares - 1)} sejak "
                    f"akhir FY{first['year'] - 1}; perubahan modal itu sudah masuk neraca dan arus "
@@ -956,19 +1097,35 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
                 f"sebesar {_bn(opening['equity'])} + laba bersih konsolidasi H2 skenario "
                 f"{_bn(interim['h2_cons'])} - dividen H2; tahun berikutnya = ekuitas awal + laba "
                 "bersih konsolidasi - dividen; tanpa penerbitan atau pembelian kembali saham "
-                "sesudah neraca interim.")
+                "sesudah neraca interim.",
+                "Model mechanics: "
+                + (f"the share count has changed {fmt.pct(official_shares / year_shares - 1)} "
+                   f"since the end of FY{first['year'] - 1}; that capital change is already in the "
+                   f"official {period} balance sheet and cash flow, so " if moved else "")
+                + f"{first['label']} equity = equity on the official {opening['when']} interim "
+                f"balance sheet of {_bn(opening['equity'])} + scenario H2 consolidated net "
+                f"profit of {_bn(interim['h2_cons'])} - H2 dividends; later years = opening "
+                "equity + consolidated net profit - dividends; no share issuance or buyback after "
+                "the interim balance sheet."))
         elif opening["interim"]:
-            assumptions.append(
+            assumptions.append(_t(
                 f"Mekanika model: {moved_text}, sehingga ekuitas {first['label']} = ekuitas "
                 f"neraca interim resmi {opening['when']} sebesar {_bn(opening['equity'])} + laba "
                 "H2 skenario; tahun berikutnya = ekuitas awal + laba bersih konsolidasi - "
-                "dividen.")
+                "dividen.",
+                f"Model mechanics: {moved_en}, so {first['label']} equity = equity on the "
+                f"official {opening['when']} interim balance sheet of {_bn(opening['equity'])} + "
+                "scenario H2 profit; later years = opening equity + consolidated net profit - "
+                "dividends."))
         else:
-            assumptions.append(
+            assumptions.append(_t(
                 f"Mekanika model: ekuitas = saldo FY{base_year} "
                 + ("rilis tahunan resmi US$" if usd_base else "data Sectors")
                 + " + laba bersih konsolidasi - dividen; tanpa penerbitan atau pembelian kembali "
-                "saham.")
+                "saham.",
+                f"Model mechanics: equity = FY{base_year} balance from "
+                + ("the official US$ annual release" if usd_base else "Sectors data")
+                + " + consolidated net profit - dividends; no share issuance or buyback."))
 
     # --- balance-sheet opening (full statements only)
     rec0 = pay0 = 0.0
@@ -988,12 +1145,16 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         cash_cap = min(cash0, year_cash) if year_cash is not None and year_cash > 0 else cash0
         cash_ratio, cash_floor_basis = _minimum_cash(
             history, first["year"] - 1, cash_cap,
-            f"kas neraca interim {when}" if cash_cap == cash0 else
-            f"kas FY{first['year'] - 1} (kas neraca interim {when} {_bn(cash0)} masih memuat "
-            "dana aksi korporasi atau penerbitan utang yang belum terpakai)")
+            _t(f"kas neraca interim {when}", f"{when} interim cash") if cash_cap == cash0 else
+            _t(f"kas FY{first['year'] - 1} (kas neraca interim {when} {_bn(cash0)} masih memuat "
+               "dana aksi korporasi atau penerbitan utang yang belum terpakai)",
+               f"FY{first['year'] - 1} cash ({when} interim cash of {_bn(cash0)} still holds "
+               "unspent proceeds of a corporate action or debt issue)"))
         residual = flows["operating_cash_flow"] - interim["net_cons_1h"] - interim["da_1h"]
         later = path[1]["label"] if len(path) > 1 else "tahun berikutnya"
-        assumptions.append(
+        later_en = path[1]["label"] if len(path) > 1 else "the next year"
+        # The statement title is quoted as published.
+        assumptions.append(_t(
             f"Mekanika model (neraca awal interim): neraca {first['label']} bergulir dari neraca "
             f"konsolidasian resmi {when} ({_source(interim['source'])}) dengan arus H2 saja: laba "
             f"bersih konsolidasi H2 skenario {_bn(interim['h2_cons'])}, D&A H2 "
@@ -1002,8 +1163,18 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             f"{_bn(first['capex'])} - capex {period} resmi {_bn(interim['capex_1h'])}), kenaikan "
             f"modal kerja H2 {_bn(interim['dnwc_h2'])} (kenaikan FY x porsi pendapatan H2 "
             f"{fmt.pct(interim['h2_share'])}) dan dividen H2 {_bn(interim['div_h2'])}; {later} "
-            f"dan seterusnya bergulir dari neraca akhir {first['label']}.")
-        assumptions.append(
+            f"dan seterusnya bergulir dari neraca akhir {first['label']}.",
+            f"Model mechanics (interim opening balance sheet): the {first['label']} balance sheet "
+            f"rolls from the official {when} consolidated balance sheet "
+            f"({_source(interim['source'])}) with H2 flows only: scenario H2 consolidated net "
+            f"profit {_bn(interim['h2_cons'])}, H2 D&A {_bn(interim['da_h2'])} (FY D&A "
+            f"{_bn(da_list[0])} - official {period} D&A {_bn(interim['da_1h'])}), H2 capex "
+            f"{_bn(interim['capex_h2'])} (scenario FY capex {_bn(first['capex'])} - official "
+            f"{period} capex {_bn(interim['capex_1h'])}), H2 working-capital increase "
+            f"{_bn(interim['dnwc_h2'])} (FY increase x H2 revenue share "
+            f"{fmt.pct(interim['h2_share'])}) and H2 dividends {_bn(interim['div_h2'])}; "
+            f"{later_en} onwards rolls from the {first['label']} closing balance sheet."))
+        assumptions.append(_t(
             f"Mekanika model: arus kas {first['label']} = arus kas {period} aktual resmi"
             + (f" ({_source(interim['flow_pages'])})" if interim.get("flow_pages") else "")
             + f" + arus kas H2 model, dari kas awal FY{first['year'] - 1} "
@@ -1013,25 +1184,49 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
             f"({_bn(flows['other_investing_cash_flow'])}), penarikan (pembayaran) utang "
             f"({_bn(flows['debt_raised'])}), penerbitan saham ({_bn(flows['equity_raised'])}) dan "
             f"pos pendanaan lainnya ({_bn(flows['other_financing_cash_flow'])}) {period} adalah "
-            "angka aktual.")
-        assumptions.append(
+            "angka aktual.",
+            f"Model mechanics: {first['label']} cash flow = official {period} actual cash flow"
+            + (f" ({_src(interim['flow_pages'])})" if interim.get("flow_pages") else "")
+            + f" + model H2 cash flow, from FY{first['year'] - 1} opening cash "
+            f"{_bn(flows['cash_begin'])}; official {period} operating cash flow "
+            f"{_bn(flows['operating_cash_flow'])}, whose gap to {period} profit + D&A "
+            f"({_bn(residual)}) is shown as other operating items; other investing items "
+            f"({_bn(flows['other_investing_cash_flow'])}), debt drawn (repaid) "
+            f"({_bn(flows['debt_raised'])}), share issuance ({_bn(flows['equity_raised'])}) and "
+            f"other financing items ({_bn(flows['other_financing_cash_flow'])}) for {period} are "
+            "actual figures."))
+        assumptions.append(_t(
             f"Asumsi screening: utang awal flat pada saldo neraca interim resmi {when} (jangka "
             f"pendek {_bn(std0)}, jangka panjang {_bn(ltd0)}); tanpa jadwal pelunasan atau "
-            "penarikan bersumber, utang yang jatuh tempo dianggap dibiayai kembali.")
-        assumptions.append(
+            "penarikan bersumber, utang yang jatuh tempo dianggap dibiayai kembali.",
+            f"Screening assumption: opening debt flat at the official {when} interim balance "
+            f"(short-term {_bn(std0)}, long-term {_bn(ltd0)}); with no sourced repayment or "
+            "drawdown schedule, maturing debt is assumed refinanced."))
+        assumptions.append(_t(
             f"Asumsi screening: aset tidak lancar lain {_bn(onca0)} dan liabilitas tidak lancar "
             f"non-utang {_bn(oncl0)} flat pada saldo {when}; sesudah {period} arus kas investasi "
             "hanya capex dan arus kas pendanaan hanya dividen dan utang jangka pendek "
-            "penyeimbang kas, tanpa penerbitan saham.")
-        assumptions.append(
+            "penyeimbang kas, tanpa penerbitan saham.",
+            f"Screening assumption: other non-current assets {_bn(onca0)} and non-debt "
+            f"non-current liabilities {_bn(oncl0)} flat at the {when} balance; after {period}, "
+            "investing cash flow is capex only and financing cash flow only dividends and "
+            "cash-balancing short-term debt, with no share issuance."))
+        assumptions.append(_t(
             f"Skenario analis: capex per tahun dari skenario; aset tetap = saldo {when} "
-            f"{_bn(fa0)} + capex H2 - D&A H2, lalu + capex - D&A per tahun.")
-        assumptions.append(
+            f"{_bn(fa0)} + capex H2 - D&A H2, lalu + capex - D&A per tahun.",
+            f"Analyst Scenario: annual capex from the scenario; fixed assets = {when} balance "
+            f"{_bn(fa0)} + H2 capex - H2 D&A, then + capex - D&A each year."))
+        assumptions.append(_t(
             f"Mekanika model: kas akhir {first['label']} = kas neraca interim {when} "
             f"{_bn(cash0)} + arus kas bersih H2, sesudahnya kas awal + arus kas bersih, bukan "
             "penyeimbang; arus kas operasi = laba induk + D&A - kenaikan modal kerja + laba "
             "non-pengendali; neraca seimbang karena setiap pos bergerak lewat laba rugi atau "
-            "arus kas.")
+            "arus kas.",
+            f"Model mechanics: {first['label']} closing cash = {when} interim cash "
+            f"{_bn(cash0)} + H2 net cash flow, then opening cash + net cash flow, not a plug; "
+            "operating cash flow = parent profit + D&A - working-capital increase + minority "
+            "profit; the balance sheet balances because every line moves through the income "
+            "statement or cash flow."))
     elif full:
         cash0 = _cash(base)
         std0 = _num(base.get("short_term_debt")) or 0.0
@@ -1052,30 +1247,47 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         nwc0 = oca0 + inv0 - ocl0
         cash_cap = cash0
         cash_ratio, cash_floor_basis = _minimum_cash(history, base_year, cash0)
-        assumptions.append(
+        assumptions.append(_t(
             f"Asumsi screening: utang awal flat pada saldo FY{base_year} data Sectors (jangka "
             f"pendek {_bn(std0)}, jangka panjang {_bn(ltd0)}); tanpa jadwal pelunasan atau "
-            "penarikan bersumber, sama dengan forecast screening.")
-        assumptions.append(
+            "penarikan bersumber, sama dengan forecast screening.",
+            f"Screening assumption: opening debt flat at the FY{base_year} Sectors balance "
+            f"(short-term {_bn(std0)}, long-term {_bn(ltd0)}); no sourced repayment or drawdown "
+            "schedule, as in the screening forecast."))
+        assumptions.append(_t(
             f"Asumsi screening: aset tidak lancar lain {_bn(onca0)} dan liabilitas tidak lancar "
             f"non-utang {_bn(oncl0)} flat pada saldo FY{base_year}; arus kas investasi hanya "
             "capex dan arus kas pendanaan hanya dividen dan utang jangka pendek penyeimbang kas, "
-            "tanpa penerbitan saham.")
-        assumptions.append(
+            "tanpa penerbitan saham.",
+            f"Screening assumption: other non-current assets {_bn(onca0)} and non-debt "
+            f"non-current liabilities {_bn(oncl0)} flat at the FY{base_year} balance; investing "
+            "cash flow is capex only and financing cash flow only dividends and cash-balancing "
+            "short-term debt, with no share issuance."))
+        whole = abs(onca0) <= abs(ta0) * 0.001
+        assumptions.append(_t(
             ("Skenario analis dan jadwal LoM" if lom else "Skenario analis") +
             f": capex per tahun dari skenario; aset tetap = saldo FY{base_year} {_bn(fa0)} + "
             "capex - D&A"
-            + (" (aset tetap data Sectors mencakup seluruh aset tidak lancar)."
-               if abs(onca0) <= abs(ta0) * 0.001 else "."))
-        assumptions.append(
+            + (" (aset tetap data Sectors mencakup seluruh aset tidak lancar)." if whole else "."),
+            ("Analyst Scenario and LoM schedule" if lom else "Analyst Scenario") +
+            f": annual capex from the scenario; fixed assets = FY{base_year} balance {_bn(fa0)} + "
+            "capex - D&A"
+            + (" (Sectors fixed assets cover all non-current assets)." if whole else ".")))
+        assumptions.append(_t(
             f"Mekanika model: kas akhir = kas awal FY{base_year} {_bn(cash0)} + arus kas bersih, "
             "bukan penyeimbang; arus kas operasi = laba induk + D&A - kenaikan modal kerja + "
             "laba non-pengendali; neraca seimbang karena setiap pos bergerak lewat laba rugi "
-            "atau arus kas.")
+            "atau arus kas.",
+            f"Model mechanics: closing cash = FY{base_year} opening cash {_bn(cash0)} + net cash "
+            "flow, not a plug; operating cash flow = parent profit + D&A - working-capital "
+            "increase + minority profit; the balance sheet balances because every line moves "
+            "through the income statement or cash flow."))
         if abs(gap) > max(abs(ta0) * 1e-6, 1.0):
-            assumptions.append(
+            assumptions.append(_t(
                 f"Catatan data: total aset FY{base_year} Sectors berbeda {_bn(gap)} dari "
-                "liabilitas + ekuitas; selisih dibawa flat di liabilitas tidak lancar lain.")
+                "liabilitas + ekuitas; selisih dibawa flat di liabilitas tidak lancar lain.",
+                f"Data note: Sectors FY{base_year} total assets differ by {_bn(gap)} from "
+                "liabilities + equity; the gap is carried flat in other non-current liabilities."))
 
     # --- year loop
     rows = []
@@ -1217,19 +1429,28 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         earnings_prev = p["earnings"]
         rows.append(row)
     if full:
-        draws = [f"{r['label']} {'tarik' if r['revolver_drawn'] > 0 else 'lunasi'} "
-                 f"{_bn(abs(r['revolver_drawn']))}" for r in rows
+        draws = [f"{r['label']} "
+                 + _t('tarik' if r['revolver_drawn'] > 0 else 'lunasi',
+                      'draws' if r['revolver_drawn'] > 0 else 'repays')
+                 + f" {_bn(abs(r['revolver_drawn']))}" for r in rows
                  if abs(r["revolver_drawn"]) > 0.5]
         for r in rows:
             r["revolver_flow"] = r.pop("revolver_drawn", 0.0)
-        assumptions.append(
+        assumptions.append(_t(
             "Asumsi screening: utang jangka pendek penyeimbang kas. Kas minimum = "
             f"{cash_floor_basis}; bila kas sebelum pembiayaan di bawah minimum, kekurangannya "
             "ditarik sebagai utang jangka pendek dan dilunasi lebih dulu saat kas melebihi "
             "minimum. Bunganya tidak ditambahkan: laba sebelum pajak tetap diturunkan dari laba "
             "bersih skenario, jadi pos non-operasional bersih yang implisit menanggungnya. "
             + ("Dipakai: " + "; ".join(draws) + "." if draws else
-               "Tidak terpakai pada skenario ini."))
+               "Tidak terpakai pada skenario ini."),
+            "Screening assumption: short-term debt balances cash. Minimum cash = "
+            f"{cash_floor_basis}; when cash before financing falls below the minimum, the "
+            "shortfall is drawn as short-term debt and repaid first once cash exceeds the "
+            "minimum. Its interest is not added: pre-tax profit is still derived from scenario "
+            "net profit, so the implied net non-operating items carry it. "
+            + ("Used: " + "; ".join(draws) + "." if draws else
+               "Not used in this scenario.")))
 
     reasons = _reasons(bank=bank, full=full, moved_text=moved_text, da_reason=da_reason,
                        has_ebitda=has_ebitda, has_capex=has_capex, base=base,
@@ -1268,12 +1489,22 @@ def _bank_model_rows(intake, fc, model, horizon):
     span = (f"{rows[0]['label']}-{rows[-1]['label']}" if len(rows) > 1 else rows[0]["label"]
             ) if rows else "-"
     period = model["anchor"]["period"]
-    assumptions = [
+    # The bank model writes its sentences before the prose stage, in both
+    # languages (app.bank_model ``assumptions_en``).
+    own = model.get("assumptions") or []
+    english = model.get("assumptions_en")
+    if prose_lang.english() and isinstance(english, list) and len(english) == len(own):
+        own = english
+    assumptions = [_t(
         f"Skenario analis (model driver bank): {span} dari aktual {period} resmi ditambah H2 dan "
         f"{max(len(rows) - 1, 0)} tahun lanjutan dari driver analis; laba, dividen dan ekuitas "
-        "yang sama dipakai Key Financials dan DDM."] + list(model.get("assumptions") or [])
+        "yang sama dipakai Key Financials dan DDM.",
+        f"Analyst Scenario (bank driver model): {span} from official {period} actuals plus H2 "
+        f"and {max(len(rows) - 1, 0)} out-years from analyst drivers; Key Financials and the "
+        "DDM use the same profit, dividends and equity.")] + list(own)
     for text in (model.get("checks") or {}).get("warnings") or []:
-        assumptions.append(f"Catatan model: {text}.")
+        assumptions.append(_t(f"Catatan model: {text}.",
+                              f"Model note: {prose_lang.label(text)}."))
     assumptions.extend(_earnings_quality_notes(intake, fc))
     return {"rows": rows, "notes": _notes(rows, universe, reasons, None),
             "assumptions": assumptions, "basis": "skenario analis (model driver bank)",
