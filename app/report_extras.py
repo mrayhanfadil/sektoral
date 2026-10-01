@@ -170,9 +170,11 @@ def holding_sotp_exhibit(va):
     bn = lambda v: fmt._id(v / 1e9, 1)
     rows = []
     for c in d["components"]:
-        rows.append([f"{c['name']} ({c['ticker']}), {c['segment']}: {fmt.pct(c['stake'])} x "
-                     f"kapitalisasi Rp{bn(c['market_cap'])} miliar", "nilai pasar",
-                     bn(c["market_value"])])
+        rows.append([_t(f"{c['name']} ({c['ticker']}), {c['segment']}: {fmt.pct(c['stake'])} x "
+                        f"kapitalisasi Rp{bn(c['market_cap'])} miliar",
+                        f"{c['name']} ({c['ticker']}), {prose_lang.label(c['segment'])}: "
+                        f"{fmt.pct(c['stake'])} x market cap of Rp{bn(c['market_cap'])} miliar"),
+                     "nilai pasar", bn(c["market_value"])])
     rows.append([f"Ekuitas pemilik induk per {d.get('balance_period') or '-'}", "nilai buku",
                  bn(d["parent_equity"])])
     for c in d["components"]:
@@ -183,8 +185,10 @@ def holding_sotp_exhibit(va):
                  "nilai buku", bn(d["remainder_book"])])
     if land:
         li = land["inputs"]
-        rows.append([f"Revaluasi landbank: RNAV Rp{bn(land['nav'])} miliar dikurangi nilai buku "
-                     f"Rp{bn(li['carrying_idr'])} miliar, porsi {fmt.pct(li['stake'])}",
+        rows.append([_t(f"Revaluasi landbank: RNAV Rp{bn(land['nav'])} miliar dikurangi nilai buku "
+                        f"Rp{bn(li['carrying_idr'])} miliar, porsi {fmt.pct(li['stake'])}",
+                        f"Landbank revaluation: RNAV of Rp{bn(land['nav'])} miliar less book value "
+                        f"of Rp{bn(li['carrying_idr'])} miliar, {fmt.pct(li['stake'])} share"),
                      "RNAV", bn(d["landbank_uplift"])])
     rows.append(["Total nilai SOTP", "", bn(d["total"])])
     for item in d["discounts"]:
@@ -228,28 +232,41 @@ def landbank_exhibits(va):
     shares = sotp["detail"]["shares"]
     bn = lambda v: fmt._id(v / 1e9, 0)
     land_src = ev.get("land_for_development") or {}
+    # The bases are the analyst file's words (data/source_text_en has their English).
+    basis = lambda key: prose_lang.label(lb.get(key)) if lb.get(key) else "-"  # noqa: E731
     rows = [
         ["Tanah untuk pengembangan (bruto)", f"{fmt._id(li['gross_ha'], 0)} ha",
-         f"audit {li['carrying_as_of']}, {land_src.get('page')}"],
+         _t(f"audit {li['carrying_as_of']}, {land_src.get('page')}",
+            f"audit {li['carrying_as_of']}, {prose_lang.label(land_src.get('page'))}")],
         ["Nilai buku tanah", f"Rp{bn(li['carrying_idr'])} miliar",
-         f"Rp{fmt._id(li['carrying_idr'] / (li['gross_ha'] * 10_000) / 1000, 0)} ribu/m2 bruto"],
+         _t(f"Rp{fmt._id(li['carrying_idr'] / (li['gross_ha'] * 10_000) / 1000, 0)} ribu/m2 bruto",
+            f"Rp{fmt._id(li['carrying_idr'] / (li['gross_ha'] * 10_000) / 1000, 0)} thousand/m2 "
+            "gross")],
         ["Porsi dapat dijual (asumsi analis)", fmt.pct(li["net_ratio"]),
-         lb.get("net_saleable_basis") or "-"],
-        ["Laju penjualan", f"{fmt._id(li['pace_ha'], 1)} ha/tahun",
-         lb.get("pace_basis") or "-"],
-        ["Harga jual awal", f"Rp{fmt._id(li['asp'] / 1000, 0)} ribu/m2",
+         basis("net_saleable_basis")],
+        ["Laju penjualan", _t(f"{fmt._id(li['pace_ha'], 1)} ha/tahun",
+                              f"{fmt._id(li['pace_ha'], 1)} ha/yr"),
+         basis("pace_basis")],
+        ["Harga jual awal", _t(f"Rp{fmt._id(li['asp'] / 1000, 0)} ribu/m2",
+                               f"Rp{fmt._id(li['asp'] / 1000, 0)} thousand/m2"),
          "marketing sales 1H26 (9,4 ha, Rp195,9 miliar)"],
-        ["Pertumbuhan harga", fmt.pct(li["asp_growth"]), lb.get("growth_basis") or "-"],
+        ["Pertumbuhan harga", fmt.pct(li["asp_growth"]), basis("growth_basis")],
         ["Margin kas", fmt.pct(li["cash_margin"]),
-         f"laba kotor {fmt.pct(li['gross_margin'])} + biaya buku lahan "
-         f"{fmt.pct(li['land_cost_share'])} - beban usaha {fmt.pct(li['opex_ratio'])} - PPh final "
-         f"{fmt.pct(li['final_tax'])} (segmen properti {li['margin_periods']})"],
-        ["Tingkat diskonto", fmt.pct(land["rate"]), lb.get("discount_basis") or "-"],
+         _t(f"laba kotor {fmt.pct(li['gross_margin'])} + biaya buku lahan "
+            f"{fmt.pct(li['land_cost_share'])} - beban usaha {fmt.pct(li['opex_ratio'])} - PPh final "
+            f"{fmt.pct(li['final_tax'])} (segmen properti {li['margin_periods']})",
+            f"gross margin {fmt.pct(li['gross_margin'])} + land book cost "
+            f"{fmt.pct(li['land_cost_share'])} - operating expenses {fmt.pct(li['opex_ratio'])} - "
+            f"final income tax {fmt.pct(li['final_tax'])} (property segment "
+            f"{li['margin_periods']})")],
+        ["Tingkat diskonto", fmt.pct(land["rate"]), basis("discount_basis")],
         ["RNAV landbank (100%)", f"Rp{bn(land['nav'])} miliar",
-         f"terjual habis dalam {land['years']} tahun"],
+         _t(f"terjual habis dalam {land['years']} tahun",
+            f"sold out within {land['years']} years")],
         [f"Tambahan nilai porsi SSIA ({fmt.pct(li['stake'])})",
          f"Rp{bn(land['uplift_attributable'])} miliar",
-         f"{_rp_signed(land['uplift_attributable'] / shares)} per saham"],
+         _t(f"{_rp_signed(land['uplift_attributable'] / shares)} per saham",
+            f"{_rp_signed(land['uplift_attributable'] / shares)} per share")],
     ]
     appraisal = ev.get("appraisal") or {}
     if appraisal.get("fair_value_idr") and appraisal.get("area_m2"):
@@ -3539,7 +3556,7 @@ def investability_page(doc, intake):
     for item in inv.get("business_quality") or []:
         # Document titles stay as published; the issuer pack's words (assessment,
         # model effect, page notes) through data/source_text_en.
-        sources = "; ".join(f"{e['title']} ({e['published_at']}, "
+        sources = "; ".join(f"{prose_lang.quoted(e['title'])} ({e['published_at']}, "
                             f"{prose_lang.source(e.get('page')) or '-'})"
                             for e in item["evidence"]) or "-"
         bq_rows.append([item["label"], prose_lang.label(item["assessment"]),
@@ -3789,7 +3806,8 @@ def link_catalysts(doc, intake):
                         f"driver ini sendiri tidak mengubah rating dalam rentang uji; {band_text}",
                         f"this driver alone does not change the rating within its tested range; "
                         f"{band_text}"))
-                    row += [f"{prose_lang.label(driver['driver'])} ({driver['base']})", threshold]
+                    row += [f"{prose_lang.label(driver['driver'])} "
+                            f"({prose_lang.label(driver['base'])})", threshold]
                 else:
                     row += [(_t("tidak terhubung ke driver di tabel driver-ke-nilai",
                                 "not linked to a driver in the driver-to-value table") if drivers else

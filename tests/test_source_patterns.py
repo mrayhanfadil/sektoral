@@ -446,13 +446,36 @@ def _lom_examples():
         ("inflasi AS jangka panjang 2,2% per tahun (IMF WEO Apr 2026)",
          "long-term US inflation of 2,2% a year (IMF WEO Apr 2026)"),
         ("nilai buku FY2025, rilis tahunan resmi", "book value FY2025, official annual release"),
+        # A title the issuer published in English is quoted as it is.
+        ("nilai buku FY2025, AMMAN FY 2025 Earnings Release",
+         "book value FY2025, AMMAN FY 2025 Earnings Release"),
         ("rilis tahunan resmi", "official annual release"),
+    ]
+
+
+def _driver_unit_examples():
+    """Driver bases and test units (app.driver_value), a DCF bridge's parent share
+    (app.scenario_value) and the bank model's funding warning (app.bank_model)."""
+    return [
+        ("50,3 ha/tahun", "50,3 ha/yr"),
+        ("±25 ha/tahun", "±25 ha/yr"),
+        ("±1 pp per tahun", "±1 pp per year"),
+        ("±2% level harga", "±2% price level"),
+        ("±2% level biaya, diteruskan ke tarif", "±2% cost level, passed through to tariffs"),
+        ("porsi induk 92,2% dari laba 1H resmi", "parent share of 92,2% of official 1H profit"),
+        ("tidak dilaporkan terpisah; dianggap tidak material",
+         "not reported separately; taken as immaterial"),
+        ("LDR di atas rekor tertinggi historis data Sectors (97,8%): FY26F 98,4%, FY27F 98,4%; "
+         "kredit tumbuh lebih cepat dari pendanaan skenario",
+         "LDR above its historical Sectors record (97,8%): FY26F 98,4%, FY27F 98,4%; loans grow "
+         "faster than scenario funding"),
     ]
 
 
 EXAMPLES = (_bridge_examples() + _driver_examples() + _payout_examples()
             + _candidate_examples() + _method_examples() + _label_examples()
-            + _statement_examples() + _investability_examples() + _lom_examples())
+            + _statement_examples() + _investability_examples() + _lom_examples()
+            + _driver_unit_examples())
 
 # Fixed texts read straight from their producers: each must have English.
 PRODUCED = sorted(

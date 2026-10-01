@@ -65,6 +65,20 @@ def t(id: str, en: str) -> str:
 _UNTRANSLATED = "\u2063"
 
 
+# Marks a document or news title an English template quotes as published, so
+# an English sentence citing an Indonesian title is not taken for one that left
+# a clause untranslated; the marks never reach the attached English.
+_QUOTE = "⁤"
+_QUOTED = re.compile(f"{_QUOTE}[^{_QUOTE}]*{_QUOTE}")
+
+
+def quoted(text):
+    """A title quoted as published: marked in an English build, as is otherwise."""
+    if _BUILD.get() != "en" or not isinstance(text, str) or not text:
+        return text
+    return f"{_QUOTE}{text}{_QUOTE}"
+
+
 # English for Indonesian source text (issuer evidence, curated names), one file
 # per ticker or topic, keyed by the exact Indonesian text. It lives outside the
 # hashed source packs, so a translation never changes their evidence; when the
@@ -126,9 +140,20 @@ def label(id_text, en_text=None):
         if isinstance(found, str) and found.strip() and figures(found) == figures(id_text) \
                 and not mixed(found):
             return found
-    if language_neutral(id_text):
+    if language_neutral(id_text) or _amount(id_text):
         return id_text
     return source(id_text)
+
+
+# Units a model value carries ("US$13.002/t", "4.455 US$/oz", "50 bp").
+_UNITS = {"t", "oz", "lb", "dmt", "kt", "koz", "ha", "bp", "pp", "x", "m2"}
+
+
+def _amount(text):
+    """True for a figure with its units and nothing else to translate."""
+    words = _LETTERS.findall(text)
+    return bool(_FIGURE.search(text)) and all(w in _UNITS or w[0].isupper() for w in words) \
+        and not _INDONESIAN.search(text)
 
 
 def known(id_text) -> str | None:
@@ -229,13 +254,16 @@ def _pair(id_text, en_text):
     """The English twin of one prose string, or None when it may not be attached."""
     if not isinstance(id_text, str) or not isinstance(en_text, str) or not en_text.strip():
         return None
+    # A quoted title is the source's own words: no clause to check, no marks kept.
+    own = _QUOTED.sub("", en_text)
+    en_text = en_text.replace(_QUOTE, "")
     if en_text == id_text or _UNTRANSLATED in en_text:
         return None  # not translated (yet): nothing to attach
     if figures(id_text) != figures(en_text):
         return None
-    if scrub.contains_banned(en_text) and not scrub.contains_banned(id_text):
+    if scrub.contains_banned(own) and not scrub.contains_banned(id_text):
         return None
-    if mixed(en_text):
+    if mixed(own):
         return None
     return en_text
 

@@ -969,11 +969,15 @@ TERMS.update({
     "CAGR harga marketing historis": "historical marketing price CAGR",
     "Cost of Equity kebijakan": "policy Cost of Equity",
     "harga penutupan bertanggal": "dated closing price",
-    "harga penutupan": "closing price",
+    "harga penutupan": "closing price", "dasar": "base",
     "level 1H": "1H level",
     "level harga": "price level",
     "level biaya": "cost level",
     "per tahun": "per year",
+    # Holding SOTP and landbank RNAV rows (app.report_extras).
+    "Segmen lain (lahan industri, hotel, utilitas, sewa) pada nilai buku":
+        "Other segments (industrial land, hotels, utilities, rentals) at book value",
+    "Tanah untuk pengembangan": "Development land", "bruto": "gross",
 })
 # Mining tables of the SOTP/LoM report (app.narrative): royalty, capex, Elang
 # milestones and AMDAL scope, LoM phases, WACC and analyst assumptions.
@@ -1058,6 +1062,7 @@ _PATTERNS += [(re.compile(p), t) for p, t in (
     (r"(.+): harga terealisasi", "{0}: realised price"),
     (r"(.+): pertumbuhan volume", "{0}: volume growth"),
     (r"laju (\S+ \d{4}) \(emiten\)", "{0} run-rate (issuer)"),
+    (r"(±.+) per tahun", "{0} per year"),
     (r"Naik dari (Buy|Hold|Sell)", "Upgraded from {0}"),
     (r"Turun dari (Buy|Hold|Sell)", "Downgraded from {0}"),
 )]
@@ -1356,14 +1361,23 @@ _NM_COLUMNS = {"kolom aktual": "actual columns", "kolom forecast": "forecast col
 
 
 def _nm_labels(text):
-    """Line labels joined by ", " (a comma inside parentheses belongs to its label)."""
+    """Line labels joined by ", " (a comma inside parentheses belongs to its
+    label) in English, or None when one has none (a code such as "EPS" is its
+    own English)."""
+    from . import prose_lang  # it imports this module
     parts, depth, start = [], 0, 0
     for i, ch in enumerate(text):
         depth += (ch == "(") - (ch == ")")
         if ch == "," and depth == 0 and text[i + 1:i + 2] == " ":
             parts.append(text[start:i])
             start = i + 2
-    return ", ".join(_en(p) for p in parts + [text[start:]])
+    out = []
+    for part in parts + [text[start:]]:
+        english = _en(part)
+        if english == plain(part) and not prose_lang.language_neutral(re.sub(r"\(.*?\)", "", part)):
+            return None
+        out.append(english)
+    return ", ".join(out)
 
 
 def _nm_reason(text):
@@ -1394,10 +1408,11 @@ def _nm_part(text):
         for segment in re.split(r"; (?=[^;]*? \(kolom [^()]+\): )", text[len("n.m. pada "):]):
             found = _NM_SEGMENT.fullmatch(segment)
             reason = _nm_reason(found[3]) if found else None
-            if reason is None:
+            labels = _nm_labels(found[1]) if found else None
+            if reason is None or labels is None:
                 return None
             column = _NM_COLUMNS.get(found[2]) or f"{found[2][len('kolom '):]} columns"
-            out.append(f"{_nm_labels(found[1])} ({column}): {reason}")
+            out.append(f"{labels} ({column}): {reason}")
         return "n.m. in " + "; ".join(out)
     peers = _NM_PEERS.fullmatch(text)
     if peers:  # "P/E 2 peer, liabilitas/ekuitas 1 peer"
