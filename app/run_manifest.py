@@ -121,8 +121,8 @@ def issuer_source_hashes(ticker):
     """Content identity of curated per-issuer inputs and shared rate policy."""
     symbol = str(ticker or "").upper()
     names = ("issuer_evidence", "market_quotes", "peer_groups", "analyst_scenarios",
-             "drivers", "market_history", "idx_history", "rating_history",
-             "method_overrides")
+             "drivers", "bank_drivers", "operating_drivers", "market_history", "idx_history",
+             "rating_history", "method_overrides")
     paths = [ROOT / "data" / group / f"{symbol}.json" for group in names]
     paths.append(ROOT / "data" / "rate_benchmarks.json")
     return {path.relative_to(ROOT).as_posix(): digest
