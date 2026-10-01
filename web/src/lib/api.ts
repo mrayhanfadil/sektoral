@@ -487,9 +487,10 @@ export function hasEnglish(item: Pick<ReportItem, "languages" | "files"> | null 
 }
 
 /**
- * Where a report's files live on the server. `html` and `pdf` follow the
- * reader: the English files when ``lang`` is English and ``english`` says the
- * report is published in English, else the Indonesian ones.
+ * Where a report's files live on the server. `html`, `pdf` and the `cover`
+ * thumbnail of that PDF follow the reader: the English files when ``lang`` is
+ * English and ``english`` says the report is published in English, else the
+ * Indonesian ones.
  */
 export const reportFiles = (t: string, lang: ReportLang = "id", english = false) => {
   const suffix = lang === "en" && english ? ".en" : "";
@@ -497,7 +498,7 @@ export const reportFiles = (t: string, lang: ReportLang = "id", english = false)
     pdf: `/files/reports/${t}${suffix}.pdf`,
     html: `/files/reports/${t}${suffix}.html`,
     traceHtml: `/files/reports/${t}-trace.html`,
-    cover: `/files/reports/${t}/cover.png`,
+    cover: `/files/reports/${t}/cover${suffix}.png`,
   };
 };
 

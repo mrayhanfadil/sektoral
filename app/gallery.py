@@ -8,6 +8,10 @@ document (rating, target, method, status, headline, method chain); the server
 serves the HTML, PDF and trace HTML as files, the trace only through its public
 view, and a cover thumbnail rendered from the PDF.
 
+The cover is keyed on the published bundle's PDF hash on either basis, and
+only a PDF that still has those bytes gets one; an English reader gets the
+English PDF's cover when that PDF is in the bundle (#45).
+
 The English edition (``{T}.en.html``/``.en.pdf``) is public only as part of the
 published bundle (ADR 0015): its kind must be in the bundle and the file on
 disk must still carry the bundle's SHA-256.
@@ -40,6 +44,8 @@ ENGLISH_FILES = {"html_en": ("{t}.en.html", "text/html; charset=utf-8"),
 PREVIEW_FILES = {**FILES, **ENGLISH_FILES}
 # Languages a reader may open from a public route, with their HTML kind.
 PUBLIC_LANGUAGES = {"id": "html", "en": "html_en"}
+# The PDF whose first page is the cover thumbnail, per reader language.
+COVER_KINDS = {"id": "pdf", "en": "pdf_en"}
 ANALYTICALLY_ELIGIBLE = frozenset({"production_ready", "distributable",
                                    "distributable_assumption_led"})
 RELEASE_STATUSES = ANALYTICALLY_ELIGIBLE | frozenset({"draft_non_distributable"})
@@ -125,8 +131,8 @@ def _bundle(review, folder, ticker, db=None, *, approved) -> dict:
             if isinstance(row, dict) and run_manifest.re_full_sha(row.get("sha256"))}
 
 
-def _english_ok(folder, ticker: str, kind: str, bundle: dict) -> bool:
-    """Whether an English file is in the bundle and still has its bundle bytes."""
+def _in_bundle(folder, ticker: str, kind: str, bundle: dict) -> bool:
+    """Whether a file is in the bundle and still has its bundle bytes."""
     expected = bundle.get(kind)
     found = artifact(folder, ticker, kind)
     return (found is not None and isinstance(expected, str)
@@ -176,7 +182,7 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
     files = {**{kind: published and (folder / pattern.format(t=ticker)).is_file()
                 for kind, (pattern, _) in FILES.items()},
              "trace_json": published and outputs.exists(outputs.TRACE, folder, ticker),
-             **{kind: published and _english_ok(folder, ticker, kind, bundle)
+             **{kind: published and _in_bundle(folder, ticker, kind, bundle)
                 for kind in ENGLISH_FILES}}
     return {
         "ticker": ticker,
@@ -264,25 +270,32 @@ def public_artifact(folder, ticker: str, kind: str, db=None) -> tuple[Path, str]
     publication = _publication(doc, folder, ticker, db)
     if not publication["published"]:
         return None
-    if kind in ENGLISH_FILES and not _english_ok(folder, ticker, kind,
+    if kind in ENGLISH_FILES and not _in_bundle(folder, ticker, kind,
                                                  publication.get("bundle") or {}):
         return None
     return artifact(folder, ticker, kind)
 
 
-def cover(folder, ticker: str) -> Path | None:
-    """PNG of page 1 of the current approved PDF, cached by its content hash."""
-    found = public_artifact(folder, ticker, "pdf")
-    if not found or not shutil.which("pdftoppm"):
+def cover(folder, ticker: str, lang: str = "id", db=None) -> Path | None:
+    """PNG of page 1 of the published PDF in ``lang``, cached by its bundle hash.
+
+    The hash is the bundle's on either basis: the approved record's, or the
+    finalized run manifest's on the automatic basis (ADR 0014), the same
+    bundle that gates the English files. A PDF whose bytes no longer match it
+    gets no cover, and neither does a language whose PDF is not in the bundle."""
+    ticker = str(ticker).upper()
+    kind = COVER_KINDS.get(lang)
+    if kind is None or not TICKER.fullmatch(ticker) or not shutil.which("pdftoppm"):
         return None
-    review = assumption_review.status(folder, str(ticker).upper())
-    pdf_sha = (review.get("artifact_hashes") or {}).get("pdf")
-    if review.get("state") != "approved" or not pdf_sha:
+    doc = outputs.load(outputs.REPORT, folder, ticker, db)
+    publication = _publication(doc, folder, ticker, db)
+    bundle = publication.get("bundle") or {}
+    if not publication["published"] or not _in_bundle(folder, ticker, kind, bundle):
         return None
-    pdf = found[0]
+    pdf = artifact(folder, ticker, kind)[0]
     thumbs = pdf.parent / ".thumbs"
     thumbs.mkdir(exist_ok=True)
-    png = thumbs / f"{ticker.upper()}-{pdf_sha[:16]}-cover.png"
+    png = thumbs / f"{ticker}-{bundle[kind][:16]}-cover.png"
     if not png.exists():
         base = png.with_suffix("")
         subprocess.run(["pdftoppm", "-png", "-r", "70", "-f", "1", "-l", "1", "-singlefile",
