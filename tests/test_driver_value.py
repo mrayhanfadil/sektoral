@@ -96,3 +96,21 @@ def test_the_mining_deck_and_discount_rate_use_the_report_format(monkeypatch):
     assert base["Tingkat diskonto US$"] == "10,7%"
     assert fmt.localize(base["Harga tembaga"], "en") == "US$13,002/t"
     assert fmt.localize(base["Tingkat diskonto US$"], "en") == "10.7%"
+
+
+def test_the_case_table_rounds_to_the_tick_like_the_target_price():
+    """The base case reads as the cover: AMMN's model value Rp3.487,8 is the
+    Rp3.490 target, -26,2% against Rp4.730, not Rp3.488 and -26,3%."""
+    from app import report_extras as RX
+    row = {"driver": "Harga tembaga", "basis": "asumsi analis", "years": "LoM",
+           "base": "US$13.002/t", "unit": "±10%", "fy1_profit_low": None,
+           "value_effect_low": -418.0, "value_effect_high": 418.0}
+    doc = {"driver_value": {"rows": [row], "method": "LoM", "cases": {
+        "downside": {"per_share": 2211.4}, "base": {"per_share": 3487.8},
+        "upside": {"per_share": 5168.1}}}}
+    page = RX.driver_value_page(doc, {"price": 4730.0})
+    cases = page["exhibit"][1]["data"]["rows"]
+    assert [r[:3] for r in cases] == [["Turun", "Rp2.210", "-53,3%"],
+                                      ["Dasar", "Rp3.490", "-26,2%"],
+                                      ["Naik", "Rp5.175", "+9,4%"]]
+    assert "dibulatkan ke fraksi harga seperti target" in page["exhibit"][1]["catatan_sumber"]
