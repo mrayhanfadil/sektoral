@@ -18,7 +18,9 @@ Events the web matches on carry codes beside their Indonesian words:
 chain rows ``decision_code`` (``report_extras.decision_code``), the primary
 method ``method`` and the release the raw ``tp_value``/``upside_pct``.
 Recorded runs stored before codes existed get them on replay (``coded``),
-read back from their labels and data.
+read back from their labels and data. A replay ends on the report it stands
+on: a recorded gate, build or release event says what that report says
+(``coded`` with the report, ``settled``), even when the run saw another state.
 
 Every event also carries its English where there is one (``label_en``,
 ``detail_en``, see ``app.progress``): host-written words from
@@ -32,7 +34,7 @@ import math
 import re
 from pathlib import Path
 
-from . import exhibit_ids, gallery, host_lang, outputs, progress, report_extras, trace_view
+from . import exhibit_ids, gallery, host_lang, outputs, progress, report_extras, report_lang, trace_view
 from .jobs import text
 
 GATES = ((0, "Model bisnis"), (1, "Kelayakan data"), (2, "Struktur kepemilikan"),
@@ -65,8 +67,14 @@ RELEASE = {"production_ready": "siap produksi",
 # events use the same kinds; only a live run has tool_error).
 KINDS = ("tool_start", "tool_done", "tool_empty", "tool_error", "hypothesis", "primary_method",
          "chain_done", "release", "gate", "chain_row")
-GATE_CODES = {"lolos": "pass", "gagal": "fail", "tidak berlaku": "not_applicable",
-              "tidak dapat dinilai": "not_assessable"}
+GATE_CODES = {"lolos": "pass", "gagal": "fail", "ditandai": "flagged",
+              "tidak berlaku": "not_applicable", "tidak dapat dinilai": "not_assessable"}
+# Method Gate 5 checks that flag a result for disclosure and a cross-check but
+# do not block the rating: ``model_profiles._eval_method_gate5`` lists them as
+# failed without a rating override, and ``valuation`` turns them into notes.
+# Only an extreme upside or downside (``5_upside_extreme``,
+# ``5_downside_extreme``) overrides the rating to Review Required.
+DISCLOSURE_FLAGS = frozenset({"5_exit_multiple_out_of_range", "5_tv_share_high"})
 HYPOTHESIS_CODES = {"didukung": "supported", "tidak didukung": "not_supported",
                     "belum terjawab": "unanswered"}
 VERDICT_CODES = frozenset(HYPOTHESIS_CODES.values()) | {"partly_supported"}
@@ -89,7 +97,10 @@ def _check(ids):
 
 
 def gate_rows(verdict: dict | None) -> list[dict]:
-    """Six rows {gate, name, verdict, verdict_code, ok, detail} from a model_profiles GateVerdict dict."""
+    """Six rows {gate, name, verdict, verdict_code, ok, detail} from a model_profiles GateVerdict dict.
+
+    A gate whose only failed checks are disclosure flags (``DISCLOSURE_FLAGS``)
+    is "ditandai" (flagged), not "gagal": the rating stands, the flag is disclosed."""
     verdict = verdict if isinstance(verdict, dict) else {}
 
     def ids(key):
@@ -102,10 +113,14 @@ def gate_rows(verdict: dict | None) -> list[dict]:
         mine = [i for i in passed + failed + unassessed if i[:1] == str(n)]
         unknown = [i for i in unassessed if i[:1] == str(n)]
         bad = [i for i in failed if i[:1] == str(n) and i not in unassessed]
+        flagged = [i for i in bad if i in DISCLOSURE_FLAGS]
+        bad = [i for i in bad if i not in DISCLOSURE_FLAGS]
         if unknown:
             word, ok, detail = "tidak dapat dinilai", False, "data belum cukup untuk " + _check(unknown)
         elif bad:
             word, ok, detail = "gagal", False, _check(bad)
+        elif flagged:
+            word, ok, detail = "ditandai", False, _check(flagged)
         elif mine:
             word, ok, detail = "lolos", True, _check([i for i in passed if i[:1] == str(n)])
         else:
@@ -127,7 +142,7 @@ def _chain_rows(doc):
         if isinstance(row, list) and len(row) >= 3:
             yield {"method": re.sub(r"^\S+\.\s*", "", str(row[0])).replace(" (utama)", ""),
                    "decision": str(row[1]), "decision_code": report_extras.decision_code(row[1]),
-                   "value": str(row[2]),
+                   "value": str(row[2]), "value_en": report_lang.plain(str(row[2])),
                    "reason": str(row[3]) if len(row) > 3 else ""}
 
 
@@ -155,7 +170,8 @@ def valuation_events(doc: dict) -> list[dict]:
         out.append(dict(stage="gate", label=row["method"][:80], detail=row["reason"],
                         tool="chain_step", agent="gerbang",
                         data={"kind": "chain_row", "decision": row["decision"][:40],
-                              "decision_code": row["decision_code"], "value": row["value"][:40]}))
+                              "decision_code": row["decision_code"], "value": row["value"][:40],
+                              "value_en": row["value_en"][:40]}))
     method = str(doc.get("method") or "").split(" [")[0]
     out.append(dict(stage="gate", label=f"Metode utama {method}" if method else "Rantai metode selesai",
                     status="ok", agent="gerbang",
@@ -214,17 +230,38 @@ def _pct_value(shown):
     return value if found.group(1) == "+" else -value
 
 
+def _gate_row(tool: str, doc) -> dict | None:
+    """The ``gate_rows`` row of gate event ``tool`` ("gate_5") from ``doc``'s verdict."""
+    found = re.fullmatch(r"gate_(\d)", tool)
+    verdict = (((doc.get("log_gate") or {}).get("release") or {}).get("gate_verdict")
+               if found and isinstance(doc, dict) else None)
+    if not isinstance(verdict, dict):
+        return None
+    return next((row for row in gate_rows(verdict) if row["gate"] == int(found.group(1))), None)
+
+
 def coded(event: dict, doc: dict | None = None) -> dict:
     """``event`` with the codes the web matches on, read back from its label
     and data when it was recorded without them (runs stored before codes);
-    ``doc``, the run's report document, names the primary method's short name."""
+    ``doc``, the run's report document, names the primary method's short name
+    and gives each gate event the verdict ``gate_rows`` reads from it now.
+    A chain row gets its value in English (``value_en``)."""
     label, tool, stage = str(event.get("label") or ""), str(event.get("tool") or ""), event.get("stage")
     data = dict(event.get("data") or {})
     add = {}
+    row = _gate_row(tool, doc)
+    if row is not None and (data.get("verdict") != row["verdict"] or event.get("detail") != row["detail"]):
+        # The report's own verdict, read the way gate_rows reads it now (a
+        # Gate 5 disclosure flag recorded as "gagal" becomes "ditandai").
+        return {**event, "detail": row["detail"], "detail_en": None,
+                "status": "ok" if row["ok"] else "warn",
+                "data": {**data, "kind": "gate", "verdict": row["verdict"],
+                         "verdict_code": row["verdict_code"]}}
     if tool.startswith("gate_") and data.get("verdict") in GATE_CODES:
         add = {"kind": "gate", "verdict_code": GATE_CODES[data["verdict"]]}
     elif tool == "chain_step":
-        add = {"kind": "chain_row", "decision_code": report_extras.decision_code(data.get("decision"))}
+        add = {"kind": "chain_row", "decision_code": report_extras.decision_code(data.get("decision")),
+               "value_en": report_lang.plain(str(data["value"]))[:40] if data.get("value") else None}
     elif stage == "gate" and label.startswith("Metode utama "):
         method = label[len("Metode utama "):]
         add = {"kind": "primary_method",
@@ -243,6 +280,29 @@ def coded(event: dict, doc: dict | None = None) -> dict:
                         f"{tool}: data tidak tersedia": "tool_empty"}.get(label)}
     missing = {k: v for k, v in add.items() if v is not None and k not in data}
     return {**event, "data": {**data, **missing}} if missing else event
+
+
+BUILT = "Company update tersusun"
+
+
+def settled(event: dict, doc: dict) -> dict:
+    """``event`` as the report it ends on has it: a recorded build or release
+    event says the release status of ``doc``, not the status the run saw
+    before a later rebuild or publication (a JPFA run recorded "draft" beside
+    its published report)."""
+    meta = doc.get("meta") if isinstance(doc, dict) and isinstance(doc.get("meta"), dict) else {}
+    status = meta.get("status")
+    if not status:
+        return event
+    if event.get("stage") == "report" and event.get("label") == BUILT and event.get("detail") != status:
+        return {**event, "detail": status, "detail_en": None}
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    if event.get("tool") == "release" and data.get("status") != status:
+        release = valuation_events(doc)[-1]
+        return {**event, "label": release["label"], "label_en": None,
+                "detail": release.get("detail"), "detail_en": None,
+                "status": release["status"], "data": release["data"]}
+    return event
 
 
 def prose_twins(audit: dict) -> dict:
@@ -395,7 +455,7 @@ def derive(audit: dict, doc: dict) -> list[dict]:
         stage, label = kwargs.pop("stage"), kwargs.pop("label")
         add(1.6 if i == 0 else 0.35, stage, label, kwargs.pop("detail", None), **kwargs)
     meta = doc.get("meta") or {}
-    add(5.5, "report", "Company update tersusun", meta.get("status"))
+    add(5.5, "report", BUILT, meta.get("status"))
     add(0.2, "done", "Selesai")
     return events
 
@@ -430,7 +490,7 @@ def replay(folder, ticker: str) -> dict | None:
     recorded = outputs.load(outputs.EVENTS, folder, t)
     events = progress.public(recorded) if isinstance(recorded, list) and recorded else []
     twins = prose_twins(audit)
-    events = progress.public([englished(coded(e, doc), twins, doc) for e in events])
+    events = progress.public([englished(settled(coded(e, doc), doc), twins, doc) for e in events])
     if events and not narrates_trace(events, audit):
         events = []  # another run's recording: replay the run the report stands on
     source = "recorded" if events else "derived"

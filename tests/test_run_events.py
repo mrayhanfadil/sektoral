@@ -35,6 +35,74 @@ def test_an_unassessed_check_is_not_reported_as_failed():
     assert rows[1]["ok"] is False and rows[5]["ok"] is False
 
 
+FLAGGED = {"primary": "FCFF/WACC DCF", "gates_passed": ["0_business_model", "5_upside_band"],
+           "gates_failed": ["5_exit_multiple_out_of_range", "5_tv_share_high"],
+           "gates_unassessed": []}
+
+
+def test_a_gate_5_disclosure_flag_is_flagged_not_failed():
+    # model_profiles lists these as failed but sets no rating override: the
+    # rating stands and the report discloses them.
+    gate5 = run_events.gate_rows(FLAGGED)[5]
+    assert gate5 == {"gate": 5, "name": "Kewajaran hasil", "verdict": "ditandai",
+                     "verdict_code": "flagged", "ok": False,
+                     "detail": "multiple keluar di luar rentang peer; porsi nilai terminal tinggi"}
+    event = next(progress.event(**e) for e in run_events.valuation_events({**_doc(), "log_gate": {
+        "release": {"gate_verdict": FLAGGED}}}) if e.get("tool") == "gate_5")
+    assert event["status"] == "warn" and event["data"]["verdict_code"] == "flagged"
+    assert event["detail_en"] == "exit multiple outside the peer range; high terminal-value share"
+    # An extreme upside overrides the rating: that still fails the gate.
+    blocking = {**FLAGGED, "gates_failed": FLAGGED["gates_failed"] + ["5_upside_extreme"]}
+    assert run_events.gate_rows(blocking)[5]["verdict_code"] == "fail"
+    assert run_events.gate_rows(blocking)[5]["detail"] == "upside ekstrem"
+
+
+def test_a_stored_gate_event_reads_the_report_verdict_on_replay():
+    doc = {**_doc(), "log_gate": {"release": {"gate_verdict": FLAGGED}}}
+    stored = {"stage": "gate", "label": "Kewajaran hasil", "tool": "gate_5", "agent": "gerbang",
+              "status": "warn", "t": 5, "detail": "multiple keluar di luar rentang peer",
+              "detail_en": "exit multiple outside the peer range",
+              "data": {"kind": "gate", "gate": "5", "verdict": "gagal", "verdict_code": "fail"}}
+    event, = progress.public([run_events.coded(stored, doc)])
+    assert event["data"] == {"kind": "gate", "gate": "5", "verdict": "ditandai",
+                             "verdict_code": "flagged"}
+    assert event["status"] == "warn"
+    assert event["detail_en"] == "exit multiple outside the peer range; high terminal-value share"
+    # Without its report a stored event keeps what it recorded.
+    assert run_events.coded(stored) is stored
+
+
+def test_chain_rows_carry_their_value_in_english():
+    chain = [e for e in run_events.valuation_events({**_doc(), "exhibits": [
+        {"judul": "Rantai metode valuasi", "data": {"rows": [
+            ["1. DDM (utama)", "Terpilih", "Rp3.490", "alasan"], ["2. PSR", "Belum tersedia", "-", "x"]]}}]})
+             if e.get("tool") == "chain_step"]
+    assert [(e["data"]["value"], e["data"]["value_en"]) for e in chain] == [
+        ("Rp3.490", "Rp3,490"), ("-", "-")]
+    old = {"stage": "gate", "label": "DDM", "tool": "chain_step", "t": 6,
+           "data": {"decision": "Terpilih", "value": "Rp12.350"}}
+    assert run_events.coded(old)["data"]["value_en"] == "Rp12,350"
+
+
+def test_a_recorded_build_or_release_event_says_the_report_status():
+    doc = _doc()  # distributable, Hold at Rp1.100
+    built = {"stage": "report", "label": "Company update tersusun", "detail": "draft_non_distributable",
+             "status": "ok", "t": 9}
+    assert run_events.settled(built, doc)["detail"] == "distributable_assumption_led"
+    assert run_events.settled({**built, "detail": "distributable_assumption_led"}, doc)["detail"] == (
+        "distributable_assumption_led")
+    held = {"stage": "report", "label": "Status rilis: draf, belum didistribusikan", "tool": "release",
+            "status": "warn", "t": 8, "detail": "2 pemeriksaan menahan rating dan target harga",
+            "data": {"kind": "release", "status": "draft_non_distributable"}}
+    release, = progress.public([run_events.settled(held, doc)])
+    assert release["label"] == "Status rilis: dapat didistribusikan, berbasis asumsi analis"
+    assert release["label_en"] == "Release status: distributable, Assumption-Led"
+    assert release["status"] == "ok" and release["detail"] == "rating dan target harga diterbitkan"
+    assert release["data"]["tp_value"] == 1100 and release["t"] == 8
+    same = {**held, "data": {"kind": "release", "status": "distributable_assumption_led"}}
+    assert run_events.settled(same, doc) is same
+
+
 def _doc(published=True):
     return {"meta": {"ticker": "AAAA", "emiten": "PT AAAA Tbk", "status": (
                 "distributable_assumption_led" if published else "draft_non_distributable"),
@@ -258,8 +326,11 @@ def test_replay_endpoint_prefers_recorded_events(tmp_path):
                                        "label_en": "Plan ready", "detail": "Q", "agent": "analis"}]
         outputs.save(outputs.EVENTS, reports, "AAAA", OLD_EVENTS)
         old = client.get("/api/reports/AAAA/run").json()["events"]
+        # The recorded release (production_ready, Rp12.350) is not the report's:
+        # the replay says the release the report it ends on has.
         release = next(e for e in old if e.get("tool") == "release")
-        assert release["data"]["tp_value"] == 12350 and release["data"]["upside_pct"] == -20.9
+        assert release["data"]["status"] == "distributable_assumption_led"
+        assert release["data"]["tp_value"] == 1100 and release["data"]["upside_pct"] == 10.0
         assert client.get("/api/reports/ZZZZ/run").status_code == 404
         assert client.get("/api/reports/..%2Fx/run").status_code == 404
 
@@ -350,11 +421,14 @@ def test_old_recorded_events_get_english_on_replay(tmp_path):
     replay = run_events.replay(reports, "AAAA")
     assert replay["source"] == "recorded"
     by_label = {e["label"]: e for e in replay["events"]}
-    assert [e["label"] for e in replay["events"]] == [e["label"] for e in OLD_EVENTS] + [
+    # The recorded release ("siap produksi") says the release of the report it ends on.
+    released = "Status rilis: dapat didistribusikan, berbasis asumsi analis"
+    assert [e["label"] for e in replay["events"]] == [
+        released if e.get("tool") == "release" else e["label"] for e in OLD_EVENTS] + [
         "Hipotesis 2", "PER FY skenario"]
     assert by_label["Menjalankan find_peers"]["label_en"] == "Running find_peers"
     assert by_label["Kelayakan data"]["label_en"] == "Data eligibility"
-    assert by_label["Status rilis: siap produksi"]["label_en"] == "Release status: Production-Ready"
+    assert by_label[released]["label_en"] == "Release status: distributable, Assumption-Led"
     assert by_label["Hipotesis 2"]["detail"] == "H2: dua"
     assert by_label["Hipotesis 2"]["detail_en"] == "H2: two"  # the analyst's own twin
     # A chain row's recorded detail is cut; its English comes from the whole reason.
