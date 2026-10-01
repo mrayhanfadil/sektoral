@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
-import { api, ApiError, jobFiles, readerFiles, reportFiles, type ProblemNote, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
-import { rp } from "../lib/format";
+import { ArrowLeft, ChevronRight, FileDown, FileText, Info, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
+import {
+  api, ApiError, jobFiles, readerFiles, reportFiles, type BankDriverRow, type OutyearRow, type ProblemNote, type ReportItem, type RunReplay, type TraceView,
+} from "../lib/api";
+import { idr } from "../lib/format";
 import { LOCALE, twin, useLang, type Bi } from "../lib/i18n";
 import { problemNotes, validatorNote } from "../lib/labels";
 import { AGENT, derive, type AgentId, type Status } from "../lib/agents";
@@ -11,7 +13,7 @@ import { LiveMark } from "../components/Mark";
 import {
   Chip, Empty, INTEL_SECTIONS, IntelHeadline, IntelSections, Section, Source, StatusWord, SubHead, type ChipTone,
 } from "../components/Intel";
-import { MethodChain, RatingBadge, signedPct } from "../components/Reports";
+import { formatDay, MethodChain, RatingBadge, signedPct } from "../components/Reports";
 import { Notice, useLoad } from "../components/State";
 import { ReviewPanel, keepReviewToken, readReviewToken } from "../components/Review";
 import { IssuerLogo } from "../components/IssuerLogo";
@@ -42,7 +44,7 @@ const FORECAST: [string, Bi][] = [
 ];
 /** A catalyst's direction code, as the forecast agent writes it, in tone. */
 const DIRECTION_TONE: Record<string, ChipTone> = { Positif: "ok", Negatif: "err", "Dua arah": "neutral" };
-const BANK_COLS: [keyof NonNullable<TraceView["forecast"]["bank_drivers"]>[number], Bi][] = [
+const BANK_COLS: [keyof BankDriverRow, Bi][] = [
   ["loan_growth_pct", { id: "Pertumbuhan kredit", en: "Loan growth" }],
   ["nim_pct", { id: "NIM", en: "NIM" }],
   ["non_ii_to_nii_pct", { id: "Non-bunga / NII", en: "Non-interest / NII" }],
@@ -224,15 +226,173 @@ const pctOf = (v: number | null, cell: Intl.NumberFormat) => (v == null ? "n.a."
 
 const RELEASE: Record<string, [Bi, ChipTone]> = {
   production_ready: [{ id: "Siap produksi", en: "Production-ready" }, "ok"],
-  distributable_assumption_led: [{ id: "Terbit, berbasis asumsi analis", en: "Published, analyst-assumption led" }, "brand"],
-  draft_non_distributable: [{ id: "Draft, belum didistribusikan", en: "Draft, not distributed" }, "warn"],
+  distributable_assumption_led: [{ id: "Berbasis asumsi analis", en: "Assumption-led" }, "brand"],
+  draft_non_distributable: [{ id: "Draf, tidak diterbitkan", en: "Draft, not published" }, "warn"],
 };
+
+/**
+ * The trace's real review state as a publication state, for a report the gallery list does not carry
+ * (the gallery's own `publication_state` wins when it does): published and approved reads as
+ * analyst-reviewed, published otherwise as auto-published (ADR 0014), unpublished and pending as
+ * awaiting review (review-gated mode), anything else as not yet cleared.
+ */
+function publicationOf(trace: TraceView): ReportItem["publication_state"] {
+  if (!trace.report.published) return trace.review_state === "pending" ? "review_pending" : "built";
+  return trace.review_state === "approved" ? "published" : "auto_published";
+}
 
 function forecastStatus(status: string | null): [Bi, Status] {
   if (status === "validated") return [{ id: "Tervalidasi", en: "Validated" }, "ok"];
   if (status === "partial") return [{ id: "Parsial", en: "Partial" }, "warn"];
   if (status) return [{ id: `Status ${status}`, en: `Status ${status}` }, "warn"];
   return [{ id: "Status tidak tercatat", en: "Status not recorded" }, "idle"];
+}
+
+/** The label of an agent table the model did not run. */
+const NOT_USED: Bi = { id: "Usulan agent, tidak dipakai model", en: "Agent's proposal, not used by the model" };
+
+/** A note on how the model used (or did not use) an agent table. */
+function ModelNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-3 flex max-w-[80ch] items-start gap-2 rounded-md border border-rule bg-raised px-3.5 py-2.5 text-[14px] text-ink">
+      <Info aria-hidden className="mt-[3px] size-3.5 flex-none text-ink-soft" strokeWidth={2.2} />
+      <span className="min-w-0">{children}</span>
+    </p>
+  );
+}
+
+/** What a model driver rests on, as a small mark after its value; a plain sourced value has none. */
+const KIND_MARK: Record<string, [mark: string, Bi]> = {
+  company_guidance: ["G", { id: "panduan perusahaan", en: "company guidance" }],
+  analyst_assumption: ["A", { id: "asumsi analis", en: "analyst assumption" }],
+};
+
+/** "Asumsi analis" on a plan row the agent wrote as its own scenario. */
+function AssumptionChip({ row }: { row: { analyst_assumption?: boolean | null } }) {
+  const { t } = useLang();
+  return row.analyst_assumption ? <Chip tone="dashed" className="ml-2 align-middle">{t({ id: "Asumsi analis", en: "Analyst assumption" })}</Chip> : null;
+}
+
+/** A row's basis line: rationale, source file and source ids; kept in view while the table scrolls sideways. */
+function RowBasis({ row, cols }: { row: { rationale: string | null; rationale_en?: string | null; source?: string | null;
+  source_ids?: string[]; analyst_assumption?: boolean | null }; cols: number }) {
+  const { t, lang } = useLang();
+  const ids = row.source_ids ?? [];
+  if (!row.rationale && !row.source && !ids.length && !row.analyst_assumption) return null;
+  return (
+    <tr>
+      <td colSpan={cols} className="px-2 pb-3 text-[13.5px] text-ink-soft">
+        <div className="sticky left-2 max-w-[min(80ch,calc(100vw-72px))]">
+          {row.rationale && <><span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{twin(row, "rationale", lang)}</>}
+          {row.source && row.source !== "model" && <span className={row.rationale ? "ml-2" : ""}>{t({ id: "Sumber:", en: "Source:" })} <span className="font-mono text-[12.5px]">{row.source}</span></span>}
+          <AssumptionChip row={row} />
+          {ids.length > 0 && (
+            <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+              {ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
+            </span>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** Bank drivers by year: the first row is the interim year's H2, the rest full years. Model rows add the payout and each driver's kind. */
+function BankDriverTable({ rows }: { rows: BankDriverRow[] }) {
+  const { t, lang } = useLang();
+  const cell = pctCell[lang];
+  const payout = rows.some((r) => r.payout_pct != null);
+  const kinds = new Set(rows.flatMap((r) => Object.values(r.kinds ?? {})).filter((k): k is string => Boolean(k && KIND_MARK[k])));
+  const cols = BANK_COLS.length + 1 + (payout ? 1 : 0);
+  return (
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse text-[14px]">
+          <thead>
+            <tr className="text-[12.5px] text-ink-soft [&>th]:px-2 [&>th]:pb-2 [&>th]:align-bottom [&>th]:font-medium">
+              <th scope="col" className="text-left">{t({ id: "Tahun", en: "Year" })}</th>
+              {BANK_COLS.map(([key, label]) => <th key={key} scope="col" className="text-right">{t(label)}</th>)}
+              {payout && <th scope="col" className="text-right">{t({ id: "Rasio dividen", en: "Payout" })}</th>}
+            </tr>
+          </thead>
+          {rows.map((row, i) => (
+            <tbody key={row.year ?? i} className="border-t border-rule">
+              <tr className="[&>td]:px-2 [&>td]:pt-2.5 [&>td]:pb-1">
+                <th scope="row" className="px-2 pt-2.5 pb-1 text-left font-mono font-semibold text-ink-strong">
+                  {row.year}{i === 0 && <span className="ml-1.5 font-sans text-[12px] font-normal text-ink-soft">H2</span>}
+                </th>
+                {BANK_COLS.map(([key]) => {
+                  const v = row[key] as number | null;
+                  const kind = KIND_MARK[row.kinds?.[key] ?? ""];
+                  return (
+                    <td key={key} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>
+                      {pctOf(v, cell)}
+                      {kind && <sup title={t(kind[1])} className="ml-0.5 font-sans text-[10px] font-semibold text-ink-soft">{kind[0]}<span className="sr-only"> ({t(kind[1])})</span></sup>}
+                    </td>
+                  );
+                })}
+                {payout && <td className={`text-right font-mono whitespace-nowrap tabular-nums ${row.payout_pct == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(row.payout_pct ?? null, cell)}</td>}
+              </tr>
+              <RowBasis row={row} cols={cols} />
+            </tbody>
+          ))}
+        </table>
+      </div>
+      {kinds.size > 0 && (
+        <p className="mt-2 text-[12.5px] text-ink-soft">
+          {[...kinds].map((k) => `${KIND_MARK[k][0]} = ${t(KIND_MARK[k][1])}`).join(" · ")}
+          {t({ id: "; tanpa tanda = bersumber.", en: "; unmarked = sourced." })}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Out-years of the earnings forecast (percent). */
+function OutyearTable({ rows }: { rows: OutyearRow[] }) {
+  const { t, lang } = useLang();
+  const cell = pctCell[lang];
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-[14px]">
+        <thead>
+          <tr className="text-[12.5px] text-ink-soft [&>th]:px-2 [&>th]:pb-2 [&>th]:align-bottom [&>th]:font-medium">
+            <th scope="col" className="text-left">{t({ id: "Tahun", en: "Year" })}</th>
+            <th scope="col" className="text-right">{t({ id: "Pertumbuhan revenue", en: "Revenue growth" })}</th>
+            <th scope="col" className="text-right">{t({ id: "Margin EBITDA", en: "EBITDA margin" })}</th>
+            <th scope="col" className="text-right">{t({ id: "Margin laba", en: "Net margin" })}</th>
+            <th scope="col" className="text-right">Capex/revenue</th>
+          </tr>
+        </thead>
+        {rows.map((row, i) => (
+          <tbody key={row.year ?? i} className="border-t border-rule">
+            <tr className="[&>td]:px-2 [&>td]:pt-2.5 [&>td]:pb-1">
+              <th scope="row" className="px-2 pt-2.5 pb-1 text-left font-mono font-semibold text-ink-strong">{row.year}</th>
+              {[row.revenue_growth_pct, row.ebitda_margin_pct, row.net_income_margin_pct, row.capex_to_revenue_pct].map((v, j) => (
+                <td key={j} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(v, cell)}</td>
+              ))}
+            </tr>
+            <RowBasis row={row} cols={5} />
+          </tbody>
+        ))}
+      </table>
+    </div>
+  );
+}
+
+/** An agent table the model did not run, folded away under its label. */
+function UnusedProposal({ title, children }: { title: string; children: React.ReactNode }) {
+  const { t } = useLang();
+  return (
+    <details className="group mt-4 rounded-md border border-rule">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 rounded-md px-3 py-2.5 text-[14.5px] font-medium text-ink-strong hover:bg-raised [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden className="size-4 flex-none text-ink-soft transition-transform duration-200 group-open:rotate-90" strokeWidth={2.2} />
+        {title}
+        <Chip tone="dashed" className="ml-auto">{t(NOT_USED)}</Chip>
+      </summary>
+      <div className="border-t border-rule px-3 pt-2 pb-1 opacity-80">{children}</div>
+    </details>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -249,7 +409,8 @@ type Links = {
 function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; run?: RunReplay }) {
   const { t, lang } = useLang();
   const { report } = trace;
-  const awaiting = trace.review_state === "pending" && (report.release_status ?? "").startsWith("distributable");
+  // Review-gated publication only: a report that cleared the gates but is not public waits for the analyst.
+  const awaiting = !report.published && trace.review_state === "pending" && (report.release_status ?? "").startsWith("distributable");
   const [label, tone] = awaiting ? [t({ id: "Lolos gerbang, menunggu review analis", en: "Passed the gates, awaiting analyst review" }), "warn" as ChipTone]
     : RELEASE[report.release_status ?? ""]
       ? [t(RELEASE[report.release_status!][0]), RELEASE[report.release_status!][1]]
@@ -273,12 +434,12 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
             rating: report.published ? report.rating : null,
             held_reason: item?.held_reason ?? "",
             release_status: "",
-            publication_state: item?.publication_state ?? (report.published ? "published" : "review_pending"),
+            publication_state: item?.publication_state ?? publicationOf(trace),
           }} /></dd>
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
           <dt className={dt}>{t({ id: "Target harga", en: "Target price" })}</dt>
-          <dd className="m-0 font-mono text-[15px] font-semibold tabular-nums text-ink-strong">{report.published ? `Rp${rp(report.target_price)}` : t({ id: "Ditahan", en: "Withheld" })}</dd>
+          <dd className="m-0 font-mono text-[15px] font-semibold tabular-nums text-ink-strong">{report.published ? idr(report.target_price, lang) : t({ id: "Ditahan", en: "Withheld" })}</dd>
         </div>
         <div className={`${cell} col-span-2 sm:col-span-1`}>
           <dt className={dt}>{t({ id: "Potensi", en: "Upside" })}</dt>
@@ -291,12 +452,16 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
           <dd className="m-0 text-[14px] leading-snug text-ink">{twin(report, "method", lang) || t({ id: "Belum tercatat", en: "Not recorded" })}</dd>
         </div>
         <div className={`${cell} col-span-3 sm:col-span-1`}>
-          <dt className={dt}>{t({ id: "Data per", en: "Data as of" })}</dt>
-          <dd className="m-0 font-mono text-[13.5px] text-ink-strong">{report.as_of ?? "—"}</dd>
+          <dt className={dt}>{t({ id: "Tanggal laporan", en: "Report date" })}</dt>
+          <dd className="m-0 font-mono text-[13.5px] whitespace-nowrap text-ink-strong">
+            {report.as_of ? <time dateTime={report.as_of}>{formatDay(report.as_of, lang)}</time> : "—"}
+          </dd>
         </div>
         <div className={`${cell} col-span-3 sm:col-span-1`}>
           <dt className={dt}>{t({ id: "Harga pasar per", en: "Market price as of" })}</dt>
-          <dd className="m-0 font-mono text-[13.5px] text-ink-strong">{report.market_price_date ?? "—"}</dd>
+          <dd className="m-0 font-mono text-[13.5px] whitespace-nowrap text-ink-strong">
+            {report.market_price_date ? <time dateTime={report.market_price_date}>{formatDay(report.market_price_date, lang)}</time> : "—"}
+          </dd>
         </div>
       </dl>
       {(item?.chain.length || counts) && (
@@ -317,7 +482,7 @@ function Release({ trace, item, run }: { trace: TraceView; item?: ReportItem; ru
   );
 }
 
-function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: ReportItem; run?: RunReplay; links: Links }) {
+export function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: ReportItem; run?: RunReplay; links: Links }) {
   const { t } = useLang();
   const name = item?.name ?? trace.analyst?.name;
   return (
@@ -373,11 +538,10 @@ function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: Rep
   );
 }
 
-function TraceBody({ trace }: { trace: TraceView }) {
+export function TraceBody({ trace }: { trace: TraceView }) {
   const { t, locale, lang } = useLang();
   const { research, news, forecast } = trace;
   const index = useSectionIndex();
-  const cell = pctCell[lang];
   const cited = useMemo(() => {
     const n: Record<string, number> = {};
     research.insights.forEach((i) => i.citations.forEach((c) => { if (c.endpoint) n[c.endpoint] = (n[c.endpoint] ?? 0) + 1; }));
@@ -386,6 +550,12 @@ function TraceBody({ trace }: { trace: TraceView }) {
   const analyst = trace.analyst;
   const [fLabel, fStatus] = forecastStatus(forecast.status);
   const searched = news.search.status === "searched";
+  // Whether the model ran the agent's tables (true), its own (false: the agent's is an unused proposal),
+  // or the server does not say (null, older traces).
+  const agentBank = forecast.bank_drivers ?? [];
+  const bankUsed = forecast.bank_drivers_used;
+  const bankModel = bankUsed === false && forecast.bank_drivers_model?.length ? forecast.bank_drivers_model : undefined;
+  const outModel = forecast.outyears_used === false && forecast.outyears_model?.length ? forecast.outyears_model : undefined;
   const fetched = trace.deepdive.filter((d) => d.status === "fetched").length;
 
   return (
@@ -453,7 +623,7 @@ function TraceBody({ trace }: { trace: TraceView }) {
                               <ChevronRight aria-hidden className="mx-1 inline size-3 align-[-1px] text-ink-faint" strokeWidth={2.2} />
                               <span className="sr-only">field </span><span className="text-ink">{c.field_path}</span>
                             </span>
-                            <span className="font-semibold text-ink-strong tabular-nums"><span className="sr-only">{t({ id: "nilai ", en: "value " })}</span>{c.value}</span>
+                            <span className="font-semibold text-ink-strong tabular-nums"><span className="sr-only">{t({ id: "nilai ", en: "value " })}</span>{twin(c, "value", lang)}</span>
                           </li>
                         ))}
                       </ul>
@@ -630,90 +800,67 @@ function TraceBody({ trace }: { trace: TraceView }) {
           )}
 
           {forecast.outyears.length > 0 && (
-            <Section id="tahun-lanjutan" title={t(LABEL["tahun-lanjutan"])} count={forecast.outyears.length}>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-[14px]">
-                  <thead>
-                    <tr className="text-[12.5px] text-ink-soft [&>th]:px-2 [&>th]:pb-2 [&>th]:align-bottom [&>th]:font-medium">
-                      <th scope="col" className="text-left">{t({ id: "Tahun", en: "Year" })}</th>
-                      <th scope="col" className="text-right">{t({ id: "Pertumbuhan revenue", en: "Revenue growth" })}</th>
-                      <th scope="col" className="text-right">{t({ id: "Margin EBITDA", en: "EBITDA margin" })}</th>
-                      <th scope="col" className="text-right">{t({ id: "Margin laba", en: "Net margin" })}</th>
-                      <th scope="col" className="text-right">Capex/revenue</th>
-                    </tr>
-                  </thead>
-                  {forecast.outyears.map((row, i) => (
-                    <tbody key={row.year ?? i} className="border-t border-rule">
-                      <tr className="[&>td]:px-2 [&>td]:pt-2.5 [&>td]:pb-1">
-                        <th scope="row" className="px-2 pt-2.5 pb-1 text-left font-mono font-semibold text-ink-strong">{row.year}</th>
-                        {[row.revenue_growth_pct, row.ebitda_margin_pct, row.net_income_margin_pct, row.capex_to_revenue_pct].map((v, j) => (
-                          <td key={j} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(v, cell)}</td>
-                        ))}
-                      </tr>
-                      <tr>
-                        <td colSpan={5} className="px-2 pb-3 text-[13.5px] text-ink-soft">
-                          <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{twin(row, "rationale", lang)}
-                          {row.source_ids.length > 0 && (
-                            <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
-                              {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  ))}
-                </table>
-              </div>
+            <Section id="tahun-lanjutan" title={t(LABEL["tahun-lanjutan"])} count={(outModel ?? forecast.outyears).length}
+              aside={forecast.outyears_used === false && !outModel && <Chip tone="dashed">{t(NOT_USED)}</Chip>}>
+              {forecast.outyears_used === false && (
+                <ModelNote>
+                  {twin(forecast, "outyears_note", lang) || t({
+                    id: "Model tidak memakai tabel tahun lanjutan agent ini: forecast-nya mengikuti jadwal model sendiri.",
+                    en: "The model did not use the agent's out-year table: its forecast follows the model's own schedule.",
+                  })}
+                </ModelNote>
+              )}
+              {outModel ? (
+                <>
+                  <SubHead>{t({ id: "Forecast yang dijalankan model", en: "The forecast the model ran" })}</SubHead>
+                  <OutyearTable rows={outModel} />
+                  <UnusedProposal title={t({ id: "Tabel tahun lanjutan agent forecast", en: "The forecast agent's out-year table" })}>
+                    <OutyearTable rows={forecast.outyears} />
+                  </UnusedProposal>
+                </>
+              ) : (
+                <div className={forecast.outyears_used === false ? "opacity-80" : ""}><OutyearTable rows={forecast.outyears} /></div>
+              )}
             </Section>
           )}
-          {(forecast.bank_drivers?.length ?? 0) > 0 && (
-            <Section id="driver-bank" title={t(LABEL["driver-bank"])} count={forecast.bank_drivers!.length}>
+          {agentBank.length > 0 && (
+            <Section id="driver-bank" title={t(LABEL["driver-bank"])} count={(bankModel ?? agentBank).length}
+              aside={bankUsed === false && !bankModel && <Chip tone="dashed">{t(NOT_USED)}</Chip>}>
               <p className="mb-3 max-w-[80ch] text-[14px] text-ink-soft">
                 {t({
-                  id: "Driver model bank per tahun: tahun berjalan memakai aktual 1H resmi ditambah driver H2; tahun berikutnya setahun penuh. "
-                    + "Neraca, laba dan dividen dihitung model dari driver ini, dengan batas modal dan pendanaan.",
-                  en: "Bank model drivers by year: the current year uses official 1H actuals plus H2 drivers; later years are full-year. "
-                    + "The model derives the balance sheet, earnings and dividends from these drivers, within capital and funding limits.",
+                  id: "Driver bank per tahun: tahun berjalan memakai aktual 1H resmi ditambah driver H2; tahun berikutnya setahun penuh.",
+                  en: "Bank drivers by year: the current year uses official 1H actuals plus H2 drivers; later years are full-year.",
+                })}
+                {/* Only the drivers the model actually ran drive its balance sheet, earnings and dividends. */}
+                {(bankUsed === true || bankModel) && " " + t({
+                  id: "Neraca, laba dan dividen dihitung model dari driver yang dijalankannya, dengan batas modal dan pendanaan.",
+                  en: "The model derives the balance sheet, earnings and dividends from the drivers it ran, within capital and funding limits.",
                 })}
               </p>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse text-[14px]">
-                  <thead>
-                    <tr className="text-[12.5px] text-ink-soft [&>th]:px-2 [&>th]:pb-2 [&>th]:align-bottom [&>th]:font-medium">
-                      <th scope="col" className="text-left">{t({ id: "Tahun", en: "Year" })}</th>
-                      {BANK_COLS.map(([key, label]) => <th key={key} scope="col" className="text-right">{t(label)}</th>)}
-                    </tr>
-                  </thead>
-                  {forecast.bank_drivers!.map((row, i) => (
-                    <tbody key={row.year ?? i} className="border-t border-rule">
-                      <tr className="[&>td]:px-2 [&>td]:pt-2.5 [&>td]:pb-1">
-                        <th scope="row" className="px-2 pt-2.5 pb-1 text-left font-mono font-semibold text-ink-strong">
-                          {row.year}{i === 0 && <span className="ml-1.5 font-sans text-[12px] font-normal text-ink-soft">H2</span>}
-                        </th>
-                        {BANK_COLS.map(([key]) => {
-                          const v = row[key] as number | null;
-                          return <td key={key} className={`text-right font-mono whitespace-nowrap tabular-nums ${v == null ? "text-ink-faint" : "text-ink-strong"}`}>{pctOf(v, cell)}</td>;
-                        })}
-                      </tr>
-                      {row.rationale && (
-                        <tr>
-                          <td colSpan={BANK_COLS.length + 1} className="px-2 pb-3 text-[13.5px] text-ink-soft">
-                            {/* The table scrolls sideways on phones; the rationale stays in view and wraps to it. */}
-                            <div className="sticky left-2 max-w-[min(80ch,calc(100vw-72px))]">
-                              <span className="sr-only">{t({ id: "Dasar: ", en: "Basis: " })}</span>{twin(row, "rationale", lang)}
-                              {row.source_ids.length > 0 && (
-                                <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
-                                  {row.source_ids.map((s) => <Chip key={s} mono>{s}</Chip>)}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  ))}
-                </table>
-              </div>
+              {bankUsed === false && (
+                <ModelNote>
+                  {twin(forecast, "bank_drivers_note", lang) || t({
+                    id: "Model bank tidak memakai driver usulan agent ini.",
+                    en: "The bank model did not use the agent's proposed drivers.",
+                  })}
+                </ModelNote>
+              )}
+              {bankModel ? (
+                <>
+                  <SubHead>{t({ id: "Driver yang dijalankan model", en: "Drivers the model ran" })}</SubHead>
+                  <BankDriverTable rows={bankModel} />
+                  {(forecast.bank_payout_rationale || forecast.bank_payout_rationale_en) && (
+                    <p className="mt-2 max-w-[80ch] text-[13.5px] text-ink-soft">
+                      <span className="font-medium text-ink">{t({ id: "Rasio dividen: ", en: "Payout: " })}</span>{twin(forecast, "bank_payout_rationale", lang)}
+                    </p>
+                  )}
+                  <UnusedProposal title={t({ id: "Usulan driver agent forecast", en: "The forecast agent's proposed drivers" })}>
+                    <BankDriverTable rows={agentBank} />
+                  </UnusedProposal>
+                </>
+              ) : (
+                <div className={bankUsed === false ? "opacity-80" : ""}><BankDriverTable rows={agentBank} /></div>
+              )}
             </Section>
           )}
           {(forecast.catalysts?.length ?? 0) > 0 && (
