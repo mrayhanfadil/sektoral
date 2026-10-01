@@ -84,12 +84,12 @@ function DeckBar() {
           <Link to="/" aria-label={t({ id: "Sektoral, beranda", en: "Sektoral, home" })} className="flex-none">
             <Logo className="h-[22px] max-sm:h-[19px]" />
           </Link>
-          <nav aria-label={t({ id: "Navigasi utama", en: "Main navigation" })} className="flex h-full items-stretch gap-1 max-sm:ml-auto max-sm:gap-0">
+          <nav aria-label={t({ id: "Navigasi utama", en: "Main navigation" })} className="flex h-full min-w-0 items-stretch gap-1 max-sm:ml-auto max-sm:gap-0 max-sm:overflow-x-auto max-sm:[scrollbar-width:none]">
             {KEYS.map((k) => {
               const active = k.match(pathname);
               return (
                 <Link key={k.key} to={k.to} aria-current={active ? "page" : undefined}
-                  className={`group relative flex items-center gap-2 px-2.5 text-[14px] font-medium whitespace-nowrap no-underline transition-colors max-sm:px-1.5 max-sm:text-[13.5px] ${
+                  className={`group relative flex items-center gap-2 px-2.5 text-[14px] font-medium whitespace-nowrap no-underline transition-colors max-sm:px-1 max-sm:text-[13px] ${
                     active ? "text-ink-strong" : "text-ink-soft hover:text-ink-strong"}`}>
                   <kbd className={`kbd transition-colors max-sm:hidden ${active ? "!border-brand-ink/40 !text-brand-ink" : "group-hover:text-ink"}`}>{k.key}</kbd>
                   {/* Phones: F3 is an icon with its full name for screen readers, so all three keys fit the bar. */}
