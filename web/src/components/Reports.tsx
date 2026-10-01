@@ -42,29 +42,43 @@ export function StaleBadge({ item }: { item: Pick<ReportItem, "freshness"> }) {
   if (!freshness || (state !== "stale" && state !== "withdrawal_due")) return null;
   const why = [twin(freshness, "reason", lang), ...(twin(freshness, "triggers", lang) ?? [])].filter(Boolean).join(" ");
   return (
-    <span title={why} className="mt-1 inline-flex h-6 items-center rounded-[5px] border border-warn-rule/60 bg-warn-bg px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-warn-ink">
-      {state === "withdrawal_due"
+    <StatusLabel title={why} className="mt-1 border-warn-rule/60 bg-warn-bg text-warn-ink"
+      parts={labelParts(state === "withdrawal_due"
         ? t({ id: "Stale · penarikan jatuh tempo", en: "Stale · withdrawal due" })
-        : t({ id: "Stale · perlu ditinjau", en: "Stale · needs review" })}
+        : t({ id: "Stale · perlu ditinjau", en: "Stale · needs review" }))} />
+  );
+}
+
+/**
+ * A status label that stays inside its container: it breaks between its
+ * parts ("Release:" | "Assumption-Led", "Auto-published ·" | "not
+ * analyst-reviewed") when the line is too narrow, and inside a part only as
+ * a last resort, so it never runs over a neighbouring column (#44).
+ */
+function StatusLabel({ parts, className, title }: { parts: string[]; className: string; title?: string }) {
+  return (
+    <span title={title} className={`inline-flex min-h-6 max-w-full flex-wrap items-center gap-x-[1ch] rounded-[5px] border px-2 py-[3px] font-mono text-[11px] leading-4 font-medium [overflow-wrap:anywhere] ${className}`}>
+      {parts.map((part, i) => <span key={i} className="min-w-0">{part}</span>)}
     </span>
   );
 }
+
+/** "Auto-published · not analyst-reviewed" → ["Auto-published ·", "not analyst-reviewed"]. */
+export const labelParts = (label: string) => label.split(" · ").map((part, i, all) => (i < all.length - 1 ? `${part} ·` : part));
 
 export function RatingBadge({ item }: { item: Pick<ReportItem, "rating" | "held_reason" | "release_status" | "publication_state"> }) {
   const { t } = useLang();
   const state = PUBLICATION_STATE_LABEL[item.publication_state];
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
+    <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
       <span className={`inline-flex h-6 items-center gap-1.5 rounded-[5px] border px-2 font-mono text-[12px] leading-none font-semibold whitespace-nowrap ${TONE[ratingTone(item)]}`}>
         <span aria-hidden className="size-1.5 rounded-[1.5px] bg-current" />
         <span className="sr-only">Rating </span>{ratingLabel(item)}
       </span>
-      {item.release_status && <span className="inline-flex h-6 items-center rounded-[5px] border border-rule bg-raised px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-ink-soft">
-        Release: {RELEASE_STATUS_LABEL[item.release_status] ?? item.release_status}
-      </span>}
-      <span className={`inline-flex h-6 items-center rounded-[5px] border px-2 font-mono text-[11px] leading-none font-medium whitespace-nowrap ${item.publication_state === "published" ? "border-ok-ink/30 bg-ok-bg text-ok-ink" : item.publication_state === "auto_published" ? "border-rule bg-raised text-ink-soft" : "border-warn-rule/50 bg-warn-bg/60 text-warn-ink"}`}>
-        {state ? t(state) : item.publication_state}
-      </span>
+      {item.release_status && <StatusLabel className="border-rule bg-raised text-ink-soft"
+        parts={["Release:", RELEASE_STATUS_LABEL[item.release_status] ?? item.release_status]} />}
+      <StatusLabel parts={labelParts(state ? t(state) : item.publication_state)}
+        className={item.publication_state === "published" ? "border-ok-ink/30 bg-ok-bg text-ok-ink" : item.publication_state === "auto_published" ? "border-rule bg-raised text-ink-soft" : "border-warn-rule/50 bg-warn-bg/60 text-warn-ink"} />
     </span>
   );
 }
@@ -306,15 +320,16 @@ function ArchivedVersions({ ticker }: { ticker: string }) {
 /** The PDF cover as a row thumbnail; hover or focus lifts a readable preview beside it. */
 function Cover({ item }: { item: ReportItem }) {
   const { t, lang } = useLang();
-  const [broken, setBroken] = useState(false);
+  // The cover follows the reader's language, so a failed image is remembered by its URL.
+  const [broken, setBroken] = useState<string | null>(null);
   const files = readerFiles(item, lang);
-  if (!item.files.pdf || broken) {
+  if (!item.files.pdf || broken === files.cover) {
     return <span aria-hidden className="block h-[62px] w-11 rounded-[3px] border border-dashed border-rule" />;
   }
   return (
     <a href={files.pdf} className="group/cover relative block w-11 rounded-[3px] focus-visible:outline-offset-2">
       <img src={files.cover} alt={t({ id: `Sampul PDF company update ${item.ticker}`, en: `PDF cover of the ${item.ticker} company update` })} loading="lazy" width={44} height={62}
-        onError={() => setBroken(true)}
+        onError={() => setBroken(files.cover)}
         className="block h-[62px] w-11 rounded-[3px] border border-rule bg-white object-cover object-top transition-[border-color] group-hover/cover:border-brand-ink" />
       <span aria-hidden
         className="pointer-events-none absolute top-1/2 left-full z-30 ml-3 w-[250px] origin-left -translate-y-1/2 scale-[.96] overflow-hidden rounded-md border border-rule bg-white opacity-0 shadow-[var(--shadow-pop)] transition-[opacity,transform] duration-200 ease-[var(--ease-out-expo)] group-hover/cover:scale-100 group-hover/cover:opacity-100 group-focus-visible/cover:scale-100 group-focus-visible/cover:opacity-100">
@@ -328,15 +343,17 @@ function Cover({ item }: { item: ReportItem }) {
 /* The register: one ruled row per company update.                    */
 
 // Rows are one grid; areas move as the width changes. Below lg a row
-// stacks (identity, figures, chain and actions); from lg the figures are
-// columns, and from xl the method and date get columns of their own.
+// stacks (identity, rating, figures, chain and actions); from lg the figures
+// are columns, and from xl the method and date get columns of their own.
+// The rating column fits every Release label on one line; the longer
+// labels wrap inside it rather than run into the next column (#44).
 const ROW =
-  "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-4 [grid-template-areas:'tk_nm_rt'_'num_num_num'_'l2_l2_l2'] " +
-  "lg:grid-cols-[44px_76px_minmax(0,1fr)_128px_96px_88px_128px] lg:[grid-template-areas:'cv_tk_nm_rt_tp_px_up'_'cv_._l2_l2_l2_l2_l2'] " +
-  "xl:grid-cols-[44px_76px_minmax(0,1fr)_128px_112px_96px_88px_128px_96px] xl:[grid-template-areas:'cv_tk_nm_rt_me_tp_px_up_dt'_'cv_._l2_l2_l2_l2_l2_l2_l2']";
+  "grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 [grid-template-areas:'tk_nm'_'rt_rt'_'num_num'_'l2_l2'] " +
+  "lg:grid-cols-[44px_76px_minmax(0,1fr)_200px_96px_88px_128px] lg:[grid-template-areas:'cv_tk_nm_rt_tp_px_up'_'cv_._l2_l2_l2_l2_l2'] " +
+  "xl:grid-cols-[44px_76px_minmax(0,1fr)_200px_112px_96px_88px_128px_96px] xl:[grid-template-areas:'cv_tk_nm_rt_me_tp_px_up_dt'_'cv_._l2_l2_l2_l2_l2_l2_l2']";
 const HEAD =
-  "hidden gap-x-4 lg:grid lg:grid-cols-[44px_76px_minmax(0,1fr)_128px_96px_88px_128px] lg:[grid-template-areas:'cv_tk_nm_rt_tp_px_up'] " +
-  "xl:grid-cols-[44px_76px_minmax(0,1fr)_128px_112px_96px_88px_128px_96px] xl:[grid-template-areas:'cv_tk_nm_rt_me_tp_px_up_dt']";
+  "hidden gap-x-4 lg:grid lg:grid-cols-[44px_76px_minmax(0,1fr)_200px_96px_88px_128px] lg:[grid-template-areas:'cv_tk_nm_rt_tp_px_up'] " +
+  "xl:grid-cols-[44px_76px_minmax(0,1fr)_200px_112px_96px_88px_128px_96px] xl:[grid-template-areas:'cv_tk_nm_rt_me_tp_px_up_dt']";
 
 export type SortKey = "ticker" | "upside";
 export type Sort = { key: SortKey; dir: "asc" | "desc" };
@@ -411,10 +428,10 @@ function ReportRow({ item, scale }: { item: ReportItem; scale: number }) {
         </div>
       </div>
 
-      <div style={{ gridArea: "rt" }} className="pt-px max-lg:text-right">
+      <div style={{ gridArea: "rt" }} className="min-w-0 pt-px max-lg:mt-2 max-lg:flex max-lg:flex-wrap max-lg:items-center max-lg:gap-x-3 max-lg:gap-y-1.5">
         <RatingBadge item={item} />
         <StaleBadge item={item} />
-        <time dateTime={item.date} className="data mt-1.5 block text-ink-soft lg:hidden">{formatDay(item.date)}</time>
+        <time dateTime={item.date} className="data text-ink-soft lg:hidden">{formatDay(item.date)}</time>
       </div>
 
       <p style={{ gridArea: "me" }} className="truncate pt-0.5 text-[13.5px] text-ink max-xl:hidden" title={item.published ? twin(item, "method", lang) : ""}>

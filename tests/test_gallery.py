@@ -200,3 +200,64 @@ def test_every_chain_decision_cell_reads_back_to_its_code():
         "Dilewati": "skipped", "Silang cek": "cross_check", "Tidak dijalankan": "not_needed",
         "Belum tersedia": "unavailable"}
     assert report_extras.decision_code("lain") is None
+
+
+def _render_covers(monkeypatch) -> list[str]:
+    """Stub pdftoppm: each render writes the PDF's bytes as the PNG; returns the PDFs rendered."""
+    rendered = []
+
+    def render(command, **_kwargs):
+        rendered.append(Path(command[-2]).name)
+        Path(command[-1] + ".png").write_bytes(Path(command[-2]).read_bytes())
+
+    monkeypatch.setattr(gallery.shutil, "which", lambda _name: "/usr/bin/pdftoppm")
+    monkeypatch.setattr(gallery.subprocess, "run", render)
+    return rendered
+
+
+def test_an_approved_report_gets_its_cover_from_the_approved_pdf_hash(tmp_path, monkeypatch):
+    rendered = _render_covers(monkeypatch)
+    _report(tmp_path, "AAAA")
+    record = assumption_review.record(tmp_path, "AAAA")
+    png = gallery.cover(tmp_path, "AAAA")
+    assert png.name == f"AAAA-{record['artifact_hashes']['pdf'][:16]}-cover.png"
+    assert png.read_bytes() == b"%PDF-1.4 test"
+    assert gallery.cover(tmp_path, "AAAA") == png and rendered == ["AAAA.pdf"]  # cached
+
+
+def test_an_auto_published_report_gets_its_cover_from_the_run_manifest(tmp_path, monkeypatch):
+    rendered = _render_covers(monkeypatch)
+    _report(tmp_path, "AAAA", reviewed=False)
+    assert gallery.load(tmp_path)[0]["publication_basis"] == "automatic"
+    manifest = outputs.load(outputs.MANIFEST, tmp_path, "AAAA")
+    png = gallery.cover(tmp_path, "AAAA")
+    assert png.name == f"AAAA-{manifest['artifacts']['pdf']['sha256'][:16]}-cover.png"
+    assert rendered == ["AAAA.pdf"]
+    # Not published (review-gated, not approved): no cover.
+    monkeypatch.setenv("SECTORAL_AUTO_PUBLISH", "0")
+    assert gallery.cover(tmp_path, "AAAA") is None
+
+
+def test_a_pdf_that_no_longer_matches_its_bundle_gets_no_cover(tmp_path, monkeypatch):
+    rendered = _render_covers(monkeypatch)
+    _report(tmp_path, "AAAA", reviewed=False)
+    (tmp_path / "AAAA.pdf").write_bytes(b"%PDF-1.4 rebuilt after the run")
+    assert gallery.cover(tmp_path, "AAAA") is None and rendered == []
+    # A draft never has one, whatever PDF exists.
+    _report(tmp_path, "BBBB", published=False)
+    assert gallery.cover(tmp_path, "BBBB") is None and rendered == []
+
+
+def test_an_english_reader_gets_the_english_pdf_cover_while_it_is_in_the_bundle(tmp_path, monkeypatch):
+    rendered = _render_covers(monkeypatch)
+    _report(tmp_path, "AAAA", reviewed=False, english=True)
+    english = gallery.cover(tmp_path, "AAAA", "en")
+    assert english.read_bytes() == b"%PDF-1.4 english" and rendered == ["AAAA.en.pdf"]
+    assert gallery.cover(tmp_path, "AAAA", "id").read_bytes() == b"%PDF-1.4 test"
+    assert gallery.cover(tmp_path, "AAAA", "fr") is None
+    (tmp_path / "AAAA.en.pdf").write_bytes(b"%PDF-1.4 replaced")
+    assert gallery.cover(tmp_path, "AAAA", "en") is None
+    # A bundle without English has no English cover.
+    _report(tmp_path, "BBBB")
+    assert gallery.cover(tmp_path, "BBBB", "en") is None
+    assert gallery.cover(tmp_path, "BBBB", "id") is not None
