@@ -379,3 +379,23 @@ def test_a_research_run_stores_its_events_with_its_outputs(monkeypatch, tmp_path
     assert [e["label"] for e in stored] == ["Rencana siap", "Selesai"]
     outputs.copy(tmp_path, "AAAA", tmp_path / "published")
     assert outputs.load(outputs.EVENTS, tmp_path / "published", "AAAA") == stored
+
+
+def test_a_recording_of_another_run_gives_way_to_the_trace(tmp_path):
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    _report(reports, "AAAA")
+    audit = _audit()
+    outputs.save(outputs.TRACE, reports, "AAAA", audit)
+    steps = [s.get("why") for s in (audit.get("analyst") or {}).get("steps") or [] if s.get("why")]
+    assert steps, "the fixture trace needs step reasons"
+    same = [{"stage": "tool", "label": "Menjalankan x", "detail": steps[0], "status": "ok", "t": 1.0,
+             "tool": "x", "agent": "analis"}]
+    other = [{"stage": "tool", "label": "Menjalankan x", "detail": "Alasan dari run lain.",
+              "status": "ok", "t": 1.0, "tool": "x", "agent": "analis"}]
+    outputs.save(outputs.EVENTS, reports, "AAAA", same)
+    assert run_events.replay(reports, "AAAA")["source"] == "recorded"
+    outputs.save(outputs.EVENTS, reports, "AAAA", other)
+    replayed = run_events.replay(reports, "AAAA")
+    assert replayed["source"] == "derived"
+    assert not any(e.get("detail") == "Alasan dari run lain." for e in replayed["events"])
