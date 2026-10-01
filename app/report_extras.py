@@ -3433,9 +3433,13 @@ def driver_value_page(doc, intake):
                        rows, "Sumber: berkas driver bersumber dan model yang sama; " + dv["method"] + ".")
     cases = dv["cases"]
     case_rows = []
-    for key, label, text in (("downside", "Turun", "semua driver pada ujung merugikan rentang uji"),
-                             ("base", "Dasar", "driver dasar"),
-                             ("upside", "Naik", "semua driver pada ujung menguntungkan rentang uji")):
+    for key, label, text in (("downside", "Turun",
+                              _t("semua driver pada ujung merugikan rentang uji",
+                                 "every driver at the adverse end of its tested range")),
+                             ("base", "Dasar", _t("driver dasar", "base drivers")),
+                             ("upside", "Naik",
+                              _t("semua driver pada ujung menguntungkan rentang uji",
+                                 "every driver at the favourable end of its tested range"))):
         c = cases[key]
         vs = f"{(c['per_share'] / price - 1) * 100:+.1f}%" if price else "-"
         profit = [fmt._id(c["fy1_profit"] / 1e9, 1)] if with_profit else []
@@ -3462,31 +3466,48 @@ def investability_page(doc, intake):
         return None
     liq, ff = inv.get("liquidity") or {}, inv.get("free_float") or {}
     rows = []
+
+    def missing(reason):
+        """An unavailable measure and why (app.investability writes the reason)."""
+        return _t(f"tidak tersedia: {reason}", f"not available: {prose_lang.label(reason)}")
+
     if liq.get("status") == "available":
-        rows.append(["Jendela observasi", f"{liq['sessions']} sesi, {liq['start']} s.d. {liq['end']} ({liq['source']})"])
+        rows.append(["Jendela observasi", _t(
+            f"{liq['sessions']} sesi, {liq['start']} s.d. {liq['end']} ({liq['source']})",
+            f"{liq['sessions']} sessions, {liq['start']} to {liq['end']} "
+            f"({prose_lang.label(liq['source'])})")])
         rows.append(["Nilai transaksi harian median / rata-rata",
                      f"Rp{fmt._id(liq['median_value'] / 1e9, 1)} miliar / Rp{fmt._id(liq['mean_value'] / 1e9, 1)} miliar"])
         rows.append(["Sesi tanpa volume", str(liq["zero_volume_sessions"])])
     else:
-        rows.append(["Likuiditas", f"tidak tersedia: {liq.get('reason')}"])
-    rows.append(["Free float", (f"{fmt._id(ff['pct'], 1)}% ({ff['source']})"
-                                + (f"; nilai Rp{fmt._id(ff['value'] / 1e9, 0)} miliar" if ff.get("value") else ""))
-                 if ff.get("status") == "available" else f"tidak tersedia: {ff.get('reason')}"])
-    rows.append(["Papan pencatatan", f"{inv.get('board')} ({inv.get('board_source')})" if inv.get("board")
-                 else "tidak tersedia"])
-    rows.append(["Status perdagangan", f"tidak tersedia: {inv['trading_status']['reason']}"])
+        rows.append(["Likuiditas", missing(liq.get("reason"))])
+    rows.append(["Free float", (f"{fmt._id(ff['pct'], 1)}% ({prose_lang.label(ff['source'])})"
+                                + (_t(f"; nilai Rp{fmt._id(ff['value'] / 1e9, 0)} miliar",
+                                      f"; value Rp{fmt._id(ff['value'] / 1e9, 0)} miliar")
+                                   if ff.get("value") else ""))
+                 if ff.get("status") == "available" else missing(ff.get("reason"))])
+    rows.append(["Papan pencatatan",
+                 f"{inv.get('board')} ({prose_lang.label(inv.get('board_source'))})" if inv.get("board")
+                 else _t("tidak tersedia", "not available")])
+    rows.append(["Status perdagangan", missing(inv["trading_status"]["reason"])])
     for pos in liq.get("positions") or []:
-        rows.append([f"Ilustrasi posisi Rp{fmt._id(pos['position'] / 1e9, 0)} miliar",
-                     f"sekitar {fmt._id(pos['days'], 1)} hari bursa pada partisipasi "
-                     f"{fmt._id(pos['participation'] * 100, 0)}% nilai transaksi median"])
+        rows.append([f"Ilustrasi posisi Rp{fmt._id(pos['position'] / 1e9, 0)} miliar", _t(
+            f"sekitar {fmt._id(pos['days'], 1)} hari bursa pada partisipasi "
+            f"{fmt._id(pos['participation'] * 100, 0)}% nilai transaksi median",
+            f"about {fmt._id(pos['days'], 1)} trading days at "
+            f"{fmt._id(pos['participation'] * 100, 0)}% participation in the median traded value")])
     liquidity = _exhibit("Likuiditas dan investabilitas", ["Ukuran", "Nilai"], rows,
                          "Ilustrasi posisi memakai ukuran posisi dan tingkat partisipasi yang "
                          "dinyatakan; tidak berarti order dapat dieksekusi pada harga kutipan.")
     bq_rows = []
     for item in inv.get("business_quality") or []:
-        sources = "; ".join(f"{e['title']} ({e['published_at']}, {e.get('page') or '-'})"
+        # Document titles stay as published; the issuer pack's words (assessment,
+        # model effect, page notes) through data/source_text_en.
+        sources = "; ".join(f"{e['title']} ({e['published_at']}, "
+                            f"{prose_lang.source(e.get('page')) or '-'})"
                             for e in item["evidence"]) or "-"
-        bq_rows.append([item["label"], item["assessment"], item.get("model_effect") or "-", sources])
+        bq_rows.append([item["label"], prose_lang.label(item["assessment"]),
+                        prose_lang.source(item.get("model_effect")) or "-", sources])
     quality = _exhibit("Kualitas bisnis", ["Dimensi", "Penilaian", "Dampak ke model", "Sumber"],
                        bq_rows, "Setiap dimensi memakai bukti bertanggal; dimensi tanpa bukti "
                        "tidak dijawab. Risiko yang sudah ada di arus kas tidak didiskon lagi.")
@@ -3706,9 +3727,11 @@ def link_catalysts(doc, intake):
         return
     bounds = {"Buy": [price * (1 + D.BUY)], "Sell": [price * (1 + D.SELL)],
               "Hold": [price * (1 + D.BUY), price * (1 + D.SELL)]}[rating]
-    band_text = "; ".join(
+    band_text = "; ".join(_t(
         f"nilai {'di atas' if b > base else 'di bawah'} Rp{fmt._id(b, 0)} menjadi "
-        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}" for b in bounds)
+        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}",
+        f"value {'above' if b > base else 'below'} Rp{fmt._id(b, 0)} becomes "
+        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}") for b in bounds)
     for page in doc.get("bagian") or []:
         for exhibit in page.get("exhibit") or []:
             if not exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS):
@@ -3721,16 +3744,23 @@ def link_catalysts(doc, intake):
                 driver = _driver_for(row, drivers) if drivers else None
                 if driver:
                     moves = [m for m in (D._move_to(driver, b, base) for b in bounds) if m]
-                    threshold = ("; atau ".join(
+                    threshold = (_t("; atau ", "; or ").join(_t(
                         f"{D._step_text(driver, m)} (rating menjadi "
-                        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))})"
-                        for m, b in zip(moves, bounds)) if moves else
-                        f"driver ini sendiri tidak mengubah rating dalam rentang uji; {band_text}")
-                    row += [f"{driver['driver']} ({driver['base']})", threshold]
+                        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))})",
+                        f"{D._step_text(driver, m)} (rating becomes "
+                        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))})")
+                        for m, b in zip(moves, bounds)) if moves else _t(
+                        f"driver ini sendiri tidak mengubah rating dalam rentang uji; {band_text}",
+                        f"this driver alone does not change the rating within its tested range; "
+                        f"{band_text}"))
+                    row += [f"{prose_lang.label(driver['driver'])} ({driver['base']})", threshold]
                 else:
-                    row += [("tidak terhubung ke driver di tabel driver-ke-nilai" if drivers else
-                             "laporan tanpa tabel driver-ke-nilai (Assumption-Led)"),
-                            f"Rating {rating} berubah bila {band_text}"]
+                    row += [(_t("tidak terhubung ke driver di tabel driver-ke-nilai",
+                                "not linked to a driver in the driver-to-value table") if drivers else
+                             _t("laporan tanpa tabel driver-ke-nilai (Assumption-Led)",
+                                "report without a driver-to-value table (Assumption-Led)")),
+                            _t(f"Rating {rating} berubah bila {band_text}",
+                               f"The {rating} rating changes if {band_text}")]
             exhibit["catatan_sumber"] = (str(exhibit.get("catatan_sumber") or "").rstrip(". ")
                                          + ". Ambang dibaca linear dari rentang uji tabel "
                                          "driver-ke-nilai; bukan probabilitas.")

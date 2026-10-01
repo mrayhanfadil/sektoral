@@ -596,6 +596,32 @@ _NOTES = _NOTE_PARTS + [
      "cannot be projected."),
 ])
 
+# --- Liquidity and business quality (app.investability), quoted in the
+# investability exhibits.
+_INVESTABILITY = [
+    (r"kurang dari 20 sesi harga dan volume sampai " + DATE + r" di data Sectors",
+     "fewer than 20 sessions of price and volume to {0} in Sectors data"),
+    (r"data Sectors harian (\S+) \(harga penutupan x volume\)",
+     "Sectors daily data, {0} (closing price x volume)"),
+] + _fixed([
+    ("porsi publik tidak tersedia di data kepemilikan",
+     "the public share is not in the ownership data"),
+    ("data kepemilikan Sectors", "Sectors ownership data"),
+    ("profil emiten data Sectors", "Sectors issuer profile"),
+    ("status suspensi dan notasi khusus tidak ada di data; tidak diasumsikan normal",
+     "suspension status and special notations are not in the data; normal trading is not "
+     "assumed"),
+    ("tidak dijawab: Sektoral Team belum menetapkan sumber penilaian tata kelola bertanggal yang "
+     "dapat diterima (keputusan D8, 2026-09-26)",
+     "unanswered: the Sektoral Team has not yet set an acceptable dated source for governance "
+     "assessments (decision D8, 2026-09-26)"),
+    ("tidak dijawab: belum ditelaah; berkas kualitas bisnis tidak memuat bukti bertanggal untuk "
+     "dimensi ini",
+     "unanswered: not yet reviewed; the business-quality file holds no dated evidence for this "
+     "dimension"),
+])
+
 PATTERNS = [(re.compile(p), t) for p, t in (
     _BRIDGE + _DRIVERS + _PAYOUT + _READER + _CANDIDATE + _METHOD + _LABEL + _NOTES
+    + _INVESTABILITY
 )]
