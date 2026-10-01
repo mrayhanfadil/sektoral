@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Intel, JobEvent } from "./api";
-import { derive, duration, planIn, releaseFigures } from "./agents";
+import { derive, duration, gateTally, gateTallyText, planIn, releaseFigures } from "./agents";
 import { playbackTimes } from "./replay";
 
 const ev = (stage: string, label: string, status: JobEvent["status"], t: number, extra: Partial<JobEvent> = {}): JobEvent =>
@@ -167,6 +167,46 @@ describe("plan in the reader's language", () => {
   });
 });
 
+describe("Method Gate verdicts and chain values", () => {
+  const gate = (n: number, data: Record<string, string>, status: JobEvent["status"] = "ok") =>
+    ev("gate", `Gerbang ${n}`, status, 43 + n / 10, { agent: "gerbang", tool: `gate_${n}`, data: { gate: String(n), ...data } });
+  const RUN_GATES: JobEvent[] = [
+    gate(0, { verdict: "lolos", verdict_code: "pass" }),
+    gate(1, { verdict: "tidak berlaku", verdict_code: "not_applicable" }),
+    gate(2, { verdict: "tidak berlaku" }),
+    gate(3, { verdict: "tidak dapat dinilai", verdict_code: "not_assessable" }, "warn"),
+    gate(4, { verdict: "lolos" }),
+    gate(5, { verdict: "ditandai", verdict_code: "flagged" }, "warn"),
+  ];
+
+  it("reads a flagged Gate 5 check as a warning, not a pass or a fail", () => {
+    const g5 = derive(RUN_GATES).gates[5];
+    expect(g5).toMatchObject({ status: "warn", code: "flagged", verdict: "ditandai" });
+    // A flagged verdict stays a warning even if its event said ok; the label alone also reads as flagged.
+    const okFlag = derive([gate(5, { verdict: "ditandai" }, "ok")]).gates[5];
+    expect(okFlag).toMatchObject({ status: "warn", code: "flagged" });
+  });
+
+  it("counts not-applicable and unassessable gates apart from assessed ones", () => {
+    const { gates } = derive(RUN_GATES);
+    expect(gateTally(gates)).toEqual({ total: 6, read: 6, assessed: 3, notApplicable: 2, notAssessable: 1 });
+    expect(gateTallyText(gates, "en")).toBe("3/6 assessed, 2 not applicable, 1 cannot be assessed");
+    expect(gateTallyText(gates, "id")).toBe("3/6 dinilai, 2 tidak berlaku, 1 tidak dapat dinilai");
+    expect(gateTallyText(derive([]).gates, "en")).toBe("0/6 assessed");
+  });
+
+  it("shows a chain value in English figures when the server sent them", () => {
+    const row = ev("gate", "SOTP/LoM", "ok", 44, {
+      agent: "gerbang", tool: "chain_step", data: { decision: "Terpilih", value: "Rp3.490", value_en: "Rp3,490" } });
+    expect(derive([row], { lang: "en" }).chain[0].value).toBe("Rp3,490");
+    expect(derive([row], { lang: "id" }).chain[0].value).toBe("Rp3.490");
+    // An older event without the twin keeps its value; a row without a value reads "-".
+    const old = { ...row, data: { decision: "Terpilih", value: "Rp3.490" } };
+    expect(derive([old], { lang: "en" }).chain[0].value).toBe("Rp3.490");
+    expect(derive([{ ...row, data: { decision: "Tidak dijalankan" } }], { lang: "en" }).chain[0].value).toBe("-");
+  });
+});
+
 describe("helpers", () => {
   it("formats durations the Indonesian way", () => {
     expect(duration(12.44, "id")).toBe("12,4 dtk");
@@ -175,6 +215,12 @@ describe("helpers", () => {
   it("formats durations the English way", () => {
     expect(duration(12.44, "en")).toBe("12.4 s");
     expect(duration(125, "en")).toBe("2 min 05 s");
+  });
+  it("rounds before splitting minutes, so a minute never shows 60 seconds", () => {
+    expect(duration(59.96, "en")).toBe("1 min 00 s");
+    expect(duration(119.6, "en")).toBe("2 min 00 s");
+    expect(duration(119.6, "id")).toBe("2 mnt 00 dtk");
+    expect(duration(59.94, "en")).toBe("59.9 s");
   });
   it("shortens long waits on playback but keeps order", () => {
     const times = playbackTimes([ev("plan", "a", "ok", 0), ev("plan", "b", "ok", 60), ev("plan", "c", "ok", 60)]);

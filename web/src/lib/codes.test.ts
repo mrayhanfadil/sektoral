@@ -5,6 +5,7 @@ describe("codes first, labels as the fallback", () => {
   it("takes the server's code when it sends one", () => {
     expect(decisionCode("cross_check", "Silang cek")).toBe("cross_check");
     expect(gateCode("not_assessable", "tidak dapat dinilai")).toBe("not_assessable");
+    expect(gateCode("flagged", "ditandai")).toBe("flagged");
     expect(verdictCode("partly_supported", "sebagian didukung")).toBe("partly_supported");
   });
   it("reads the Indonesian label when the code is absent, null or unknown", () => {
@@ -15,6 +16,7 @@ describe("codes first, labels as the fallback", () => {
     expect(decisionCode(undefined, "Terpilih, ekstrem")).toBe("stop_extreme");
     expect(gateCode(undefined, "Gagal")).toBe("fail");
     expect(gateCode(undefined, "tidak berlaku")).toBe("not_applicable");
+    expect(gateCode(undefined, "ditandai")).toBe("flagged");
     expect(verdictCode(undefined, "belum terjawab")).toBe("unanswered");
   });
   it("gives no code for a label it does not know", () => {
