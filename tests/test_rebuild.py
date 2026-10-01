@@ -282,12 +282,7 @@ def test_a_pinned_ust_series_is_served_and_recorded(tmp_path, monkeypatch):
     assert rates.on_or_before(AS_OF)["rate"] == pytest.approx(0.052)  # loader restored
 
 
-def test_a_usd_reporters_source_fx_is_recovered_from_the_source_report(tmp_path, monkeypatch, capsys):
-    source, out = tmp_path / "src", tmp_path / "out"
-    usd_revenue = (100.0e6, 110.0e6)
-    _stored_run(source, bars=tuple(v * 17893.0 for v in usd_revenue))
-    store.put(fx.COLLECTION, fx.KEY, {"pair": "USD/IDR", "rate": 17837.3, "date": AS_OF,
-                                      "source": "Yahoo Finance IDR=X daily close"})
+def _usd_rebuild(monkeypatch, usd_revenue):
     monkeypatch.setattr(intake, "load", lambda ticker, as_of=None: (
         {"official_evidence": {"reporting_currency": "USD"}, "peer_basis": None}, {}))
 
@@ -298,15 +293,83 @@ def test_a_usd_reporters_source_fx_is_recovered_from_the_source_report(tmp_path,
 
     fake = FakeBuild(usd_build)
     monkeypatch.setattr(build, "build", fake)
+    return fake
+
+
+def test_a_usd_reporters_source_fx_is_recovered_from_the_source_report(tmp_path, monkeypatch, capsys):
+    """No stored close for the source's price date: the source report's own
+    rate is recovered and labelled as implied, never as a Yahoo close."""
+    source, out = tmp_path / "src", tmp_path / "out"
+    usd_revenue = (100.0e6, 110.0e6)
+    _stored_run(source, bars=tuple(v * 17893.0 for v in usd_revenue))
+    store.put(fx.COLLECTION, fx.KEY, {"pair": "USD/IDR", "rate": 17837.3, "date": "2026-09-25",
+                                      "source": "Yahoo Finance IDR=X daily close"})
+    fake = _usd_rebuild(monkeypatch, usd_revenue)
 
     assert rebuild.main(["--from", str(source), "--out", str(out)]) == 0
 
     assert len(fake.calls) == 2  # today's snapshot, then the recovered source rate
     doc = outputs.load(outputs.REPORT, out, "AAAA")
     assert doc["exhibits"][1]["data"]["series"][0]["bars"][1] == pytest.approx(100.0e6 * 17893.0)
-    manifest = outputs.load(outputs.MANIFEST, out, "AAAA")
-    assert manifest["market_inputs"]["fx"]["rate"] == pytest.approx(17893.0)
+    quote = outputs.load(outputs.MANIFEST, out, "AAAA")["market_inputs"]["fx"]
+    assert quote == {"pair": "USD/IDR", "rate": pytest.approx(17893.0), "date": AS_OF,
+                     "source": fx.IMPLIED_SOURCE}
+    assert fx.basis(quote) == "kurs tersirat dari report sumber"
+    assert fx.dated(quote) == f"tersirat dari report sumber, harga {AS_OF}"
     assert "kurs Rp17.893,0/USD tersirat dari report sumber" in capsys.readouterr().out
+
+
+def test_the_stored_close_for_the_source_price_date_is_kept(tmp_path, monkeypatch):
+    """The database holds the close for the source report's price date: that
+    quote is the rate of record, not one back-solved from the source report."""
+    source, out = tmp_path / "src", tmp_path / "out"
+    usd_revenue = (100.0e6, 110.0e6)
+    _stored_run(source, bars=tuple(v * 17893.0 for v in usd_revenue))
+    close = {"pair": "USD/IDR", "rate": 17837.3, "date": AS_OF,
+             "source": "Yahoo Finance IDR=X daily close"}
+    store.put(fx.COLLECTION, fx.KEY, close)
+    fake = _usd_rebuild(monkeypatch, usd_revenue)
+
+    assert rebuild.main(["--from", str(source), "--out", str(out)]) == 0
+
+    assert len(fake.calls) == 1
+    assert outputs.load(outputs.MANIFEST, out, "AAAA")["market_inputs"]["fx"] == close
+    doc = outputs.load(outputs.REPORT, out, "AAAA")
+    assert doc["exhibits"][1]["data"]["series"][0]["bars"][1] == pytest.approx(100.0e6 * 17837.3)
+
+
+def test_a_pinned_rate_recorded_as_a_yahoo_close_is_corrected(tmp_path, monkeypatch, capsys):
+    """Earlier rebuilds pinned the recovered rate under the Yahoo quote's date
+    and source. The stored close for that date replaces it; without one the
+    rate stays, labelled as implied."""
+    usd_revenue = (100.0e6, 110.0e6)
+    legacy = {"pair": "USD/IDR", "rate": 17893.0, "date": AS_OF,
+              "source": "Yahoo Finance IDR=X daily close",
+              "note": "tersirat dari report sumber (app.rebuild)"}
+    close = {"pair": "USD/IDR", "rate": 17837.3, "date": AS_OF,
+             "source": "Yahoo Finance IDR=X daily close"}
+    source = tmp_path / "src"
+    _stored_run(source, manifest={"ticker": "AAAA", "code_revision": "old",
+                                  "market_inputs": {"fx": legacy}})
+    _usd_rebuild(monkeypatch, usd_revenue)
+
+    store.put(fx.COLLECTION, fx.KEY, close)
+    assert rebuild.main(["--from", str(source), "--out", str(tmp_path / "a")]) == 0
+    assert outputs.load(outputs.MANIFEST, tmp_path / "a", "AAAA")["market_inputs"]["fx"] == close
+    assert "kurs Rp17.893,0/USD tersirat diganti kurs tersimpan Rp17.837,3/USD" in \
+        capsys.readouterr().out
+
+    store.put(fx.COLLECTION, fx.KEY, {**close, "date": "2026-09-25"})
+    assert rebuild.main(["--from", str(source), "--out", str(tmp_path / "b")]) == 0
+    quote = outputs.load(outputs.MANIFEST, tmp_path / "b", "AAAA")["market_inputs"]["fx"]
+    assert quote == fx.implied_quote(17893.0, AS_OF)
+
+
+def test_pinned_fx_leaves_a_market_quote_alone():
+    close = {"pair": "USD/IDR", "rate": 17837.3, "date": AS_OF, "source": "Yahoo"}
+    assert rebuild.pinned_fx(close, {**close, "rate": 1.0}, AS_OF) == (close, None)
+    assert rebuild.pinned_fx(None, close, AS_OF) == (None, None)
+    assert fx.basis(close) == "Yahoo Finance IDR=X" and fx.dated(close) == AS_OF
 
 
 def test_out_must_differ_from_the_source(tmp_path):

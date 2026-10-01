@@ -10,6 +10,7 @@ from . import cache as cache_mod
 from . import consensus
 from . import ddm
 from . import fmt
+from . import fx as fx_quotes
 from . import share_basis
 from . import method_chain
 from . import exhibit_ids
@@ -3453,12 +3454,19 @@ def _lom_reconciliation(intake, lom_res):
                            else ""))}
 
 
+def _dcf_fx_source(dcf_s):
+    """The DCF bridge's FX row label: source and date of the one rate."""
+    if str(dcf_s.get("fx_label") or "").startswith("tersirat"):
+        return dcf_s["fx_label"]
+    return f"Yahoo Finance IDR=X, {dcf_s.get('fx_date') or '-'}"
+
+
 def _lom_fx_source(intake):
     """The one USD/IDR quote of the report, as the SOTP bridge states it."""
     cash = (intake.get("sotp_bridge") or {}).get("cash_idr") or {}
     spot = intake.get("fx_spot") or {}
     if spot.get("rate") and cash.get("fx_rate") == spot["rate"]:
-        return f"Yahoo Finance IDR=X, {spot.get('date')}"
+        return f"{fx_quotes.basis(spot)}, {spot.get('date')}"
     return f"kurs bertanggal {cash.get('fx_date') or '-'}"
 
 
@@ -4617,7 +4625,7 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
                 f"(x) Porsi induk ({dcf_s['nci_basis']})")
 
     paid_out = money_s.get("distributions") or 0.0
-    fx_text = (f"Kurs Rp/US$ (Yahoo Finance IDR=X, {dcf_s.get('fx_date') or '-'})"
+    fx_text = (f"Kurs Rp/US$ ({_dcf_fx_source(dcf_s)})"
                if usd_model else None)
 
     def bridge_rows(ev, tv, pv_tv, per_share, per_share_native):
@@ -4667,7 +4675,7 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
                f"{fmt.pct(dcf_s['exit_gap'])} diungkapkan, tidak dirata-rata."
                if exit_col else "; exit historis kurang dari tiga titik.")
             + (f" Nilai dalam US$ sampai ekuitas per saham, lalu dikonversi ke rupiah satu kali "
-               f"pada kurs spot Rp{fmt._id(dcf_s['fx'], 0)}/US$ ({dcf_s.get('fx_date') or '-'})."
+               f"pada kurs spot Rp{fmt._id(dcf_s['fx'], 0)}/US$ ({dcf_s.get('fx_label') or dcf_s.get('fx_date') or '-'})."
                if usd_model else ""))}
     rf_row = ([f"Risk-free (UST 10Y, {dcf_s.get('rf_date') or '-'})", fmt.pct(dcf_s["rf"])]
               if usd_model else ["Risk-free IDR (house policy)", fmt.pct(dcf_s["rf"])])
@@ -4718,7 +4726,7 @@ def _dcf_scenario_exhibits(intake, dcf_s, label, forward):
                      "rows": grid_rows},
             "catatan_sumber": "Sumber: Sektoral Estimates; basis sama dengan target harga (Gordon)."
             + (f" WACC dan g dalam US$; nilai per saham US$ dikonversi ke rupiah pada kurs "
-               f"Rp{fmt._id(dcf_s['fx'], 0)}/US$ ({dcf_s.get('fx_date') or '-'})."
+               f"Rp{fmt._id(dcf_s['fx'], 0)}/US$ ({dcf_s.get('fx_label') or dcf_s.get('fx_date') or '-'})."
                if usd_model else "")}
     return [fcff, terminal, wacc, grid]
 

@@ -6,6 +6,7 @@ from datetime import date
 from . import cache
 from . import fmt
 from . import fx
+from .fx import IMPLIED_SOURCE as FX_IMPLIED_SOURCE, is_implied as fx_is_implied
 from . import mineops
 from . import market_quote
 from . import model_profiles
@@ -45,7 +46,11 @@ def _sotp_bridge_inputs(evidence, as_of, fx_spot=None):
     other_financial = debt_evidence.get("other_financial_liabilities_usd_thousand") or {}
     fx_quote = evidence.get("valuation_fx_reference") or {}
     spot = fx_spot if isinstance(fx_spot, dict) else {}
-    if spot.get("rate") and spot.get("date"):
+    if spot.get("rate") and spot.get("date") and fx_is_implied(spot):
+        # A rate a rebuild recovered from its source report has no web source.
+        fx_quote = {"rate": spot["rate"], "date": spot["date"],
+                    "source_title": "Kurs Rp/US$", "source_url": FX_IMPLIED_SOURCE}
+    elif spot.get("rate") and spot.get("date"):
         fx_quote = {"rate": spot["rate"], "date": spot["date"],
                     "source_title": "Yahoo Finance IDR=X penutupan harian",
                     "source_url": "https://finance.yahoo.com/quote/IDR=X/history/"}

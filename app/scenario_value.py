@@ -26,6 +26,7 @@ from datetime import date
 from statistics import median
 
 from . import bank_model, fmt, house_assumptions, period_basis, share_basis
+from .fx import dated as fx_dated
 
 _IDR_POLICY = house_assumptions.discount_inputs("IDR")
 _USD_POLICY = house_assumptions.discount_inputs("USD")
@@ -803,6 +804,7 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=
               "attributable_share": share_parent, "shares": shares,
               "shares_basis": link.get("shares_basis"), "fx": fx if fx != 1.0 else None,
               "fx_date": (intake.get("fx_spot") or {}).get("date") if fx != 1.0 else None,
+              "fx_label": fx_dated(intake.get("fx_spot")) if fx != 1.0 else None,
               "per_share": per_share,
               "tv_share": base["pv_tv"] / base["ev"] if base["ev"] else None,
               "implied_exit": (base["tv"] / lines[-1]["ebitda"]

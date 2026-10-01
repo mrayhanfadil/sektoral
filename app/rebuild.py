@@ -213,7 +213,7 @@ def market_inputs(pins: dict | None, used: dict, seen: dict):
         quote = pins["fx"]
         rnav._FX_QUOTE = quote
         rnav.FX_USDIDR = float(quote["rate"]) if quote else 16000.0
-        rnav.FX_BASIS = (f"Yahoo Finance IDR=X ({quote['date']})" if quote else
+        rnav.FX_BASIS = (f"{fx.basis(quote)} ({quote['date']})" if quote else
                          "asumsi analis Rp16.000/USD (rate belum di-refresh; tanpa silent "
                          "network fallback)")
     try:
@@ -445,6 +445,25 @@ def implied_fx(source: dict, rebuilt: dict, rate: float | None) -> float | None:
     return rate * ratio if abs(ratio - 1) > SAME else None
 
 
+def pinned_fx(quote, stored: dict | None, price_day: str) -> tuple[dict | None, str | None]:
+    """The USD/IDR quote a rebuild pins from its source manifest, and a note.
+
+    Earlier rebuilds recorded a rate recovered from their source report under
+    the Yahoo Finance quote's date and source label (``note``: "tersirat dari
+    report sumber"). The stored close for the source's price date replaces it
+    when the database holds one; otherwise the rate stays, labelled as what
+    it is (``fx.implied_quote``). Any other quote is returned unchanged.
+    """
+    if not isinstance(quote, dict) or not (
+            fx.is_implied(quote) or "tersirat dari report sumber" in str(quote.get("note") or "")):
+        return quote, None
+    if isinstance(stored, dict) and price_day and stored.get("date") == price_day:
+        return copy.deepcopy(stored), (
+            f"kurs Rp{_num(quote.get('rate'), 1)}/USD tersirat diganti kurs tersimpan "
+            f"Rp{_num(stored.get('rate'), 1)}/USD ({stored.get('date')})")
+    return fx.implied_quote(quote["rate"], price_day or quote.get("date")), None
+
+
 def _same_revenue(source: dict, rebuilt: dict) -> bool:
     before, after = forecast_revenue(source), forecast_revenue(rebuilt)
     first = next((c for c in after if c in before), None)
@@ -536,6 +555,11 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         source_manifest.get("market_inputs"), dict) else None
     pins = None if live_inputs else copy.deepcopy(recorded)
     pinned = [] if pins is None else ["snapshot pasar dari manifest sumber"]
+    price_day = str((source_doc.get("meta") or {}).get("harga_tanggal") or "")[:10]
+    if pins is not None and "fx" in pins:
+        pins["fx"], fx_note = pinned_fx(pins["fx"], fx.load_cached_rate(db), price_day)
+        if fx_note:
+            pinned.append(fx_note)
     out.mkdir(parents=True, exist_ok=True)
     # Rebuild may target an existing reports folder. Archive the old approved
     # bundle before its report, HTML, trace or manifest can be replaced.
@@ -558,11 +582,14 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     if log:
         log(text)
     if pins is None and not live_inputs and seen.get("reporting_currency") == "USD":
-        rate = (used.get("fx") or {}).get("rate")
-        inferred = implied_fx(source_doc, doc, rate)
+        quote = used.get("fx") or {}
+        rate = quote.get("rate")
+        # The stored close for the source's price date is the rate of record;
+        # only without one is the source report's own rate recovered.
+        inferred = (None if quote.get("date") and quote.get("date") == price_day
+                    else implied_fx(source_doc, doc, rate))
         if inferred:
-            quote = {**(used.get("fx") or {}), "rate": inferred,
-                     "note": "tersirat dari report sumber (app.rebuild)"}
+            quote = fx.implied_quote(inferred, price_day or quote.get("date"))
             second = _build_once(t, out, kwargs, {"fx": quote})
             last_built = second[0]
             if log:
