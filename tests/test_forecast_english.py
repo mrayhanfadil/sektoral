@@ -617,3 +617,25 @@ def test_an_english_twin_may_run_longer_than_its_indonesian_limit():
     assert not any("characters" in r for r in agent._twin_reasons(indonesian, english, (40, 450), None))
     too_long = english + " Growth stays gradual across the forecast period." * 3
     assert "must be 40-585 characters" in agent._twin_reasons(indonesian, too_long, (40, 450), None)
+
+
+def test_a_translation_timeout_is_asked_once_more():
+    english = _earnings_english()
+    calls = []
+
+    def flaky(messages, **_kwargs):
+        calls.append(messages)
+        if len(calls) == 1:
+            raise TimeoutError("The read operation timed out")
+        return json.dumps({path: english[path] for path in _asked(messages) if path in english})
+    out, notes = agent.translate_plan(_earnings_plan(), chat=flaky)
+    assert notes["status"] == "translated" and not notes["problems"] and len(calls) == 2
+
+    def down(messages, **_kwargs):
+        calls.append(messages)
+        raise TimeoutError("The read operation timed out")
+    calls.clear()
+    plan = _earnings_plan()
+    out, notes = agent.translate_plan(plan, chat=down)
+    assert out == plan and notes["status"] == "failed" and len(calls) == 2
+    assert "TimeoutError" in notes["problems"][0] and "(after a retry)" in notes["problems"][0]

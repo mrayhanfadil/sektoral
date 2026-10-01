@@ -365,3 +365,16 @@ def test_translate_analyst_needs_named_tickers(tmp_path):
     with pytest.raises(SystemExit):
         rebuild.main(["--from", str(tmp_path / "src"), "--out", str(tmp_path / "out"),
                       "--translate-analyst"])
+
+
+def test_a_translation_timeout_is_asked_once_more():
+    chat, calls = _translator()
+    tries = []
+
+    def flaky(messages, **kwargs):
+        tries.append(1)
+        if len(tries) == 1:
+            raise TimeoutError("The read operation timed out")
+        return chat(messages, **kwargs)
+    out, notes = analyst.translate_intel(_intel(), chat=flaky)
+    assert notes["status"] == "translated" and not notes["problems"] and len(tries) == 2
