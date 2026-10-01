@@ -117,6 +117,28 @@ def normalize_plan(value, key=None):
 # wrong after the repair attempts is dropped and the Indonesian kept.
 EN_SOFT = " (en)"
 _CJK = _re.compile(r"[\u4e00-\u9fff]")
+# A source id the agent cites inside its prose ("(news:5)", "guidance:2"). It is
+# a reference, not a figure: translators leave source ids out of the English and
+# the report words them ("(berita bertanggal)"), so figures are compared without them.
+_SOURCE_REF = _re.compile(r"\b(?:news|guidance):\s*\d+\b", _re.I)
+
+
+def _stated(text):
+    """The figures prose states, its source ids aside."""
+    from . import prose_lang  # prose_lang imports this module
+    return prose_lang.figures(_SOURCE_REF.sub("", text))
+
+
+def _figure_problem(id_clean, en_clean):
+    """The figure problem of an English twin, naming what differs (so a repair
+    can fix it and a dropped twin says why), or None when the figures match."""
+    stated, said = _stated(id_clean), _stated(en_clean)
+    if stated == said:
+        return None
+    parts = [f"{label} {', '.join(sorted(diff.elements()))}"
+             for label, diff in (("missing", stated - said), ("adding", said - stated)) if diff]
+    return ("must state exactly the Indonesian figures, written as in the Indonesian ("
+            + " and ".join(parts) + ")")
 
 
 def english_problems(id_text, en_text):
@@ -126,21 +148,25 @@ def english_problems(id_text, en_text):
     the figures of the Indonesian as written there, and use no banned term
     the Indonesian avoids. It may repeat the Indonesian only when that is a
     code or name the same in both languages (``prose_lang.language_neutral``). Figures are compared after house style, which
-    rewrites periods the same way in both languages."""
+    rewrites periods the same way in both languages, and without the source
+    ids the prose cites; the figure problem names the figures that differ."""
     from . import prose_lang  # prose_lang imports this module
     if not isinstance(en_text, str) or not en_text.strip():
         return ["is missing"]
     id_clean = normalize_prose(str(id_text or ""), english=False)
     en_clean = normalize_prose(en_text, english=True)
-    if en_clean.strip() == id_clean.strip() and not prose_lang.language_neutral(id_clean):
-        # A code or name ("3Q26", "FY2026") is its own English; prose is not.
+    if (en_clean.strip() == id_clean.strip() and not prose_lang.language_neutral(id_clean)
+            and (prose_lang.indonesian_words(id_clean) or prose_lang._indonesian_share(id_clean)[0]
+                 or not prose_lang.reads_english(id_clean))):
+        # A code or name ("3Q26", "FY2026") is its own English, and so is a source
+        # text already in English ("2H26 (forecast)"); Indonesian prose is not.
         return ["repeats the Indonesian instead of translating it"]
     problems = []
     if _CJK.search(en_text) or not prose_lang.reads_english(en_text):
         problems.append("must be English only")
-    if prose_lang.figures(en_clean) != prose_lang.figures(id_clean):
-        problems.append("must state exactly the Indonesian figures, written as in the "
-                        "Indonesian")
+    figures = _figure_problem(id_clean, en_clean)
+    if figures:
+        problems.append(figures)
     if contains_banned(en_clean) and not contains_banned(id_clean):
         problems.append("uses a term the report does not allow")
     return problems

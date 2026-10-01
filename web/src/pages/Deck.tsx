@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { CircleX, FileDown, FileText, Route, SquareTerminal } from "lucide-react";
 import { AGENTS, derive, eventText, PHASES, planIn, releaseFigures, type DeckState } from "../lib/agents";
 import {
-  api, ApiError, readerFiles, reportFiles, type Intel, type Job, type JobEvent, type ReportItem, type RunReplay,
+  api, ApiError, jobFiles, readerFiles, reportFiles, type Intel, type Job, type JobEvent, type ReportItem, type RunReplay,
 } from "../lib/api";
 import { primaryMethodOf, str } from "../lib/codes";
 import { pct, rp } from "../lib/format";
@@ -227,9 +227,12 @@ export function DeckJob() {
     );
   }
 
-  const name = job.intel?.name ?? reports?.find((r) => r.ticker === job.ticker)?.name;
+  const item = reports?.find((r) => r.ticker === job.ticker);
+  const name = job.intel?.name ?? item?.name;
   const done = job.state === "completed";
-  const links: Links = { report: job.report_url, trace: job.trace_url, pdf: job.pdf_url };
+  // The snapshot's gallery links, in English for an English reader where the bundle has it.
+  const files = jobFiles(job, item, lang);
+  const links: Links = { report: files.html, trace: job.trace_url, pdf: files.pdf };
   const result = fromRelease(state, lang);
   const lastError = [...events].reverse().find((e) => e.status === "error");
   const errorText = lastError && eventText(lastError, lang);
@@ -247,7 +250,7 @@ export function DeckJob() {
                 en: "Evidence does not yet cover every section; the limits are explained in the report and the Audit Trace.",
               })}>{t({ id: "Parsial", en: "Partial" })}</span>
             ) : undefined}
-            action={done && job.report_url ? <OpenReport href={job.report_url} /> : undefined} />
+            action={done && links.report ? <OpenReport href={links.report} /> : undefined} />
         }
         notice={job.state === "error" ? (
           <Notice tone="error" action={<RerunButton ticker={job.ticker} label={t({ id: "Jalankan ulang riset", en: "Rerun the research" })} />}>
