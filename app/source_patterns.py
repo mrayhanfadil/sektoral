@@ -35,6 +35,18 @@ def _source(text):
     return prose_lang.source(text)
 
 
+# A document title the issuer published in English ("AMMAN FY 2025 Earnings
+# Release", "... Consolidated Financial Statements ...") is quoted as it is; an
+# Indonesian one goes through the same lookup as other text, so it still falls
+# back when it has no English.
+_ENGLISH_TITLE = re.compile(r"\b(Release|Report|Statements?|Presentation|Earnings|Financial|"
+                            r"Annual|Interim|Consolidated|Update)\b")
+
+
+def _title(text):
+    return text if _ENGLISH_TITLE.search(text) else _source(text)
+
+
 def _fixed(pairs):
     """Patterns for strings without variable parts."""
     return [(re.escape(id_text), en_text.replace("{", "{{").replace("}", "}}"))
@@ -76,6 +88,10 @@ _BRIDGE = [
     (r"nilai buku, Sectors " + DATE, "book value, Sectors {0}"),
     (r"nilai buku, neraca interim resmi (\S+)",
      "book value, official interim balance sheet at {0}"),
+    # app.forecast_statements: NCI opening from a US$ reporter's annual release.
+    (r"nilai buku FY(\d{4}), (.+)",
+     _Call(lambda year, title: f"book value FY{year}, {_title(title)}")),
+    (r"rilis tahunan resmi", "official annual release"),
     (r"tidak dilaporkan terpisah; ekuitas induk = total ekuitas",
      "not reported separately; parent equity = total equity"),
     (r"dividen tunai Rp([\d.,]+)/saham, ex-date (\d{4}-\d{2}-\d{2}(?:, \d{4}-\d{2}-\d{2})*) "
@@ -94,7 +110,7 @@ _BRIDGE = [
      "official share register at {0}, adjusted for corporate actions to {1}"),
     (r"porsi induk (\S+) resmi", "official {0} parent share"),
     (r"porsi induk FY(\d{4}) resmi, (.+)",
-     _Call(lambda year, title: f"official FY{year} parent share, {_source(title)}")),
+     _Call(lambda year, title: f"official FY{year} parent share, {_title(title)}")),
     (r"laporan tahunan resmi", "official annual report"),
     (r"laba konsolidasi \(porsi induk tidak dilaporkan terpisah\)",
      "consolidated profit (parent share not reported separately)"),
@@ -596,6 +612,77 @@ _NOTES = _NOTE_PARTS + [
      "cannot be projected."),
 ])
 
+# --- The LoM schedule's yearly basis (app.lom outyear rows), quoted in the
+# scenario basis table.
+def _lom_kinds(kinds):
+    return kinds.replace("konsentrat", "concentrate")
+
+
+_LOM = [
+    (r"Jadwal LoM: umpan ([\d.,]+) Mt \(([^()]*)\), katoda ([\d.,]+) kt, emas murni ([\d.,]+) koz; "
+     r"dek Cu US\$([\d.,]+)/t dan Au US\$([\d.,]+)/oz(?: \(dek 2026 dieskalasi (.+)\))?; EBITDA "
+     r"sesudah beban umum korporat; bunga 2x beban keuangan 1H26; pajak dan PNBP pada tarif "
+     r"efektif 1H26\.",
+     _Call(lambda feed, kinds, cathode, gold, cu, au, esc:
+           f"LoM schedule: feed {feed} Mt ({_lom_kinds(kinds)}), cathode {cathode} kt, refined "
+           f"gold {gold} koz; Cu deck US${cu}/t and Au US${au}/oz"
+           + (f" (2026 deck escalated by {_source(esc)})" if esc else "")
+           + "; EBITDA after corporate overheads; interest at 2x 1H26 finance costs; tax and "
+           "PNBP at 1H26 effective rates.")),
+    (r"inflasi AS jangka panjang ([\d.,]+%) per tahun \((.+)\)",
+     "long-term US inflation of {0} a year ({1})"),
+]
+
+# --- Model drivers' base values and test units (app.driver_value), quoted with
+# their figures as written in the decision summary and catalyst thresholds; a
+# DCF bridge's parent share (app.scenario_value); the bank model's funding
+# warning (app.bank_model.checks).
+_DRIVER_UNITS = [
+    (r"([\d.,]+) ha/tahun", "{0} ha/yr"),
+    (r"±([\d.,]+) ha/tahun", "±{0} ha/yr"),
+    (r"±([\d.,]+) pp per tahun", "±{0} pp per year"),
+    (r"±([\d.,]+)% level harga", "±{0}% price level"),
+    (r"±([\d.,]+)% level biaya, diteruskan ke tarif", "±{0}% cost level, passed through to tariffs"),
+    (r"porsi induk ([\d.,]+)% dari laba 1H resmi", "parent share of {0}% of official 1H profit"),
+    (r"(LDR|porsi kredit dalam aset produktif) di atas rekor tertinggi historis data Sectors "
+     r"\(" + PCT + r"\): (.+); kredit tumbuh lebih cepat dari pendanaan skenario",
+     _Call(lambda name, record, years:
+           f"{'LDR' if name == 'LDR' else 'loan share of earning assets'} above its historical "
+           f"Sectors record ({record}): {years}; loans grow faster than scenario funding")),
+    (r"CAR di bawah target jangka menengah manajemen \(" + PCT + r"\), di atas batas regulator: "
+     r"(.+)",
+     "CAR below management's medium-term target ({0}), above the regulatory floor: {1}"),
+] + _fixed([
+    ("tidak dilaporkan terpisah; dianggap tidak material",
+     "not reported separately; taken as immaterial"),
+])
+
+# --- Liquidity and business quality (app.investability), quoted in the
+# investability exhibits.
+_INVESTABILITY = [
+    (r"kurang dari 20 sesi harga dan volume sampai " + DATE + r" di data Sectors",
+     "fewer than 20 sessions of price and volume to {0} in Sectors data"),
+    (r"data Sectors harian (\S+) \(harga penutupan x volume\)",
+     "Sectors daily data, {0} (closing price x volume)"),
+] + _fixed([
+    ("porsi publik tidak tersedia di data kepemilikan",
+     "the public share is not in the ownership data"),
+    ("data kepemilikan Sectors", "Sectors ownership data"),
+    ("profil emiten data Sectors", "Sectors issuer profile"),
+    ("status suspensi dan notasi khusus tidak ada di data; tidak diasumsikan normal",
+     "suspension status and special notations are not in the data; normal trading is not "
+     "assumed"),
+    ("tidak dijawab: Sektoral Team belum menetapkan sumber penilaian tata kelola bertanggal yang "
+     "dapat diterima (keputusan D8, 2026-09-26)",
+     "unanswered: the Sektoral Team has not yet set an acceptable dated source for governance "
+     "assessments (decision D8, 2026-09-26)"),
+    ("tidak dijawab: belum ditelaah; berkas kualitas bisnis tidak memuat bukti bertanggal untuk "
+     "dimensi ini",
+     "unanswered: not yet reviewed; the business-quality file holds no dated evidence for this "
+     "dimension"),
+])
+
 PATTERNS = [(re.compile(p), t) for p, t in (
     _BRIDGE + _DRIVERS + _PAYOUT + _READER + _CANDIDATE + _METHOD + _LABEL + _NOTES
+    + _INVESTABILITY + _LOM + _DRIVER_UNITS
 )]

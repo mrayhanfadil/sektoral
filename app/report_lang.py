@@ -234,7 +234,7 @@ TERMS = {
     "Laju penjualan": "Sales rate",
     "Langkah": "Step",
     "kumulatif": "cumulative",
-    "Liabilitas/ekuitas": "Liabilities/equity",
+    "Liabilitas/ekuitas": "Liabilities/equity", "liabilitas/ekuitas": "liabilities/equity",
     "Margin bersih": "Net margin",
     "Metode": "Method",
     "Metrik": "Metric",
@@ -951,8 +951,159 @@ TERMS.update({
     "Discount Rate per Aset": "Discount rate by asset",
     "Sensitivitas RNAV (diskon x harga)": "RNAV sensitivity (discount x price)",
 })
+# Model drivers, their bases and test units (app.driver_value), quoted in the
+# decision summary and the catalyst thresholds; rating moves (app.rating_history).
+TERMS.update({
+    "Tingkat diskonto US$": "US$ discount rate",
+    "Utilisasi smelter dan PMR 2027+": "Smelter and PMR utilisation 2027+",
+    "Capex pemeliharaan": "Maintenance capex",
+    "Beban bahan bakar: biaya per unit": "Fuel expense: unit cost",
+    "Laju penjualan lahan": "Land sales pace",
+    "Pertumbuhan harga lahan": "Land price growth",
+    "Tingkat diskonto landbank": "Landbank discount rate",
+    "Porsi lahan dapat dijual": "Saleable land share",
+    "Harga saham anak usaha tercatat (NRCA)": "Listed subsidiary share price (NRCA)",
+    "kebijakan rumah": "house policy",
+    "asumsi analis (dek 12 bulan)": "Analyst Assumption (12M deck)",
+    "rata-rata marketing sales historis": "historical average marketing sales",
+    "CAGR harga marketing historis": "historical marketing price CAGR",
+    "Cost of Equity kebijakan": "policy Cost of Equity",
+    "harga penutupan bertanggal": "dated closing price",
+    "harga penutupan": "closing price", "dasar": "base",
+    "level 1H": "1H level",
+    "level harga": "price level",
+    "level biaya": "cost level",
+    "per tahun": "per year",
+    # Holding SOTP and landbank RNAV rows (app.report_extras).
+    "Segmen lain (lahan industri, hotel, utilitas, sewa) pada nilai buku":
+        "Other segments (industrial land, hotels, utilities, rentals) at book value",
+    "Tanah untuk pengembangan": "Development land", "bruto": "gross",
+})
+# Mining tables of the SOTP/LoM report (app.narrative): royalty, capex, Elang
+# milestones and AMDAL scope, LoM phases, WACC and analyst assumptions.
+TERMS.update({
+    "Emas ikutan dalam konsentrat": "By-product gold in concentrate",
+    "Emas murni, logam primer": "Refined gold, primary metal",
+    "Bea keluar ekspor konsentrat pada periode yang ditegaskan AMMAN":
+        "Concentrate export duty in the period AMMAN confirmed",
+    "Kas dibayar: royalti, pajak dan PNBP H1 2026": "Cash paid: royalties, taxes and PNBP 1H 2026",
+    "Beban PNBP H1 2026": "PNBP expense 1H 2026",
+    "Formula HPM konsentrat tembaga": "Copper concentrate HPM formula",
+    "Input kontrak yang belum diungkap untuk netback": "Undisclosed contract inputs for netback",
+    "Tier terpilih: konsentrat Cu / katoda Cu": "Applicable tier: Cu concentrate / Cu cathode",
+    "Tier terpilih: Au ikutan konsentrat / emas murni":
+        "Applicable tier: by-product Au in concentrate / refined gold",
+    "HMA resmi H1 2026: tembaga": "Official 1H 2026 HMA: copper",
+    "HMA resmi H1 2026: emas": "Official 1H 2026 HMA: gold",
+    "12 periode, US$/dmt": "12 periods, US$/dmt", "12 periode, US$/oz": "12 periods, US$/oz",
+    "FY2024 aktual emiten": "FY2024 issuer actual", "FY2025 aktual emiten": "FY2025 issuer actual",
+    "FY2025: sustaining tambang Phase 8": "FY2025: Phase 8 mine sustaining",
+    "FY2025: smelter tembaga dan PMR": "FY2025: copper smelter and PMR",
+    "FY2025: ekspansi pabrik pengolahan": "FY2025: processing plant expansion",
+    "FY2025: PLTGU dan fasilitas LNG": "FY2025: combined-cycle power plant and LNG facilities",
+    "1H2026 aktual": "1H2026 actual",
+    "FY2026 skenario analis": "FY2026 Analyst Scenario",
+    "H2 tersirat dari skenario": "H2 implied by the scenario",
+    "US$m menurut penggunaan": "US$m by use",
+    "Pembanding dalam H1 release": "Comparator in the H1 release",
+    "Laporan interim; capex kas + additions": "Interim report; cash capex + additions",
+    "FY26 skenario dikurangi H1 aktual": "FY26 scenario less 1H actual",
+    "Penambangan Batu Hijau sampai": "Batu Hijau mining until",
+    "Pengolahan stockpile sampai": "Stockpile processing until",
+    "Bijih pertama Elang": "Elang first ore",
+    "Target keputusan investasi Elang": "Elang final investment decision target",
+    "Penyusunan rencana tambang": "Mine planning",
+    "Perizinan koridor OLC": "OLC corridor permitting",
+    "Feasibility study Elang": "Elang feasibility study",
+    "Optimasi teknis Elang": "Elang technical optimisation",
+    "Lingkup infrastruktur Elang": "Elang infrastructure scope",
+    "Elang: horizon operasi yang diperkirakan": "Elang: expected operating horizon",
+    "Engineering rinci dan optimasi": "Detailed engineering and optimisation",
+    "Indikasi investasi awal Elang": "Indicative initial Elang investment",
+    "bukan anggaran tervalidasi": "not a validated budget",
+    "Target konstruksi yang disampaikan pada konsultasi publik":
+        "Construction target stated at the public consultation",
+    "Konteks konsultasi publik AMDAL": "AMDAL public consultation context",
+    "Rencana kapasitas penambangan bijih Elang": "Planned Elang ore mining capacity",
+    "Kapasitas tahunan pabrik pengolahan": "Annual processing plant capacity",
+    "Rentang desain ekspansi pabrik": "Plant expansion design range",
+    "Overland conveyor Elang": "Elang overland conveyor",
+    "Fasilitas pendukung yang direncanakan": "Planned support facilities",
+    "NAV Batu Hijau": "Batu Hijau NAV",
+    "pit, stockpile, pabrik, smelter, PMR": "pit, stockpile, plant, smelter, PMR",
+    "NAV Elang sebelum risiko": "Elang NAV before risk",
+    "Persediaan logam dan konsentrat": "Metal and concentrate inventory",
+    "aset dikonsolidasi; kepentingan nonpengendali dikurangkan di bawah":
+        "assets consolidated; non-controlling interests deducted below",
+    "beban umum 1H26 x2": "1H26 general expenses x2",
+    "neraca 30 Jun 2026": "balance sheet at 30 Jun 2026",
+    "nilai buku 30 Jun 2026": "book value at 30 Jun 2026",
+    "2H26 Batu Hijau, panduan FY": "2H26 Batu Hijau, FY guidance",
+    "Pit Batu Hijau, per tahun": "Batu Hijau pit, per year",
+    "Stockpile Batu Hijau, per tahun": "Batu Hijau stockpile, per year",
+    "Capex Elang, total": "Elang capex, total",
+    "Produksi Elang, per tahun": "Elang production, per year",
+    "WACC US$ (Batu Hijau dan Elang)": "US$ WACC (Batu Hijau and Elang)",
+    "Capex pengembangan Elang": "Elang development capex",
+    "Capex pemeliharaan Elang": "Elang sustaining capex",
+    "Capex fase stockpile": "Stockpile-phase capex",
+    "Tanpa izin ekspor konsentrat (umpan dibatasi kapasitas smelter)":
+        "No concentrate export permit (feed capped at smelter capacity)",
+    "Izin ekspor konsentrat diperpanjang (umpan penuh 85 Mtpa, sesuai jadwal tambang emiten)":
+        "Concentrate export permit extended (full 85 Mtpa feed, per the issuer's mine plan)",
+    # The LoM reconciliation walk (app.lom) and the cost tables.
+    "Target SOTP/LoM": "SOTP/LoM target",
+    "Izin ekspor konsentrat diperpanjang": "Concentrate export permit extended",
+    "Tanpa izin ekspor konsentrat": "No concentrate export permit",
+    "Elang dinilai penuh (probabilitas pengembangan 100%)":
+        "Elang valued in full (100% development probability)",
+    "Lalu dek harga +20% (alternatif penutup sisa selisih)":
+        "Then a +20% price deck (alternative to close the remaining gap)",
+    "Biaya operasi, sebelum adjustment": "Operating costs, before adjustments",
+    "Kredit produk sampingan": "By-product credits",
+    "Biaya treatment smelting/refining": "Smelting/refining treatment costs",
+    "Unit cash cost dilaporkan": "Reported unit cash cost",
+    "Pelunasan utang Q3": "Q3 debt repayment", "dilaporkan aktual": "reported actual",
+    "US$/ton bijih": "US$/t ore",
+    "Ekuitas": "Equity",
+    "harga komoditas Sectors": "Sectors commodity prices",
+    "Beban material": "Material expenses",
+    # DCF and holding SOTP bridges, landbank RNAV (app.report_extras).
+    "Saham": "Shares", "Porsi induk": "Parent share", "nilai pasar": "market value",
+    "Dividen dibagikan sesudah tanggal neraca": "Dividends paid after the balance-sheet date",
+    "Porsi dapat dijual": "Saleable share",
+    "Harga jual awal": "Initial selling price",
+    "RNAV landbank": "Landbank RNAV",
+    "Cross-check penilai independen": "Independent appraiser cross-check",
+})
+_PATTERNS += [(re.compile(p), t) for p, t in (
+    (r"NAV Elang x probabilitas pengembangan (\S+)", "Elang NAV x {0} development probability"),
+    (r"Elang ditambang sampai cadangan habis \((\d{4})\), bukan (\d{4})",
+     "Elang mined until reserves run out ({0}), not {1}"),
+    (r"Kurs USD/IDR (\S+)", "USD/IDR rate {0}"),
+    (r"Penambangan sampai cadangan habis, bukan batas (\d{4})",
+     "Mining until reserves run out, not the {0} limit"),
+    (r"Lalu tingkat diskonto -2pp ke (\S+) \(alternatif penutup sisa selisih\)",
+     "Then a discount rate 2pp lower, at {0} (alternative to close the remaining gap)"),
+    (r"(\S+) forecast", "{0} forecast"),
+    (r"miliar, (.+)", "bn, {0}"),
+    (r"(.+?) \((dividen tunai .+)\)", "{0} ({1})"),
+    (r"Ekuitas pemilik induk per (\S+)", "Parent equity at {0}"),
+    (r"Dikurangi porsi (\S+) atas ekuitas buku (\S+)", "Less the {0} share of {1} book equity"),
+    (r"Tambahan nilai porsi (\S+)", "Value added to the {0} share"),
+)]
+_PATTERNS += [(re.compile(p), t) for p, t in (
+    (r"(.+): harga terealisasi", "{0}: realised price"),
+    (r"(.+): pertumbuhan volume", "{0}: volume growth"),
+    (r"laju (\S+ \d{4}) \(emiten\)", "{0} run-rate (issuer)"),
+    (r"(±.+) per tahun", "{0} per year"),
+    (r"Naik dari (Buy|Hold|Sell)", "Upgraded from {0}"),
+    (r"Turun dari (Buy|Hold|Sell)", "Downgraded from {0}"),
+)]
+
 # Checked before the general patterns above, which they narrow.
 _PATTERNS[:0] = [(re.compile(p), t) for p, t in (
+    (r"tarif efektif (\S+) resmi", "official {0} effective rate"),
     (r"Target harga: PER peer x EPS (.+)", "Target Price: peer PER x EPS {0}"),
     (r"Target harga: P/BV wajar dari ROE (.+) \(sensitivitas CoE x g\)", "Target Price: fair P/BV from ROE {0} (CoE x g sensitivity)"),
     (r"Target harga (FY\d+F?) EV/EBITDA", "{0} EV/EBITDA Target Price"),
@@ -1011,7 +1162,11 @@ def _en(text: str) -> str:
     for sep in (" & ", " / "):
         if sep in text:
             return sep.join(_en(part) for part in text.split(sep))
-    return plain(text)
+    # Source or model text a label quotes (a curated Peer Group name, a cash
+    # basis): its English in data/source_text_en or app.source_patterns.
+    from . import prose_lang  # it imports this module
+    found = prose_lang.known(text)
+    return plain(found if found else text)
 
 
 def label(text, lang: str = DEFAULT):
@@ -1118,3 +1273,203 @@ def note(text, lang: str = DEFAULT):
         if found:
             return template.format(*(fmt.localize(g or "", lang) for g in found.groups()))
     return text
+
+
+# The reason a table prints n.m. (render's ``_nm_note``): the n.m. part of an
+# exhibit's source note, written by app.report_extras, app.forecast_statements
+# and app.bank_model. Each part is a whole sentence or clause; one this table
+# does not know leaves the note Indonesian whole.
+_NM_PARTS = {
+    "n.m. pada kolom yoy: perubahan dari/ke angka negatif tidak bermakna sebagai persentase":
+        "n.m. in the yoy column: a change from or to a negative figure is not meaningful as a "
+        "percentage",
+    "di atas 500% ditulis >500% dan di bawah -500% ditulis n.m. karena basis rendah atau negatif":
+        "above 500% is shown as >500% and below -500% as n.m., on a low or negative base",
+    "Penjualan persediaan 1H tidak dimodelkan terpisah": "1H inventory sales are not modelled separately",
+    "rasio di atas 500% ditulis n.m. karena basis pendapatan atau ekuitas sangat kecil":
+        "ratios above 500% are shown as n.m. on a very small revenue or equity base",
+    "Multiple di atas 100x ditulis n.m. karena basis laba atau ekuitas sangat kecil":
+        "Multiples above 100x are shown as n.m. on a very small earnings or equity base",
+    "Perbedaan OLC 54/60 km belum dimodelkan sebagai capex":
+        "The 54/60 km OLC difference is not yet modelled as capex",
+    "PER dan PBV di atas 100x atau dengan basis tidak positif ditulis n.m":
+        "PER and PBV above 100x or on a non-positive base are shown as n.m",
+    "DPS dan dividend yield n.m.: model ini tidak memproyeksikan dividen":
+        "DPS and dividend yield n.m.: this model does not project dividends",
+    "median P/E dan P/B memakai rentang yang sama dengan valuasi":
+        "the median P/E and P/B use the same range as the valuation",
+    "Emiten yang dibahas disorot '(emiten)'": "The issuer under discussion is marked '(issuer)'",
+    "P/E dan P/B peer bukan EV/EBITDA dan berbeda struktur modal":
+        "Peer P/E and P/B are not EV/EBITDA and reflect different capital structures",
+    "nilai negatif ditampilkan dalam kurung": "negative values are shown in brackets",
+    "kolom kini dan harga implisit ditulis n.m. (tanpa basis positif saat ini)":
+        "the current and implied price columns are shown as n.m. (no positive current base)",
+    "pembiayaan sebenarnya (utang bank, obligasi atau penundaan capex) belum dimodelkan":
+        "the actual financing (bank debt, bonds or deferred capex) is not yet modelled",
+}
+# Why a line is n.m. in a column: "n.m. pada <lines> (kolom <columns>): <reason>".
+_NM_REASONS = {
+    # app.report_extras
+    "skenario forecast belum tervalidasi, sehingga kolom forecast belum dimodelkan":
+        "the forecast scenario is not validated, so the forecast columns are not yet modelled",
+    "pos ini tidak dihasilkan model forecast": "the forecast model does not produce this line",
+    "tidak bermakna karena basis pembanding nol, negatif, atau tidak tersedia":
+        "not meaningful: the comparison base is zero, negative or unavailable",
+    "tahun ini di luar horizon skenario tervalidasi": "this year is beyond the validated scenario horizon",
+    "tidak dilaporkan di data Sectors untuk tahun ini": "not reported in Sectors data for this year",
+    "rilis tahunan resmi US$ hanya memuat pendapatan, EBITDA, laba dan ekuitas; data Sectors untuk "
+    "pos ini hanya tersedia dalam rupiah hasil konversi":
+        "the official US$ annual release carries only revenue, EBITDA, earnings and equity; Sectors "
+        "data for this line exists only in converted rupiah",
+    "tahun sebelumnya tidak ada di rilis tahunan resmi US$":
+        "the prior year is not in the official US$ annual release",
+    "Sectors tidak memisahkan piutang usaha; nilainya termasuk aset lancar lainnya":
+        "Sectors does not separate trade receivables; the value sits in other current assets",
+    "Sectors tidak memisahkan utang usaha; nilainya termasuk liabilitas lancar lainnya":
+        "Sectors does not separate trade payables; the value sits in other current liabilities",
+    "Sectors tidak memisahkan pendapatan bunga emiten non-bank; nilainya termasuk pendapatan "
+    "(beban) lain-lain":
+        "Sectors does not separate interest income for non-bank issuers; the value sits in other "
+        "income (expense)",
+    "Sectors hanya memuat total arus kas operasi; perubahan modal kerja termasuk pos operasi lainnya":
+        "Sectors carries only total operating cash flow; the change in working capital sits in "
+        "other operating items",
+    "Sectors hanya memuat total arus kas pendanaan tanpa rincian":
+        "Sectors carries only total financing cash flow, without a breakdown",
+    "Sectors tidak memisahkan obligasi pemerintah dan surat berharga":
+        "Sectors does not separate government bonds and securities",
+    "Sectors tidak memuat kredit bermasalah (NPL)": "Sectors carries no non-performing loans (NPL)",
+    "Sectors tidak memuat dividen tahunan pada laporan keuangan historis":
+        "Sectors carries no annual dividends in the historical financial statements",
+    "pinjaman penyeimbang kas adalah pos model forecast; utang aktual seluruhnya di utang jangka "
+    "pendek dan jangka panjang":
+        "cash-balancing borrowing is a forecast model line; actual debt sits entirely in short- and "
+        "long-term debt",
+    "pinjaman penyeimbang kas adalah pos model forecast; utang aktual seluruhnya di penarikan "
+    "(pembayaran) utang":
+        "cash-balancing borrowing is a forecast model line; actual debt flows sit entirely in debt "
+        "drawn (repaid)",
+    "laporan resmi mereklasifikasi pendapatan tahun ini; angka Sectors untuk pos ini masih sebelum "
+    "reklasifikasi":
+        "the official report reclassified this year's revenue; the Sectors figure for this line "
+        "predates the reclassification",
+    "multiple historis memerlukan harga akhir tahun dan jumlah saham tahun itu; data harga IDX "
+    "lokal tidak mencakup tahun ini":
+        "a historical multiple needs the year-end price and that year's share count; local IDX "
+        "price data does not cover this year",
+    "multiple di atas 100x tidak bermakna karena basis laba, ekuitas atau EBITDA sangat kecil":
+        "a multiple above 100x is not meaningful on a very small earnings, equity or EBITDA base",
+    "laba bersih tahun itu tidak positif": "net profit for the year is not positive",
+    "EPS forecast tidak positif": "forecast EPS is not positive",
+    "ekuitas tahun itu tidak positif": "equity for the year is not positive",
+    "BVPS forecast tidak positif": "forecast BVPS is not positive",
+    "EBITDA atau utang bersih tahun itu tidak tersedia di data Sectors":
+        "EBITDA or net debt for the year is not in Sectors data",
+    "jembatan EV (kas, utang, saham) valuasi tidak lengkap":
+        "the valuation's EV bridge (cash, debt, shares) is incomplete",
+    "tidak tersedia pada data aktual tabel ini": "not available in this table's actual data",
+    "basis tahun sebelumnya nol, negatif, atau tidak tersedia":
+        "the prior-year base is zero, negative or unavailable",
+    "laba atau jumlah saham tidak tersedia": "earnings or share count unavailable",
+    "ekuitas atau jumlah saham tidak tersedia": "equity or share count unavailable",
+    "laba atau ekuitas tahun itu tidak tersedia di data Sectors":
+        "earnings or equity for the year is not in Sectors data",
+    "data Sectors mencatat dividen per tanggal ex-date, bukan per tahun buku":
+        "Sectors data records dividends by ex-date, not by financial year",
+}
+_NM_PATTERNS = [(re.compile(p), t) for p, t in (
+    (r"n\.m\. pada multiple (\S+): di atas (\d+)x, basis laba atau ekuitas sangat kecil",
+     "n.m. on {0} multiples: above {1}x, on a very small earnings or equity base"),
+    (r"n\.m\.: (.+?) ((?:\d[HQ]\d+|FY\d+F?)(?:, (?:\d[HQ]\d+|FY\d+F?))*) \(rilis resmi tidak memuat "
+     r"EBITDA periode itu\)",
+     "n.m.: {0} {1} (the official release has no EBITDA for that period)"),
+    (r"Pertumbuhan FCFF (FY\S+) n\.m\.: EBIT, D&A dan capex (FY\d+) dalam US\$ tidak tersedia",
+     "{0} FCFF growth n.m.: {1} EBIT, D&A and capex in US$ are not available"),
+    (r"(\S+) menggantikan band (\S+) karena (\S+) (FY\d+) tidak positif sejak (\S+), sehingga "
+     r"(\S+) kini tidak bermakna",
+     "{0} replaces the {1} band because {2} {3} has not been positive since {4}, so the current "
+     "{5} is not meaningful"),
+)]
+_NM_PEERS = re.compile(r"n\.m\.: kurang dari tiga peer valid \((.+)\)")
+_NM_SEGMENT = re.compile(r"(.+) \((kolom [^()]+)\): (.+)")
+_NM_COLUMNS = {"kolom aktual": "actual columns", "kolom forecast": "forecast columns"}
+
+
+def _nm_labels(text):
+    """Line labels joined by ", " (a comma inside parentheses belongs to its
+    label) in English, or None when one has none (a code such as "EPS" is its
+    own English)."""
+    from . import prose_lang  # it imports this module
+    parts, depth, start = [], 0, 0
+    for i, ch in enumerate(text):
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth == 0 and text[i + 1:i + 2] == " ":
+            parts.append(text[start:i])
+            start = i + 2
+    out = []
+    for part in parts + [text[start:]]:
+        english = _en(part)
+        if english == plain(part) and not prose_lang.language_neutral(re.sub(r"\(.*?\)", "", part)):
+            return None
+        out.append(english)
+    return ", ".join(out)
+
+
+def _nm_reason(text):
+    """A reason from app.report_extras (here), or a statement model's own note
+    (``forecast_statements`` / ``bank_model``, whose English is in
+    ``app.source_patterns``)."""
+    text = text.strip().rstrip(".")
+    hit = _NM_REASONS.get(text)
+    if hit is not None:
+        return hit
+    from . import prose_lang  # it imports this module
+    found = prose_lang.known(text + ".")
+    return found.rstrip(".") if found else None
+
+
+def _nm_part(text):
+    """English of one n.m. sentence or clause (no final period), or None."""
+    hit = _NM_PARTS.get(text)
+    if hit is not None:
+        return hit
+    two = re.fullmatch(r"(.+?[^m])\. ([a-z].*)", text)
+    if two:  # "<sentence>. n.m.: <reason>", or a clause that runs on in lower case
+        first, second = _nm_part(two[1]), _nm_part(two[2])
+        return None if first is None or second is None else f"{first}. {second}"
+    if text.startswith("n.m. pada ") and not text.startswith("n.m. pada multiple "):
+        out = []
+        # A segment starts where "<lines> (kolom ...): " follows "; ".
+        for segment in re.split(r"; (?=[^;]*? \(kolom [^()]+\): )", text[len("n.m. pada "):]):
+            found = _NM_SEGMENT.fullmatch(segment)
+            reason = _nm_reason(found[3]) if found else None
+            labels = _nm_labels(found[1]) if found else None
+            if reason is None or labels is None:
+                return None
+            column = _NM_COLUMNS.get(found[2]) or f"{found[2][len('kolom '):]} columns"
+            out.append(f"{labels} ({column}): {reason}")
+        return "n.m. in " + "; ".join(out)
+    peers = _NM_PEERS.fullmatch(text)
+    if peers:  # "P/E 2 peer, liabilitas/ekuitas 1 peer"
+        counts = []
+        for item in peers[1].split(", "):
+            found = re.fullmatch(r"(.+) (\d+) peer", item)
+            if not found:
+                return None
+            counts.append(f"{_en(found[1])} {found[2]} peer{'' if found[2] == '1' else 's'}")
+        return f"n.m.: fewer than three valid peers ({', '.join(counts)})"
+    for pattern, template in _NM_PATTERNS:
+        found = pattern.fullmatch(text)
+        if found:
+            return template.format(*(_en(g) if g else "" for g in found.groups()))
+    return None
+
+
+def nm_note(parts, lang: str = DEFAULT):
+    """The n.m. reasons printed under a table, one sentence or clause per part,
+    in `lang`; in English None when a part is not known, so the caller keeps
+    the Indonesian whole rather than mix the languages."""
+    if lang == DEFAULT:
+        return parts
+    out = [_nm_part(part.strip().rstrip(".")) for part in parts]
+    return None if any(p is None for p in out) else out

@@ -12,7 +12,10 @@ translates those labels (``app.report_lang``).
 ``<field>_en`` siblings (``headline_en``, ``bullets_en``, ``paragraf_en``,
 ``isi_en``, ``text_en``, ``narasi_en``, ``catatan_metodologi_en``, and on the
 audit appendix pages ``catatan_sumber_en``), which every other reader of the
-document ignores. A sibling is attached only where both
+document ignores. A table cell the English run wrote in English (a template's
+``t``, a ``source`` quote) gets one too: ``data.rows_en`` beside ``data.rows``,
+None where the cell has none, so the renderer prints it in place of the
+``report_lang`` label. A sibling is attached only where both
 runs produced the same structure and the English text carries exactly the
 figures of its Indonesian twin, so the English edition can never state a
 number the Indonesian one does not. Anything else falls back to Indonesian.
@@ -62,6 +65,20 @@ def t(id: str, en: str) -> str:
 _UNTRANSLATED = "\u2063"
 
 
+# Marks a document or news title an English template quotes as published, so
+# an English sentence citing an Indonesian title is not taken for one that left
+# a clause untranslated; the marks never reach the attached English.
+_QUOTE = "⁤"
+_QUOTED = re.compile(f"{_QUOTE}[^{_QUOTE}]*{_QUOTE}")
+
+
+def quoted(text):
+    """A title quoted as published: marked in an English build, as is otherwise."""
+    if _BUILD.get() != "en" or not isinstance(text, str) or not text:
+        return text
+    return f"{_QUOTE}{text}{_QUOTE}"
+
+
 # English for Indonesian source text (issuer evidence, curated names), one file
 # per ticker or topic, keyed by the exact Indonesian text. It lives outside the
 # hashed source packs, so a translation never changes their evidence; when the
@@ -106,6 +123,37 @@ def source(id_text, en_text=None):
         if found:
             return template.format(*(g or "" for g in found.groups()))
     return f"{_UNTRANSLATED}{id_text}{_UNTRANSLATED}"
+
+
+def label(id_text, en_text=None):
+    """A fixed label or host-written string quoted inside a template (a driver,
+    a method line, a release limitation): in an English build `en_text` (an
+    agent's twin) when given, else its English from ``report_lang`` or
+    ``app.host_lang`` when that states the same figures as written, a code or
+    name as it is, else as ``source`` gives it."""
+    if _BUILD.get() != "en" or not isinstance(id_text, str) or not id_text.strip():
+        return id_text
+    if isinstance(en_text, str) and en_text.strip():
+        return en_text
+    from . import host_lang  # it reads this module's tables
+    for found in (report_lang.known(id_text), host_lang.raw(id_text)):
+        if isinstance(found, str) and found.strip() and figures(found) == figures(id_text) \
+                and not mixed(found):
+            return found
+    if language_neutral(id_text) or _amount(id_text):
+        return id_text
+    return source(id_text)
+
+
+# Units a model value carries ("US$13.002/t", "4.455 US$/oz", "50 bp").
+_AMOUNT_UNITS = {"t", "oz", "lb", "dmt", "kt", "koz", "ha", "bp", "pp", "x", "m2"}
+
+
+def _amount(text):
+    """True for a figure with its units and nothing else to translate."""
+    words = _LETTERS.findall(text)
+    return (bool(_FIGURE.search(text)) and not _INDONESIAN.search(text)
+            and all(w in _AMOUNT_UNITS or w[0].isupper() for w in words))
 
 
 def known(id_text) -> str | None:
@@ -302,13 +350,16 @@ def _pair(id_text, en_text):
     """The English twin of one prose string, or None when it may not be attached."""
     if not isinstance(id_text, str) or not isinstance(en_text, str) or not en_text.strip():
         return None
+    # A quoted title is the source's own words: no clause to check, no marks kept.
+    own = _QUOTED.sub("", en_text)
+    en_text = en_text.replace(_QUOTE, "")
     if en_text == id_text or _UNTRANSLATED in en_text:
         return None  # not translated (yet): nothing to attach
     if figures(id_text) != figures(en_text):
         return None
-    if scrub.contains_banned(en_text) and not scrub.contains_banned(id_text):
+    if scrub.contains_banned(own) and not scrub.contains_banned(id_text):
         return None
-    if mixed(en_text):
+    if mixed(own):
         return None
     return en_text
 
@@ -363,6 +414,33 @@ def _attach_exhibits(id_exhibits, en_exhibits):
     for a, b in zip(id_exhibits, en_exhibits):
         if isinstance(a, dict) and isinstance(b, dict) and a.get("judul") == b.get("judul"):
             _set(a, "narasi", _pair(a.get("narasi"), b.get("narasi")))
+            _attach_cells(a.get("data"), b.get("data"))
+
+
+def _attach_cells(id_data, en_data):
+    """``rows_en``: the cells the English run wrote in English, row by row
+    (None for a row or cell without), on tables of the same shape.
+
+    A builder whose cells later code still reads in Indonesian (the catalyst
+    table, matched to model drivers by its words) keeps them Indonesian in the
+    English run too and puts their English in that run's own ``rows_en``,
+    which takes precedence here."""
+    if not isinstance(id_data, dict) or not isinstance(en_data, dict):
+        return
+    rows, rows_en = id_data.get("rows"), en_data.get("rows")
+    if not isinstance(rows, list) or not isinstance(rows_en, list) or len(rows) != len(rows_en):
+        return
+    late = en_data.get("rows_en") if isinstance(en_data.get("rows_en"), list) else []
+    out = []
+    for i, (a, b) in enumerate(zip(rows, rows_en)):
+        cells = None
+        if isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+            over = late[i] if i < len(late) and isinstance(late[i], list) else []
+            cells = [_pair(x, over[j] if j < len(over) and over[j] is not None else y)
+                     for j, (x, y) in enumerate(zip(a, b))]
+        out.append(cells if cells and any(c is not None for c in cells) else None)
+    if any(row is not None for row in out):
+        id_data["rows_en"] = out
 
 
 def attach(doc: dict, doc_en: dict) -> dict:
@@ -473,6 +551,19 @@ class _View:
         for exhibit in exhibits or []:
             if isinstance(exhibit, dict) and (exhibit.get("narasi") or exhibit.get("narasi_en")):
                 self.field(exhibit, "narasi")
+            if isinstance(exhibit, dict):
+                self.cells(exhibit.get("data"))
+
+    @staticmethod
+    def cells(data):
+        """English cells with English figures; the Indonesian rows stay for the
+        renderer's column kinds and row marks."""
+        rows = data.get("rows_en") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            return
+        data["rows_en"] = [[c if c is None or isinstance(c, Translated)
+                            else Translated(report_lang.plain(c)) for c in row]
+                           if isinstance(row, list) else None for row in rows]
 
 
 def english_view(doc: dict, missing: list | None = None) -> tuple[dict, int]:

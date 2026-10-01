@@ -17,9 +17,11 @@ probability or a forecast of the price.
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from . import exhibit_ids, fmt, release_policy
+from .prose_lang import label as _label, t as _t
 
 BUY, SELL = 0.15, -0.10
 # A linear reading beyond this many tested steps leaves the tested range too far
@@ -51,18 +53,24 @@ def _move_to(row, target, base):
     return need / effect, (row["high"] if need > 0 else row["low"])
 
 
+# A driver's direction word (``driver_value`` rows) in the English edition.
+_DIRECTION_EN = {"naik": "up", "turun": "down"}
+
+
 def _step_text(row, move):
     """The move in the driver's own unit: a multiple of its tested step."""
-    import re
     fraction, direction = move
+    driver = _label(row["driver"])
+    way = _t(direction, _DIRECTION_EN.get(direction, direction))
     match = re.search(r"±\s*([\d.,]+)\s*(pp|bp|%)", row["unit"])
     if match:
         step = float(match.group(1).replace(",", "."))
         unit = match.group(2)
         rest = row["unit"][match.end():].split(",")[0].strip()
         amount = f"{fmt._id(abs(fraction) * step, 1)} {unit}".replace(" %", "%")
-        return f"{row['driver']} {direction} {amount}{(' ' + rest) if rest else ''}"
-    return f"{row['driver']} {direction} {fmt._id(abs(fraction), 1)} x rentang uji"
+        return f"{driver} {way} {amount}{(' ' + _label(rest)) if rest else ''}"
+    return _t(f"{driver} {way} {fmt._id(abs(fraction), 1)} x rentang uji",
+              f"{driver} {way} {fmt._id(abs(fraction), 1)}x the tested range")
 
 
 def _band(upside):
@@ -101,8 +109,11 @@ def build(doc, intake, fc, va):
         from . import rating_history
         history = rating_history.cover_status(intake["ticker"], rating)
         history = (history.get("label") if isinstance(history, dict) else history) or "-"
-    rows.append(["Yang berubah", f"Rating {rating or '-'} ({history}); aktual resmi terbaru "
-                 f"{actual.get('period') or '-'} (terbit {actual.get('published_at') or '-'})."])
+    rows.append(["Yang berubah", _t(
+        f"Rating {rating or '-'} ({history}); aktual resmi terbaru "
+        f"{actual.get('period') or '-'} (terbit {actual.get('published_at') or '-'}).",
+        f"Rating {rating or '-'} ({_label(history)}); latest official actuals "
+        f"{actual.get('period') or '-'} (published {actual.get('published_at') or '-'}).")])
     path = []
     scenario = (fc or {}).get("earnings_scenario") or {}
     full = scenario.get("full_year") or {}
@@ -114,12 +125,12 @@ def build(doc, intake, fc, va):
     money = (lambda v: f"US${fmt._id(v / 1e6, 1)} juta") if usd else \
         (lambda v: f"Rp{fmt._id(v / 1e9, 1)} miliar")
     if path:
-        rows.append(["Ekspektasi model", "Laba induk " + ", ".join(
+        rows.append(["Ekspektasi model", _t("Laba induk ", "Parent profit ") + ", ".join(
             f"FY{y % 100:02d}F {money(v)}" for y, v in path[:3] if y and v is not None) + "."])
     top = (dv.get("rows") or [])[:3]
     if top:
         rows.append(["Yang harus terjadi", "; ".join(
-            f"{r['driver']} {r['base']} ({r['basis']})" for r in top) + "."])
+            f"{_label(r['driver'])} {_label(r['base'])} ({_label(r['basis'])})" for r in top) + "."])
     base = ((dv.get("cases") or {}).get("base") or {}).get("per_share")
     if top and price and base:
         implied = [(_step_text(r, m) if m is not None else None) for r in top
@@ -128,11 +139,15 @@ def build(doc, intake, fc, va):
         detail = next((t.get("detail") for t in ((va or {}).get("method_chain") or {}).get("trace") or []
                        if t.get("key") == ((va or {}).get("method_chain") or {}).get("selected")), {}) or {}
         rate = detail.get("implied_wacc") or detail.get("implied_coe")
-        text = ("Harga Rp" + fmt._id(price, 0) + " setara dengan satu dari: " + "; ".join(implied)
-                + " dari rentang uji (pembacaan linear)") if implied else \
-            "Harga di luar jangkauan rentang uji setiap driver"
+        text = _t("Harga Rp" + fmt._id(price, 0) + " setara dengan satu dari: " + "; ".join(implied)
+                  + " dari rentang uji (pembacaan linear)",
+                  "The Rp" + fmt._id(price, 0) + " price equals any one of: " + "; ".join(implied)
+                  + ", read linearly from the tested range") if implied else \
+            _t("Harga di luar jangkauan rentang uji setiap driver",
+               "The price is beyond every driver's tested range")
         if rate:
-            text += f"; tingkat diskonto tersirat {fmt.pct(rate)}"
+            text += _t(f"; tingkat diskonto tersirat {fmt.pct(rate)}",
+                       f"; implied discount rate {fmt.pct(rate)}")
         rows.append(["Yang disiratkan harga", text + "."])
         rating = meta.get("rating")
         if rating in ("Buy", "Hold", "Sell"):
@@ -143,31 +158,50 @@ def build(doc, intake, fc, va):
                 for r in top[:2]:
                     f = _move_to(r, bound, base)
                     if f is not None:
-                        tests.append(f"{_step_text(r, f)} (nilai Rp{fmt._id(bound, 0)}, rating "
-                                     f"menjadi {_band(bound / price - 1 + (1e-6 if bound > base else -1e-6))})")
-            rows.append(["Yang membuktikan salah", ("Rating " + rating + " berubah bila "
-                         + "; atau ".join(tests)) if tests else
-                         "Tidak ada driver dalam rentang uji yang mengubah rating sendirian."])
+                        band = _band(bound / price - 1 + (1e-6 if bound > base else -1e-6))
+                        tests.append(_t(f"{_step_text(r, f)} (nilai Rp{fmt._id(bound, 0)}, rating "
+                                        f"menjadi {band})",
+                                        f"{_step_text(r, f)} (value Rp{fmt._id(bound, 0)}, rating "
+                                        f"becomes {band})"))
+            rows.append(["Yang membuktikan salah", _t(
+                "Rating " + rating + " berubah bila " + "; atau ".join(tests),
+                "The " + rating + " rating changes if " + "; or ".join(tests)) if tests else
+                _t("Tidak ada driver dalam rentang uji yang mengubah rating sendirian.",
+                   "No driver within its tested range changes the rating alone.")])
     filing = next_filing(intake.get("as_of"), actual.get("period_end"))
     catalyst = None
     for page in doc.get("bagian") or []:
         for exhibit in page.get("exhibit") or []:
             if exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS):
                 data = (exhibit.get("data") or {}).get("rows") or []
+                # The English run keeps the catalyst rows Indonesian and their
+                # English beside them (app.narrative); quote that.
+                english = (exhibit.get("data") or {}).get("rows_en") or []
                 # The next catalyst is one still ahead: skip rows marked completed.
-                ahead = [r for r in data if not any(word in str(r[1]).lower()
-                                                    for word in ("rampung", "selesai", "completed"))]
-                catalyst = ahead[0] if ahead else None
+                ahead = [i for i, r in enumerate(data)
+                         if not any(word in str(r[1]).lower()
+                                    for word in ("rampung", "selesai", "completed"))]
+                catalyst = data[ahead[0]] if ahead else None
+                if ahead and ahead[0] < len(english) and english[ahead[0]]:
+                    catalyst = [e or c for e, c in zip(english[ahead[0]], catalyst)]
     parts = []
     if filing:
-        parts.append(f"laporan {filing['label']} (batas OJK {filing['deadline']}): bandingkan "
-                     "laba induk, volume dan margin dengan jalur model")
+        parts.append(_t(f"laporan {filing['label']} (batas OJK {filing['deadline']}): bandingkan "
+                        "laba induk, volume dan margin dengan jalur model",
+                        f"{filing['label']} report (OJK deadline {filing['deadline']}): compare "
+                        "parent profit, volumes and margins with the model path"))
     if catalyst:
-        parts.append(f"{catalyst[0]} ({catalyst[1].split('. Sumber')[0]})")
+        # The English run's catalyst table reads "<date>. Source: ...".
+        when = str(catalyst[1]).split(_t(". Sumber", ". Source"))[0]
+        parts.append(f"{catalyst[0]} ({when})")
     if parts:
         rows.append(["Katalis berikutnya", "; ".join(parts) + "."])
     limitation = next(iter(((va or {}).get("release") or {}).get("limitations") or []), None)
-    rows.append(["Status dan batas", f"Tanggal laporan {intake.get('as_of')}; harga {intake.get('price_date')}; "
-                 f"status {meta.get('status')}; metode {va.get('method') if va else '-'}; "
-                 f"batas utama: {limitation or '-'}."])
+    method = va.get("method") if va else "-"
+    rows.append(["Status dan batas", _t(
+        f"Tanggal laporan {intake.get('as_of')}; harga {intake.get('price_date')}; "
+        f"status {meta.get('status')}; metode {method}; batas utama: {limitation or '-'}.",
+        f"Report Date {intake.get('as_of')}; price {intake.get('price_date')}; "
+        f"status {meta.get('status')}; method {_label(method)}; key limitation: "
+        f"{_label(limitation) if limitation else '-'}.")])
     return rows
