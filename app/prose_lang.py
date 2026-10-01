@@ -157,9 +157,18 @@ _INDONESIAN = re.compile(
     r"sudah|agar|serta)\b", re.I)
 
 
+def indonesian_words(text) -> set:
+    """The Indonesian function words `text` holds, lowercase."""
+    return {w.lower() for w in _INDONESIAN.findall(text)} if isinstance(text, str) else set()
+
+
 def mixed(text) -> bool:
-    """True when English text still reads partly Indonesian."""
-    return isinstance(text, str) and len({w.lower() for w in _INDONESIAN.findall(text)}) >= 2
+    """True when English text still reads partly Indonesian.
+
+    Two words, not one: template English may quote an Indonesian name ("PT
+    Industri Jamu Dan Farmasi"). Code that pieces English together from parts
+    holds each part it did not translate to ``indonesian_words`` being empty."""
+    return len(indonesian_words(text)) >= 2
 
 
 _ENGLISH = re.compile(

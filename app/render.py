@@ -935,6 +935,13 @@ def _table(ex, context="full"):
     kinds = _column_kinds(cols, rows)
     shown_cols = [_lbl(str(col)) for col in cols]
     shown = [[_lbl(str(row[i])) if i < len(row) else "" for i in range(len(cols))] for row in rows]
+    if _english() and exhibit_ids.is_exhibit(ex, exhibit_ids.METHOD_CHAIN):
+        # A Method Chain reason joins release limitations with "; ": the
+        # host's English for them (app.host_lang), as the web app shows it.
+        from . import host_lang
+        for row, cells in zip(rows, shown):
+            if len(row) == len(cols) and cells:
+                cells[-1] = host_lang.english(str(row[-1])) or cells[-1]
     body_rows = [cells for row, cells in zip(rows, shown)
                  if not _is_section_row([str(row[i]) if i < len(row) else "" for i in range(len(cols))])]
     widths = _column_widths(shown_cols, body_rows, context, kinds)
