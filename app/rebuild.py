@@ -37,6 +37,21 @@ agent's prose. Use it for reports whose plan predates the translation step::
     python -m app.rebuild --from out/demo-reports --out out/english \
         --translate-assumptions BBRI
 
+``--translate-analyst`` (explicit tickers only; it combines with the flags
+above) is paid the same way: it takes the Planning Analyst Agent's result the
+trace stored (``analyst``) and asks the model for the English twins of the
+prose that has none (``agents.analyst.run.translate_intel``: plan question,
+hypotheses and step reasons, headline, findings, verdict reasons, next
+checks). The rebuilt trace stores the result with its twins and the notes
+(``analyst.translation``), and a Run Replay of the stored events reads them
+(``run_events.prose_twins``). The report builder does not read the analyst
+result, so the report document, rating, Target Price and every Indonesian
+value are those of a plain rebuild. Use it for runs stored before the analyst
+wrote its own English::
+
+    python -m app.rebuild --from out/demo-reports --out out/english \
+        --translate-assumptions --translate-analyst BBRI
+
 Use it after a change to presentation, peer groups or valuation code to
 re-render every report reproducibly and see exactly what moved. It prints one
 line per ticker: release status, rating and Target Price of the rebuilt report;
@@ -283,6 +298,14 @@ def translated_assumptions(plan):
     return translate_plan(plan)
 
 
+def translated_analyst(intel):
+    """The stored analyst result with the English twins of its prose, and the
+    translation notes (``translate_intel``). This calls the LLM; it runs
+    outside the offline guard."""
+    from agents.analyst.run import translate_intel
+    return translate_intel(intel)
+
+
 def report_fields(doc: dict) -> dict:
     """The trace ``report`` block research._run writes for this report."""
     meta = doc.get("meta") or {}
@@ -455,7 +478,7 @@ def _build_once(t, out, kwargs, pins):
 def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
                 analyst_target: bool = False, live_inputs: bool = False,
                 refresh_assumptions: bool = False, translate_assumptions: bool = False,
-                db=None, log=None,
+                translate_analyst: bool = False, db=None, log=None,
                 plan_override: dict | None = None, trace_extra: dict | None = None,
                 as_of: str | None = None) -> dict:
     """Rebuild one ticker from ``source`` into ``out``; returns the comparison.
@@ -464,6 +487,9 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     evidence first (see ``refreshed_assumptions``) and stores its new plan.
     ``translate_assumptions`` adds the English twins to the stored plan
     (``translated_assumptions``) and stores the translated plan.
+    ``translate_analyst`` adds the English twins to the stored analyst result
+    (``translated_analyst``) and stores it in the trace; the report does not
+    read it.
     ``plan_override`` builds on a reviewed plan instead (app.assumption_review:
     the analyst's edits); the trace stores it as the plan, keeps the agent's
     as ``agent_plan_before_review`` and takes ``trace_extra`` keys as given.
@@ -501,6 +527,9 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     if translate_assumptions and isinstance(kwargs.get("assumption_plan"), dict):
         translated_plan, translation = translated_assumptions(kwargs["assumption_plan"])
         kwargs["assumption_plan"] = copy.deepcopy(translated_plan)
+    analyst_translation = translated_intel = None
+    if translate_analyst:
+        translated_intel, analyst_translation = translated_analyst(stored_trace.get("analyst"))
     if plan_override is not None:
         kwargs["assumption_plan"] = copy.deepcopy(plan_override)
     recorded = source_manifest.get("market_inputs") if isinstance(
@@ -553,6 +582,7 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         "analyst_target": kwargs["analyst_target"], "method_override": kwargs["method_override"],
         "refreshed_assumptions": bool(refresh_assumptions),
         "translated_assumptions": bool(translate_assumptions),
+        "translated_analyst": bool(translate_analyst),
         "as_of_override": as_of,
     }
     doc["run_manifest"] = manifest
@@ -583,6 +613,9 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
                 fa["plan_normalized_for_report"] = True
         fa["translation"] = translation
         trace["forecast_assumptions"] = fa
+    if analyst_translation is not None and isinstance(translated_intel, dict):
+        # Replays and the trace view read the analyst's twins from here.
+        trace["analyst"] = {**copy.deepcopy(translated_intel), "translation": analyst_translation}
     if plan_override is not None:
         fa = dict(trace.get("forecast_assumptions") or {})
         before = fa.get("agent_plan_raw") if "agent_plan_raw" in fa else fa.get("plan")
@@ -615,6 +648,8 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
               "intake_peer_basis": seen.get("peer_basis"), "pdf": pdf_path}
     if translation is not None:
         result["translation"] = translation
+    if analyst_translation is not None:
+        result["analyst_translation"] = analyst_translation
     return result
 
 
@@ -653,6 +688,10 @@ def line(result: dict) -> str:
     translated = (f" | terjemahan: {translation.get('status')} "
                   f"{translation.get('attached', 0)}/{translation.get('fields', 0)} teks"
                   if isinstance(translation, dict) else "")
+    analyst = result.get("analyst_translation")
+    translated += (f" | terjemahan analis: {analyst.get('status')} "
+                   f"{analyst.get('attached', 0)}/{analyst.get('fields', 0)} teks"
+                   if isinstance(analyst, dict) else "")
     return (f"{result['ticker']:<5} {status:<30} {str(result.get('rating') or '-'):<6} "
             f"TP {_tp(result.get('tp')):<9} "
             + ("BERUBAH: " + ", ".join(moved) + was if moved else "rating/TP sama")
@@ -680,6 +719,9 @@ def main(argv=None) -> int:
     parser.add_argument("--translate-assumptions", action="store_true",
                         help="translate the stored forecast plan's prose to English (paid "
                              "LLM) for the named tickers before rebuilding")
+    parser.add_argument("--translate-analyst", action="store_true",
+                        help="translate the stored analyst result's prose to English (paid "
+                             "LLM) for the named tickers before rebuilding")
     parser.add_argument("--as-of", dest="as_of",
                         help="a later Report Date for the rebuild (same stored evidence)")
     parser.add_argument("tickers", nargs="*", help="default: every report in --from")
@@ -691,6 +733,8 @@ def main(argv=None) -> int:
         parser.error("--refresh-assumptions calls the LLM; name the tickers to refresh")
     if args.translate_assumptions and not args.tickers:
         parser.error("--translate-assumptions calls the LLM; name the tickers to translate")
+    if args.translate_analyst and not args.tickers:
+        parser.error("--translate-analyst calls the LLM; name the tickers to translate")
     if args.translate_assumptions and args.refresh_assumptions:
         parser.error("--refresh-assumptions already translates the new plan; "
                      "drop --translate-assumptions")
@@ -706,6 +750,7 @@ def main(argv=None) -> int:
                                  live_inputs=args.live_inputs,
                                  refresh_assumptions=args.refresh_assumptions,
                                  translate_assumptions=args.translate_assumptions,
+                                 translate_analyst=args.translate_analyst,
                                  as_of=args.as_of,
                                  log=(lambda text: print(text, end="")) if args.verbose else None)
         except Exception as error:  # report every ticker, then fail the command

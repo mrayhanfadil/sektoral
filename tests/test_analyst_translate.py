@@ -4,7 +4,8 @@ Runs stored before the analyst wrote its own English (#39) have Indonesian
 prose only. ``translate_intel`` asks for the English afterwards, in calls of
 their own, checks each twin with the rules a twin from the run passes, repairs
 once and leaves out what still fails; it never changes an Indonesian value.
-No real LLM."""
+``app.rebuild --translate-analyst`` stores the translated result in the
+rebuilt trace, where the trace view and a Run Replay read it. No real LLM."""
 import copy
 import json
 import sys
@@ -16,7 +17,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from agents.analyst import run as analyst  # noqa: E402
-from test_forecast_english import _without_english  # noqa: E402
+from app import build as B, outputs, rebuild, run_events, trace_view  # noqa: E402
+from test_forecast_english import _indonesian_doc, _without_english  # noqa: E402
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+AS_OF = "2026-09-24"
 
 QUESTION = "Bagaimana posisi BBRI terhadap bank besar lain?"
 HYPOTHESES = ["ROE BBRI di atas median peer.", "Arus bersih asing 20 sesi terakhir negatif."]
@@ -242,3 +247,121 @@ def test_a_result_with_every_twin_needs_no_call():
     again, notes = analyst.translate_intel(out, chat=lambda *a, **k: calls.append(a))
     assert again is out and calls == [] and notes["status"] == "nothing_to_translate"
     assert analyst.translate_intel(None, chat=chat)[1]["status"] == "nothing_to_translate"
+
+
+# --- app.rebuild --translate-analyst ----------------------------------------
+
+
+OLD_EVENTS = [
+    {"stage": "plan", "label": "Rencana siap", "detail": QUESTION, "t": 1.0},
+    {"stage": "plan", "label": "Hipotesis 1", "detail": HYPOTHESES[0], "tool": "hypothesis",
+     "data": {"index": "1", "kind": "hypothesis"}, "t": 1.1},
+    {"stage": "plan", "label": "Hipotesis 2", "detail": HYPOTHESES[1], "tool": "hypothesis",
+     "data": {"index": "2", "kind": "hypothesis"}, "t": 1.2},
+    *[{"stage": "tool", "label": f"Menjalankan {tool}", "detail": why, "status": "run",
+       "tool": tool, "t": 2.0 + i}
+      for i, (tool, why) in enumerate(zip(("find_peers", "rank_peers", "foreign_flow"), WHY))],
+    {"stage": "synthesis", "label": "H1 didukung", "detail": REASONS[0], "tool": "verdict",
+     "t": 9.0},
+]
+
+
+def _source(tmp_path):
+    stored = json.loads((FIXTURES / "bbri_scenario_plan.json").read_text())
+    source = tmp_path / "src"
+    B.build("BBRI", source, as_of=AS_OF, assumption_plan=copy.deepcopy(stored["plan"]),
+            assumption_status=stored["status"])
+    outputs.save(outputs.TRACE, source, "BBRI", {
+        "ticker": "BBRI", "report": {"as_of": AS_OF}, "analyst": _intel(),
+        "forecast_assumptions": {"status": stored["status"], "plan": stored["plan"]}})
+    outputs.save(outputs.EVENTS, source, "BBRI", copy.deepcopy(OLD_EVENTS))
+    return source
+
+
+def test_rebuild_translate_analyst_keeps_the_report_and_gives_the_trace_english(
+        tmp_path, monkeypatch, capsys):
+    source = _source(tmp_path)
+    chat, calls = _translator()
+    monkeypatch.setattr(analyst, "_chat", chat)
+
+    assert rebuild.main(["--from", str(source), "--out", str(tmp_path / "plain"), "BBRI"]) == 0
+    assert calls == []                                       # a plain rebuild calls no model
+    assert rebuild.main(["--from", str(source), "--out", str(tmp_path / "en"),
+                         "--translate-analyst", "BBRI"]) == 0
+    assert len(calls) == 1
+    assert "terjemahan analis: translated 16/16 teks" in capsys.readouterr().out
+
+    plain = outputs.load(outputs.REPORT, tmp_path / "plain", "BBRI")
+    translated = outputs.load(outputs.REPORT, tmp_path / "en", "BBRI")
+    # The report builder does not read the analyst result: the same document.
+    assert _indonesian_doc(translated) == _indonesian_doc(plain)
+    without = {k: v for k, v in translated.items() if k != "run_manifest"}
+    assert without == {k: v for k, v in plain.items() if k != "run_manifest"}
+    assert translated["meta"]["rating"] == plain["meta"]["rating"]
+    assert translated["meta"]["tp"] == plain["meta"]["tp"]
+    manifest = outputs.load(outputs.MANIFEST, tmp_path / "en", "BBRI")
+    assert manifest["rebuild"]["translated_analyst"] is True
+    assert outputs.load(outputs.MANIFEST, tmp_path / "plain", "BBRI")["rebuild"][
+        "translated_analyst"] is False
+
+    # The trace stores the translated result and its notes; its Indonesian is the stored one.
+    trace = outputs.load(outputs.TRACE, tmp_path / "en", "BBRI")
+    plain_trace = outputs.load(outputs.TRACE, tmp_path / "plain", "BBRI")
+    stored = trace["analyst"]
+    assert stored.pop("translation")["status"] == "translated"
+    assert _without_english(stored) == _intel() == plain_trace["analyst"]
+    assert _twins(stored)["question"] == ENGLISH["plan.question"]
+
+    # The trace view serves the twins.
+    view = trace_view.build(trace)["analyst"]
+    assert view["plan"]["question_en"] == ENGLISH["plan.question"]
+    assert view["plan"]["hypotheses_en"] == [ENGLISH["plan.hypotheses[0]"],
+                                             ENGLISH["plan.hypotheses[1]"]]
+    assert [s["why_en"] for s in view["steps"]] == [ENGLISH[f"plan.steps[{i}].why"]
+                                                    for i in range(3)]
+    synthesis = view["synthesis"]
+    assert synthesis["headline_en"] == ENGLISH["synthesis.headline"]
+    assert synthesis["findings"][0]["interpretation_en"] == ENGLISH[
+        "synthesis.findings[0].interpretation"]
+    assert [h["reason_en"] for h in synthesis["hypotheses"]] == [
+        ENGLISH["synthesis.hypotheses[0].reason"], ENGLISH["synthesis.hypotheses[1].reason"]]
+    assert synthesis["next_checks_en"] == [ENGLISH["synthesis.next_checks[0]"]]
+    assert trace_view.build(plain_trace)["analyst"]["plan"]["question_en"] is None
+
+    # A replay of the stored events reads the twins: question, hypotheses, step reasons.
+    english = {e["label"]: e.get("detail_en")
+               for e in run_events.replay(tmp_path / "en", "BBRI")["events"]}
+    assert english["Rencana siap"] == ENGLISH["plan.question"]
+    assert english["Hipotesis 1"] == ENGLISH["plan.hypotheses[0]"]
+    assert english["Hipotesis 2"] == ENGLISH["plan.hypotheses[1]"]
+    assert [english[f"Menjalankan {t}"] for t in ("find_peers", "rank_peers", "foreign_flow")] == [
+        ENGLISH[f"plan.steps[{i}].why"] for i in range(3)]
+    assert english["H1 didukung"] == ENGLISH["synthesis.hypotheses[0].reason"]
+    plain_replay = run_events.replay(tmp_path / "plain", "BBRI")["events"]
+    assert not any(e.get("detail_en") for e in plain_replay if e["label"] == "Rencana siap")
+
+
+def test_rebuild_combines_both_translations(tmp_path, monkeypatch, capsys):
+    from agents.forecast_assumptions import run as forecast
+    source = _source(tmp_path)
+    analyst_chat, analyst_calls = _translator()
+    monkeypatch.setattr(analyst, "_chat", analyst_chat)
+    forecast_calls = []
+
+    def forecast_chat(messages, **_kwargs):
+        forecast_calls.append(messages)
+        raise RuntimeError("LLM is disabled in tests")
+    monkeypatch.setattr(forecast, "_chat", forecast_chat)
+    assert rebuild.main(["--from", str(source), "--out", str(tmp_path / "en"),
+                         "--translate-assumptions", "--translate-analyst", "BBRI"]) == 0
+    out = capsys.readouterr().out
+    assert "terjemahan: failed" in out and "terjemahan analis: translated" in out
+    assert analyst_calls and forecast_calls
+    manifest = outputs.load(outputs.MANIFEST, tmp_path / "en", "BBRI")["rebuild"]
+    assert manifest["translated_analyst"] is True and manifest["translated_assumptions"] is True
+
+
+def test_translate_analyst_needs_named_tickers(tmp_path):
+    with pytest.raises(SystemExit):
+        rebuild.main(["--from", str(tmp_path / "src"), "--out", str(tmp_path / "out"),
+                      "--translate-analyst"])
