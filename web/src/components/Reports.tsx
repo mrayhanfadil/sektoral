@@ -218,7 +218,7 @@ function UpsideMeter({ value, scale }: { value: number | null; scale: number }) 
   const width = `${(Math.min(1, Math.abs(value) / scale) * 50).toFixed(1)}%`;
   const up = value >= 0;
   return (
-    <span aria-hidden className="relative block h-1.5 w-14 flex-none rounded-full bg-rule-soft">
+    <span aria-hidden className="relative block h-1.5 w-14 flex-none rounded-full bg-rule-soft max-[359px]:w-10">
       <motion.span
         className={`absolute inset-y-0 ${up ? "left-1/2 origin-left rounded-r-full bg-ok-ink" : "right-1/2 origin-right rounded-l-full bg-err-ink"}`}
         style={{ width }}
