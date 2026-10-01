@@ -9,6 +9,12 @@ also for traces stored before twins existed (``app.host_lang``), and so does
 curated source text with its English in ``data/source_text_en``
 (``prose_lang.known``); source data (news titles, search queries, article
 text) and agent prose without its own twin stay Indonesian.
+
+Given the report document the trace belongs to, the view also says what the
+model ran where it is not the agents' proposal (the curated bank driver
+file, a LoM or Operating Model out-year schedule) and which peer group the
+report compares against when the research run used another one; all of it
+is read from the report as built, never from a pack that may have changed.
 """
 from __future__ import annotations
 
@@ -137,13 +143,207 @@ def _plan_en(value, limit):
     return text(report_lang.plain(value), limit) if isinstance(value, str) and value.strip() else None
 
 
-def _forecast(result: dict) -> dict:
+def _number(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+# A plan row whose rationale says it is the analyst's own scenario or
+# assumption ("Skenario analis: ...", "... Asumsi analis.").
+_ANALYST = re.compile(r"\b(?:skenario|asumsi) analis\b", re.IGNORECASE)
+
+
+def _sources(row: dict) -> dict:
+    """``source_ids`` of a plan row and whether it is an analyst assumption.
+
+    The agent cites ``official`` for the filing its anchor comes from; on a
+    row whose rationale is the analyst's own scenario that tag would read as
+    an official figure, so it is left out (``analyst_assumption``)."""
+    ids = [text(s, 40) for s in (row.get("source_ids") or [])[:8]]
+    assumed = bool(_ANALYST.search(str(row.get("rationale") or "")))
+    return {"source_ids": [s for s in ids if s != "official"] if assumed else ids,
+            "analyst_assumption": assumed}
+
+
+# The bank model's drivers (app.bank_drivers.DRIVER_KEYS, plus deposit growth)
+# with the short labels the trace table uses.
+BANK_KEYS = ("loan_growth_pct", "nim_pct", "non_ii_to_nii_pct", "cost_to_income_pct",
+             "cost_of_credit_pct", "deposit_growth_pct")
+_BANK_LABELS = {"loan_growth_pct": ("Kredit", "Loans"), "nim_pct": ("NIM", "NIM"),
+                "non_ii_to_nii_pct": ("Non-bunga/NII", "Non-interest/NII"),
+                "cost_to_income_pct": ("CIR", "CIR"),
+                "cost_of_credit_pct": ("Biaya kredit", "Cost of credit"),
+                "deposit_growth_pct": ("DPK", "Deposits")}
+
+
+def _curated_bank_rows(data: dict, source: str) -> list[dict]:
+    """The driver rows of a bank driver file as the model ran them: each
+    driver's value, ``kinds`` (company_guidance, sourced, analyst_assumption),
+    the payout on that year's profit and the rationales, joined by driver."""
+    payout = (data.get("payout_path") or {}).get("values") if isinstance(
+        data.get("payout_path"), dict) else None
+    payout = payout if isinstance(payout, list) else []
+    rows = []
+    for i, row in enumerate(_list(data.get("drivers"))[:6]):
+        cells = {key: row.get(key) for key in BANK_KEYS if isinstance(row.get(key), dict)}
+        parts = [(key, str(cell.get("rationale") or "").strip()) for key, cell in cells.items()]
+        parts = [(key, why) for key, why in parts if why]
+        english = [prose_lang.known(why) for _key, why in parts]
+        refs = sorted({str(ref) for cell in cells.values() for ref in cell.get("source_refs") or []
+                       if isinstance(ref, str)})
+        share = _number(payout[i]) if i < len(payout) else None
+        rows.append({
+            "year": text(row.get("year"), 8),
+            **{key: _number((cells.get(key) or {}).get("value")) for key in BANK_KEYS},
+            "payout_pct": round(share * 100, 2) if share is not None else None,
+            "kinds": {key: text(cell.get("kind"), 30) for key, cell in cells.items()},
+            "rationale": text("; ".join(f"{_BANK_LABELS[key][0]}: {why}" for key, why in parts), 1500),
+            "rationale_en": (text("; ".join(f"{_BANK_LABELS[key][1]}: {en}"
+                                            for (key, _why), en in zip(parts, english)), 1500)
+                             if parts and all(english) else None),
+            "source_ids": [text(ref, 40) for ref in refs[:8]],
+            "source": text(source, 80),
+        })
+    return rows
+
+
+def _differ(model: list[dict], agent: list[dict]) -> bool:
+    """Whether the model's driver values differ from the agent's in any year
+    both tables have (or the tables cover different years)."""
+    proposed = {str(r.get("year")): r for r in agent}
+    shared = [r for r in model if str(r.get("year")) in proposed]
+    if not shared or len(shared) != len(model):
+        return True
+    return any(row.get(key) is not None and proposed[str(row["year"])].get(key) != row.get(key)
+               for row in shared for key in BANK_KEYS)
+
+
+def _bank_model(doc: dict, agent: list[dict]) -> dict:
+    """What the bank model ran, read from the report document it built.
+
+    A sourced driver file (``data/bank_drivers/<T>.json``) replaces the
+    agent's drivers in the model (``forecast._bank_scenario``); the report
+    keeps the file it ran in ``model_inputs``, so the file on disk (which may
+    have changed since) is never read here. Without it, the report's validated
+    bank scenario rows are the model's out-years."""
+    fields = {"bank_drivers_model": None, "bank_drivers_used": None, "bank_drivers_note": None,
+              "bank_drivers_note_en": None, "bank_payout_rationale": None,
+              "bank_payout_rationale_en": None}
+    if not agent or not isinstance(doc, dict):
+        return fields
+    inputs = doc.get("model_inputs") if isinstance(doc.get("model_inputs"), dict) else {}
+    outyears = (doc.get("forecast_assumptions") or {}).get("outyear_scenario") if isinstance(
+        doc.get("forecast_assumptions"), dict) else None
+    data = inputs.get("drivers") if inputs.get("kind") == "bank" else None
+    if isinstance(data, dict):
+        ticker = str(data.get("ticker") or (doc.get("meta") or {}).get("ticker") or "").upper()
+        source = f"data/bank_drivers/{ticker}.json"
+        model = _curated_bank_rows(data, source)
+        reviewed = text(data.get("reviewed_at"), 20)
+        where = (f"berkas driver kurasi {source}" + (f" (ditinjau {reviewed})" if reviewed else ""),
+                 f"the curated driver file {source}" + (f" (reviewed {reviewed})" if reviewed else ""))
+        payout = data.get("payout_path") if isinstance(data.get("payout_path"), dict) else {}
+        why = str(payout.get("rationale") or "").strip()
+        fields.update(bank_payout_rationale=text(why, 600) or None,
+                      bank_payout_rationale_en=text(prose_lang.known(why), 600))
+    elif isinstance(outyears, dict) and outyears.get("status") == "validated_bank_driver_scenario":
+        model = [{"year": text(r.get("year"), 8), **{key: _number(r.get(key)) for key in BANK_KEYS},
+                  "payout_pct": None, "kinds": {},
+                  "rationale": text(r.get("rationale"), 1500),
+                  "rationale_en": text(prose_lang.known(r.get("rationale")), 1500),
+                  "source_ids": [], "source": "model"}
+                 for r in _list(outyears.get("rows"))[:6]]
+        where = ("driver yang tercatat di laporan", "the drivers the report records")
+    else:
+        return fields
+    used = not _differ(model, agent)
+    fields["bank_drivers_used"] = used
+    if not used:
+        fields.update(
+            bank_drivers_model=model,
+            bank_drivers_note=("Model bank tidak memakai driver usulan agent ini: neraca, laba dan "
+                               f"dividen dihitung dari {where[0]}."),
+            bank_drivers_note_en=("The bank model did not use the agent's proposed drivers: the "
+                                  "balance sheet, earnings and dividends are computed from "
+                                  f"{where[1]}."))
+    else:
+        fields.update(bank_payout_rationale=None, bank_payout_rationale_en=None)
+    return fields
+
+
+# Report out-year schedules the model builds itself, not from the agent's table
+# (``valuation`` for the LoM, ``forecast`` for the Operating Model).
+_SCHEDULES = {"lom_schedule": ("jadwal Life-of-Mine (LoM) tambang", "the mine's Life-of-Mine (LoM) schedule"),
+              "operating_driver_model": ("Operating Model {source}", "the Operating Model {source}")}
+
+
+def _outyears_model(doc: dict, agent: list[dict]) -> dict:
+    """Whether the model's FY+1..FY+4 forecast is the agent's out-year table.
+
+    A miner's forecast follows its Life-of-Mine schedule and an Operating
+    Model issuer's its driver file; the agent's table then stays as proposed
+    and the model's own rows (``outyears_model``) are what the report uses."""
+    fields = {"outyears_used": None, "outyears_note": None, "outyears_note_en": None,
+              "outyears_model": None}
+    forecast = doc.get("forecast_assumptions") if isinstance(doc, dict) else None
+    schedule = (forecast or {}).get("outyear_scenario") if isinstance(forecast, dict) else None
+    if not agent or not isinstance(schedule, dict):
+        return fields
+    status = schedule.get("status")
+    if status == "validated_analyst_scenario":
+        fields["outyears_used"] = True
+        return fields
+    if status not in _SCHEDULES:
+        return fields
+    rows = _list(schedule.get("rows"))[:6]
+    years = [r["year"] for r in rows if isinstance(r.get("year"), int)]
+    span = f"FY{min(years) % 100:02d}F-FY{max(years) % 100:02d}F" if years else "tahun lanjutan"
+    span_en = span if years else "out-year"
+    ticker = str((doc.get("meta") or {}).get("ticker") or "").upper()
+    source = f"(data/operating_drivers/{ticker}.json)" if ticker else ""
+    name_id, name_en = (part.format(source=source).strip() for part in _SCHEDULES[status])
+    fields.update(
+        outyears_used=False,
+        outyears_note=(f"Model tidak memakai tabel tahun lanjutan agent ini: forecast {span} "
+                       f"mengikuti {name_id}."),
+        outyears_note_en=(f"The model did not use the agent's out-year table: the {span_en} "
+                          f"forecast follows {name_en}."),
+        outyears_model=[{
+            "year": text(r.get("year"), 8),
+            **{key: _number(r.get(key)) for key in (
+                "revenue_growth_pct", "ebitda_margin_pct", "net_income_margin_pct",
+                "capex_to_revenue_pct")},
+            "rationale": text(r.get("rationale"), 600),
+            "rationale_en": text(prose_lang.known(r.get("rationale")), 600),
+            "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
+        } for r in rows])
+    return fields
+
+
+def _forecast(result: dict, doc: dict | None = None) -> dict:
     plan = result.get("plan") if isinstance(result.get("plan"), dict) else {}
     interim = plan.get("interim_scenario") if isinstance(plan.get("interim_scenario"), dict) else {}
     scenario = plan.get("earnings_scenario") if isinstance(plan.get("earnings_scenario"), dict) else {}
-
-    def number(value):
-        return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    number = _number
+    outyears = [{
+        "year": text(r.get("year"), 8),
+        "revenue_growth_pct": number(r.get("revenue_growth_pct")),
+        "ebitda_margin_pct": number(r.get("ebitda_margin_pct")),
+        "net_income_margin_pct": number(r.get("net_income_margin_pct")),
+        "capex_to_revenue_pct": number(r.get("capex_to_revenue_pct")),
+        "rationale": text(r.get("rationale"), 600),
+        "rationale_en": _plan_en(r.get("rationale_en"), 600),
+        **_sources(r),
+    } for r in _list(plan.get("outyear_scenario"))[:6]]
+    # Bank Driver Scenario (financial_ddm): the interim-year H2 drivers and
+    # the four out-years the agent proposed, in percent.
+    bank = [{
+        "year": text(r.get("year"), 8),
+        **{key: number(r.get(key)) for key in BANK_KEYS},
+        "rationale": text(r.get("rationale"), 600),
+        "rationale_en": _plan_en(r.get("rationale_en"), 600),
+        **_sources(r),
+    } for r in [scenario.get("bank_drivers")]
+        + _list(plan.get("bank_outyear_scenario"))[:4] if isinstance(r, dict)]
 
     return {
         "status": text(result.get("status"), 60),
@@ -169,16 +369,8 @@ def _forecast(result: dict) -> dict:
                                      or text(prose_lang.known(interim.get("rationale")), 2400)),
                     "published_at": text(interim.get("published_at"), 30),
                     "url": http_url(interim.get("source_url"))} if interim else None,
-        "outyears": [{
-            "year": text(r.get("year"), 8),
-            "revenue_growth_pct": number(r.get("revenue_growth_pct")),
-            "ebitda_margin_pct": number(r.get("ebitda_margin_pct")),
-            "net_income_margin_pct": number(r.get("net_income_margin_pct")),
-            "capex_to_revenue_pct": number(r.get("capex_to_revenue_pct")),
-            "rationale": text(r.get("rationale"), 600),
-            "rationale_en": _plan_en(r.get("rationale_en"), 600),
-            "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
-        } for r in _list(plan.get("outyear_scenario"))[:6]],
+        "outyears": outyears,
+        **_outyears_model(doc, outyears),
         # Spec §5.4 key risks and the catalyst table of the earnings scenario,
         # with the agent's English twins; the category and the direction are
         # codes whose English is the report's own label.
@@ -200,19 +392,82 @@ def _forecast(result: dict) -> dict:
             "direction_en": text(host_lang.english(c.get("direction")), 20),
             "source_ids": [text(s, 40) for s in (c.get("source_ids") or [])[:8]],
         } for c in _list(scenario.get("catalysts_risks"))[:10]],
-        # Bank Driver Scenario (financial_ddm): the interim-year H2 drivers and
-        # the four out-years, in percent.
-        "bank_drivers": [{
-            "year": text(r.get("year"), 8),
-            **{key: number(r.get(key)) for key in (
-                "loan_growth_pct", "nim_pct", "non_ii_to_nii_pct", "cost_to_income_pct",
-                "cost_of_credit_pct", "deposit_growth_pct")},
-            "rationale": text(r.get("rationale"), 600),
-            "rationale_en": _plan_en(r.get("rationale_en"), 600),
-            "source_ids": [text(s, 40) for s in (r.get("source_ids") or [])[:8]],
-        } for r in [(plan.get("earnings_scenario") or {}).get("bank_drivers")]
-            + _list(plan.get("bank_outyear_scenario"))[:4] if isinstance(r, dict)],
+        "bank_drivers": bank,
+        # What the bank model ran when it was not the agent's table.
+        **_bank_model(doc, bank),
     }
+
+
+_PEER_TABLE = "Perbandingan peer"
+_PEER_PACK = "Grup peer: alasan pemilihan"
+_PEER_SYMBOL = re.compile(r"\(([A-Z0-9.]{2,12})\)$")
+
+
+def _report_peers(doc: dict) -> dict | None:
+    """The peer group the report compares against, from its own exhibits:
+    {group, basis, as_of, source, members}, or None when it has no peer table.
+
+    The comparison table names each member "Name (CODE)", the issuer's row
+    ends "(emiten)", and its source note reads "Sumber: <source> (<basis>);
+    per <date>; ...". A curated pack also has its selection table, whose note
+    reads "Sumber: data/peer_groups/<T>.json (kurasi Sektoral, <as_of>). <basis>"."""
+    exhibits = _list(doc.get("exhibits")) if isinstance(doc, dict) else []
+    table = next((e for e in exhibits if str(e.get("judul") or "").startswith(_PEER_TABLE)), None)
+    if table is None:
+        return None
+    rows = ((table.get("data") or {}).get("rows") or []) if isinstance(table.get("data"), dict) else []
+    members = []
+    for row in rows:
+        name = str(row[0]).strip() if isinstance(row, list) and row else ""
+        found = _PEER_SYMBOL.search(name)
+        if found and not name.endswith("(emiten)"):
+            members.append(found.group(1).replace(".JK", ""))
+    note = str(table.get("catatan_sumber") or "")
+    listed = re.match(r"Sumber: (.+?) \((.+?)\); per (\d{4}-\d{2}-\d{2})", note)
+    out = {"group": str(table["judul"])[len(_PEER_TABLE):].strip() or None,
+           "source": listed.group(1) if listed else None,
+           "basis": listed.group(2) if listed else None,
+           "as_of": listed.group(3) if listed else None, "members": members}
+    pack = next((e for e in exhibits if e.get("judul") == _PEER_PACK), None)
+    curated = re.match(r"Sumber: (data/peer_groups/\S+\.json) \(kurasi Sektoral, ([^)]+)\)\. (.+)",
+                       str((pack or {}).get("catatan_sumber") or ""), re.DOTALL)
+    if curated:
+        out.update(source=curated.group(1), as_of=curated.group(2), basis=curated.group(3).strip())
+    return out
+
+
+def _peer_context(intel: dict, raw: dict, doc: dict | None) -> dict:
+    """The research run's peer group dated where its source has a date, and
+    the report's own group when the research run used another one.
+
+    A research run keeps the peer group it ranked against; the report is
+    rebuilt later and may compare against a newer group (GMFI and POWR moved
+    to IDX-only packs). ``peers_stale`` is None when the report has no peer
+    table to compare."""
+    raw_peers = raw.get("peers") if isinstance(raw.get("peers"), dict) else {}
+    as_of = text(raw_peers.get("as_of"), 20)
+    market = text(raw.get("market_date"), 20)
+    peers = {**(intel.get("peers") or {}), "as_of": as_of,
+             "as_of_note": None if as_of else (
+                 "Sumber tabel peer riset ini tidak mencantumkan tanggal snapshot"
+                 + (f"; data pasar riset per {market}." if market else ".")),
+             "as_of_note_en": None if as_of else (
+                 "The research run's peer table source states no snapshot date"
+                 + (f"; the run's market data are as of {market}." if market else "."))}
+    report = _report_peers(doc) if isinstance(doc, dict) else None
+    ran = {str(m.get("symbol") or "").replace(".JK", "") for m in _list(raw_peers.get("members"))
+           if not m.get("is_self")}
+    stale = None if report is None or not ran else ran != set(report["members"])
+    current = None
+    if stale:
+        group, basis = report["group"], report["basis"]
+        current = {"group": text(group, 160),
+                   "group_en": text(prose_lang.known(group) or host_lang.english(group), 160),
+                   "basis": text(basis, 1500),
+                   "basis_en": text(prose_lang.known(basis) or host_lang.english(basis), 1500),
+                   "as_of": text(report["as_of"], 20), "source": text(report["source"], 200),
+                   "members": [text(m, 12) for m in report["members"][:20]]}
+    return {"peers": peers, "peers_stale": stale, "peers_current": current}
 
 
 def _deepdive(items) -> list[dict]:
@@ -309,15 +564,22 @@ def _manifest(value: object) -> dict | None:
     }
 
 
-def build(audit: dict | None) -> dict | None:
-    """The browser-safe trace, or None when ``audit`` is not a trace."""
+def build(audit: dict | None, doc: dict | None = None) -> dict | None:
+    """The browser-safe trace, or None when ``audit`` is not a trace.
+
+    ``doc``, the report document the trace belongs to, says what the model
+    ran where it differs from the agents' proposals (bank drivers, out-year
+    schedules) and which peer group the report compares against."""
     if not isinstance(audit, dict) or not audit.get("ticker"):
         return None
     analyst = audit.get("analyst") if isinstance(audit.get("analyst"), dict) else {}
+    intel = public_intel(analyst)
+    if intel is not None:
+        intel.update(_peer_context(intel, analyst, doc))
     return {
         "ticker": text(audit.get("ticker"), 12),
         "report": _status(audit.get("report") if isinstance(audit.get("report"), dict) else {}),
-        "analyst": public_intel(analyst),
+        "analyst": intel,
         "analyst_problems": [text(p, 300) for p in (analyst.get("problems") or [])[:6] if isinstance(p, str)],
         "analyst_problems_en": _english_list(analyst.get("problems"), 300, 6),
         # The analyst records structured notes since #34; older runs are parsed.
@@ -329,7 +591,8 @@ def build(audit: dict | None) -> dict | None:
         "research": _research(audit.get("research") if isinstance(audit.get("research"), dict) else {}),
         "news": _news(audit.get("news_sources") if isinstance(audit.get("news_sources"), dict) else {}),
         "forecast": _forecast(audit.get("forecast_assumptions")
-                              if isinstance(audit.get("forecast_assumptions"), dict) else {}),
+                              if isinstance(audit.get("forecast_assumptions"), dict) else {},
+                              doc if isinstance(doc, dict) else None),
         "run_manifest": _manifest(audit.get("run_manifest")),
         "deepdive": _deepdive(audit.get("news_deepdive")),
     }

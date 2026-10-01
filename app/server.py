@@ -205,12 +205,14 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         t = ticker.upper()
         if not gallery.is_publishable(jobs.reports, t):
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
+        doc = outputs.load(outputs.REPORT, jobs.reports, t) if TICKER.fullmatch(t) else None
         view = trace_view.build(outputs.load(outputs.TRACE, jobs.reports, t)
-                                if TICKER.fullmatch(t) else None)
+                                if TICKER.fullmatch(t) else None, doc)
         if view is None:
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
-        view["audit_appendix"] = _audit_appendix(outputs.load(outputs.REPORT, jobs.reports, t))
-        view["review_state"] = "approved"
+        view["audit_appendix"] = _audit_appendix(doc)
+        # A report can be public without an approval (automatic publication).
+        view["review_state"] = assumption_review.status(jobs.reports, t)["state"]
         return data(view)
 
     @app.get("/api/reports/{ticker}/trace/preview")
@@ -222,10 +224,11 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         t = ticker.upper()
         if not TICKER.fullmatch(t):
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
-        view = trace_view.build(outputs.load(outputs.TRACE, jobs.reports, t))
+        doc = outputs.load(outputs.REPORT, jobs.reports, t)
+        view = trace_view.build(outputs.load(outputs.TRACE, jobs.reports, t), doc)
         if view is None:
             raise HTTPException(404, "Jejak riset tidak ditemukan.")
-        view["audit_appendix"] = _audit_appendix(outputs.load(outputs.REPORT, jobs.reports, t))
+        view["audit_appendix"] = _audit_appendix(doc)
         view["review_state"] = assumption_review.status(jobs.reports, t)["state"]
         return data(view)
 
