@@ -132,8 +132,8 @@ function SiteFooter() {
         <p className="max-w-[88ch] text-[13.5px] text-ink-soft">
           <strong className="text-ink">{t({ id: "Bukan rekomendasi investasi.", en: "Not investment advice." })}</strong>{" "}
           {t({
-            id: "Sektoral menyajikan informasi dan analisis untuk mendukung kerja analis. Rating dan target harga hanya muncul setelah pemeriksaan data, forecast, dan valuasi lolos. Sektoral tidak terhubung ke broker dan tidak mengeksekusi transaksi. Keputusan investasi tetap tanggung jawab pembaca.",
-            en: "Sektoral provides information and analysis to support analysts' work. A rating and target price appear only after the data, forecast and valuation checks pass. Sektoral is not connected to any broker and does not execute trades. Investment decisions remain the reader's responsibility.",
+            id: "Sektoral menyajikan informasi dan analisis untuk mendukung kerja analis. Rating dan target harga hanya muncul bila pemeriksaan rilis yang memblokir lolos; forecast berbasis asumsi dan temuan yang ditandai diberi label di laporan. Sektoral tidak terhubung ke broker dan tidak mengeksekusi transaksi. Keputusan investasi tetap tanggung jawab pembaca.",
+            en: "Sektoral provides information and analysis to support analysts' work. A rating and target price appear only when the blocking release checks pass; an assumption-led forecast and flagged findings are labelled in the report. Sektoral is not connected to any broker and does not execute trades. Investment decisions remain the reader's responsibility.",
           })}
         </p>
         <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-ink-soft">
