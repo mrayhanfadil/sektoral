@@ -27,6 +27,17 @@ TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.-]{0,9}$")
 JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 _SAFE_STATUS = re.compile(r"^[A-Za-z0-9_.-]{1,48}$")
 _MAX_EVENTS = 600
+# A run keeps every signal it computed; the view shows up to this many and
+# says how many there were (``signals_total``, ``web_news.total``).
+MAX_SIGNALS = 120
+MAX_WEB_ITEMS = 40
+# Peer signals computed from a peer's earnings (ROE, ROA, net margin).
+_EARNINGS_SIGNALS = ("peer.roe", "peer.roa", "peer.net_margin")
+_OUTLIER_NOTE = ("P/E positif padahal laba di baris ROE dan margin negatif: P/E dan laba "
+                 "berasal dari periode berbeda, sehingga multiple ini tidak sebanding")
+_OUTLIER_NOTE_EN = ("A positive P/E while the earnings behind ROE and margin are negative: the "
+                    "P/E and the earnings come from different periods, so the multiple is "
+                    "not comparable")
 
 
 def text(value, limit=400):
@@ -53,15 +64,24 @@ def public_intel(intel) -> dict | None:
     the host fallback plan and synthesis) gets its English here, old results
     included (``app.host_lang``); display values get English figures.
     ``verdict_code`` is the verdict's stable code, worked out for results
-    stored before it."""
+    stored before it.
+
+    Up to ``MAX_SIGNALS`` signals and ``MAX_WEB_ITEMS`` web news items are
+    shown, with their totals (``signals_total``, ``web_news.total``). A peer
+    row whose P/E is positive while the same peer's earnings are negative is
+    ``outlier`` with a note (``outlier_note``/``_en``)."""
     if not isinstance(intel, dict) or not isinstance(intel.get("plan"), dict):
         return None
     plan, synthesis = intel["plan"], intel.get("synthesis") or {}
     changes = intel.get("changes") or {}
+    raw_signals = [s for s in intel.get("signals") or [] if isinstance(s, dict)]
+    # A positive P/E beside negative earnings in the same peer table mixes
+    # periods (AMMN's peer MDKA at 9,141.7x): the row is marked, not dropped.
+    loss_making = {str(p.get("symbol")) for s in raw_signals if s.get("id") in _EARNINGS_SIGNALS
+                   for p in s.get("peers") or [] if isinstance(p, dict)
+                   and isinstance(p.get("value"), (int, float)) and p["value"] < 0}
     signals = []
-    for signal in intel.get("signals") or []:
-        if not isinstance(signal, dict):
-            continue
+    for signal in raw_signals[:MAX_SIGNALS]:
         row = {key: text(signal.get(key), 200) for key in
                ("id", "kind", "label", "label_en", "display", "note", "flag", "flag_en", "period",
                 "median_display")}
@@ -76,10 +96,22 @@ def public_intel(intel) -> dict | None:
         if signal.get("kind") == "web":
             row["url"] = http_url(signal.get("url"))
         if signal.get("kind") == "peer":
-            row["peers"] = [{"symbol": text(p.get("symbol"), 12), "display": text(p.get("display"), 40),
-                             "display_en": text(host_lang.figures(p.get("display")), 40)}
-                            for p in (signal.get("peers") or [])[:15] if isinstance(p, dict)]
+            row["peers"] = []
+            for p in (signal.get("peers") or [])[:15]:
+                if not isinstance(p, dict):
+                    continue
+                outlier = (signal.get("id") == "peer.pe" and str(p.get("symbol")) in loss_making
+                           and isinstance(p.get("value"), (int, float)) and p["value"] > 0)
+                row["peers"].append({
+                    "symbol": text(p.get("symbol"), 12), "display": text(p.get("display"), 40),
+                    "display_en": text(host_lang.figures(p.get("display")), 40),
+                    "outlier": outlier,
+                    "outlier_note": _OUTLIER_NOTE if outlier else None,
+                    "outlier_note_en": _OUTLIER_NOTE_EN if outlier else None})
         signals.append(row)
+
+    web_items = [i for i in ((intel.get("web_news") or {}).get("items") or [])
+                 if isinstance(i, dict) and http_url(i.get("url"))]
 
     def ids(values):
         return [text(x, 60) for x in (values or []) if isinstance(x, str)][:8]
@@ -113,15 +145,16 @@ def public_intel(intel) -> dict | None:
                       for key in ("tool", "why", "summary", "status", "origin")},
                    "why_en": twin(step, "why", 240), "summary_en": twin(step, "summary", 240)}
                   for step in (intel.get("steps") or [])[:10] if isinstance(step, dict)],
-        "signals": signals[:30],
+        "signals": signals,
+        "signals_total": len(raw_signals),
         "peers": {**{key: text((intel.get("peers") or {}).get(key), 160) for key in ("basis", "group")},
                   **{f"{key}_en": twin(intel.get("peers") or {}, key, 160) for key in ("basis", "group")}},
         "web_news": {"window": text(((intel.get("web_news") or {}).get("window")), 40),
                      "window_en": twin(intel.get("web_news") or {}, "window", 40),
                      "items": [{"title": text(i.get("title"), 200), "url": http_url(i.get("url")),
                                 "domain": text(i.get("domain"), 80), "date": text(i.get("date"), 12)}
-                               for i in ((intel.get("web_news") or {}).get("items") or [])[:8]
-                               if isinstance(i, dict) and http_url(i.get("url"))]},
+                               for i in web_items[:MAX_WEB_ITEMS]],
+                     "total": len(web_items)},
         "synthesis": {
             "headline": text(synthesis.get("headline"), 400), "source": text(synthesis.get("source"), 20),
             "headline_en": twin(synthesis, "headline", 400),
