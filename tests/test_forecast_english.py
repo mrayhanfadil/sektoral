@@ -243,7 +243,7 @@ def test_twins_follow_the_rules_of_their_indonesian_fields():
     chat, _ = _translator(english)
     _, notes = agent.translate_plan(plan, chat=chat)
     dropped = notes["dropped"]
-    assert any(n.startswith("earnings_scenario.key_risks[2].headline:") and "8-70" in n
+    assert any(n.startswith("earnings_scenario.key_risks[2].headline:") and "8-91" in n
                and "capital" in n for n in dropped)
     assert any(n.startswith("earnings_scenario.thesis_points[1]:") and "found 'hold'" in n
                for n in dropped)
@@ -608,3 +608,12 @@ def test_a_source_text_already_english_is_its_own_twin():
     assert scrub.english_problems("2H26 (forecast)", "2H26 (forecast)") == []
     assert "repeats the Indonesian instead of translating it" in scrub.english_problems(
         "Kualitas aset kredit UMKM", "Kualitas aset kredit UMKM")
+
+
+def test_an_english_twin_may_run_longer_than_its_indonesian_limit():
+    indonesian = "Kredit FY2026 tumbuh 10,0%; biaya kredit 3,10%. " * 6
+    english = "We project FY2026 loan growth of 10,0% and a cost of credit of 3,10%, rising gradually. " * 6
+    assert len(indonesian) <= 450 < len(english) <= agent._en_bounds((40, 450))[1]
+    assert not any("characters" in r for r in agent._twin_reasons(indonesian, english, (40, 450), None))
+    too_long = english + " Growth stays gradual across the forecast period." * 3
+    assert "must be 40-585 characters" in agent._twin_reasons(indonesian, too_long, (40, 450), None)
