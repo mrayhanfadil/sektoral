@@ -14,7 +14,7 @@ import functools
 import html
 import math
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from . import cache as cache_mod
@@ -1776,6 +1776,37 @@ def _source_appendix(notes, meta):
             f"<dl class='src-list'>{''.join(entries)}</dl></div>")
 
 
+def _local_day(stamp):
+    """The calendar day of a timestamp where the report is built (a Report
+    Date is a local day; 06:00 WIB is still the day before in UTC)."""
+    try:
+        return datetime.fromisoformat(str(stamp)).astimezone().date().isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def build_note(doc):
+    """The day the document was built (or rebuilt), when it is not the Report
+    Date: a house decision or policy dated after the Report Date then reads as
+    what it is, the policy in force when the report was built."""
+    manifest = doc.get("run_manifest") if isinstance(doc.get("run_manifest"), dict) else {}
+    rebuild = manifest.get("rebuild") if isinstance(manifest.get("rebuild"), dict) else {}
+    day = _local_day(rebuild.get("rebuilt_at") or manifest.get("built_at"))
+    report_day = str((doc.get("meta") or {}).get("tanggal") or "")[:10]
+    if not day or not report_day or day == report_day:
+        return None
+    if rebuild:
+        return _say(f"Disusun ulang {day} atas bukti per Tanggal Laporan {report_day}; rujukan "
+                    "bertanggal sesudah Tanggal Laporan adalah kebijakan yang berlaku saat "
+                    "disusun ulang.",
+                    f"Rebuilt on {day} from evidence as of the Report Date, {report_day}; "
+                    "references dated after the Report Date are policies in force at the rebuild.")
+    return _say(f"Disusun {day} atas bukti per Tanggal Laporan {report_day}; rujukan bertanggal "
+                "sesudah Tanggal Laporan adalah kebijakan yang berlaku saat disusun.",
+                f"Built on {day} from evidence as of the Report Date, {report_day}; references "
+                "dated after the Report Date are policies in force when it was built.")
+
+
 def render(doc, lang=report_lang.DEFAULT):
     """The Company Update HTML of `doc` in `lang` ("id" or "en")."""
     token = _NOTES.set([])
@@ -1937,6 +1968,9 @@ def _render(doc, prose_fallback=0):
         # English prose from the builder is final; only Indonesian notes are looked up.
         note = c if isinstance(c, prose_lang.Translated) else report_lang.note(c, lang)
         h.append(f"<li class='small'>{html.escape(note)}</li>")
+    built = build_note(doc)
+    if built:
+        h.append(f"<li class='small'>{html.escape(built)}</li>")
     h.append("</ul></div></body></html>")
     out = "\n".join(h)
     return out.replace("—", " - ").replace("–", "-")

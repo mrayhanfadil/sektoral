@@ -127,7 +127,7 @@ def _driver_examples():
          "FY2025 non-cash working capital negative (-4% of revenue); not counted as a source of "
          "cash"),
         (scenario_value.nwc_intensity(nwc(21.8))[1],
-         "FY2025 non-cash working capital, Sectors data (18.2% of revenue)"),
+         "FY2025 non-cash working capital, Sectors data (18,2% of revenue)"),
         ("model operasional (hari piutang, persediaan, utang usaha)",
          "per the Operating Model (receivable, inventory and payable days)"),
         ("parameter kebijakan analis", "analyst policy parameter"),

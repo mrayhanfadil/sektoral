@@ -80,3 +80,38 @@ def refresh_usd_idr(db=None, fetcher: Callable[[], dict] = fetch_usd_idr) -> dic
         raise ValueError("fetcher did not return USD/IDR source provenance")
     store.put(COLLECTION, KEY, data, db)
     return data
+
+
+# A rebuild whose source report converted at a rate no stored quote matches
+# recovers that rate from the source report (app.rebuild). It is not a Yahoo
+# Finance close, so it carries its own source and every label says so.
+IMPLIED_SOURCE = "tersirat dari report sumber (app.rebuild)"
+
+
+def implied_quote(rate: float, day: str) -> dict:
+    """A USD/IDR rate recovered from a source report, dated with its price date."""
+    return {"pair": "USD/IDR", "rate": float(rate), "date": str(day)[:10],
+            "source": IMPLIED_SOURCE}
+
+
+def is_implied(quote) -> bool:
+    return isinstance(quote, dict) and quote.get("source") == IMPLIED_SOURCE
+
+
+def basis(quote, english: bool = False) -> str:
+    """Where the quote comes from, as the report names it."""
+    if is_implied(quote):
+        return ("rate implied from the source report" if english
+                else "kurs tersirat dari report sumber")
+    return "Yahoo Finance IDR=X"
+
+
+def dated(quote, english: bool = False) -> str | None:
+    """The quote's date as the report prints it beside the rate; an implied
+    rate says so instead of passing for that day's close."""
+    if not isinstance(quote, dict) or not quote.get("date"):
+        return None
+    if is_implied(quote):
+        return (f"implied from the source report, price {quote['date']}" if english
+                else f"tersirat dari report sumber, harga {quote['date']}")
+    return str(quote["date"])

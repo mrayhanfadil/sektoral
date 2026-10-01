@@ -67,6 +67,7 @@ from __future__ import annotations
 import re
 
 from . import cache, fmt, release_policy, scenario_value, share_basis
+from .fx import dated as fx_dated
 from . import prose_lang  # app.valuation reaches this module while prose_lang loads
 
 
@@ -724,13 +725,13 @@ def forecast_rows(intake: dict, fc: dict | None, va: dict | None = None,
         spot = intake.get("fx_spot") or {}
         assumptions.append(_t(
             f"Skenario dalam US$ dikonversi ke Rupiah pada kurs Rp{fmt._id(fx, 0)}/US$ "
-            f"({spot.get('date') or 'tanggal kurs tidak tercatat'}), sama dengan Key Financials, "
+            f"({fx_dated(spot) or 'tanggal kurs tidak tercatat'}), sama dengan Key Financials, "
             "grafik dan DCF US$; "
             + (f"{usd_base['note']}." if usd_base else
                "neraca awal dari data Sectors dalam Rupiah (rilis tahunan resmi US$ tanpa "
                "ekuitas tahun dasar)."),
             f"The US$ scenario is converted to Rupiah at Rp{fmt._id(fx, 0)}/US$ "
-            f"({spot.get('date') or 'FX date not recorded'}), as in Key Financials, the charts "
+            f"({fx_dated(spot, english=True) or 'FX date not recorded'}), as in Key Financials, the charts "
             "and the US$ DCF; "
             + (f"{usd_base['note']}." if usd_base else
                "opening balance sheet from Sectors data in Rupiah (the official US$ annual "
