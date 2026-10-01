@@ -13,7 +13,8 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import fmt
+from . import fmt, prose_lang
+from .prose_lang import t as _t
 
 ROOT = Path(__file__).resolve().parent.parent / "data" / "consensus"
 TITLE = "Target harga Sektoral dan konsensus analis"
@@ -23,15 +24,18 @@ def load(ticker, as_of, root=ROOT):
     """(consensus, reason): the dated consensus, or None and why not."""
     path = Path(root) / f"{str(ticker).upper()}.json"
     if not path.exists():
-        return None, "konsensus analis belum dikumpulkan untuk emiten ini"
+        return None, _t("konsensus analis belum dikumpulkan untuk emiten ini",
+                        "analyst consensus has not been collected for this issuer")
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
         when = date.fromisoformat(doc["as_of"])
     except (OSError, ValueError, KeyError):
-        return None, "berkas konsensus tidak valid"
+        return None, _t("berkas konsensus tidak valid", "the consensus file is not valid")
     if as_of and when > date.fromisoformat(str(as_of)[:10]):
-        return None, (f"konsensus diambil {when.isoformat()}, sesudah tanggal laporan; tidak "
-                      "dipakai (tanpa data sesudah tanggal laporan)")
+        return None, _t(f"konsensus diambil {when.isoformat()}, sesudah tanggal laporan; tidak "
+                        "dipakai (tanpa data sesudah tanggal laporan)",
+                        f"consensus retrieved {when.isoformat()}, after the Report Date; not used "
+                        "(no data after the Report Date)")
     return doc, None
 
 
@@ -41,21 +45,28 @@ def exhibit(ticker, as_of, target, rating, price, root=ROOT):
     rp = lambda v: f"Rp{fmt.rp(v)}"
     rows = [["Target harga Sektoral", f"{rating or '-'} {rp(target)}" if target else "-"]]
     if not doc:
-        rows.append(["Konsensus analis", f"tidak tersedia: {why}"])
+        rows.append(["Konsensus analis", _t(f"tidak tersedia: {why}", f"not available: {why}")])
         note = "Sumber: Sektoral Estimates."
     else:
         avg = doc["target_avg"]
         rows += [
             [f"Rata-rata target konsensus ({doc['analysts']} analis)", rp(avg)],
-            ["Rentang target konsensus", f"{rp(doc['target_low'])} s.d. {rp(doc['target_high'])}"],
+            ["Rentang target konsensus", _t(f"{rp(doc['target_low'])} s.d. {rp(doc['target_high'])}",
+                                            f"{rp(doc['target_low'])} to {rp(doc['target_high'])}")],
             ["Rekomendasi (beli / tahan / jual)", f"{doc['buy']} / {doc['hold']} / {doc['sell']}"],
             ["Target Sektoral terhadap rata-rata konsensus",
              fmt.pct(target / avg - 1) if target and avg else
-             "tidak dihitung: target harga Sektoral ditahan"],
+             _t("tidak dihitung: target harga Sektoral ditahan",
+                "not computed: the Sektoral Target Price is withheld")],
             ["Upside rata-rata konsensus terhadap harga",
-             fmt.pct(avg / price - 1) if price else "tidak dihitung: harga pasar tidak tersedia"],
-            ["Estimasi konsensus pendapatan, EBITDA, laba", doc.get("estimates_note") or "-"],
-            ["Sumber konsensus", f"{doc['source_title']}, diambil {doc['as_of']}"]]
+             fmt.pct(avg / price - 1) if price else
+             _t("tidak dihitung: harga pasar tidak tersedia",
+                "not computed: no market price is available")],
+            # The file's own note (data/consensus), English in data/source_text_en.
+            ["Estimasi konsensus pendapatan, EBITDA, laba",
+             prose_lang.source(doc.get("estimates_note")) or "-"],
+            ["Sumber konsensus", _t(f"{doc['source_title']}, diambil {doc['as_of']}",
+                                    f"{doc['source_title']}, retrieved {doc['as_of']}")]]
         note = f"Sumber: {doc['source_title']} ({doc['source_url']}), diambil {doc['as_of']}; Sektoral Estimates."
     return {"n": 0, "judul": TITLE, "tipe": "tabel",
             "data": {"cols": ["Keterangan", "Nilai"], "rows": rows}, "catatan_sumber": note}

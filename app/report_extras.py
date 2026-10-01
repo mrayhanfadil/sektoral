@@ -170,9 +170,11 @@ def holding_sotp_exhibit(va):
     bn = lambda v: fmt._id(v / 1e9, 1)
     rows = []
     for c in d["components"]:
-        rows.append([f"{c['name']} ({c['ticker']}), {c['segment']}: {fmt.pct(c['stake'])} x "
-                     f"kapitalisasi Rp{bn(c['market_cap'])} miliar", "nilai pasar",
-                     bn(c["market_value"])])
+        rows.append([_t(f"{c['name']} ({c['ticker']}), {c['segment']}: {fmt.pct(c['stake'])} x "
+                        f"kapitalisasi Rp{bn(c['market_cap'])} miliar",
+                        f"{c['name']} ({c['ticker']}), {prose_lang.label(c['segment'])}: "
+                        f"{fmt.pct(c['stake'])} x market cap of Rp{bn(c['market_cap'])} miliar"),
+                     "nilai pasar", bn(c["market_value"])])
     rows.append([f"Ekuitas pemilik induk per {d.get('balance_period') or '-'}", "nilai buku",
                  bn(d["parent_equity"])])
     for c in d["components"]:
@@ -183,8 +185,10 @@ def holding_sotp_exhibit(va):
                  "nilai buku", bn(d["remainder_book"])])
     if land:
         li = land["inputs"]
-        rows.append([f"Revaluasi landbank: RNAV Rp{bn(land['nav'])} miliar dikurangi nilai buku "
-                     f"Rp{bn(li['carrying_idr'])} miliar, porsi {fmt.pct(li['stake'])}",
+        rows.append([_t(f"Revaluasi landbank: RNAV Rp{bn(land['nav'])} miliar dikurangi nilai buku "
+                        f"Rp{bn(li['carrying_idr'])} miliar, porsi {fmt.pct(li['stake'])}",
+                        f"Landbank revaluation: RNAV of Rp{bn(land['nav'])} miliar less book value "
+                        f"of Rp{bn(li['carrying_idr'])} miliar, {fmt.pct(li['stake'])} share"),
                      "RNAV", bn(d["landbank_uplift"])])
     rows.append(["Total nilai SOTP", "", bn(d["total"])])
     for item in d["discounts"]:
@@ -228,36 +232,52 @@ def landbank_exhibits(va):
     shares = sotp["detail"]["shares"]
     bn = lambda v: fmt._id(v / 1e9, 0)
     land_src = ev.get("land_for_development") or {}
+    # The bases are the analyst file's words (data/source_text_en has their English).
+    basis = lambda key: prose_lang.label(lb.get(key)) if lb.get(key) else "-"  # noqa: E731
     rows = [
         ["Tanah untuk pengembangan (bruto)", f"{fmt._id(li['gross_ha'], 0)} ha",
-         f"audit {li['carrying_as_of']}, {land_src.get('page')}"],
+         _t(f"audit {li['carrying_as_of']}, {land_src.get('page')}",
+            f"audit {li['carrying_as_of']}, {prose_lang.label(land_src.get('page'))}")],
         ["Nilai buku tanah", f"Rp{bn(li['carrying_idr'])} miliar",
-         f"Rp{fmt._id(li['carrying_idr'] / (li['gross_ha'] * 10_000) / 1000, 0)} ribu/m2 bruto"],
+         _t(f"Rp{fmt._id(li['carrying_idr'] / (li['gross_ha'] * 10_000) / 1000, 0)} ribu/m2 bruto",
+            f"Rp{fmt._id(li['carrying_idr'] / (li['gross_ha'] * 10_000) / 1000, 0)} thousand/m2 "
+            "gross")],
         ["Porsi dapat dijual (asumsi analis)", fmt.pct(li["net_ratio"]),
-         lb.get("net_saleable_basis") or "-"],
-        ["Laju penjualan", f"{fmt._id(li['pace_ha'], 1)} ha/tahun",
-         lb.get("pace_basis") or "-"],
-        ["Harga jual awal", f"Rp{fmt._id(li['asp'] / 1000, 0)} ribu/m2",
+         basis("net_saleable_basis")],
+        ["Laju penjualan", _t(f"{fmt._id(li['pace_ha'], 1)} ha/tahun",
+                              f"{fmt._id(li['pace_ha'], 1)} ha/yr"),
+         basis("pace_basis")],
+        ["Harga jual awal", _t(f"Rp{fmt._id(li['asp'] / 1000, 0)} ribu/m2",
+                               f"Rp{fmt._id(li['asp'] / 1000, 0)} thousand/m2"),
          "marketing sales 1H26 (9,4 ha, Rp195,9 miliar)"],
-        ["Pertumbuhan harga", fmt.pct(li["asp_growth"]), lb.get("growth_basis") or "-"],
+        ["Pertumbuhan harga", fmt.pct(li["asp_growth"]), basis("growth_basis")],
         ["Margin kas", fmt.pct(li["cash_margin"]),
-         f"laba kotor {fmt.pct(li['gross_margin'])} + biaya buku lahan "
-         f"{fmt.pct(li['land_cost_share'])} - beban usaha {fmt.pct(li['opex_ratio'])} - PPh final "
-         f"{fmt.pct(li['final_tax'])} (segmen properti {li['margin_periods']})"],
-        ["Tingkat diskonto", fmt.pct(land["rate"]), lb.get("discount_basis") or "-"],
+         _t(f"laba kotor {fmt.pct(li['gross_margin'])} + biaya buku lahan "
+            f"{fmt.pct(li['land_cost_share'])} - beban usaha {fmt.pct(li['opex_ratio'])} - PPh final "
+            f"{fmt.pct(li['final_tax'])} (segmen properti {li['margin_periods']})",
+            f"gross margin {fmt.pct(li['gross_margin'])} + land book cost "
+            f"{fmt.pct(li['land_cost_share'])} - operating expenses {fmt.pct(li['opex_ratio'])} - "
+            f"final income tax {fmt.pct(li['final_tax'])} (property segment "
+            f"{li['margin_periods']})")],
+        ["Tingkat diskonto", fmt.pct(land["rate"]), basis("discount_basis")],
         ["RNAV landbank (100%)", f"Rp{bn(land['nav'])} miliar",
-         f"terjual habis dalam {land['years']} tahun"],
+         _t(f"terjual habis dalam {land['years']} tahun",
+            f"sold out within {land['years']} years")],
         [f"Tambahan nilai porsi SSIA ({fmt.pct(li['stake'])})",
          f"Rp{bn(land['uplift_attributable'])} miliar",
-         f"{_rp_signed(land['uplift_attributable'] / shares)} per saham"],
+         _t(f"{_rp_signed(land['uplift_attributable'] / shares)} per saham",
+            f"{_rp_signed(land['uplift_attributable'] / shares)} per share")],
     ]
     appraisal = ev.get("appraisal") or {}
     if appraisal.get("fair_value_idr") and appraisal.get("area_m2"):
+        per_m2 = fmt._id(appraisal['fair_value_idr'] / appraisal['area_m2'] / 1000, 0)
         rows.append(["Cross-check penilai independen",
-                     f"Rp{fmt._id(appraisal['fair_value_idr'] / appraisal['area_m2'] / 1000, 0)} "
-                     "ribu/m2 bruto",
-                     f"{fmt._id(appraisal.get('area_ha'), 0)} ha, {appraisal.get('method')}, "
-                     f"{appraisal.get('appraisal_date')} (tanah mentah, sebelum pengembangan)"])
+                     _t(f"Rp{per_m2} ribu/m2 bruto", f"Rp{per_m2} thousand/m2 gross"),
+                     _t(f"{fmt._id(appraisal.get('area_ha'), 0)} ha, {appraisal.get('method')}, "
+                        f"{appraisal.get('appraisal_date')} (tanah mentah, sebelum pengembangan)",
+                        f"{fmt._id(appraisal.get('area_ha'), 0)} ha, "
+                        f"{prose_lang.label(appraisal.get('method'))}, "
+                        f"{appraisal.get('appraisal_date')} (raw land, before development)")])
     growths = sorted({g for (_, g) in land["grid"]})
     # The base pace joins the grid (same landbank.nav as the valuation) so the
     # base row and column can be marked and highlighted.
@@ -792,9 +812,11 @@ def peer_page(intake, valuation_inputs=None):
     exhibits = [_exhibit(
         "Grup peer: alasan pemilihan",
         ["Emiten", "Bursa", "Status", "Alasan"],
-        [[p.get("name") or p["symbol"], p.get("market") or "-", "dipakai", p["reason"]]
-         for p in curated["peers"]]
-        + [[x["symbol"], "BEI", "dikeluarkan", x["reason"]] for x in curated.get("excluded") or []],
+        # The curation file's reasons, English in data/source_text_en.
+        [[p.get("name") or p["symbol"], p.get("market") or "-", "dipakai",
+          prose_lang.source(p["reason"])] for p in curated["peers"]]
+        + [[x["symbol"], "BEI", "dikeluarkan", prose_lang.source(x["reason"])]
+           for x in curated.get("excluded") or []],
         f"Sumber: data/peer_groups/{ticker}.json (kurasi Sektoral, {curated.get('as_of')}). "
         + curated["basis"])] if curated else []
     exhibits += [_exhibit(
@@ -2053,50 +2075,83 @@ def mining_catalysts(doc, intake):
     balance = evidence.get("balance_sheet") or {}
     published = actual.get("published_at") or "-"
     period = actual.get("period") or "periode terakhir"
-    rows = []
+    rows, rows_en = [], []
+
+    def add(*cells):
+        """A row of (Indonesian, English) cells. The rows stay Indonesian in the
+        English run too (link_catalysts matches their words); the English rides
+        in rows_en (app.prose_lang)."""
+        rows.append([c[0] for c in cells])
+        rows_en.append([c[1] for c in cells])
+
     if operating:
-        rows.append(["Volume dan kadar tambang", f"{operating[0]['fact']} (rilis {published})",
-                     "Volume konsentrat dan kadar menentukan pendapatan serta EBITDA tahun berjalan.",
-                     "Positif; turun bila kadar kembali melemah"])
+        add(("Volume dan kadar tambang", "Mine volume and grade"),
+            (f"{operating[0]['fact']} (rilis {published})",
+             f"{prose_lang.label(operating[0]['fact'])} (release {published})"),
+            ("Volume konsentrat dan kadar menentukan pendapatan serta EBITDA tahun berjalan.",
+             "Concentrate volume and grade set revenue and EBITDA for the current year."),
+            ("Positif; turun bila kadar kembali melemah", "Positive; down if grades weaken again"))
     if len(operating) > 1:
-        rows.append(["Ramp-up pemrosesan", f"{operating[1]['fact']} (rilis {published})",
-                     "Utilisasi smelter dan PMR menaikkan porsi produk olahan dan margin.",
-                     "Positif bila utilisasi naik; negatif bila terjadi gangguan"])
+        add(("Ramp-up pemrosesan", "Processing ramp-up"),
+            (f"{operating[1]['fact']} (rilis {published})",
+             f"{prose_lang.label(operating[1]['fact'])} (release {published})"),
+            ("Utilisasi smelter dan PMR menaikkan porsi produk olahan dan margin.",
+             "Smelter and PMR utilisation raise the share of refined products and margins."),
+            ("Positif bila utilisasi naik; negatif bila terjadi gangguan",
+             "Positive if utilisation rises; negative on disruptions"))
     attainment = guidance_attainment(evidence)
     if attainment:
         low = min(r[3] for r in attainment)
         high = max(r[3] for r in attainment)
-        rows.append([f"Pencapaian panduan {_guidance_period(evidence)}",
-                     f"Realisasi {period} {fmt.pct(low)} sampai {fmt.pct(high)} dari panduan volume.",
-                     "Volume semester kedua menentukan EBITDA forecast dan target harga.",
-                     "Negatif bila semester kedua di bawah laju yang disiratkan panduan"])
+        add((f"Pencapaian panduan {_guidance_period(evidence)}",
+             f"{_guidance_period(evidence)} guidance attainment"),
+            (f"Realisasi {period} {fmt.pct(low)} sampai {fmt.pct(high)} dari panduan volume.",
+             f"{prose_lang.label(period)} delivery of {fmt.pct(low)} to {fmt.pct(high)} of volume "
+             "guidance."),
+            ("Volume semester kedua menentukan EBITDA forecast dan target harga.",
+             "Second-half volumes set forecast EBITDA and the Target Price."),
+            ("Negatif bila semester kedua di bawah laju yang disiratkan panduan",
+             "Negative if the second half runs below the pace guidance implies"))
     for name in _commodities(intake):
         points = _series(name, intake.get("as_of"))
         change = _change_12m(points)
         if change is None:
             continue
-        rows.append([f"Harga {COMMODITY_UNITS[name][0].lower()}",
-                     f"{'Naik' if change >= 0 else 'Turun'} {fmt.pct(abs(change))} dalam 12 bulan "
-                     f"(data s.d. {points[-1][0].isoformat()}).",
-                     "Harga realisasi langsung mengalir ke pendapatan; lihat tabel sensitivitas.",
-                     "Dua arah"])
+        add((f"Harga {COMMODITY_UNITS[name][0].lower()}", f"{name} price"),
+            (f"{'Naik' if change >= 0 else 'Turun'} {fmt.pct(abs(change))} dalam 12 bulan "
+             f"(data s.d. {points[-1][0].isoformat()}).",
+             f"{'Up' if change >= 0 else 'Down'} {fmt.pct(abs(change))} over 12 months "
+             f"(data to {points[-1][0].isoformat()})."),
+            ("Harga realisasi langsung mengalir ke pendapatan; lihat tabel sensitivitas.",
+             "Realised prices flow straight into revenue; see the sensitivity table."),
+            ("Dua arah", "Two-way"))
     debt, cash = balance.get("total_debt"), balance.get("cash")
     if debt is not None and cash is not None:
-        rows.append(["Utang bersih dan capex",
-                     f"Utang bersih US${fmt._id((debt - cash) / 1e6, 0)} juta per "
-                     f"{balance.get('period_end', '-')}.",
-                     "Beban bunga dan capex memengaruhi laba bersih dan nilai ekuitas.",
-                     "Negatif bila capex pengembangan dipercepat"])
+        add(("Utang bersih dan capex", "Net debt and capex"),
+            (f"Utang bersih US${fmt._id((debt - cash) / 1e6, 0)} juta per "
+             f"{balance.get('period_end', '-')}.",
+             f"Net debt US${fmt._id((debt - cash) / 1e6, 0)} juta at "
+             f"{balance.get('period_end', '-')}."),
+            ("Beban bunga dan capex memengaruhi laba bersih dan nilai ekuitas.",
+             "Interest expense and capex affect net profit and equity value."),
+            ("Negatif bila capex pengembangan dipercepat",
+             "Negative if development capex is brought forward"))
     if life.get("elang_fid_target") or life.get("elang_first_ore"):
-        rows.append(["Pengembangan Elang",
-                     f"Target keputusan investasi {life.get('elang_fid_target', '-')}; "
-                     f"bijih pertama {life.get('elang_first_ore', '-')}.",
-                     "Capex pengembangan menekan arus kas bebas; nilai aset baru masuk setelah LoM tersedia.",
-                     "Dua arah"])
+        add(("Pengembangan Elang", "Elang development"),
+            (f"Target keputusan investasi {life.get('elang_fid_target', '-')}; "
+             f"bijih pertama {life.get('elang_first_ore', '-')}.",
+             f"Final investment decision targeted {life.get('elang_fid_target', '-')}; "
+             f"first ore {life.get('elang_first_ore', '-')}."),
+            ("Capex pengembangan menekan arus kas bebas; nilai aset baru masuk setelah LoM tersedia.",
+             "Development capex weighs on free cash flow; the asset value enters once the LoM is "
+             "available."),
+            ("Dua arah", "Two-way"))
     for exhibit in doc["exhibits"]:
         if exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS) and rows:
             exhibit["data"] = {"cols": ["Katalis / risiko", "Waktu dan bukti",
                                         "Driver dan jalur dampak", "Arah"], "rows": rows}
+            if prose_lang.english():
+                exhibit["data"]["rows_en"] = rows_en
             exhibit["catatan_sumber"] = (
                 f"Sumber fakta: {actual.get('source_title')} (terbit {published}); Sectors untuk "
                 "harga komoditas. Kolom driver dan arah adalah analisis Sektoral.")
@@ -2245,7 +2300,8 @@ def drop_screening_values(doc):
                     continue
                 label = str(row[0]).strip().lower()
                 if label.startswith("keputusan rilis") and len(row) > 1:
-                    row[1] = "Rating dan target harga ditahan sampai seluruh pemeriksaan selesai."
+                    row[1] = _t("Rating dan target harga ditahan sampai seluruh pemeriksaan selesai.",
+                                "Rating and Target Price are withheld until every check is complete.")
                 if re.search(r"nilai (?:wajar|model) per saham|nilai per saham|target harga", label):
                     for index in range(1, len(row)):
                         row[index] = "Ditahan"
@@ -3433,9 +3489,13 @@ def driver_value_page(doc, intake):
                        rows, "Sumber: berkas driver bersumber dan model yang sama; " + dv["method"] + ".")
     cases = dv["cases"]
     case_rows = []
-    for key, label, text in (("downside", "Turun", "semua driver pada ujung merugikan rentang uji"),
-                             ("base", "Dasar", "driver dasar"),
-                             ("upside", "Naik", "semua driver pada ujung menguntungkan rentang uji")):
+    for key, label, text in (("downside", "Turun",
+                              _t("semua driver pada ujung merugikan rentang uji",
+                                 "every driver at the adverse end of its tested range")),
+                             ("base", "Dasar", _t("driver dasar", "base drivers")),
+                             ("upside", "Naik",
+                              _t("semua driver pada ujung menguntungkan rentang uji",
+                                 "every driver at the favourable end of its tested range"))):
         c = cases[key]
         vs = f"{(c['per_share'] / price - 1) * 100:+.1f}%" if price else "-"
         profit = [fmt._id(c["fy1_profit"] / 1e9, 1)] if with_profit else []
@@ -3462,31 +3522,48 @@ def investability_page(doc, intake):
         return None
     liq, ff = inv.get("liquidity") or {}, inv.get("free_float") or {}
     rows = []
+
+    def missing(reason):
+        """An unavailable measure and why (app.investability writes the reason)."""
+        return _t(f"tidak tersedia: {reason}", f"not available: {prose_lang.label(reason)}")
+
     if liq.get("status") == "available":
-        rows.append(["Jendela observasi", f"{liq['sessions']} sesi, {liq['start']} s.d. {liq['end']} ({liq['source']})"])
+        rows.append(["Jendela observasi", _t(
+            f"{liq['sessions']} sesi, {liq['start']} s.d. {liq['end']} ({liq['source']})",
+            f"{liq['sessions']} sessions, {liq['start']} to {liq['end']} "
+            f"({prose_lang.label(liq['source'])})")])
         rows.append(["Nilai transaksi harian median / rata-rata",
                      f"Rp{fmt._id(liq['median_value'] / 1e9, 1)} miliar / Rp{fmt._id(liq['mean_value'] / 1e9, 1)} miliar"])
         rows.append(["Sesi tanpa volume", str(liq["zero_volume_sessions"])])
     else:
-        rows.append(["Likuiditas", f"tidak tersedia: {liq.get('reason')}"])
-    rows.append(["Free float", (f"{fmt._id(ff['pct'], 1)}% ({ff['source']})"
-                                + (f"; nilai Rp{fmt._id(ff['value'] / 1e9, 0)} miliar" if ff.get("value") else ""))
-                 if ff.get("status") == "available" else f"tidak tersedia: {ff.get('reason')}"])
-    rows.append(["Papan pencatatan", f"{inv.get('board')} ({inv.get('board_source')})" if inv.get("board")
-                 else "tidak tersedia"])
-    rows.append(["Status perdagangan", f"tidak tersedia: {inv['trading_status']['reason']}"])
+        rows.append(["Likuiditas", missing(liq.get("reason"))])
+    rows.append(["Free float", (f"{fmt._id(ff['pct'], 1)}% ({prose_lang.label(ff['source'])})"
+                                + (_t(f"; nilai Rp{fmt._id(ff['value'] / 1e9, 0)} miliar",
+                                      f"; value Rp{fmt._id(ff['value'] / 1e9, 0)} miliar")
+                                   if ff.get("value") else ""))
+                 if ff.get("status") == "available" else missing(ff.get("reason"))])
+    rows.append(["Papan pencatatan",
+                 f"{inv.get('board')} ({prose_lang.label(inv.get('board_source'))})" if inv.get("board")
+                 else _t("tidak tersedia", "not available")])
+    rows.append(["Status perdagangan", missing(inv["trading_status"]["reason"])])
     for pos in liq.get("positions") or []:
-        rows.append([f"Ilustrasi posisi Rp{fmt._id(pos['position'] / 1e9, 0)} miliar",
-                     f"sekitar {fmt._id(pos['days'], 1)} hari bursa pada partisipasi "
-                     f"{fmt._id(pos['participation'] * 100, 0)}% nilai transaksi median"])
+        rows.append([f"Ilustrasi posisi Rp{fmt._id(pos['position'] / 1e9, 0)} miliar", _t(
+            f"sekitar {fmt._id(pos['days'], 1)} hari bursa pada partisipasi "
+            f"{fmt._id(pos['participation'] * 100, 0)}% nilai transaksi median",
+            f"about {fmt._id(pos['days'], 1)} trading days at "
+            f"{fmt._id(pos['participation'] * 100, 0)}% participation in the median traded value")])
     liquidity = _exhibit("Likuiditas dan investabilitas", ["Ukuran", "Nilai"], rows,
                          "Ilustrasi posisi memakai ukuran posisi dan tingkat partisipasi yang "
                          "dinyatakan; tidak berarti order dapat dieksekusi pada harga kutipan.")
     bq_rows = []
     for item in inv.get("business_quality") or []:
-        sources = "; ".join(f"{e['title']} ({e['published_at']}, {e.get('page') or '-'})"
+        # Document titles stay as published; the issuer pack's words (assessment,
+        # model effect, page notes) through data/source_text_en.
+        sources = "; ".join(f"{prose_lang.quoted(e['title'])} ({e['published_at']}, "
+                            f"{prose_lang.source(e.get('page')) or '-'})"
                             for e in item["evidence"]) or "-"
-        bq_rows.append([item["label"], item["assessment"], item.get("model_effect") or "-", sources])
+        bq_rows.append([item["label"], prose_lang.label(item["assessment"]),
+                        prose_lang.source(item.get("model_effect")) or "-", sources])
     quality = _exhibit("Kualitas bisnis", ["Dimensi", "Penilaian", "Dampak ke model", "Sumber"],
                        bq_rows, "Setiap dimensi memakai bukti bertanggal; dimensi tanpa bukti "
                        "tidak dijawab. Risiko yang sudah ada di arus kas tidak didiskon lagi.")
@@ -3706,9 +3783,11 @@ def link_catalysts(doc, intake):
         return
     bounds = {"Buy": [price * (1 + D.BUY)], "Sell": [price * (1 + D.SELL)],
               "Hold": [price * (1 + D.BUY), price * (1 + D.SELL)]}[rating]
-    band_text = "; ".join(
+    band_text = "; ".join(_t(
         f"nilai {'di atas' if b > base else 'di bawah'} Rp{fmt._id(b, 0)} menjadi "
-        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}" for b in bounds)
+        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}",
+        f"value {'above' if b > base else 'below'} Rp{fmt._id(b, 0)} becomes "
+        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))}") for b in bounds)
     for page in doc.get("bagian") or []:
         for exhibit in page.get("exhibit") or []:
             if not exhibit_ids.is_exhibit(exhibit, exhibit_ids.CATALYSTS):
@@ -3721,16 +3800,24 @@ def link_catalysts(doc, intake):
                 driver = _driver_for(row, drivers) if drivers else None
                 if driver:
                     moves = [m for m in (D._move_to(driver, b, base) for b in bounds) if m]
-                    threshold = ("; atau ".join(
+                    threshold = (_t("; atau ", "; or ").join(_t(
                         f"{D._step_text(driver, m)} (rating menjadi "
-                        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))})"
-                        for m, b in zip(moves, bounds)) if moves else
-                        f"driver ini sendiri tidak mengubah rating dalam rentang uji; {band_text}")
-                    row += [f"{driver['driver']} ({driver['base']})", threshold]
+                        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))})",
+                        f"{D._step_text(driver, m)} (rating becomes "
+                        f"{D._band(b / price - 1 + (1e-6 if b > base else -1e-6))})")
+                        for m, b in zip(moves, bounds)) if moves else _t(
+                        f"driver ini sendiri tidak mengubah rating dalam rentang uji; {band_text}",
+                        f"this driver alone does not change the rating within its tested range; "
+                        f"{band_text}"))
+                    row += [f"{prose_lang.label(driver['driver'])} "
+                            f"({prose_lang.label(driver['base'])})", threshold]
                 else:
-                    row += [("tidak terhubung ke driver di tabel driver-ke-nilai" if drivers else
-                             "laporan tanpa tabel driver-ke-nilai (Assumption-Led)"),
-                            f"Rating {rating} berubah bila {band_text}"]
+                    row += [(_t("tidak terhubung ke driver di tabel driver-ke-nilai",
+                                "not linked to a driver in the driver-to-value table") if drivers else
+                             _t("laporan tanpa tabel driver-ke-nilai (Assumption-Led)",
+                                "report without a driver-to-value table (Assumption-Led)")),
+                            _t(f"Rating {rating} berubah bila {band_text}",
+                               f"The {rating} rating changes if {band_text}")]
             exhibit["catatan_sumber"] = (str(exhibit.get("catatan_sumber") or "").rstrip(". ")
                                          + ". Ambang dibaca linear dari rentang uji tabel "
                                          "driver-ke-nilai; bukan probabilitas.")
