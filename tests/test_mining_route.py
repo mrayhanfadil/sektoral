@@ -8,7 +8,7 @@ import json
 import re
 from pathlib import Path
 
-from app import build, commodity, fx, prose_lang, rates, server, store
+from app import build, commodity, fmt, fx, prose_lang, rates, server, store
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PLAN = json.loads((FIXTURES / "ammn_interim_plan.json").read_text())
@@ -129,6 +129,31 @@ def test_ammn_audit_appendix_has_english_for_its_template_text(tmp_path):
 
 # Two sentences run together: a full stop straight into the next sentence.
 _RUN_ON = re.compile(r"[a-z)]\.[A-Z][a-z]")
+
+
+def test_ammn_prose_describes_the_escalated_deck_the_lom_runs(tmp_path):
+    """Since the LoM escalates the deck, costs and capex with US inflation, the
+    target-price paragraph and the methodology note say so, at the model's own
+    rate, in both languages; nothing says the deck is held flat (#50)."""
+    store.put(commodity.COLLECTION, "Copper", COPPER)
+    store.put(fx.COLLECTION, fx.KEY, USD_IDR)
+    store.put(rates.COLLECTION, rates.UST10Y, UST_10Y)
+    doc = build.build("AMMN", tmp_path, as_of="2026-09-24", assumption_plan=PLAN,
+                      assumption_status="validated")
+    inputs = doc["model_inputs"]["inputs"]
+    assert inputs["escalation"] > 0
+    rate = fmt.pct(inputs["escalation"])
+    paragraph = next(p for p in doc["cover"]["paragraf"] if "memakai SOTP/LoM" in p["isi"])
+    note = next(n for n in doc["catatan_metodologi"] if n.startswith("Dek harga"))
+    for text in (paragraph["isi"], note):
+        assert f"menjadi dek 2026 dan sesudahnya dieskalasi {inputs['escalation_basis']}" in text
+        assert "bersama biaya dan capex" in text and "datar" not in text
+    english = [paragraph["isi_en"], doc["catatan_metodologi_en"][
+        doc["catatan_metodologi"].index(note)]]
+    for text in english:
+        assert (f"escalated after that by long-run US inflation of {rate} a year "
+                "(IMF WEO Apr 2026), as are costs and capex") in text
+        assert "held flat" not in text
 
 
 def test_ammn_h2_bridge_sentences_are_spaced(tmp_path):

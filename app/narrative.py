@@ -3249,6 +3249,7 @@ def _lom_exhibits(intake, va, detail):
     down = lom_res["per_share_down"]
     last_pit = max((f["year"] for f in flows if f["asset"] == "bh" and "pit" in f["kinds"]),
                    default=inp["pit_end"])
+    deck_path = _deck_path(inp)
     text = _t(
         (f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai SOTP/LoM, metode utama tambang: "
          f"NAV Batu Hijau US${fmt._id(nav_bh / 1e9, 1)} miliar (pit sampai {last_pit}, lalu "
@@ -3264,7 +3265,7 @@ def _lom_exhibits(intake, va, detail):
          f"{fmt.pct(rate.get('crp'))} + beta x ERP, biaya utang {fmt.pct(rate.get('kd_pretax'))}) "
          f"sampai {int(inp['licence_end'])} tanpa nilai "
          f"terminal. Dek harga rata-rata 12 bulan kalender terakhir (sumber di tabel "
-         f"sensitivitas) dibuat datar; pada harga cadangan JORC emiten nilainya "
+         f"sensitivitas) {deck_path}; pada harga cadangan JORC emiten nilainya "
          f"Rp{fmt.rp(fmt.tick(grid[(inp['discount'], 'reserve')]))}, "
          + ("bila izin ekspor konsentrat diperpanjang " if not inp.get("export_base", True)
             else "tanpa izin ekspor konsentrat ")
@@ -3285,7 +3286,7 @@ def _lom_exhibits(intake, va, detail):
          f"{fmt.pct(rate.get('crp'))} + beta x ERP, cost of debt "
          f"{fmt.pct(rate.get('kd_pretax'))}) to {int(inp['licence_end'])} with no terminal "
          f"value. The price deck, the average of the last 12 calendar months (sources in the "
-         f"sensitivity table), is held flat; at the issuer's JORC reserve prices the value is "
+         f"sensitivity table), {deck_path}; at the issuer's JORC reserve prices the value is "
          f"Rp{fmt.rp(fmt.tick(grid[(inp['discount'], 'reserve')]))}, "
          + ("with the concentrate export permit extended " if not inp.get("export_base", True)
             else "without a concentrate export permit ")
@@ -3312,11 +3313,11 @@ def _lom_exhibits(intake, va, detail):
            "exports are labelled analyst assumptions; Elang capex comes from broker research, not "
            "issuer data. The discount rate is a US$ WACC from a dated UST 10Y + CRP + beta x ERP "
            "(analyst policy parameters), as in other US$ models."),
-        _t("Dek harga rata-rata 12 bulan kalender terakhir dibuat datar (Sectors bila datanya "
-           "segar, selain itu seri Yahoo Finance bertanggal); harga cadangan JORC dan guncangan "
+        _t("Dek harga rata-rata 12 bulan kalender terakhir (Sectors bila datanya segar, selain "
+           f"itu seri Yahoo Finance bertanggal) {deck_path}; harga cadangan JORC dan guncangan "
            "+/-20% ada di tabel sensitivitas.",
-           "The price deck, the average of the last 12 calendar months, is held flat (Sectors when "
-           "its data is fresh, otherwise a dated Yahoo Finance series); JORC reserve prices and "
+           "The price deck, the average of the last 12 calendar months (Sectors when its data is "
+           f"fresh, otherwise a dated Yahoo Finance series), {deck_path}; JORC reserve prices and "
            "+/-20% shocks are in the sensitivity table."),
         _t("EV/EBITDA FY26F 8x menjadi cross-check di rantai metode, tidak dirata-rata.",
            "FY26F EV/EBITDA of 8x is a cross-check in the Method Chain, not averaged."),
@@ -3336,6 +3337,22 @@ def _rf_source(source):
     harian', without the ticker symbol or the provider's own label."""
     text = re.sub(r" [(].*$", "", str(source or "Yahoo Finance ^TNX"))
     return text.replace("^TNX daily close", "imbal hasil UST 10Y harian").replace("^TNX", "UST 10Y")
+
+
+def _deck_path(inp):
+    """What the LoM does with the price deck after 2026, as the model ran it.
+
+    ``app.lom.escalation_inputs`` escalates the deck, unit costs and capex with
+    the dated long-run US inflation; without that rate the deck stays flat. The
+    Indonesian quotes the model's own basis, as the LoM schedule rows do."""
+    rate, basis = inp.get("escalation"), inp.get("escalation_basis")
+    if not rate or not basis:
+        return _t("dibuat datar", "is held flat")
+    source = re.search(r"[(]([^()]+)[)]$", basis)
+    return _t(f"menjadi dek 2026 dan sesudahnya dieskalasi {basis}, bersama biaya dan capex",
+              f"is the 2026 deck and is escalated after that by long-run US inflation of "
+              f"{fmt.pct(rate)} a year" + (f" ({source.group(1)})" if source else "")
+              + ", as are costs and capex")
 
 
 def _lom_reconciliation(intake, lom_res):
