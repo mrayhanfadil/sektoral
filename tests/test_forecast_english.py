@@ -255,7 +255,7 @@ def test_twins_follow_the_rules_of_their_indonesian_fields():
     assert out is rows and notes["status"] == "failed"
     assert notes["dropped"][0] == (
         "bank_outyear_scenario[0].rationale: must be English only; must state exactly the "
-        "Indonesian figures, written as in the Indonesian")
+        "Indonesian figures, written as in the Indonesian (missing 1, 26)")
 
 
 def test_interim_twin_obeys_the_interim_evidence_rules():
@@ -467,10 +467,43 @@ def test_house_style_writes_driver_in_english_text():
 def test_english_problems_compare_figures_after_house_style():
     assert scrub.english_problems("Laba H1 2026 naik 12,4%.", "Profit rose 12,4% in 1H26.") == []
     assert scrub.english_problems("Laba naik 12,4%.", "Profit rose 12.4%.") == [
-        "must state exactly the Indonesian figures, written as in the Indonesian"]
+        "must state exactly the Indonesian figures, written as in the Indonesian "
+        "(missing 12,4 and adding 12.4)"]
     assert scrub.english_problems("Laba naik.", None) == ["is missing"]
     assert scrub.english_problems("Laba naik.", "The cache shows profit rose.") == [
         "uses a term the report does not allow"]
+
+
+def test_source_ids_in_the_prose_are_not_figures():
+    # BBCA's bank-driver rationale and first key risk lost their English this
+    # way: the Indonesian cites "(news:5)", the translator is told to leave
+    # source ids out, and the "5" counted as a missing figure.
+    rationale = ("Kredit tumbuh 8% YoY (news:5) kami angkat ke 9% setahun penuh; NIM 5,7% "
+                 "ditopang CASA 85,2% (news:2, guidance:1).")
+    english = ("Loan growth of 8% YoY we lift to 9% for the full year; NIM of 5,7% is "
+               "supported by CASA of 85,2%.")
+    assert scrub.english_problems(rationale, english) == []
+    assert scrub.english_problems(rationale, english.replace("(news", "")) == []
+    # A source id kept in the English is no figure either; real figures still count.
+    assert scrub.english_problems(rationale, english + " (news:5)") == []
+    assert scrub.english_problems(rationale, english.replace("9%", "nine percent")) == [
+        "must state exactly the Indonesian figures, written as in the Indonesian (missing 9)"]
+
+
+def test_a_dropped_twin_names_the_figures_that_differ():
+    # A note that says which figures differ lets the repair call fix them and
+    # tells a reader of the trace why the English was dropped.
+    plan = _earnings_plan()
+    english = _earnings_english()
+    path = "earnings_scenario.bank_drivers.rationale"
+    indonesian = plan["earnings_scenario"]["bank_drivers"]["rationale"]
+    figure = sorted(prose_lang.figures(indonesian))[0]
+    english[path] = english[path].replace(figure, "several", 1)
+    chat, calls = _translator(english, repair=english)
+    _, notes = agent.translate_plan(plan, chat=chat)
+    assert f"(missing {figure})" in calls[1][-1]["content"]
+    assert notes["dropped"] == [f"{path}: must state exactly the Indonesian figures, written as "
+                                f"in the Indonesian (missing {figure})"]
 
 
 # --- The English report ---------------------------------------------------
