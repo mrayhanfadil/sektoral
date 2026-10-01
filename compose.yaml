@@ -15,6 +15,10 @@ services:
       - path: .env
         required: false
     environment:
+      # The app always listens on 8765 inside the container. SECTORAL_PORT in
+      # .env picks only the host port above; env_file would otherwise hand it
+      # to the server too, which then listens where nothing is mapped.
+      SECTORAL_PORT: "8765"
       SECTORAL_PDF: "1"
       # Public deployment: visitors replay stored runs; a live (paid) run needs
       # SECTORAL_RUN_TOKEN from .env. Set "open" for a private local server.
