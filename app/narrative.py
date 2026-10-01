@@ -264,6 +264,16 @@ def _replace_interest_causality(text, net_margin_pct):
     return " ".join(out), replaced
 
 
+def _then(text, more):
+    """``text`` and then ``more``, one space between however ``text`` ends.
+
+    Sentence pieces built separately end either with '. ' or with '.'; adding
+    them blindly runs two sentences together or doubles the space."""
+    if not text or not more:
+        return text + more
+    return text.rstrip(" ") + " " + more.lstrip(" ")
+
+
 def _trim(s, cap=30):
     w = s.split()
     return " ".join(w[:cap]) if len(w) > cap else s
@@ -3239,6 +3249,7 @@ def _lom_exhibits(intake, va, detail):
     down = lom_res["per_share_down"]
     last_pit = max((f["year"] for f in flows if f["asset"] == "bh" and "pit" in f["kinds"]),
                    default=inp["pit_end"])
+    deck_path = _deck_path(inp)
     text = _t(
         (f"Kami menetapkan target Rp{fmt.rp(va['tp'])} memakai SOTP/LoM, metode utama tambang: "
          f"NAV Batu Hijau US${fmt._id(nav_bh / 1e9, 1)} miliar (pit sampai {last_pit}, lalu "
@@ -3254,7 +3265,7 @@ def _lom_exhibits(intake, va, detail):
          f"{fmt.pct(rate.get('crp'))} + beta x ERP, biaya utang {fmt.pct(rate.get('kd_pretax'))}) "
          f"sampai {int(inp['licence_end'])} tanpa nilai "
          f"terminal. Dek harga rata-rata 12 bulan kalender terakhir (sumber di tabel "
-         f"sensitivitas) dibuat datar; pada harga cadangan JORC emiten nilainya "
+         f"sensitivitas) {deck_path}; pada harga cadangan JORC emiten nilainya "
          f"Rp{fmt.rp(fmt.tick(grid[(inp['discount'], 'reserve')]))}, "
          + ("bila izin ekspor konsentrat diperpanjang " if not inp.get("export_base", True)
             else "tanpa izin ekspor konsentrat ")
@@ -3275,7 +3286,7 @@ def _lom_exhibits(intake, va, detail):
          f"{fmt.pct(rate.get('crp'))} + beta x ERP, cost of debt "
          f"{fmt.pct(rate.get('kd_pretax'))}) to {int(inp['licence_end'])} with no terminal "
          f"value. The price deck, the average of the last 12 calendar months (sources in the "
-         f"sensitivity table), is held flat; at the issuer's JORC reserve prices the value is "
+         f"sensitivity table), {deck_path}; at the issuer's JORC reserve prices the value is "
          f"Rp{fmt.rp(fmt.tick(grid[(inp['discount'], 'reserve')]))}, "
          + ("with the concentrate export permit extended " if not inp.get("export_base", True)
             else "without a concentrate export permit ")
@@ -3302,11 +3313,11 @@ def _lom_exhibits(intake, va, detail):
            "exports are labelled analyst assumptions; Elang capex comes from broker research, not "
            "issuer data. The discount rate is a US$ WACC from a dated UST 10Y + CRP + beta x ERP "
            "(analyst policy parameters), as in other US$ models."),
-        _t("Dek harga rata-rata 12 bulan kalender terakhir dibuat datar (Sectors bila datanya "
-           "segar, selain itu seri Yahoo Finance bertanggal); harga cadangan JORC dan guncangan "
+        _t("Dek harga rata-rata 12 bulan kalender terakhir (Sectors bila datanya segar, selain "
+           f"itu seri Yahoo Finance bertanggal) {deck_path}; harga cadangan JORC dan guncangan "
            "+/-20% ada di tabel sensitivitas.",
-           "The price deck, the average of the last 12 calendar months, is held flat (Sectors when "
-           "its data is fresh, otherwise a dated Yahoo Finance series); JORC reserve prices and "
+           "The price deck, the average of the last 12 calendar months (Sectors when its data is "
+           f"fresh, otherwise a dated Yahoo Finance series), {deck_path}; JORC reserve prices and "
            "+/-20% shocks are in the sensitivity table."),
         _t("EV/EBITDA FY26F 8x menjadi cross-check di rantai metode, tidak dirata-rata.",
            "FY26F EV/EBITDA of 8x is a cross-check in the Method Chain, not averaged."),
@@ -3326,6 +3337,22 @@ def _rf_source(source):
     harian', without the ticker symbol or the provider's own label."""
     text = re.sub(r" [(].*$", "", str(source or "Yahoo Finance ^TNX"))
     return text.replace("^TNX daily close", "imbal hasil UST 10Y harian").replace("^TNX", "UST 10Y")
+
+
+def _deck_path(inp):
+    """What the LoM does with the price deck after 2026, as the model ran it.
+
+    ``app.lom.escalation_inputs`` escalates the deck, unit costs and capex with
+    the dated long-run US inflation; without that rate the deck stays flat. The
+    Indonesian quotes the model's own basis, as the LoM schedule rows do."""
+    rate, basis = inp.get("escalation"), inp.get("escalation_basis")
+    if not rate or not basis:
+        return _t("dibuat datar", "is held flat")
+    source = re.search(r"[(]([^()]+)[)]$", basis)
+    return _t(f"menjadi dek 2026 dan sesudahnya dieskalasi {basis}, bersama biaya dan capex",
+              f"is the 2026 deck and is escalated after that by long-run US inflation of "
+              f"{fmt.pct(rate)} a year" + (f" ({source.group(1)})" if source else "")
+              + ", as are costs and capex")
 
 
 def _lom_reconciliation(intake, lom_res):
@@ -3685,7 +3712,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             q2_conc_value = q2_conc.get("revenue_per_sold_unit_proxy")
             conditional_revenue = conditional_volume * q2_conc_value if q2_conc_value else None
             if conditional_revenue is not None:
-                bridge_paragraph += _t(
+                bridge_paragraph = _then(bridge_paragraph, _t(
                     f"Sebagai uji bersyarat, penjualan konsentrat { _volume_text(conditional_volume, 'dmt')} "
                     f"pada proxy revenue Q2 US$ {fmt._id(q2_conc_value, 0)}/dmt memberi sekitar "
                     f"US$ {fmt._id(conditional_revenue/1e6, 1)} juta. Nilai itu hampir menutup gap, "
@@ -3693,7 +3720,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                     f"As a conditional test, concentrate sales of {_volume_text(conditional_volume, 'dmt')} "
                     f"at the Q2 revenue proxy of US$ {fmt._id(q2_conc_value, 0)}/dmt give about "
                     f"US$ {fmt._id(conditional_revenue/1e6, 1)} juta. That nearly closes the gap, "
-                    "but it is not a realized netback and depends on permits/channels and contracts not yet evidenced.")
+                    "but it is not a realized netback and depends on permits/channels and contracts not yet evidenced."))
         delivery_commitment = ((intake.get("official_evidence") or {}).get(
             "customer_delivery_commitment") or {})
         if delivery_commitment:
@@ -3738,7 +3765,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                 f"{delivery_commitment.get('source_title')}, p. "
                 f"{delivery_commitment.get('source_page')}; {delivery_commitment.get('source_url')}."
             )
-            bridge_paragraph += " " + commitment_text
+            bridge_paragraph = _then(bridge_paragraph, commitment_text)
         new_pages.append({
             "halaman": 0, "judul": "Jembatan revenue H2 menurut produk",
             "layout": "stack", "paragraf": [bridge_paragraph],
@@ -4948,16 +4975,16 @@ def _bank_driver_text(model, label, money, unit, eps_of, cite, a, forward_rows=(
     capped = (isinstance(effective_loan, (int, float)) and
               isinstance(requested_loan, (int, float)) and
               abs(effective_loan * 100 - requested_loan) > 0.05)
-    loan_text = (f"input pertumbuhan kredit bruto {pct(requested_loan)}; setelah batas model "
+    loan_text = (f"kredit bruto dengan input pertumbuhan {pct(requested_loan)}; setelah batas model "
                  f"pertumbuhan FY {fmt.pct(effective_loan)}"
                  if capped else
-                 f"pertumbuhan kredit bruto {pct(requested_loan)} setahun")
+                 f"kredit bruto tumbuh {pct(requested_loan)} setahun")
     loan_text_en = (f"gross loans at input growth of {pct(requested_loan)}, FY growth of "
                     f"{fmt.pct(effective_loan)} after the model cap"
                     if capped else
                     f"gross loan growth of {pct(requested_loan)} for the year")
     h2_text = _t(
-        f"Asumsi semester kedua: kredit bruto tumbuh "
+        f"Asumsi semester kedua: "
         f"{loan_text}, NIM H2 {pct(d['nim_pct'])}, pendapatan "
         f"non-bunga {pct(d['non_ii_to_nii_pct'])} dari NII, rasio biaya terhadap "
         f"pendapatan {pct(d['cost_to_income_pct'])} dan biaya kredit "
@@ -5290,10 +5317,10 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
             "Figures beyond the actual period are analyst assumptions, not company guidance. ")
     doc["cover"]["paragraf"][1] = {
         "judul": "Asumsi skenario dan batasannya",
-        # The bank basis ends without a space (the Indonesian keeps that as is).
-        "isi": (scenario_basis + _t(f"Laba bersih {label} model {fy_money}.",
-                                    ("" if scenario_basis.endswith(" ") else " ")
-                                    + f"Model {label} net profit is {fy_money}.") + path + priced)}
+        # The bank basis ends without a space, the non-bank one with it.
+        "isi": (_then(scenario_basis, _t(f"Laba bersih {label} model {fy_money}.",
+                                         f"Model {label} net profit is {fy_money}."))
+                + path + priced)}
     skipped = [_t(t["short"], _SHORT_EN.get(t["key"], t["short"]))
                for t in va["method_chain"]["trace"] if t["decision"] == "skipped"]
     # Struktur paragraph 3: method, forecast linkage, trading multiple (risk is
