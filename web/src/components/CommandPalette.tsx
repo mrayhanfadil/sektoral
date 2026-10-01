@@ -7,7 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CornerDownLeft, FileText, Play, Search, SquareTerminal, Compass } from "lucide-react";
 import { api, readerFiles, type ReportItem } from "../lib/api";
 import { ratingLabel } from "../lib/labels";
-import { rp } from "../lib/format";
+import { idr } from "../lib/format";
 import { launch } from "../lib/launch";
 import { twin, useLang } from "../lib/i18n";
 
@@ -119,7 +119,7 @@ function Palette({ initial, onClose }: { initial: string; onClose: () => void })
     const match = (text: string) => !q || text.toUpperCase().includes(q);
     for (const r of reports.filter((r) => match(`${r.ticker} ${r.name}`)).slice(0, 6)) {
       out.push({ id: `replay-${r.ticker}`, group: t({ id: "Putar ulang run tersimpan", en: "Replay a stored run" }), label: r.ticker, sub: r.name,
-        hint: r.published ? `${ratingLabel(r)}, TP Rp${rp(r.tp)}` : ratingLabel(r), icon: "replay",
+        hint: r.published ? `${ratingLabel(r)}, TP ${idr(r.tp)}` : ratingLabel(r), icon: "replay",
         run: () => go(`/laporan/${r.ticker}/putar`) });
     }
     for (const r of reports.filter((r) => q && r.ticker === q && r.files.html)) {
