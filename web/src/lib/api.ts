@@ -368,6 +368,13 @@ export type TraceView = {
     bank_drivers?: { year: string | null; loan_growth_pct: number | null; nim_pct: number | null; non_ii_to_nii_pct: number | null;
       cost_to_income_pct: number | null; cost_of_credit_pct: number | null; deposit_growth_pct: number | null;
       rationale: string | null; rationale_en?: string | null; source_ids: string[] }[];
+    /** Spec §5.4 key risks of the earnings scenario; older servers omit them. */
+    key_risks?: { category: string | null; category_en?: string | null; headline: string | null; headline_en?: string | null;
+      explanation: string | null; explanation_en?: string | null; source_ids: string[] }[];
+    /** What could move the scenario, when, through which drivers and which way (`direction`: Positif, Negatif, Dua arah). */
+    catalysts?: { item: string | null; item_en?: string | null; timing: string | null; timing_en?: string | null;
+      driver_path: string | null; driver_path_en?: string | null; direction: string | null; direction_en?: string | null;
+      source_ids: string[] }[];
   };
   deepdive: { title: string | null; date: string | null; url: string | null; status: string | null; length: number; preview: string | null }[];
 };
@@ -480,9 +487,10 @@ export function hasEnglish(item: Pick<ReportItem, "languages" | "files"> | null 
 }
 
 /**
- * Where a report's files live on the server. `html` and `pdf` follow the
- * reader: the English files when ``lang`` is English and ``english`` says the
- * report is published in English, else the Indonesian ones.
+ * Where a report's files live on the server. `html`, `pdf` and the `cover`
+ * thumbnail of that PDF follow the reader: the English files when ``lang`` is
+ * English and ``english`` says the report is published in English, else the
+ * Indonesian ones.
  */
 export const reportFiles = (t: string, lang: ReportLang = "id", english = false) => {
   const suffix = lang === "en" && english ? ".en" : "";
@@ -490,10 +498,27 @@ export const reportFiles = (t: string, lang: ReportLang = "id", english = false)
     pdf: `/files/reports/${t}${suffix}.pdf`,
     html: `/files/reports/${t}${suffix}.html`,
     traceHtml: `/files/reports/${t}-trace.html`,
-    cover: `/files/reports/${t}/cover.png`,
+    cover: `/files/reports/${t}/cover${suffix}.png`,
   };
 };
 
 /** A report's files in the reader's language, as far as its item says English is published. */
 export const readerFiles = (item: Pick<ReportItem, "ticker" | "languages" | "files">, lang: ReportLang) =>
   reportFiles(item.ticker, lang, hasEnglish(item));
+
+/**
+ * A finished job's report files in the reader's language. A job's own run
+ * folder is never served (`/files/jobs/...` answers 404: a run can be
+ * superseded, and only the gated gallery bundle is public), so the job
+ * snapshot links to the gallery bundle once it is publishable. An English
+ * reader gets that bundle's English edition when the gallery `item` lists it;
+ * a link the snapshot does not give stays absent.
+ */
+export function jobFiles(job: Pick<Job, "ticker" | "report_url" | "pdf_url">,
+  item: Pick<ReportItem, "ticker" | "languages" | "files"> | undefined, lang: ReportLang): { html?: string; pdf?: string } {
+  const files = item && item.ticker === job.ticker ? readerFiles(item, lang) : undefined;
+  return {
+    html: job.report_url && (files?.html ?? job.report_url),
+    pdf: job.pdf_url && (files?.pdf ?? job.pdf_url),
+  };
+}

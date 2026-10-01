@@ -225,13 +225,109 @@ _ENGLISH = re.compile(
     r"will|can|has|have|had|does|do|if|but|more|less)\b", re.I)
 
 
+# Indonesian content words common in issuer evidence, news and report prose:
+# finance, operations, time and the verbs analysts use. A short phrase may carry
+# no function word at all ("Kualitas aset kredit UMKM"); these give it away.
+# None is an English word ("modal", "armada", "jumbo", "data", "margin" stay
+# out), and words that often sit in Indonesian names ("sumber", "tengah",
+# "baru", "tambang", "listrik", "utama", "antara") stay out too. Checked against
+# every English twin stored in Oct 2026: none of them reads Indonesian by it.
+_INDONESIAN_CONTENT = frozenset("""
+    rilis di ke juga lagi telah sedang bisa dapat harus perlu boleh bukan tanpa agar
+    namun tetapi tapi sehingga sejak hingga sampai setelah sebelum saat ketika
+    sementara seiring sejalan meski walau maupun bahwa apakah tersebut menuju
+    atas bawah dekat jauh luar depan akhir awal tiap setiap semua seluruh
+    sebagian lebih kurang sangat cukup sama lainnya sendiri sekaligus terlalu jadi
+    satu dua tiga empat enam tujuh delapan sembilan sepuluh ratus ribu
+    hari minggu bulan kuartal kuartalan tahunan bulanan harian mingguan musim
+    januari februari maret juni juli agustus oktober desember liburan
+    laba rugi bersih kotor pendapatan penjualan harga saham emiten biaya beban
+    bunga dana kredit utang pinjaman kerja ekuitas aset liabilitas penyusutan
+    kas arus neraca pajak dividen tunai nilai valuasi pasar asing pokok cadang
+    pertumbuhan kenaikan penurunan pelemahan penguatan perlambatan pemulihan
+    tekanan risiko kualitas konsentrasi ekspansi produksi permintaan pasokan
+    kapasitas utilisasi kontrak proyek lahan pabrik bahan baku pakan emas
+    tembaga katoda konsentrat bijih logam kurs selisih suku kebijakan
+    pemangkasan penyesuaian pembayaran pendanaan penyaluran simpanan tabungan
+    deposito nasabah pelanggan konsumen daya beli impor ekspor jual swasta
+    usaha industri sektor segmen grup induk anak entitas kelompok produsen
+    perusahaan kinerja hasil angka rasio skenario asumsi historis analis
+    perubahan pergerakan perdagangan transaksi kepemilikan pemegang pendiri
+    konsolidasi akuisisi restrukturisasi reorganisasi kuasi provisi cadangan
+    persediaan piutang tagihan belanja investasi pemeliharaan operasi
+    operasional konstruksi properti pesawat kapal kabel laut
+    jadwal tahap rencana metode panduan resmi tercatat terukur terlapor
+    laporan keuangan berita artikel kutipan catatan daftar profil metrik
+    tabel grafik halaman rincian rentang kisaran batas ambang porsi bobot
+    tinggi rendah besar kecil stabil terjaga tipis tebal puncak riwayat
+    kuat lemah cepat lambat baik buruk positif negatif moderat agresif murni
+    efisiensi efektif profitabilitas dominasi volatilitas visibilitas intensitas
+    normalisasi diversifikasi validasi verifikasi regulasi renegosiasi reaktivasi
+    eksekusi suksesi transisi generasi sertifikasi sertifikat strategi potensi
+    posisi skala akses progres manajemen gangguan lonjakan bantalan pembanding
+    pencapaian penyerapan ketidakpastian jangka panjang pendek pihak bukti
+    terkini tingkat buku tanah uang muka jumlah faktor tanggal pemerintah
+    wajib lengkap kelola sebanding diskonto
+    tumbuh melambat melemah menguat meningkat menurun melonjak membaik memburuk
+    menekan menopang mendukung menahan menjaga mencapai mencatat mencatatkan
+    menunjukkan mencerminkan menjelaskan menyebut memakai membawa memberi
+    mengubah menambah mengurangi menurunkan menaikkan meningkatkan membebani
+    mendekati menyusun kembali mulai dukung perkuat uji rampung diakses
+    berlanjut berulang bertahan bertahap terlihat
+    tertekan terkoreksi tertunda tertinggi terendah terbesar terbaru terakhir
+    terhadap dibanding dibandingkan didukung ditopang dipakai dihitung
+    """.split())
+
+# Figure units, which the builder writes in Indonesian in both editions
+# ("Rp84,3miliar"): a word of neither language.
+_UNITS = frozenset({"rp", "miliar", "juta", "triliun"})
+# Indonesian affixes no lowercase English word takes ("harganya", "menurunkan",
+# "alokasi", "likuiditas", "kuantitatif", "mengalami", "eksposur",
+# "keterlambatan", "pengakuan", "menjadi"), checked against an English
+# dictionary. Capitalised words are left to the list: "Bekasi" is a name.
+_INDONESIAN_AFFIX = re.compile(
+    r"[a-z]{3,}(?:nya|kan|asi|itas|tif)|(?:meng|meny|peny|eks)[a-z]{3,}"
+    r"|(?:ke|pem|pen|per)[a-z]{3,}an|(?:mem|men)[a-z]{3,}(?:kan|i)")
+_URL = re.compile(r"(?:https?://|www\.)\S+", re.I)
+_CODE = re.compile(r"[A-Z]+")
+
+
+def _indonesian_share(text) -> tuple[int, int]:
+    """(Indonesian words, words) in `text`, leaving out URLs, codes and names.
+
+    A code ("UMKM", "NIM") or a unit counts as neither. A run of capitalised
+    words after the first word is a name ("PT Sumber Gemilang Persada",
+    "Bisnis Indonesia") and is left out unless every word in it is Indonesian
+    ("Harga Emas")."""
+    words = [w for w in _LETTERS.findall(_URL.sub(" ", text))
+             if not _CODE.fullmatch(w) and w.lower() not in _UNITS]
+    hits = [w.lower() in _INDONESIAN_CONTENT or bool(_INDONESIAN.fullmatch(w))
+            or bool(_INDONESIAN_AFFIX.fullmatch(w)) for w in words]
+    keep = [True] * len(words)
+    i = 1  # the first word is capitalised as the start of the text, not as a name
+    while i < len(words):
+        j = i
+        while j < len(words) and words[j][0].isupper():
+            j += 1
+        if j - i >= 2 and not all(hits[i:j]):
+            keep[i:j] = [False] * (j - i)
+        i = max(j, i + 1)
+    counted = [hit for hit, kept in zip(hits, keep) if kept]
+    return sum(counted), len(counted)
+
+
 def reads_english(text) -> bool:
     """True when agent-written text reads as English, for the checks on an agent's
     English twin (stricter than ``mixed``, which template English passes): an
-    Indonesian function word must stand beside an English one."""
+    Indonesian function word must stand beside an English one, and fewer than
+    half of its words may be Indonesian, so a short Indonesian phrase with no
+    function word ("Kualitas aset kredit UMKM") does not pass."""
     if not isinstance(text, str) or not text.strip() or mixed(text):
         return False
-    return not _INDONESIAN.search(text) or bool(_ENGLISH.search(text))
+    if _INDONESIAN.search(text) and not _ENGLISH.search(text):
+        return False
+    indonesian, words = _indonesian_share(text)
+    return not indonesian or 2 * indonesian < words
 
 
 # A run of letters, for telling codes and names from prose.
