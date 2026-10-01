@@ -6,7 +6,7 @@ English, and come from exactly one pattern.
 """
 import pytest
 
-from app import (bank_model, fmt, forecast_statements, method_chain, prose_lang,
+from app import (bank_model, fmt, forecast_statements, investability, method_chain, prose_lang,
                  scenario_value, share_basis, source_patterns)
 
 
@@ -405,9 +405,54 @@ def _label_examples():
     ]
 
 
+def _investability_examples():
+    """app.investability's reasons and sources, quoted in the investability exhibits (#41)."""
+    quality = investability.business_quality("XXXX", "2026-09-26", root="/nonexistent")
+    reasons = {item["dimension"]: item["reason"] for item in quality}
+    assessed = investability.assess({"ticker": "XXXX", "as_of": "2026-09-26"})
+    return [
+        (investability.liquidity("XXXX", "2026-09-26")["reason"],
+         "fewer than 20 sessions of price and volume to 2026-09-26 in Sectors data"),
+        ("data Sectors harian BBRI (harga penutupan x volume)",
+         "Sectors daily data, BBRI (closing price x volume)"),
+        (investability.free_float({})["reason"], "the public share is not in the ownership data"),
+        ("data kepemilikan Sectors", "Sectors ownership data"),
+        ("profil emiten data Sectors", "Sectors issuer profile"),
+        (assessed["trading_status"]["reason"],
+         "suspension status and special notations are not in the data; normal trading is not "
+         "assumed"),
+        (reasons["governance"],
+         "unanswered: the Sektoral Team has not yet set an acceptable dated source for governance "
+         "assessments (decision D8, 2026-09-26)"),
+        (reasons["pricing_power"],
+         "unanswered: not yet reviewed; the business-quality file holds no dated evidence for "
+         "this dimension"),
+    ]
+
+
+def _lom_examples():
+    """The LoM schedule's yearly basis (app.lom), its escalation basis and a US$
+    reporter's NCI basis (app.forecast_statements)."""
+    escalated = ("Jadwal LoM: umpan 68 Mt (Batu Hijau pit), katoda 205 kt, emas murni 515 koz; "
+                 "dek Cu US$13.580/t dan Au US$4.653/oz (dek 2026 dieskalasi inflasi AS jangka "
+                 "panjang 2,2% per tahun (IMF WEO Apr 2026)); EBITDA sesudah beban umum korporat; "
+                 "bunga 2x beban keuangan 1H26; pajak dan PNBP pada tarif efektif 1H26.")
+    return [
+        (escalated,
+         "LoM schedule: feed 68 Mt (Batu Hijau pit), cathode 205 kt, refined gold 515 koz; Cu "
+         "deck US$13.580/t and Au US$4.653/oz (2026 deck escalated by long-term US inflation of "
+         "2,2% a year (IMF WEO Apr 2026)); EBITDA after corporate overheads; interest at 2x 1H26 "
+         "finance costs; tax and PNBP at 1H26 effective rates."),
+        ("inflasi AS jangka panjang 2,2% per tahun (IMF WEO Apr 2026)",
+         "long-term US inflation of 2,2% a year (IMF WEO Apr 2026)"),
+        ("nilai buku FY2025, rilis tahunan resmi", "book value FY2025, official annual release"),
+        ("rilis tahunan resmi", "official annual release"),
+    ]
+
+
 EXAMPLES = (_bridge_examples() + _driver_examples() + _payout_examples()
             + _candidate_examples() + _method_examples() + _label_examples()
-            + _statement_examples())
+            + _statement_examples() + _investability_examples() + _lom_examples())
 
 # Fixed texts read straight from their producers: each must have English.
 PRODUCED = sorted(

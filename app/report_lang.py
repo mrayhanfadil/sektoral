@@ -975,6 +975,85 @@ TERMS.update({
     "level biaya": "cost level",
     "per tahun": "per year",
 })
+# Mining tables of the SOTP/LoM report (app.narrative): royalty, capex, Elang
+# milestones and AMDAL scope, LoM phases, WACC and analyst assumptions.
+TERMS.update({
+    "Emas ikutan dalam konsentrat": "By-product gold in concentrate",
+    "Emas murni, logam primer": "Refined gold, primary metal",
+    "Bea keluar ekspor konsentrat pada periode yang ditegaskan AMMAN":
+        "Concentrate export duty in the period AMMAN confirmed",
+    "Kas dibayar: royalti, pajak dan PNBP H1 2026": "Cash paid: royalties, taxes and PNBP 1H 2026",
+    "Beban PNBP H1 2026": "PNBP expense 1H 2026",
+    "Formula HPM konsentrat tembaga": "Copper concentrate HPM formula",
+    "Input kontrak yang belum diungkap untuk netback": "Undisclosed contract inputs for netback",
+    "Tier terpilih: konsentrat Cu / katoda Cu": "Applicable tier: Cu concentrate / Cu cathode",
+    "Tier terpilih: Au ikutan konsentrat / emas murni":
+        "Applicable tier: by-product Au in concentrate / refined gold",
+    "HMA resmi H1 2026: tembaga": "Official 1H 2026 HMA: copper",
+    "HMA resmi H1 2026: emas": "Official 1H 2026 HMA: gold",
+    "12 periode, US$/dmt": "12 periods, US$/dmt", "12 periode, US$/oz": "12 periods, US$/oz",
+    "FY2024 aktual emiten": "FY2024 issuer actual", "FY2025 aktual emiten": "FY2025 issuer actual",
+    "FY2025: sustaining tambang Phase 8": "FY2025: Phase 8 mine sustaining",
+    "FY2025: smelter tembaga dan PMR": "FY2025: copper smelter and PMR",
+    "FY2025: ekspansi pabrik pengolahan": "FY2025: processing plant expansion",
+    "FY2025: PLTGU dan fasilitas LNG": "FY2025: combined-cycle power plant and LNG facilities",
+    "1H2026 aktual": "1H2026 actual",
+    "FY2026 skenario analis": "FY2026 Analyst Scenario",
+    "H2 tersirat dari skenario": "H2 implied by the scenario",
+    "US$m menurut penggunaan": "US$m by use",
+    "Pembanding dalam H1 release": "Comparator in the H1 release",
+    "Laporan interim; capex kas + additions": "Interim report; cash capex + additions",
+    "FY26 skenario dikurangi H1 aktual": "FY26 scenario less 1H actual",
+    "Penambangan Batu Hijau sampai": "Batu Hijau mining until",
+    "Pengolahan stockpile sampai": "Stockpile processing until",
+    "Bijih pertama Elang": "Elang first ore",
+    "Target keputusan investasi Elang": "Elang final investment decision target",
+    "Penyusunan rencana tambang": "Mine planning",
+    "Perizinan koridor OLC": "OLC corridor permitting",
+    "Feasibility study Elang": "Elang feasibility study",
+    "Optimasi teknis Elang": "Elang technical optimisation",
+    "Lingkup infrastruktur Elang": "Elang infrastructure scope",
+    "Elang: horizon operasi yang diperkirakan": "Elang: expected operating horizon",
+    "Engineering rinci dan optimasi": "Detailed engineering and optimisation",
+    "Indikasi investasi awal Elang": "Indicative initial Elang investment",
+    "bukan anggaran tervalidasi": "not a validated budget",
+    "Target konstruksi yang disampaikan pada konsultasi publik":
+        "Construction target stated at the public consultation",
+    "Konteks konsultasi publik AMDAL": "AMDAL public consultation context",
+    "Rencana kapasitas penambangan bijih Elang": "Planned Elang ore mining capacity",
+    "Kapasitas tahunan pabrik pengolahan": "Annual processing plant capacity",
+    "Rentang desain ekspansi pabrik": "Plant expansion design range",
+    "Overland conveyor Elang": "Elang overland conveyor",
+    "Fasilitas pendukung yang direncanakan": "Planned support facilities",
+    "NAV Batu Hijau": "Batu Hijau NAV",
+    "pit, stockpile, pabrik, smelter, PMR": "pit, stockpile, plant, smelter, PMR",
+    "NAV Elang sebelum risiko": "Elang NAV before risk",
+    "Persediaan logam dan konsentrat": "Metal and concentrate inventory",
+    "aset dikonsolidasi; kepentingan nonpengendali dikurangkan di bawah":
+        "assets consolidated; non-controlling interests deducted below",
+    "beban umum 1H26 x2": "1H26 general expenses x2",
+    "neraca 30 Jun 2026": "balance sheet at 30 Jun 2026",
+    "nilai buku 30 Jun 2026": "book value at 30 Jun 2026",
+    "2H26 Batu Hijau, panduan FY": "2H26 Batu Hijau, FY guidance",
+    "Pit Batu Hijau, per tahun": "Batu Hijau pit, per year",
+    "Stockpile Batu Hijau, per tahun": "Batu Hijau stockpile, per year",
+    "Capex Elang, total": "Elang capex, total",
+    "Produksi Elang, per tahun": "Elang production, per year",
+    "WACC US$ (Batu Hijau dan Elang)": "US$ WACC (Batu Hijau and Elang)",
+    "Capex pengembangan Elang": "Elang development capex",
+    "Capex pemeliharaan Elang": "Elang sustaining capex",
+    "Capex fase stockpile": "Stockpile-phase capex",
+    "Tanpa izin ekspor konsentrat (umpan dibatasi kapasitas smelter)":
+        "No concentrate export permit (feed capped at smelter capacity)",
+    "Izin ekspor konsentrat diperpanjang (umpan penuh 85 Mtpa, sesuai jadwal tambang emiten)":
+        "Concentrate export permit extended (full 85 Mtpa feed, per the issuer's mine plan)",
+})
+_PATTERNS += [(re.compile(p), t) for p, t in (
+    (r"NAV Elang x probabilitas pengembangan (\S+)", "Elang NAV x {0} development probability"),
+    (r"Elang ditambang sampai cadangan habis \((\d{4})\), bukan (\d{4})",
+     "Elang mined until reserves run out ({0}), not {1}"),
+    (r"Kurs USD/IDR (\S+)", "USD/IDR rate {0}"),
+)]
 _PATTERNS += [(re.compile(p), t) for p, t in (
     (r"(.+): harga terealisasi", "{0}: realised price"),
     (r"(.+): pertumbuhan volume", "{0}: volume growth"),
@@ -1043,7 +1122,11 @@ def _en(text: str) -> str:
     for sep in (" & ", " / "):
         if sep in text:
             return sep.join(_en(part) for part in text.split(sep))
-    return plain(text)
+    # Source or model text a label quotes (a curated Peer Group name, a cash
+    # basis): its English in data/source_text_en or app.source_patterns.
+    from . import prose_lang  # it imports this module
+    found = prose_lang.known(text)
+    return plain(found if found else text)
 
 
 def label(text, lang: str = DEFAULT):

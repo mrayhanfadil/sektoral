@@ -76,6 +76,10 @@ _BRIDGE = [
     (r"nilai buku, Sectors " + DATE, "book value, Sectors {0}"),
     (r"nilai buku, neraca interim resmi (\S+)",
      "book value, official interim balance sheet at {0}"),
+    # app.forecast_statements: NCI opening from a US$ reporter's annual release.
+    (r"nilai buku FY(\d{4}), (.+)",
+     _Call(lambda year, title: f"book value FY{year}, {_source(title)}")),
+    (r"rilis tahunan resmi", "official annual release"),
     (r"tidak dilaporkan terpisah; ekuitas induk = total ekuitas",
      "not reported separately; parent equity = total equity"),
     (r"dividen tunai Rp([\d.,]+)/saham, ex-date (\d{4}-\d{2}-\d{2}(?:, \d{4}-\d{2}-\d{2})*) "
@@ -596,6 +600,27 @@ _NOTES = _NOTE_PARTS + [
      "cannot be projected."),
 ])
 
+# --- The LoM schedule's yearly basis (app.lom outyear rows), quoted in the
+# scenario basis table.
+def _lom_kinds(kinds):
+    return kinds.replace("konsentrat", "concentrate")
+
+
+_LOM = [
+    (r"Jadwal LoM: umpan ([\d.,]+) Mt \(([^()]*)\), katoda ([\d.,]+) kt, emas murni ([\d.,]+) koz; "
+     r"dek Cu US\$([\d.,]+)/t dan Au US\$([\d.,]+)/oz(?: \(dek 2026 dieskalasi (.+)\))?; EBITDA "
+     r"sesudah beban umum korporat; bunga 2x beban keuangan 1H26; pajak dan PNBP pada tarif "
+     r"efektif 1H26\.",
+     _Call(lambda feed, kinds, cathode, gold, cu, au, esc:
+           f"LoM schedule: feed {feed} Mt ({_lom_kinds(kinds)}), cathode {cathode} kt, refined "
+           f"gold {gold} koz; Cu deck US${cu}/t and Au US${au}/oz"
+           + (f" (2026 deck escalated by {_source(esc)})" if esc else "")
+           + "; EBITDA after corporate overheads; interest at 2x 1H26 finance costs; tax and "
+           "PNBP at 1H26 effective rates.")),
+    (r"inflasi AS jangka panjang ([\d.,]+%) per tahun \((.+)\)",
+     "long-term US inflation of {0} a year ({1})"),
+]
+
 # --- Liquidity and business quality (app.investability), quoted in the
 # investability exhibits.
 _INVESTABILITY = [
@@ -623,5 +648,5 @@ _INVESTABILITY = [
 
 PATTERNS = [(re.compile(p), t) for p, t in (
     _BRIDGE + _DRIVERS + _PAYOUT + _READER + _CANDIDATE + _METHOD + _LABEL + _NOTES
-    + _INVESTABILITY
+    + _INVESTABILITY + _LOM
 )]

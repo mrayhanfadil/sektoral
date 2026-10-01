@@ -746,13 +746,15 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             return "; ".join(values)
         royalty_rows = [
             ["HMA resmi H1 2026: tembaga (12 periode, US$/dmt)",
-             "11.790,32–13.648,27; seluruh periode masuk tier tertinggi"],
+             _t("11.790,32–13.648,27; seluruh periode masuk tier tertinggi",
+                "11.790,32–13.648,27; every period in the top tier")],
             ["HMA resmi H1 2026: emas (12 periode, US$/oz)",
-             "4.302,37–5.135,76; seluruh periode masuk tier tertinggi"],
+             _t("4.302,37–5.135,76; seluruh periode masuk tier tertinggi",
+                "4.302,37–5.135,76; every period in the top tier")],
             ["Tier terpilih: konsentrat Cu / katoda Cu",
-             "10% / 7% dari harga referensi"],
+             _t("10% / 7% dari harga referensi", "10% / 7% of the reference price")],
             ["Tier terpilih: Au ikutan konsentrat / emas murni",
-             "16% / 16% dari harga referensi"],
+             _t("16% / 16% dari harga referensi", "16% / 16% of the reference price")],
             ["Tembaga dalam konsentrat (HMA US$/t)",
              rate_range(rates.get("copper_in_concentrate_by_hma_usd_per_tonne") or [])],
             ["Emas ikutan dalam konsentrat (HMA US$/oz)",
@@ -768,7 +770,9 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             ["Kas dibayar: royalti, pajak dan PNBP H1 2026 (US$m)",
              fmt._id(royalty.get("h1_2026_cash_paid_royalties_taxes_pnbp_usd_thousand") / 1000, 1)],
             ["Formula HPM konsentrat tembaga", "Cu/Au/Ag payable × (HMA − TC/RC); Kepmen 144/2026"],
-            ["Input kontrak yang belum diungkap untuk netback", "assay/payable, TC/RC, penalti, HMA per shipment, timing volume"],
+            ["Input kontrak yang belum diungkap untuk netback",
+             _t("assay/payable, TC/RC, penalti, HMA per shipment, timing volume",
+                "assay/payable, TC/RC, penalties, HMA per shipment, volume timing")],
         ]
         royalty_exhibit = add(
             "Kerangka royalti dan bea keluar; netback belum dapat dihitung",
@@ -804,9 +808,11 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
         "top_down_projection") or {}
     if mining and capex_reference:
         capex_rows = [
-            ["FY2024 aktual emiten", fmt._id(capex_reference["fy2024"], 1), "Dilaporkan"],
-            ["FY2025 aktual emiten", fmt._id(capex_reference["fy2025"], 1), "Dilaporkan"],
-            ["FY2025: sustaining tambang Phase 8", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("phase_8_mining_sustaining"), 1), "Dilaporkan; sudah di atas skenario FY26 total"],
+            ["FY2024 aktual emiten", fmt._id(capex_reference["fy2024"], 1), _t("Dilaporkan", "Reported")],
+            ["FY2025 aktual emiten", fmt._id(capex_reference["fy2025"], 1), _t("Dilaporkan", "Reported")],
+            ["FY2025: sustaining tambang Phase 8", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("phase_8_mining_sustaining"), 1),
+             _t("Dilaporkan; sudah di atas skenario FY26 total",
+                "Reported; already above the FY26 scenario total")],
             ["FY2025: smelter tembaga dan PMR", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("copper_smelter_and_precious_metal_refinery"), 1), "US$m menurut penggunaan"],
             ["FY2025: ekspansi pabrik pengolahan", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("processing_plant_expansion"), 1), "US$m menurut penggunaan"],
             ["FY2025: PLTGU dan fasilitas LNG", fmt._id((capex_reference.get("fy2025_by_use_usd_million") or {}).get("combined_cycle_power_plant_lng_facilities"), 1), "US$m menurut penggunaan"],
@@ -1138,9 +1144,11 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
         if consultation:
             capex_range = consultation.get("reported_initial_investment_idr_trillion_range") or []
             if len(capex_range) == 2:
-                capex_indication = (
+                capex_indication = _t(
                     f"Rp{fmt._id(capex_range[0], 0)}–{fmt._id(capex_range[1], 0)} triliun; "
-                    "informasi awal yang disampaikan Bupati sebagai informasi dari AMNT")
+                    "informasi awal yang disampaikan Bupati sebagai informasi dari AMNT",
+                    f"Rp{fmt._id(capex_range[0], 0)}–{fmt._id(capex_range[1], 0)} triliun; "
+                    "preliminary figure the Regent conveyed as information from AMNT")
                 milestone_rows.append(["Indikasi investasi awal Elang (bukan anggaran tervalidasi)", capex_indication])
             if consultation.get("reported_construction_target"):
                 milestone_rows.append([
@@ -1156,22 +1164,33 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             planned_facilities = amdal_notice.get("planned_support_facilities") or []
             conveyor_notice = next((item for item in planned_facilities
                                     if "conveyor" in item.lower()), "-")
+            design_range = (annual_report.get("planned_processing_capacity_million_tonnes_per_year_range")
+                            or [85, 90])
             amdal_rows = [
                 ["Rencana kapasitas penambangan bijih Elang",
-                 f"~{fmt._id(amdal_notice.get('ore_mining_capacity_million_tonnes_per_year_approx'), 0)} Mt/tahun",
-                 "Skala rencana pada pengumuman penyusunan AMDAL; bukan output tahunan atau guidance produksi."],
+                 _t(f"~{fmt._id(amdal_notice.get('ore_mining_capacity_million_tonnes_per_year_approx'), 0)} Mt/tahun",
+                    f"~{fmt._id(amdal_notice.get('ore_mining_capacity_million_tonnes_per_year_approx'), 0)} Mt/yr"),
+                 _t("Skala rencana pada pengumuman penyusunan AMDAL; bukan output tahunan atau guidance produksi.",
+                    "Planned scale in the AMDAL preparation notice; not annual output or production guidance.")],
                 ["Kapasitas tahunan pabrik pengolahan",
-                 f"{fmt._id(comparison.get('annual_processing_ore_capacity_million_tonnes'), 0)} Mt/tahun",
-                 "Angka nameplate ekspansi pabrik pada presentasi H1; definisinya berbeda dari kapasitas penambangan Elang."],
+                 _t(f"{fmt._id(comparison.get('annual_processing_ore_capacity_million_tonnes'), 0)} Mt/tahun",
+                    f"{fmt._id(comparison.get('annual_processing_ore_capacity_million_tonnes'), 0)} Mt/yr"),
+                 _t("Angka nameplate ekspansi pabrik pada presentasi H1; definisinya berbeda dari kapasitas penambangan Elang.",
+                    "Nameplate figure of the plant expansion in the H1 presentation; defined differently from Elang mining capacity.")],
                 ["Rentang desain ekspansi pabrik (Annual Report 2025)",
-                 f"{fmt._id((annual_report.get('planned_processing_capacity_million_tonnes_per_year_range') or [85, 90])[0], 0)}–{fmt._id((annual_report.get('planned_processing_capacity_million_tonnes_per_year_range') or [85, 90])[1], 0)} Mt/tahun; first ore to mills {annual_report.get('expanded_plant_first_ore_to_mills_target', 'ditargetkan 2026')}",
-                 "Rentang yang diungkap lebih awal; presentasi H1 2026 kemudian menyebut kapasitas pabrik 85 Mt/tahun. Tidak digunakan sebagai skenario throughput tambahan."],
+                 _t(f"{fmt._id(design_range[0], 0)}–{fmt._id(design_range[1], 0)} Mt/tahun; first ore to mills {annual_report.get('expanded_plant_first_ore_to_mills_target', 'ditargetkan 2026')}",
+                    f"{fmt._id(design_range[0], 0)}–{fmt._id(design_range[1], 0)} Mt/yr; first ore to mills {annual_report.get('expanded_plant_first_ore_to_mills_target', 'targeted 2026')}"),
+                 _t("Rentang yang diungkap lebih awal; presentasi H1 2026 kemudian menyebut kapasitas pabrik 85 Mt/tahun. Tidak digunakan sebagai skenario throughput tambahan.",
+                    "A range disclosed earlier; the H1 2026 presentation later cites plant capacity of 85 Mt/yr. Not used as an additional throughput scenario.")],
                 ["Overland conveyor Elang",
-                 "54 km (presentasi Mar-26) / " + conveyor_notice.replace("overland ore conveyor ", ""),
-                 "Panjang/rute belum direkonsiliasi; perbedaan berdampak pada lingkup dan estimasi capex."],
+                 _t("54 km (presentasi Mar-26) / ", "54 km (Mar-26 presentation) / ")
+                 + conveyor_notice.replace("overland ore conveyor ", ""),
+                 _t("Panjang/rute belum direkonsiliasi; perbedaan berdampak pada lingkup dan estimasi capex.",
+                    "Length/route not yet reconciled; the difference affects scope and the capex estimate.")],
                 ["Fasilitas pendukung yang direncanakan",
                  "; ".join(item for item in planned_facilities if "conveyor" not in item.lower()),
-                 "Ruang lingkup awal AMDAL; tidak berisi biaya, jadwal konstruksi terinci, atau komitmen kontrak."],
+                 _t("Ruang lingkup awal AMDAL; tidak berisi biaya, jadwal konstruksi terinci, atau komitmen kontrak.",
+                    "Preliminary AMDAL scope; it holds no costs, detailed construction schedule or contract commitments.")],
             ]
             amdal_scope_exhibit = add(
                 "Skala dan lingkup Elang pada tahap pengumuman AMDAL",
@@ -2110,8 +2129,10 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                  ["Margin laba 2H", fmt.pct(case_assumptions["h2_net_margin_pct"] / 100),
                   lom_note if lom_basis else "Asumsi analis; pajak dan bunga belum dijembatani."],
                  ["Belanja modal 2H / 1H", fmt.pct(case_assumptions["h2_capex_to_h1"]),
-                  "Asumsi analis dari rencana belanja modal 2H26; sama dengan jadwal LoM."
-                  if lom_basis else "Asumsi analis; jadwal capex proyek belum tervalidasi."]],
+                  _t("Asumsi analis dari rencana belanja modal 2H26; sama dengan jadwal LoM.",
+                     "Analyst Assumption from the 2H26 capital spending plan; as in the LoM schedule.")
+                  if lom_basis else _t("Asumsi analis; jadwal capex proyek belum tervalidasi.",
+                                       "Analyst Assumption; the project capex schedule is not yet validated.")]],
                 f"Sumber: {agent_case['source_url']}; asumsi numerik adalah "
                 "interpretasi analis untuk skenario internal, bukan guidance emiten.")
             illustrative_pages.append({
@@ -3093,9 +3114,10 @@ def _lom_exhibits(intake, va, detail):
         ["NAV Batu Hijau (pit, stockpile, pabrik, smelter, PMR)", usd(nav_bh), bn(nav_bh * fx),
          f"LoM DCF USD, WACC {fmt.pct(inp['discount'])}"],
         ["NAV Elang sebelum risiko", usd(nav_el), bn(nav_el * fx),
-         f"sampai {int(inp['licence_end'])}; capex dari riset broker"],
+         _t(f"sampai {int(inp['licence_end'])}; capex dari riset broker",
+            f"to {int(inp['licence_end'])}; capex from broker research")],
         [f"NAV Elang x probabilitas pengembangan {fmt.pct(risk)}", usd(nav_el * risk),
-         bn(nav_el * risk * fx), "pra-FID; asumsi analis"],
+         bn(nav_el * risk * fx), _t("pra-FID; asumsi analis", "pre-FID; Analyst Assumption")],
     ]
     # With a working-capital schedule the product inventory is inside the LoM
     # cash flows (lom.value), so it is not added again at book value.
@@ -3118,9 +3140,11 @@ def _lom_exhibits(intake, va, detail):
          f"({bn(b['minority'])})", "neraca 30 Jun 2026"],
         ["Nilai ekuitas", usd(sotp["equity_value_idr"] / fx), bn(sotp["equity_value_idr"]), ""],
         ["Diskon terhadap RNAV", "0,0%", "0,0%",
-         "tidak diterapkan; risiko Elang sudah lewat probabilitas pengembangan"],
+         _t("tidak diterapkan; risiko Elang sudah lewat probabilitas pengembangan",
+            "not applied; Elang risk is carried by the development probability")],
         ["Nilai per saham (Rp)", "-", f"Rp{fmt.rp(fmt.tick(per_share))}",
-         f"{fmt._id(b['shares'] / 1e9, 2)} miliar saham"],
+         _t(f"{fmt._id(b['shares'] / 1e9, 2)} miliar saham",
+            f"{fmt._id(b['shares'] / 1e9, 2)} miliar shares")],
     ]
     sotp_table = {"n": 0, "judul": "SOTP/LoM: nilai aset ke ekuitas", "tipe": "tabel",
                   "data": {"cols": ["Komponen", "US$ juta", "Rp miliar", "Basis"], "rows": rows},
@@ -3227,33 +3251,51 @@ def _lom_exhibits(intake, va, detail):
             f"juta (harga {intake.get('price_date')}, kurs Rp{fmt.rp(fx)}/USD). WACC dibulatkan "
             "ke 0,1pp; Elang memakai WACC yang sama karena risiko pengembangannya sudah lewat "
             "probabilitas pengembangan. Tanpa nilai terminal.")}
+    first_feed = (base.get("elang_feed_years") or ["-"])[0]
+    # The bases are the analyst file's own words (data/analyst_scenarios, English
+    # in data/source_text_en).
+    label = prose_lang.label
     assumption_rows = [
         ["Tingkat diskonto USD", fmt.pct(inp["discount"]),
-         "WACC US$ dari UST 10Y, CRP, beta dan ERP sesuai house policy serta "
-         "biaya utang berbasis pasar; komponen di tabel WACC US$."],
-        ["Probabilitas pengembangan Elang", fmt.pct(risk), lom.get("elang_risk_basis")],
+         _t("WACC US$ dari UST 10Y, CRP, beta dan ERP sesuai house policy serta "
+            "biaya utang berbasis pasar; komponen di tabel WACC US$.",
+            "US$ WACC from UST 10Y, CRP, beta and ERP per house policy and a market-based cost "
+            "of debt; components in the US$ WACC table.")],
+        ["Probabilitas pengembangan Elang", fmt.pct(risk), label(lom.get("elang_risk_basis"))],
         ["Capex pengembangan Elang",
          f"US${fmt._id(sum(base['elang_capex'].values()) / 1e9, 2)} miliar "
          f"({', '.join(str(y) for y in sorted(base['elang_capex']))})",
-         f"{lom.get('elang_development_capex_basis')} Profil broker (bijih pertama 2031) digeser "
-         f"agar berakhir setahun sebelum umpan Elang pertama dalam jadwal ini "
-         f"({(base.get('elang_feed_years') or ['-'])[0]}): emiten memulai Elang sesudah umur "
-         "tambang Batu Hijau, dan pada 85 Mtpa pabrik terisi pit lalu stockpile lebih dahulu."],
-        ["Capex pemeliharaan Elang", f"US${usd(inp['elang_sustaining_usd'])} juta/tahun",
-         lom.get("elang_sustaining_capex_basis")],
+         _t(f"{lom.get('elang_development_capex_basis')} Profil broker (bijih pertama 2031) digeser "
+            f"agar berakhir setahun sebelum umpan Elang pertama dalam jadwal ini "
+            f"({first_feed}): emiten memulai Elang sesudah umur "
+            "tambang Batu Hijau, dan pada 85 Mtpa pabrik terisi pit lalu stockpile lebih dahulu.",
+            f"{label(lom.get('elang_development_capex_basis'))} The broker profile (first ore 2031) "
+            f"is shifted to end a year before the first Elang feed in this schedule "
+            f"({first_feed}): the issuer starts Elang after the Batu Hijau mine life, and at 85 "
+            "Mtpa the plant is filled by the pit and then the stockpile first.")],
+        ["Capex pemeliharaan Elang", _t(f"US${usd(inp['elang_sustaining_usd'])} juta/tahun",
+                                        f"US${usd(inp['elang_sustaining_usd'])} juta/yr"),
+         label(lom.get("elang_sustaining_capex_basis"))],
         ["Rehandle stockpile", f"US${fmt._id(inp['rehandle_usd_t'], 2)}/t",
-         lom.get("stockpile_rehandle_basis")],
+         label(lom.get("stockpile_rehandle_basis"))],
         ["Capex fase stockpile", fmt.pct(inp["stockpile_capex_share"]),
-         lom.get("stockpile_phase_sustaining_basis")],
+         label(lom.get("stockpile_phase_sustaining_basis"))],
         ["Ekspor konsentrat",
-         "tidak" if not inp.get("export_base", True) else "berlanjut",
-         (f"Izin ekspor sementara berakhir {inp.get('export_permit_expired')} dan tidak ada bukti "
-          "perpanjangan; umpan pabrik dibatasi pada bijih yang tembaganya dapat dilebur smelter "
-          "(kapasitas x utilisasi terakhir), sisa bijih diproses kemudian, dan konsentrat 2H26 di "
-          "atas kapasitas dilebur lebih dahulu pada 2027. Akibatnya pit dan stockpile berjalan "
-          "lebih lama dari jadwal emiten (pit 2031/2032, stockpile 2033/2034) dan Elang mulai "
-          "lebih lambat; jadwal emiten dengan ekspor ada di uji tambahan."
-          if not inp.get("export_base", True) else lom.get("concentrate_export"))],
+         _t("tidak", "no") if not inp.get("export_base", True) else _t("berlanjut", "continues"),
+         _t(f"Izin ekspor sementara berakhir {inp.get('export_permit_expired')} dan tidak ada bukti "
+            "perpanjangan; umpan pabrik dibatasi pada bijih yang tembaganya dapat dilebur smelter "
+            "(kapasitas x utilisasi terakhir), sisa bijih diproses kemudian, dan konsentrat 2H26 di "
+            "atas kapasitas dilebur lebih dahulu pada 2027. Akibatnya pit dan stockpile berjalan "
+            "lebih lama dari jadwal emiten (pit 2031/2032, stockpile 2033/2034) dan Elang mulai "
+            "lebih lambat; jadwal emiten dengan ekspor ada di uji tambahan.",
+            f"The temporary export permit expired on {inp.get('export_permit_expired')} with no "
+            "evidence of an extension; plant feed is capped at ore whose copper the smelter can "
+            "process (capacity x latest utilisation), the remaining ore is processed later, and "
+            "2H26 concentrate above capacity is smelted first in 2027. The pit and stockpile "
+            "therefore run longer than the issuer's schedule (pit 2031/2032, stockpile "
+            "2033/2034) and Elang starts later; the issuer's schedule with exports is in the "
+            "additional tests.")
+         if not inp.get("export_base", True) else label(lom.get("concentrate_export"))],
     ]
     assumptions = {"n": 0, "judul": "Asumsi analis dalam SOTP/LoM", "tipe": "tabel",
                    "data": {"cols": ["Asumsi", "Nilai", "Dasar"], "rows": assumption_rows},
@@ -3501,13 +3543,16 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                              if full.get(key) is not None and full.get("revenue") else "n.m.")
         official_source = ((intake.get("latest_official_actual") or {}).get("source_title") or
                            "rilis interim resmi")
+        actual_period = (intake.get('latest_official_actual') or {}).get('period') or '1H'
         assumption_rows = [[
             forecast_label,
             (f"EBITDA margin {ratio('ebitda')}; net margin {ratio('net_profit')}; "
              f"capex/revenue {ratio('capital_expenditure') if full.get('capital_expenditure') is not None else ratio('capex')}"),
-            f"Aktual {(intake.get('latest_official_actual') or {}).get('period') or '1H'} resmi "
-            f"ditambah asumsi H2 analis; rincian di exhibit skenario {forecast_label}. "
-            f"Sumber: {official_source}."]]
+            _t(f"Aktual {actual_period} resmi "
+               f"ditambah asumsi H2 analis; rincian di exhibit skenario {forecast_label}. "
+               f"Sumber: {official_source}.",
+               f"Official {actual_period} actuals plus analyst H2 assumptions; detail in the "
+               f"{forecast_label} scenario exhibit. Source: {prose_lang.label(official_source)}.")]]
         cited_urls = [source_lookup["official"]] if source_lookup.get("official") else []
         for row in forward["rows"]:
             sources = [source_lookup[source_id] for source_id in row["source_ids"]
@@ -3519,9 +3564,15 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                  f"EBITDA margin {fmt.pct(row['ebitda_margin_pct'] / 100)}; "
                  f"net margin {fmt.pct(row['net_income_margin_pct'] / 100)}; "
                  f"capex/revenue {fmt.pct(row['capex_to_revenue_pct'] / 100)}"),
-                (row.get("rationale") or "Jadwal LoM yang sama dengan valuasi.")
-                + " Bukan panduan emiten." if lom_schedule else
-                "Angka kolom ini adalah asumsi analis untuk tahun tersebut, bukan panduan emiten."])
+                # The LoM rationale is model text (app.lom), English in app.source_patterns.
+                _t((row.get("rationale") or "Jadwal LoM yang sama dengan valuasi.")
+                   + " Bukan panduan emiten.",
+                   (prose_lang.label(row["rationale"]) if row.get("rationale") else
+                    "The same LoM schedule as the valuation.") + " Not issuer guidance.")
+                if lom_schedule else
+                _t("Angka kolom ini adalah asumsi analis untuk tahun tersebut, bukan panduan emiten.",
+                   "The figures in this column are analyst assumptions for that year, not issuer "
+                   "guidance.")])
         assumptions_exhibit = {
             "n": len(doc["exhibits"]) + 1,
             "judul": (f"Dasar tiap tahun {forecast_label}-FY30F: skenario interim dan jadwal LoM"
