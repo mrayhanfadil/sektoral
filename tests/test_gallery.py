@@ -35,7 +35,7 @@ def _report(folder: Path, ticker: str, published: bool = True, chain=True, revie
             english=False):
     evidence_register = _test_register(ticker)
     doc = {"meta": {"ticker": ticker, "emiten": f"PT {ticker} Tbk", "tanggal": "2026-09-24",
-                    "harga": 1000.0, "status": ("distributable_assumption_led" if published
+                    "harga": 1000.0, "harga_tanggal": "2026-09-23", "status": ("distributable_assumption_led" if published
                                                 else "draft_non_distributable"),
                     "rating": "Hold" if published else None, "tp": 1100 if published else None,
                     "upside_persen": 10.0 if published else None,
@@ -81,6 +81,12 @@ def test_summaries_hold_drafts_and_read_the_method_chain(tmp_path):
     assert [s["decision"] for s in first["chain"]] == ["Dilewati", "Terpilih", "Silang cek"]
     assert first["chain"][0]["step"] == "DCF FCFF"
     assert [s["decision_code"] for s in first["chain"]] == ["skipped", "selected", "cross_check"]
+    # The value as the English report prints it.
+    assert [(s["value"], s["value_en"]) for s in first["chain"]] == [
+        ("-", "-"), ("Rp1.100", "Rp1,100"), ("Rp900", "Rp900")]
+    # The close the price is from, beside the report date.
+    assert first["price"] == 1000.0 and first["price_date"] == "2026-09-23"
+    assert first["date"] == "2026-09-24"
     assert held["rating"] is None and held["tp"] is None
     assert held["held_reason"] == "laporan belum tersedia untuk umum"
     assert held["method"] == "" and held["headline"] == "" and held["risks"] == []
@@ -261,3 +267,12 @@ def test_an_english_reader_gets_the_english_pdf_cover_while_it_is_in_the_bundle(
     _report(tmp_path, "BBBB")
     assert gallery.cover(tmp_path, "BBBB", "en") is None
     assert gallery.cover(tmp_path, "BBBB", "id") is not None
+
+
+def test_a_price_date_that_is_not_a_date_is_left_out(tmp_path):
+    _report(tmp_path, "AAAA")
+    doc = outputs.load(outputs.REPORT, tmp_path, "AAAA")
+    doc["meta"]["harga_tanggal"] = "24 Sep"
+    assert gallery.summary(doc, tmp_path, "AAAA")["price_date"] is None
+    del doc["meta"]["harga_tanggal"]
+    assert gallery.summary(doc, tmp_path, "AAAA")["price_date"] is None
