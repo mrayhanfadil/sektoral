@@ -130,7 +130,7 @@ def build(doc, intake, fc, va):
     top = (dv.get("rows") or [])[:3]
     if top:
         rows.append(["Yang harus terjadi", "; ".join(
-            f"{_label(r['driver'])} {r['base']} ({_label(r['basis'])})" for r in top) + "."])
+            f"{_label(r['driver'])} {_label(r['base'])} ({_label(r['basis'])})" for r in top) + "."])
     base = ((dv.get("cases") or {}).get("base") or {}).get("per_share")
     if top and price and base:
         implied = [(_step_text(r, m) if m is not None else None) for r in top

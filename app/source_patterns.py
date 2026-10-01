@@ -35,6 +35,18 @@ def _source(text):
     return prose_lang.source(text)
 
 
+# A document title the issuer published in English ("AMMAN FY 2025 Earnings
+# Release", "... Consolidated Financial Statements ...") is quoted as it is; an
+# Indonesian one goes through the same lookup as other text, so it still falls
+# back when it has no English.
+_ENGLISH_TITLE = re.compile(r"\b(Release|Report|Statements?|Presentation|Earnings|Financial|"
+                            r"Annual|Interim|Consolidated|Update)\b")
+
+
+def _title(text):
+    return text if _ENGLISH_TITLE.search(text) else _source(text)
+
+
 def _fixed(pairs):
     """Patterns for strings without variable parts."""
     return [(re.escape(id_text), en_text.replace("{", "{{").replace("}", "}}"))
@@ -78,7 +90,7 @@ _BRIDGE = [
      "book value, official interim balance sheet at {0}"),
     # app.forecast_statements: NCI opening from a US$ reporter's annual release.
     (r"nilai buku FY(\d{4}), (.+)",
-     _Call(lambda year, title: f"book value FY{year}, {_source(title)}")),
+     _Call(lambda year, title: f"book value FY{year}, {_title(title)}")),
     (r"rilis tahunan resmi", "official annual release"),
     (r"tidak dilaporkan terpisah; ekuitas induk = total ekuitas",
      "not reported separately; parent equity = total equity"),
@@ -98,7 +110,7 @@ _BRIDGE = [
      "official share register at {0}, adjusted for corporate actions to {1}"),
     (r"porsi induk (\S+) resmi", "official {0} parent share"),
     (r"porsi induk FY(\d{4}) resmi, (.+)",
-     _Call(lambda year, title: f"official FY{year} parent share, {_source(title)}")),
+     _Call(lambda year, title: f"official FY{year} parent share, {_title(title)}")),
     (r"laporan tahunan resmi", "official annual report"),
     (r"laba konsolidasi \(porsi induk tidak dilaporkan terpisah\)",
      "consolidated profit (parent share not reported separately)"),
@@ -621,6 +633,27 @@ _LOM = [
      "long-term US inflation of {0} a year ({1})"),
 ]
 
+# --- Model drivers' base values and test units (app.driver_value), quoted with
+# their figures as written in the decision summary and catalyst thresholds; a
+# DCF bridge's parent share (app.scenario_value); the bank model's funding
+# warning (app.bank_model.checks).
+_DRIVER_UNITS = [
+    (r"([\d.,]+) ha/tahun", "{0} ha/yr"),
+    (r"±([\d.,]+) ha/tahun", "±{0} ha/yr"),
+    (r"±([\d.,]+) pp per tahun", "±{0} pp per year"),
+    (r"±([\d.,]+)% level harga", "±{0}% price level"),
+    (r"±([\d.,]+)% level biaya, diteruskan ke tarif", "±{0}% cost level, passed through to tariffs"),
+    (r"porsi induk ([\d.,]+)% dari laba 1H resmi", "parent share of {0}% of official 1H profit"),
+    (r"(LDR|porsi kredit dalam aset produktif) di atas rekor tertinggi historis data Sectors "
+     r"\(" + PCT + r"\): (.+); kredit tumbuh lebih cepat dari pendanaan skenario",
+     _Call(lambda name, record, years:
+           f"{'LDR' if name == 'LDR' else 'loan share of earning assets'} above its historical "
+           f"Sectors record ({record}): {years}; loans grow faster than scenario funding")),
+] + _fixed([
+    ("tidak dilaporkan terpisah; dianggap tidak material",
+     "not reported separately; taken as immaterial"),
+])
+
 # --- Liquidity and business quality (app.investability), quoted in the
 # investability exhibits.
 _INVESTABILITY = [
@@ -648,5 +681,5 @@ _INVESTABILITY = [
 
 PATTERNS = [(re.compile(p), t) for p, t in (
     _BRIDGE + _DRIVERS + _PAYOUT + _READER + _CANDIDATE + _METHOD + _LABEL + _NOTES
-    + _INVESTABILITY + _LOM
+    + _INVESTABILITY + _LOM + _DRIVER_UNITS
 )]

@@ -5190,9 +5190,10 @@ def _build_earnings_led(intake, fc, va, s1, method="auto"):
     actual = intake.get("latest_official_actual") or {}
     actual_title = actual.get("source_title") or "rilis interim resmi"
     refs = a.get("source_refs") or {}
+    # Titles as published (prose_lang.quoted marks them in the English run).
     cite = lambda ids: "; ".join(
-        actual_title if x == "official" else
-        f"{(refs.get(x) or {}).get('title', 'berita bertanggal')} "
+        prose_lang.quoted(actual_title) if x == "official" else
+        f"{prose_lang.quoted((refs.get(x) or {}).get('title', 'berita bertanggal'))} "
         f"({(refs.get(x) or {}).get('date', '-')})"
         for x in ids or [])
     peers = [p for p in intake.get("peers") or []
