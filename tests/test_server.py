@@ -326,6 +326,28 @@ def test_report_trace_view_returns_only_public_fields(make_client, tmp_path, mon
     assert make_client(reports=reports).get("/api/reports/ZZZZ/trace").status_code == 404
 
 
+def test_a_public_trace_says_its_real_review_state(make_client, tmp_path):
+    # Published automatically (gates passed), not approved by a reviewer.
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    _report(reports, "AAAA", reviewed=False)
+    doc = outputs.load(outputs.REPORT, reports, "AAAA")
+    doc["model_inputs"] = {"kind": "bank", "drivers": {"ticker": "AAAA", "drivers": [
+        {"year": 2026, "loan_growth_pct": {"value": 9.0, "kind": "company_guidance",
+                                           "rationale": "Panduan."}}]}}
+    outputs.save(outputs.REPORT, reports, "AAAA", doc)
+    outputs.save(outputs.TRACE, reports, "AAAA", {"ticker": "AAAA", "forecast_assumptions": {
+        "plan": {"earnings_scenario": {"bank_drivers": {"year": 2026, "loan_growth_pct": 10.0}}}}})
+    body = make_client(reports=reports).get("/api/reports/AAAA/trace").json()
+    assert body["review_state"] == "pending"
+    # The trace reads what the model ran from the report it belongs to.
+    assert body["forecast"]["bank_drivers_used"] is False
+    assert body["forecast"]["bank_drivers_model"][0]["loan_growth_pct"] == 9.0
+    approve(reports, "AAAA")
+    assert make_client(reports=reports).get("/api/reports/AAAA/trace").json()[
+        "review_state"] == "approved"
+
+
 def test_spa_fallback_serves_index_but_never_escapes_or_shadows_api(make_client, tmp_path):
     static = tmp_path / "dist"
     (static / "assets").mkdir(parents=True)
