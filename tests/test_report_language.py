@@ -199,6 +199,16 @@ def test_labels_translate_terms_patterns_and_figures():
     assert en("Rp-370,7 miliar") == "Rp-370.7bn"
     assert en("Akumulasi biaya Des-25 (US$m)") == "Accumulated cost Dec-25 (US$m)"
     assert en("Rata-rata target konsensus (8 analis)") == "Consensus target average (8 analysts)"
+    # Audit appendix cells (the AMMN Q2 rebuild and H1 debt-flow reconciliation).
+    assert en("Selisih Q1 ke H1; kedua angka sumber dibulatkan ke US$ juta") == (
+        "Q1 to H1 difference; both source figures rounded to US$ mn")
+    assert en("Angka rinci laporan keuangan; US$340,0m adalah pelunasan dipercepat yang "
+              "termasuk di sini.") == ("Detailed financial statement figure; it includes the "
+                                       "US$340.0m accelerated repayment.")
+    assert en("Dibanding pembayaran pokok jangka panjang rinci US$580,866m, selisih nominal "
+              "US$7,134m belum direkonsiliasi; basis keduanya belum terbukti sama.") == (
+        "Against detailed long-term principal repayments of US$580.866m, a nominal difference "
+        "of US$7.134m is not yet reconciled; the two are not shown to share a basis.")
     # Unknown words stay; only their figures change.
     assert en("Laba tumbuh 17,5% yoy") == "Laba tumbuh 17.5% yoy"
     assert report_lang.label("Laba bersih (Rp miliar)", "id") == "Laba bersih (Rp miliar)"
