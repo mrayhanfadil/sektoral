@@ -597,7 +597,6 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     (out / f"{t}.en.html").unlink(missing_ok=True)
     (out / f"{t}.en.pdf").unlink(missing_ok=True)
     doc, events, text, used, seen = _build_once(t, out, kwargs, pins)
-    last_built = doc
     if log:
         log(text)
     if pins is None and not live_inputs and seen.get("reporting_currency") == "USD":
@@ -610,7 +609,6 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
         if inferred:
             quote = fx.implied_quote(inferred, price_day or quote.get("date"))
             second = _build_once(t, out, kwargs, {"fx": quote})
-            last_built = second[0]
             if log:
                 log(second[2])
             if _same_revenue(source_doc, second[0]):
@@ -633,8 +631,10 @@ def rebuild_one(ticker: str, source, out, *, want_pdf: bool = False,
     }
     doc["run_manifest"] = manifest
     outputs.save(outputs.REPORT, out, t, doc, db)
-    if doc is not last_built:  # build.build wrote the HTML of the rejected second pass
-        (out / f"{t}.html").write_text(render.render(doc))
+    # build.build wrote the HTML before the manifest recorded this rebuild (and,
+    # with a rejected second pass, of that pass): render the final document.
+    (out / f"{t}.html").write_text(render.render(doc))
+    if (out / f"{t}.en.html").exists():
         build.render_english(doc, out, t)
     trace = rebuilt_trace(stored_trace, doc)
     if fresh_plan is not None:

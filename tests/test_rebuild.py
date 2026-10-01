@@ -99,6 +99,20 @@ class FakeBuild:
         return doc
 
 
+@pytest.fixture(autouse=True)
+def fake_render(monkeypatch):
+    """The rebuild renders its final document once more (the manifest now
+    records the rebuild); the synthetic documents here are not renderable."""
+    rendered = []
+
+    def render(doc, lang="id"):
+        rendered.append((doc, lang))
+        return f"<html>report {lang}</html>"
+
+    monkeypatch.setattr(rebuild.render, "render", render)
+    return rendered
+
+
 @pytest.fixture
 def fake_build(monkeypatch):
     fake = FakeBuild()
@@ -390,6 +404,26 @@ def test_a_bank_plan_quoting_another_payout_than_the_model_is_flagged(tmp_path, 
     assert problems == ["earnings: earnings_scenario.key_risks[0].explanation states payout 92% "
                         "but the model runs payout 70/60% (data/bank_drivers/AAAA.json); "
                         "describe the risk relative to the model's drivers (model)"]
+
+
+def test_the_final_render_records_the_rebuild(tmp_path, monkeypatch, fake_render):
+    """Both editions are rendered from the document whose manifest records the
+    rebuild, so the report can say when it was rebuilt (render.build_note)."""
+    source, out = tmp_path / "src", tmp_path / "out"
+    _stored_run(source)
+    fake = FakeBuild()
+
+    def with_english(ticker, outdir, **kwargs):
+        doc = fake(ticker, outdir, **kwargs)
+        (outdir / f"{ticker}.en.html").write_text("<html>english</html>")
+        return doc
+
+    monkeypatch.setattr(build, "build", with_english)
+    assert rebuild.main(["--from", str(source), "--out", str(out)]) == 0
+    assert [lang for _doc_, lang in fake_render][-2:] == ["id", "en"]
+    final = fake_render[-1][0]
+    assert final["run_manifest"]["rebuild"]["rebuilt_at"]
+    assert (out / "AAAA.html").read_text() == "<html>report id</html>"
 
 
 def test_pinned_fx_leaves_a_market_quote_alone():

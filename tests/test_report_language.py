@@ -166,6 +166,27 @@ def test_english_tables_keep_the_indonesian_layout_marks(monkeypatch):
     assert "<tr class='total-row'><td class='cell-text'>Net operating cash flow</td>" in html
 
 
+def test_a_report_built_after_its_report_date_says_when(monkeypatch):
+    """A decision or policy dated after the Report Date (D8, 2026-09-26, in a
+    report dated 2026-09-24) reads as the policy in force at the (re)build."""
+    monkeypatch.setattr(render, "_price_window", lambda *_args: None)
+    doc = _doc()
+    assert render.build_note(doc) is None  # the golden document records no build
+    doc["run_manifest"] = {"built_at": "2026-09-24T12:00:00+00:00"}
+    assert render.build_note(doc) is None  # built on its Report Date
+    doc["run_manifest"] = {"built_at": "2026-09-24T12:00:00+00:00",
+                           "rebuild": {"rebuilt_at": "2026-09-30T12:00:00+00:00"}}
+    html, english = render.render(doc), render.render(doc, lang="en")
+    assert ("<li class='small'>Disusun ulang 2026-09-30 atas bukti per Tanggal Laporan "
+            "2026-09-24; rujukan bertanggal sesudah Tanggal Laporan adalah kebijakan yang "
+            "berlaku saat disusun ulang.</li>") in html
+    assert ("<li class='small'>Rebuilt on 2026-09-30 from evidence as of the Report Date, "
+            "2026-09-24; references dated after the Report Date are policies in force at the "
+            "rebuild.</li>") in english
+    doc["run_manifest"] = {"built_at": "2026-09-25T12:00:00+00:00"}
+    assert "Disusun 2026-09-25 atas bukti per Tanggal Laporan 2026-09-24" in render.render(doc)
+
+
 def test_english_method_chain_states_its_reasons_in_english(monkeypatch):
     """A reason joins release limitations with "; "; each part has English."""
     monkeypatch.setattr(render, "_price_window", lambda *_args: None)
