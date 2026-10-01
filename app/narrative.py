@@ -625,12 +625,18 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
         ]
         add("Nilai tercatat persediaan dan stockpiles",
             ["Pos (US$m)", "31 Des 2025", "30 Jun 2026"], inventory_rows,
-            f"Sumber: {inventory_sales['source_title']}, hlm. "
-            f"{inventory_sales['inventory_source_page']}; {inventory_sales['source_url']}. "
-            "Ini nilai tercatat berbasis biaya, bukan jumlah fisik konsentrat siap jual. "
-            "Laporan tidak memuat roll-forward tonase persediaan konsentrat, umpan smelter, "
-            "atau produk yang menunggu penjualan. Manajemen menyatakan stockpiles dapat dipakai/dijual "
-            "dan nilai realisasi netonya melebihi nilai tercatat.")
+            _t(f"Sumber: {inventory_sales['source_title']}, hlm. "
+               f"{inventory_sales['inventory_source_page']}; {inventory_sales['source_url']}. "
+               "Ini nilai tercatat berbasis biaya, bukan jumlah fisik konsentrat siap jual. "
+               "Laporan tidak memuat roll-forward tonase persediaan konsentrat, umpan smelter, "
+               "atau produk yang menunggu penjualan. Manajemen menyatakan stockpiles dapat dipakai/dijual "
+               "dan nilai realisasi netonya melebihi nilai tercatat.",
+               f"Source: {inventory_sales['source_title']}, p. "
+               f"{inventory_sales['inventory_source_page']}; {inventory_sales['source_url']}. "
+               "These are cost-based carrying values, not the physical quantity of concentrate ready "
+               "for sale. The report has no roll-forward of concentrate inventory tonnage, smelter "
+               "feed or product awaiting sale. Management states that the stockpiles can be used or "
+               "sold and that their net realisable value exceeds their carrying value."))
 
         sales_market_rows = [
             [row["product"], fmt._id(row["domestic"] / 1000, 1),
@@ -639,11 +645,16 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
         ]
         add("Penjualan H1 menurut produk dan pasar",
             ["Produk (US$m)", "Domestik", "Ekspor", "Total"], sales_market_rows,
-            f"Sumber: {inventory_sales['source_title']}, hlm. "
-            f"{inventory_sales['sales_source_page']}; {inventory_sales['source_url']}. "
-            "Angka laporan keuangan dalam US$ ribu. Penjualan historis menurut pasar tidak "
-            "menetapkan volume, harga, atau kanal penjualan H2; volume dan harga forward kontrak "
-            "tetap belum diungkap.")
+            _t(f"Sumber: {inventory_sales['source_title']}, hlm. "
+               f"{inventory_sales['sales_source_page']}; {inventory_sales['source_url']}. "
+               "Angka laporan keuangan dalam US$ ribu. Penjualan historis menurut pasar tidak "
+               "menetapkan volume, harga, atau kanal penjualan H2; volume dan harga forward kontrak "
+               "tetap belum diungkap.",
+               f"Source: {inventory_sales['source_title']}, p. "
+               f"{inventory_sales['sales_source_page']}; {inventory_sales['source_url']}. "
+               "Financial statement figures in US$ thousand. Historical sales by market do not set "
+               "H2 sales volume, price or channel; contract forward volumes and prices are still "
+               "undisclosed."))
         inventory_sales_section = {
             "halaman": 0,
             "judul": "Persediaan, penjualan, dan batas rekonsiliasi",
@@ -693,10 +704,15 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 "Delta produksi dan penjualan produk H1",
                 ["Produk/tahap", "Produksi H1", "Penjualan H1", "Produksi dikurangi penjualan"],
                 physical_rows,
-                f"Sumber: {actual['source_title']}, hlm. 3; {actual['source_url']}. "
-                "Delta adalah selisih arus produksi dan penjualan yang dilaporkan, bukan perubahan persediaan. "
-                "Konsentrat, kandungan logam konsentrat, katoda, dan emas murni berada pada tahap berbeda; "
-                "angka tidak boleh dijumlahkan lintas tahap atau diperlakukan sebagai payable metal/inventory.")
+                _t(f"Sumber: {actual['source_title']}, hlm. 3; {actual['source_url']}. "
+                   "Delta adalah selisih arus produksi dan penjualan yang dilaporkan, bukan perubahan persediaan. "
+                   "Konsentrat, kandungan logam konsentrat, katoda, dan emas murni berada pada tahap berbeda; "
+                   "angka tidak boleh dijumlahkan lintas tahap atau diperlakukan sebagai payable metal/inventory.",
+                   f"Source: {actual['source_title']}, p. 3; {actual['source_url']}. "
+                   "The delta is the gap between reported production and sales flows, not a change in "
+                   "inventory. Concentrate, metal contained in concentrate, cathode and refined gold "
+                   "sit at different stages; the figures must not be added across stages or treated "
+                   "as payable metal/inventory."))
             physical_sales_section = {
                 "halaman": 0,
                 "judul": "Produksi dan penjualan aktual H1 menurut tahap",
@@ -1299,12 +1315,18 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 "Uji antar-tahap logam H2: konsentrat ke produk refinery",
                 ["Metrik", "Sisa H2 tersirat", "Basis / batas interpretasi"],
                 interstage_rows,
-                f"Aktual H1 dan panduan FY26: {actual.get('source_title')}, hlm. 3 dan 7. "
-                "H2 dihitung sebagai panduan FY dikurangi produksi H1; angka Mlb katoda "
-                "dikonversi dari ton metrik. Cu/Au dalam konsentrat dan output katoda/emas "
-                "murni adalah tahap berbeda, dapat memiliki timing serta persediaan antar-tahap, "
-                "dan tidak mengungkap feed, recovery, assay, atau roll-forward material. Rasio "
-                "bukan recovery metalurgi dan tidak memvalidasi penjualan maupun revenue H2.")
+                _t(f"Aktual H1 dan panduan FY26: {actual.get('source_title')}, hlm. 3 dan 7. "
+                   "H2 dihitung sebagai panduan FY dikurangi produksi H1; angka Mlb katoda "
+                   "dikonversi dari ton metrik. Cu/Au dalam konsentrat dan output katoda/emas "
+                   "murni adalah tahap berbeda, dapat memiliki timing serta persediaan antar-tahap, "
+                   "dan tidak mengungkap feed, recovery, assay, atau roll-forward material. Rasio "
+                   "bukan recovery metalurgi dan tidak memvalidasi penjualan maupun revenue H2.",
+                   f"H1 actuals and FY26 guidance: {actual.get('source_title')}, pp. 3 and 7. "
+                   "H2 is FY guidance less H1 production; cathode Mlb figures are converted from "
+                   "metric tonnes. Cu/Au in concentrate and cathode/refined gold output are "
+                   "different stages, may differ in timing and hold inventory between stages, and "
+                   "do not disclose feed, recovery, assay or a material roll-forward. The ratio is "
+                   "not a metallurgical recovery and validates neither H2 sales nor revenue."))
             illustrative_pages.append({
                 "halaman": 0, "judul": "Uji antar-tahap produksi H2",
                 "layout": "stack",
@@ -1341,10 +1363,15 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 "Rekonstruksi Q2 2026 (H1 dikurangi Q1)",
                 ["Produk / metrik", "Produksi Q2", "Terjual Q2",
                  "Revenue / metrik", "Revenue per unit, proxy", "Implied net price"], q2_product_rows,
-                "Q2 diturunkan dari H1 resmi dikurangi Q1 resmi; volume dan metrik finansial adalah angka turunan. "
-                "Revenue produk dibulatkan di kedua rilis; revenue/unit konsentrat adalah proxy segmen, bukan realized price/netback. "
-                "Sumber Q1: AMMAN Q1 2026 Performance Release, hlm. 3-5. "
-                "Sumber H1: AMMAN H1 2026 Earnings Release, hlm. 3-4.")
+                _t("Q2 diturunkan dari H1 resmi dikurangi Q1 resmi; volume dan metrik finansial adalah angka turunan. "
+                   "Revenue produk dibulatkan di kedua rilis; revenue/unit konsentrat adalah proxy segmen, bukan realized price/netback. "
+                   "Sumber Q1: AMMAN Q1 2026 Performance Release, hlm. 3-5. "
+                   "Sumber H1: AMMAN H1 2026 Earnings Release, hlm. 3-4.",
+                   "Q2 is derived as official H1 less official Q1; volumes and financial metrics are "
+                   "derived figures. Product revenue is rounded in both releases; concentrate "
+                   "revenue/unit is a segment proxy, not a realised price/netback. "
+                   "Q1 source: AMMAN Q1 2026 Performance Release, pp. 3-5. "
+                   "H1 source: AMMAN H1 2026 Earnings Release, pp. 3-4."))
             q2_is = q2_data.get("income_statement_usd_thousand") or {}
             q2_cf = q2_data.get("cash_flow_usd_thousand") or {}
             q2_fin_rows = []
@@ -1371,10 +1398,15 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
             q2_fin_exhibit = add(
                 "Rekonstruksi laba rugi dan arus kas Q2 2026",
                 ["Metrik", "Q2 (US$ juta)", "Basis"], q2_fin_rows,
-                "Turunan H1 dikurangi Q1 dari laporan interim resmi; angka laporan keuangan dasar dalam US$ ribu. "
-                "EBITDA serta revenue per produk memakai angka rilis yang dibulatkan. FCF indikatif = arus kas operasi + arus kas investasi; "
-                "bukan metrik FCF yang dinyatakan emiten. Sumber: Q1 2026 Performance Release, lampiran laporan keuangan; "
-                "H1 2026 Earnings Release, lampiran laporan keuangan.")
+                _t("Turunan H1 dikurangi Q1 dari laporan interim resmi; angka laporan keuangan dasar dalam US$ ribu. "
+                   "EBITDA serta revenue per produk memakai angka rilis yang dibulatkan. FCF indikatif = arus kas operasi + arus kas investasi; "
+                   "bukan metrik FCF yang dinyatakan emiten. Sumber: Q1 2026 Performance Release, lampiran laporan keuangan; "
+                   "H1 2026 Earnings Release, lampiran laporan keuangan.",
+                   "Derived as H1 less Q1 from the official interim reports; underlying financial "
+                   "statement figures in US$ thousand. EBITDA and revenue by product use rounded "
+                   "release figures. Indicative FCF = operating cash flow + investing cash flow; not "
+                   "an FCF metric the issuer states. Source: Q1 2026 Performance Release, financial "
+                   "statement appendix; H1 2026 Earnings Release, financial statement appendix."))
             pricing = evidence.get("provisional_pricing_evidence") or {}
             pricing_exhibit = None
             if pricing:
@@ -1388,9 +1420,12 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 pricing_exhibit = add(
                     "Ketentuan provisional pricing dan settlement",
                     ["Pengungkapan interim", "Dampak pada forecast"], pricing_rows,
-                    f"Sumber: {pricing.get('source_title')}, Catatan 2.s hlm. 40 dan Catatan 30.a.ii hlm. 113; "
-                    f"{pricing.get('source_url')}. Harga Q2 implied pada exhibit sebelumnya adalah estimasi historis turunan, "
-                    "bukan final price atau netback shipment H2.")
+                    _t(f"Sumber: {pricing.get('source_title')}, Catatan 2.s hlm. 40 dan Catatan 30.a.ii hlm. 113; "
+                       f"{pricing.get('source_url')}. Harga Q2 implied pada exhibit sebelumnya adalah estimasi historis turunan, "
+                       "bukan final price atau netback shipment H2.",
+                       f"Source: {pricing.get('source_title')}, Note 2.s p. 40 and Note 30.a.ii p. 113; "
+                       f"{pricing.get('source_url')}. The implied Q2 price in the previous exhibit is a "
+                       "derived historical estimate, not the final price or netback of H2 shipments."))
             illustrative_pages.append({
                 "halaman": 0, "judul": "Rekonstruksi aktual Q2 2026",
                 "layout": "stack",
@@ -1428,9 +1463,13 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "Piutang provisional FVPL dan derivatif swap",
                     ["Saldo keuangan (US$m)", "30 Jun 2026", "31 Des 2025", "Klasifikasi dan batas data"],
                     pricing_balance_rows,
-                    f"Sumber: {pricing_balances.get('source_title')}, {pricing_balances.get('classification_source_note')}; "
-                    f"{pricing_balances.get('derivative_source_note')}; {pricing_balances.get('source_url')}. "
-                    "Piutang FVPL adalah bagian dari piutang usaha, sedangkan aset/liabilitas derivatif merupakan pos berbeda.")
+                    _t(f"Sumber: {pricing_balances.get('source_title')}, {pricing_balances.get('classification_source_note')}; "
+                       f"{pricing_balances.get('derivative_source_note')}; {pricing_balances.get('source_url')}. "
+                       "Piutang FVPL adalah bagian dari piutang usaha, sedangkan aset/liabilitas derivatif merupakan pos berbeda.",
+                       f"Source: {pricing_balances.get('source_title')}, {pricing_balances.get('classification_source_note')}; "
+                       f"{pricing_balances.get('derivative_source_note')}; {pricing_balances.get('source_url')}. "
+                       "FVPL receivables are part of trade receivables, while derivative assets/liabilities "
+                       "are separate line items."))
                 illustrative_pages.append({
                     "halaman": 0,
                     "judul": "Saldo settlement provisional dan klasifikasi derivatif",
@@ -1471,10 +1510,16 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "Rekonsiliasi komponen beban pokok penjualan Q2",
                     ["Komponen (US$m)", "Q1 aktual", "Q2 turunan", "H1 aktual"],
                     cogs_rows,
-                    "Q1 dari laporan interim AMMAN, Catatan 25 hlm. 105 dan Catatan 11 hlm. 72; H1 dari laporan keuangan interim AMMAN, Catatan 25 hlm. 108 dan Catatan 11 hlm. 73. "
-                    "Q2 dihitung sebagai H1 dikurangi Q1; bukan angka triwulanan yang dilaporkan terpisah. "
-                    "Sumber Q1 (arsip salinan filing emiten): https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q1/AMMN_Q1_2026.pdf. "
-                    f"Sumber H1: {cogs.get('source_url_h1')}. Nilai dalam US$ juta; angka sumber dalam US$ ribu.")
+                    _t("Q1 dari laporan interim AMMAN, Catatan 25 hlm. 105 dan Catatan 11 hlm. 72; H1 dari laporan keuangan interim AMMAN, Catatan 25 hlm. 108 dan Catatan 11 hlm. 73. "
+                       "Q2 dihitung sebagai H1 dikurangi Q1; bukan angka triwulanan yang dilaporkan terpisah. "
+                       "Sumber Q1 (arsip salinan filing emiten): https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q1/AMMN_Q1_2026.pdf. "
+                       f"Sumber H1: {cogs.get('source_url_h1')}. Nilai dalam US$ juta; angka sumber dalam US$ ribu.",
+                       "Q1 from the AMMAN interim report, Note 25 p. 105 and Note 11 p. 72; H1 from the "
+                       "AMMAN interim financial statements, Note 25 p. 108 and Note 11 p. 73. "
+                       "Q2 is H1 less Q1; not a separately reported quarterly figure. "
+                       "Q1 source (archived copy of the issuer filing): https://www.indopremier.com/xdir/news/LAPORAN%20KEUANGAN/2026/q1/AMMN_Q1_2026.pdf. "
+                       f"H1 source: {cogs.get('source_url_h1')}. Values in US$ mn; source figures in "
+                       "US$ thousand."))
                 illustrative_pages.append({
                     "halaman": 0,
                     "judul": "Komposisi biaya aktual dan keterbatasan run-rate",
@@ -1513,11 +1558,17 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                         "Dampak pergerakan persediaan pada laba kotor (diagnostik)",
                         ["Metrik (US$m)", "Q1 aktual", "Q2 turunan", "H1 aktual"],
                         gp_rows,
-                        "Perhitungan analitis dari laporan keuangan Q1 dan H1, bukan metrik yang dilaporkan emiten. "
-                        "Q2 = H1 dikurangi Q1. Baris diagnostik hanya membalik satu baris pergerakan stockpile/persediaan pada HPP; "
-                        "bukan gross profit adjusted, cash cost, EBITDA, atau FCFF. Sumber Q1: AMMAN Interim Financial Statements, "
-                        "laporan laba rugi dan Catatan 25, hlm. 4 dan 105; sumber H1: AMMAN Interim Financial Statements, "
-                        "laporan laba rugi dan Catatan 25, hlm. 4-5 dan 108.")
+                        _t("Perhitungan analitis dari laporan keuangan Q1 dan H1, bukan metrik yang dilaporkan emiten. "
+                           "Q2 = H1 dikurangi Q1. Baris diagnostik hanya membalik satu baris pergerakan stockpile/persediaan pada HPP; "
+                           "bukan gross profit adjusted, cash cost, EBITDA, atau FCFF. Sumber Q1: AMMAN Interim Financial Statements, "
+                           "laporan laba rugi dan Catatan 25, hlm. 4 dan 105; sumber H1: AMMAN Interim Financial Statements, "
+                           "laporan laba rugi dan Catatan 25, hlm. 4-5 dan 108.",
+                           "Analytical calculation from the Q1 and H1 financial statements, not a metric the "
+                           "issuer reports. Q2 = H1 less Q1. The diagnostic rows reverse only the one "
+                           "stockpile/inventory movement line in COGS; not adjusted gross profit, cash cost, "
+                           "EBITDA or FCFF. Q1 source: AMMAN Interim Financial Statements, income statement "
+                           "and Note 25, pp. 4 and 105; H1 source: AMMAN Interim Financial Statements, income "
+                           "statement and Note 25, pp. 4-5 and 108."))
                     carrying_rows = {
                         row.get("name"): row for row in
                         ((evidence.get("inventory_and_sales_detail") or {}).get(
@@ -1546,9 +1597,13 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                         "Nilai tercatat persediaan bukan tonase konsentrat",
                         ["Komponen (US$m)", "Des-25", "Jun-26", "Perubahan"],
                         inv_rows,
-                        "Sumber: AMMAN H1 2026 Interim Financial Statements, Catatan 7 hlm. 61 dan Catatan 25 hlm. 108. "
-                        "Selisih nilai tercatat gabungan dengan kredit HPP tidak direkonsiliasi langsung dalam catatan; "
-                        "keduanya tidak boleh dikonversi menjadi tonase konsentrat atau volume penjualan.")
+                        _t("Sumber: AMMAN H1 2026 Interim Financial Statements, Catatan 7 hlm. 61 dan Catatan 25 hlm. 108. "
+                           "Selisih nilai tercatat gabungan dengan kredit HPP tidak direkonsiliasi langsung dalam catatan; "
+                           "keduanya tidak boleh dikonversi menjadi tonase konsentrat atau volume penjualan.",
+                           "Source: AMMAN H1 2026 Interim Financial Statements, Note 7 p. 61 and Note 25 p. 108. "
+                           "The notes do not directly reconcile the gap between the combined carrying value "
+                           "and the COGS credit; neither may be converted into concentrate tonnage or sales "
+                           "volume."))
                     illustrative_pages.append({
                         "halaman": 0,
                         "judul": "Persediaan, gross profit, dan batas rekonsiliasi",
@@ -1593,12 +1648,19 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "Kontrak cathode, utang, dan kewajiban kas yang diungkapkan",
                     ["Fakta resmi (US$m)", "Nilai", "Makna untuk forecast"],
                     debt_contract_rows,
-                    f"Sumber: {debt_evidence.get('source_title')}, catatan laporan keuangan 15, 17, 21 dan 30; "
-                    f"{debt_evidence.get('source_url')}. Pelunasan Q3 US$350m dilaporkan aktual oleh manajemen pada "
-                    f"{(evidence.get('debt_outlook') or {}).get('actual_source_title')}, hlm. "
-                    f"{(evidence.get('debt_outlook') or {}).get('actual_source_page')}; "
-                    f"{(evidence.get('debt_outlook') or {}).get('actual_source_url')}. Angka itu memperbarui outlook H1, "
-                    "tetapi belum ada neraca pascapembayaran untuk menghitung kas/utang baru atau bunga forward."
+                    _t(f"Sumber: {debt_evidence.get('source_title')}, catatan laporan keuangan 15, 17, 21 dan 30; "
+                       f"{debt_evidence.get('source_url')}. Pelunasan Q3 US$350m dilaporkan aktual oleh manajemen pada "
+                       f"{(evidence.get('debt_outlook') or {}).get('actual_source_title')}, hlm. "
+                       f"{(evidence.get('debt_outlook') or {}).get('actual_source_page')}; "
+                       f"{(evidence.get('debt_outlook') or {}).get('actual_source_url')}. Angka itu memperbarui outlook H1, "
+                       "tetapi belum ada neraca pascapembayaran untuk menghitung kas/utang baru atau bunga forward.",
+                       f"Source: {debt_evidence.get('source_title')}, notes to the financial statements 15, 17, 21 and 30; "
+                       f"{debt_evidence.get('source_url')}. Management reported the US$350m Q3 repayment as "
+                       f"an actual in {(evidence.get('debt_outlook') or {}).get('actual_source_title')}, p. "
+                       f"{(evidence.get('debt_outlook') or {}).get('actual_source_page')}; "
+                       f"{(evidence.get('debt_outlook') or {}).get('actual_source_url')}. The figure updates the "
+                       "H1 outlook, but there is no post-payment balance sheet yet from which to compute new "
+                       "cash/debt or forward interest.")
                 )
                 illustrative_pages.append({
                     "halaman": 0,
@@ -1625,12 +1687,21 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                         "Rekonsiliasi arus pinjaman dan pembayaran utang H1 2026",
                         ["Arus kas pendanaan H1 2026 (US$m)", "Nilai", "Basis / batas rekonsiliasi"],
                         h1_debt_rows,
-                        f"Sumber utama: {hc.get('source_title')}, laporan arus kas cetak hlm. "
-                        f"{(hc.get('source_pages') or {}).get('cash_flow_statement')} dan rincian pembayaran pokok Note 17 hlm. "
-                        f"{(hc.get('source_pages') or {}).get('long_term_principal_detail')}; {hc.get('source_url')}. "
-                        "Presentasi manajemen H1 hlm. 16 menyebut US$588m utang dibayar YTD; laporan keuangan merinci US$580,866m pembayaran pokok jangka panjang. "
-                        "Selisih nominal headline tidak dijelaskan dalam sumber yang ditelaah dan basis headline belum terbukti sama; angka presisi laporan keuangan tetap dipakai untuk arus kas. "
-                        "Pembayaran US$350m Q3 yang dilaporkan kemudian tidak termasuk dalam periode H1 dan belum memiliki saldo kas/utang pascapembayaran."
+                        _t(f"Sumber utama: {hc.get('source_title')}, laporan arus kas cetak hlm. "
+                           f"{(hc.get('source_pages') or {}).get('cash_flow_statement')} dan rincian pembayaran pokok Note 17 hlm. "
+                           f"{(hc.get('source_pages') or {}).get('long_term_principal_detail')}; {hc.get('source_url')}. "
+                           "Presentasi manajemen H1 hlm. 16 menyebut US$588m utang dibayar YTD; laporan keuangan merinci US$580,866m pembayaran pokok jangka panjang. "
+                           "Selisih nominal headline tidak dijelaskan dalam sumber yang ditelaah dan basis headline belum terbukti sama; angka presisi laporan keuangan tetap dipakai untuk arus kas. "
+                           "Pembayaran US$350m Q3 yang dilaporkan kemudian tidak termasuk dalam periode H1 dan belum memiliki saldo kas/utang pascapembayaran.",
+                           f"Main source: {hc.get('source_title')}, cash flow statement, printed p. "
+                           f"{(hc.get('source_pages') or {}).get('cash_flow_statement')}, and the principal repayment detail in Note 17, p. "
+                           f"{(hc.get('source_pages') or {}).get('long_term_principal_detail')}; {hc.get('source_url')}. "
+                           "The H1 management presentation, p. 16, cites US$588m of debt repaid YTD; the "
+                           "financial statements itemise US$580,866m of long-term principal repayments. "
+                           "The sources reviewed do not explain the nominal gap to the headline, and the "
+                           "headline is not shown to share the same basis; the precise financial statement "
+                           "figures are still used for cash flow. The US$350m Q3 repayment reported later "
+                           "falls outside the H1 period and has no post-payment cash/debt balance yet.")
                     )
                     illustrative_pages.append({
                         "halaman": 0,
@@ -1685,31 +1756,70 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 "Uji revenue H2 dari volume produk dan realized price",
                 ["Produk", "H1 terjual aktual", "Basis harga H2", "H2 output tersirat", "H2 sales skenario", "H2 revenue (US$m)"],
                 product_rows,
-                "H1 sales dan realized prices: AMMAN H1 2026 Earnings Presentation, hlm. 22; FY output guidance: "
-                "AMMAN H1 2026 Earnings Release, hlm. 7. H2 sales memakai sell-through Q2 turunan untuk produk olahan; "
-                "cabang sensitivitas konservatif mengecualikan penjualan konsentrat karena volume ekspor H2 belum dapat diverifikasi. "
-                "Q2 implied net realized price untuk katoda dan emas diturunkan dari rata-rata tertimbang harga Q1 dan H1 yang dilaporkan; angka sumber dibulatkan, sehingga ini estimasi, bukan harga Q2 yang dilaporkan terpisah. Harga Q1 dan H1 sama-sama net of mark-to-market adjustment. Ini bukan fakta aktual, forecast emiten, atau bukti penjualan konsentrat total nol. "
-                "DetikBali (6 Mei 2026) mengutip pejabat NTB mengatakan AMNT mengajukan tambahan waktu enam bulan; "
-                "DetikBali (7 Mei 2026) mengutip VP Corporate Communications AMMAN bahwa perpanjangan belum diajukan; "
-                "kedua laporan itu bertentangan. IDN Times (6 Juni 2026) mengutip Kepala ESDM NTB yang menyampaikan hasil koordinasi AMNT belum berencana mengajukan. "
-                "Laporan media itu terbatas pada tanggal masing-masing, bukan konfirmasi status izin setelah Juni. "
-                "Rujukan: https://www.detik.com/bali/bisnis/d-8477778/amnt-ajukan-perpanjangan-ekspor-konsentrat-ke-esdm; "
-                "https://www.detik.com/bali/bisnis/d-8479474/amnt-sebut-belum-ajukan-perpanjangan-izin-ekspor-konsentrat; "
-                "https://ntb.idntimes.com/news/ntb/amnt-dipastikan-tak-ajukan-perpanjangan-relaksasi-ekspor-konsentrat-00-ldn3d-b7qt8x. "
-                "Paparan Publik AMMAN 2026, hlm. 16, menyatakan konsentrat hanya dapat dijual dengan izin sementara sampai 30 April 2026; laporan interim H1 mengonfirmasi izin tersebut berakhir, bukan status izin berikutnya. "
-                "PP 24/2026 tentang ekspor SDA strategis mencakup batubara, kelapa sawit, dan ferroalloy pada tahap awal, bukan konsentrat tembaga; peraturan tersebut tidak membuktikan ada atau tidaknya izin AMNT. "
-                "AMMAN juga menyatakan stabilitas utilisasi smelter dapat memengaruhi timing persediaan dan penjualan konsentrat: "
-                "FY 2025 Earnings Presentation, hlm. 19. "
-                f"Top-down H2 revenue US${fmt._id(product_bridge['h2_topdown']/1e6, 1)} juta berasal dari "
-                f"{top_down_projection.get('source_title', 'skenario analis yang dimasukkan')}; angka ini adalah hurdle skenario, "
-                "bukan panduan emiten atau forecast tervalidasi. "
-                "Harga Q2 implied untuk katoda/emas dan net realized price H1 untuk konsentrat dipakai sebagai proxy H2, bukan forecast harga emiten. H2 adalah periode enam bulan Jul-Dec yang "
-                "dihitung dari H1 aktual. Presentasi H1 menyebut first ore mill baru pada pertengahan Agustus, laju smelter Juni 93%, "
-                "rate Juli-Agustus membaik/stabil, dan rekor kinerja baru pada Juli-Agustus; tetapi tidak memberi tonase umpan atau "
-                "produksi bulanan Jul-Aug, sehingga update operasional ini belum memvalidasi penjualan maupun revenue H2. Volume periode itu masih belum dapat "
-                "diisolasi sebagai actual kuantitatif dalam jembatan ini. Sumber: AMMAN H1 2026 Earnings Presentation, hlm. 10, 12, 18; "
-                "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline. "
-                "Rilis H1/Q1 resmi membulatkan revenue segmen.")
+                _t("H1 sales dan realized prices: AMMAN H1 2026 Earnings Presentation, hlm. 22; FY output guidance: "
+                   "AMMAN H1 2026 Earnings Release, hlm. 7. H2 sales memakai sell-through Q2 turunan untuk produk olahan; "
+                   "cabang sensitivitas konservatif mengecualikan penjualan konsentrat karena volume ekspor H2 belum dapat diverifikasi. "
+                   "Q2 implied net realized price untuk katoda dan emas diturunkan dari rata-rata tertimbang harga Q1 dan H1 yang dilaporkan; angka sumber dibulatkan, sehingga ini estimasi, bukan harga Q2 yang dilaporkan terpisah. Harga Q1 dan H1 sama-sama net of mark-to-market adjustment. Ini bukan fakta aktual, forecast emiten, atau bukti penjualan konsentrat total nol. "
+                   "DetikBali (6 Mei 2026) mengutip pejabat NTB mengatakan AMNT mengajukan tambahan waktu enam bulan; "
+                   "DetikBali (7 Mei 2026) mengutip VP Corporate Communications AMMAN bahwa perpanjangan belum diajukan; "
+                   "kedua laporan itu bertentangan. IDN Times (6 Juni 2026) mengutip Kepala ESDM NTB yang menyampaikan hasil koordinasi AMNT belum berencana mengajukan. "
+                   "Laporan media itu terbatas pada tanggal masing-masing, bukan konfirmasi status izin setelah Juni. "
+                   "Rujukan: https://www.detik.com/bali/bisnis/d-8477778/amnt-ajukan-perpanjangan-ekspor-konsentrat-ke-esdm; "
+                   "https://www.detik.com/bali/bisnis/d-8479474/amnt-sebut-belum-ajukan-perpanjangan-izin-ekspor-konsentrat; "
+                   "https://ntb.idntimes.com/news/ntb/amnt-dipastikan-tak-ajukan-perpanjangan-relaksasi-ekspor-konsentrat-00-ldn3d-b7qt8x. "
+                   "Paparan Publik AMMAN 2026, hlm. 16, menyatakan konsentrat hanya dapat dijual dengan izin sementara sampai 30 April 2026; laporan interim H1 mengonfirmasi izin tersebut berakhir, bukan status izin berikutnya. "
+                   "PP 24/2026 tentang ekspor SDA strategis mencakup batubara, kelapa sawit, dan ferroalloy pada tahap awal, bukan konsentrat tembaga; peraturan tersebut tidak membuktikan ada atau tidaknya izin AMNT. "
+                   "AMMAN juga menyatakan stabilitas utilisasi smelter dapat memengaruhi timing persediaan dan penjualan konsentrat: "
+                   "FY 2025 Earnings Presentation, hlm. 19. "
+                   f"Top-down H2 revenue US${fmt._id(product_bridge['h2_topdown']/1e6, 1)} juta berasal dari "
+                   f"{top_down_projection.get('source_title', 'skenario analis yang dimasukkan')}; angka ini adalah hurdle skenario, "
+                   "bukan panduan emiten atau forecast tervalidasi. "
+                   "Harga Q2 implied untuk katoda/emas dan net realized price H1 untuk konsentrat dipakai sebagai proxy H2, bukan forecast harga emiten. H2 adalah periode enam bulan Jul-Dec yang "
+                   "dihitung dari H1 aktual. Presentasi H1 menyebut first ore mill baru pada pertengahan Agustus, laju smelter Juni 93%, "
+                   "rate Juli-Agustus membaik/stabil, dan rekor kinerja baru pada Juli-Agustus; tetapi tidak memberi tonase umpan atau "
+                   "produksi bulanan Jul-Aug, sehingga update operasional ini belum memvalidasi penjualan maupun revenue H2. Volume periode itu masih belum dapat "
+                   "diisolasi sebagai actual kuantitatif dalam jembatan ini. Sumber: AMMAN H1 2026 Earnings Presentation, hlm. 10, 12, 18; "
+                   "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline. "
+                   "Rilis H1/Q1 resmi membulatkan revenue segmen.",
+                   "H1 sales and realized prices: AMMAN H1 2026 Earnings Presentation, p. 22; FY output "
+                   "guidance: AMMAN H1 2026 Earnings Release, p. 7. H2 sales apply the derived Q2 "
+                   "sell-through to refined products; the conservative sensitivity branch excludes "
+                   "concentrate sales because H2 export volume cannot yet be verified. "
+                   "The Q2 implied net realized price for cathode and gold is derived from the weighted "
+                   "average of the reported Q1 and H1 prices; the source figures are rounded, so this is "
+                   "an estimate, not a separately reported Q2 price. Q1 and H1 prices are both net of "
+                   "mark-to-market adjustment. This is not an actual, an issuer forecast or evidence of "
+                   "zero total concentrate sales. "
+                   "DetikBali (6 May 2026) quoted an NTB official saying AMNT had applied for a six-month "
+                   "extension; DetikBali (7 May 2026) quoted AMMAN's VP Corporate Communications saying "
+                   "no extension had been applied for; the two reports conflict. IDN Times (6 June 2026) "
+                   "quoted the head of the NTB ESDM office relaying that AMNT had no plan to apply. "
+                   "Those media reports are limited to their own dates and do not confirm the permit "
+                   "status after June. "
+                   "References: https://www.detik.com/bali/bisnis/d-8477778/amnt-ajukan-perpanjangan-ekspor-konsentrat-ke-esdm; "
+                   "https://www.detik.com/bali/bisnis/d-8479474/amnt-sebut-belum-ajukan-perpanjangan-izin-ekspor-konsentrat; "
+                   "https://ntb.idntimes.com/news/ntb/amnt-dipastikan-tak-ajukan-perpanjangan-relaksasi-ekspor-konsentrat-00-ldn3d-b7qt8x. "
+                   "AMMAN's 2026 Public Expose, p. 16, states that concentrate could be sold only under "
+                   "the temporary permit until 30 April 2026; the H1 interim report confirms that the "
+                   "permit expired, not the status of any later permit. "
+                   "PP 24/2026 on strategic natural-resource exports covers coal, palm oil and "
+                   "ferroalloy in its first stage, not copper concentrate; the regulation proves neither "
+                   "that AMNT holds a permit nor that it does not. "
+                   "AMMAN also states that smelter utilisation stability can affect the timing of "
+                   "concentrate inventory and sales: FY 2025 Earnings Presentation, p. 19. "
+                   f"The top-down H2 revenue of US${fmt._id(product_bridge['h2_topdown']/1e6, 1)} juta comes from "
+                   f"{top_down_projection.get('source_title', 'the analyst scenario supplied')}; it is a scenario "
+                   "hurdle, not issuer guidance or a validated forecast. "
+                   "The Q2 implied price for cathode/gold and the H1 net realized price for concentrate "
+                   "serve as H2 proxies, not issuer price forecasts. H2 is the six-month Jul-Dec period "
+                   "computed from H1 actuals. The H1 presentation reports first ore at the new mill in "
+                   "mid-August, a June smelter rate of 93%, improving/stable rates in July-August and new "
+                   "performance records in July-August, but gives no monthly feed tonnage or production "
+                   "for Jul-Aug, so this operating update does not yet validate H2 sales or revenue. "
+                   "Volumes for that period cannot yet be isolated as quantitative actuals in this "
+                   "bridge. Source: AMMAN H1 2026 Earnings Presentation, pp. 10, 12, 18; "
+                   "https://www.amman.co.id/rails/active_storage/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Njc4NiwicHVyIjoiYmxvYl9pZCJ9fQ%3D%3D--b709bb5b1cfcd4e10d811aac0d9407656a084723/H1%202026%20EARNINGS%20PRESENTATION.pdf?disposition=inline. "
+                   "The official H1/Q1 releases round segment revenue."))
             q2_concentrate = next((row for row in
                                    q2_data.get("sales_production_bridge") or []
                                    if row.get("product_key") == "concentrate"), {})
@@ -1746,7 +1856,7 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "dipotong proporsional dari pengiriman bulanan, dan kegagalan memenuhi komitmen "
                     "mewajibkan pembayaran kembali uang muka terkait beserta bunga. ",
                     " The Glencore contract supports the existence of a cathode sales channel, with delivery "
-                    f"commitments until {delivery_commitment.get('delivery_commitment_until')}; the advance "
+                    f"commitments until {prose_lang.source(delivery_commitment.get('delivery_commitment_until'))}; the advance "
                     "is deducted pro rata from monthly deliveries, and failing to meet the commitment "
                     "requires repaying the related advance with interest. "
                 )
@@ -1845,11 +1955,16 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                 ["Produk", "Volume × harga terealisasi H1", "Revenue hitungan (US$m)",
                  "Revenue segmen dilaporkan (US$m)", "Selisih (US$m)"],
                 h1_price_rows,
-                "Harga realisasi dan volume penjualan: AMMAN H1 2026 Earnings Presentation, hlm. 22; "
-                "revenue segmen: AMMAN H1 2026 Earnings Release, hlm. 3-4. Harga/volume "
-                "yang dipublikasikan dibulatkan sehingga tie-out tidak presisi; selisih tidak "
-                "dianggap penyesuaian harga yang bisa diekstrapolasi ke H2. Untuk konsentrat, "
-                "Cu dan Au dihitung terpisah memakai net realized metal price yang dilaporkan.")
+                _t("Harga realisasi dan volume penjualan: AMMAN H1 2026 Earnings Presentation, hlm. 22; "
+                   "revenue segmen: AMMAN H1 2026 Earnings Release, hlm. 3-4. Harga/volume "
+                   "yang dipublikasikan dibulatkan sehingga tie-out tidak presisi; selisih tidak "
+                   "dianggap penyesuaian harga yang bisa diekstrapolasi ke H2. Untuk konsentrat, "
+                   "Cu dan Au dihitung terpisah memakai net realized metal price yang dilaporkan.",
+                   "Realized prices and sales volumes: AMMAN H1 2026 Earnings Presentation, p. 22; "
+                   "segment revenue: AMMAN H1 2026 Earnings Release, pp. 3-4. Published prices/volumes "
+                   "are rounded, so the tie-out is not precise; the gap is not treated as a price "
+                   "adjustment that can be extrapolated to H2. For concentrate, Cu and Au are computed "
+                   "separately using the reported net realized metal prices."))
             illustrative_pages.append({
                 "halaman": 0,
                 "judul": "Uji realized price terhadap revenue aktual H1",
@@ -1907,15 +2022,24 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                     "Kapasitas fasilitas versus panduan produksi FY26",
                     ["Produk", "FY25 produksi / output rate", "H1 aktual", "FY26 guidance", "FY26 balance vs H1", "½ kapasitas desain", "Utilisasi H2 tersirat"],
                     capacity_rows,
-                    f"Nameplate dan output rate FY2025: {capacity.get('source_title')}, "
-                    f"hlm. {', '.join(str(page) for page in capacity.get('source_pages') or [])}; "
-                    f"{capacity.get('source_url')}. H1 actual dan FY26 guidance: "
-                    "AMMAN H1 2026 Earnings Release, hlm. 3 dan 7. Balance FY guidance "
-                    "dikurangi output H1 dan utilisasi H2 dihitung analis dengan membagi "
-                    "nameplate tahunan menjadi dua semester. Presentasi H1 melaporkan mill baru first ore pada pertengahan Agustus, "
-                    "smelter rate Juni 93%, rate Juli-Agustus membaik/stabil, dan catatan rekor kinerja baru Juli-Agustus; "
-                    "tetapi tidak memberi output bulanan Jul-Aug. "
-                    "Karena itu pembagian kapasitas desain menjadi dua semester bukan jadwal aktual H2. " +
+                    _t(f"Nameplate dan output rate FY2025: {capacity.get('source_title')}, "
+                       f"hlm. {', '.join(str(page) for page in capacity.get('source_pages') or [])}; "
+                       f"{capacity.get('source_url')}. H1 actual dan FY26 guidance: "
+                       "AMMAN H1 2026 Earnings Release, hlm. 3 dan 7. Balance FY guidance "
+                       "dikurangi output H1 dan utilisasi H2 dihitung analis dengan membagi "
+                       "nameplate tahunan menjadi dua semester. Presentasi H1 melaporkan mill baru first ore pada pertengahan Agustus, "
+                       "smelter rate Juni 93%, rate Juli-Agustus membaik/stabil, dan catatan rekor kinerja baru Juli-Agustus; "
+                       "tetapi tidak memberi output bulanan Jul-Aug. "
+                       "Karena itu pembagian kapasitas desain menjadi dua semester bukan jadwal aktual H2. ",
+                       f"FY2025 nameplate and output rate: {capacity.get('source_title')}, "
+                       f"{'pp.' if len(capacity.get('source_pages') or []) > 1 else 'p.'} {', '.join(str(page) for page in capacity.get('source_pages') or [])}; "
+                       f"{capacity.get('source_url')}. H1 actual and FY26 guidance: "
+                       "AMMAN H1 2026 Earnings Release, pp. 3 and 7. The analyst computes the FY guidance "
+                       "balance less H1 output, and H2 utilisation, by splitting annual nameplate into two "
+                       "halves. The H1 presentation reports first ore at the new mill in mid-August, a June "
+                       "smelter rate of 93%, improving/stable rates in July-August and new performance records "
+                       "in July-August, but gives no monthly output for Jul-Aug. Splitting design capacity "
+                       "into two halves is therefore not an actual H2 schedule. ") +
                     str(capacity.get("capacity_caveat") or ""))
                 illustrative_pages.append({
                     "halaman": 0,
@@ -2014,11 +2138,16 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                      [f"Rp{fmt.rp(fmt.tick(item['per_share_idr']))}"
                       if item["per_share_idr"] is not None else "n.m."
                       for item in crosscheck["values"]]],
-                    f"Sumber EBITDA skenario: {crosscheck['source_url']}; "
-                    f"kas/utang/minoritas/saham: neraca {crosscheck['balance_period']}; "
-                    f"kurs: {crosscheck['fx']['source']} ({crosscheck['fx']['date']}). "
-                    "Multiple 6x/8x/10x adalah asumsi sensitivitas analis, bukan "
-                    "multiple peer yang tervalidasi atau target harga.")
+                    _t(f"Sumber EBITDA skenario: {crosscheck['source_url']}; "
+                       f"kas/utang/minoritas/saham: neraca {crosscheck['balance_period']}; "
+                       f"kurs: {crosscheck['fx']['source']} ({crosscheck['fx']['date']}). "
+                       "Multiple 6x/8x/10x adalah asumsi sensitivitas analis, bukan "
+                       "multiple peer yang tervalidasi atau target harga.",
+                       f"Scenario EBITDA source: {crosscheck['source_url']}; "
+                       f"cash/debt/minorities/shares: balance sheet {crosscheck['balance_period']}; "
+                       f"FX: {crosscheck['fx']['source']} ({crosscheck['fx']['date']}). "
+                       "The 6x/8x/10x multiples are analyst sensitivity assumptions, not validated "
+                       "peer multiples or a Target Price."))
                 inputs_exhibit = add(
                     "Input cross-check FY26 dan batasannya",
                     ["Input", "Basis", "Batasan"],
@@ -2033,9 +2162,12 @@ def _build_general_draft(intake, fc, va, s1, method="auto",
                       f"{intake['price_date']} lebih lama."],
                      ["Saham beredar", fmt._id(crosscheck["shares"] / 1e6, 1) + " juta",
                       "Sesudah saham treasuri; dilusi berikutnya belum dimodelkan."]],
-                    "Sumber: rilis interim resmi dan kurs FX bertanggal. Skenario "
-                    "multiple mengabaikan umur tambang, capex LoM, dan nilai aset "
-                    "terpisah; hanya cross-check internal.")
+                    _t("Sumber: rilis interim resmi dan kurs FX bertanggal. Skenario "
+                       "multiple mengabaikan umur tambang, capex LoM, dan nilai aset "
+                       "terpisah; hanya cross-check internal.",
+                       "Source: official interim releases and dated FX rates. The multiple scenario "
+                       "ignores mine life, LoM capex and separate asset values; an internal "
+                       "cross-check only."))
                 illustrative_pages.append({
                     "halaman": 0, "judul": "Cross-check nilai FY26 dari hasil terbaru",
                     "layout": "stack",
@@ -3505,10 +3637,17 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                               "H2 revenue pada basis harga H2 (US$m)",
                               "H2 terjual untuk rekonsiliasi"],
                      "rows": bridge_rows},
-            "catatan_sumber": (
+            "catatan_sumber": _t(
                 f"Sumber H1: {actual.get('source_title')}, hlm. 3-4; guidance FY: "
                 f"{actual.get('source_title')}, hlm. 7; {str(analyst_scenario.get('basis', 'asumsi analis')).rstrip('. ')}. "
-                "Untuk katoda dan emas dipakai estimasi Q2 net realized price dari harga Q1/H1 dan volume sales tertimbang; sumber dibulatkan sehingga harga Q2 ini turunan. Untuk konsentrat, basis H1 menggabungkan net realized Cu/Au dan volume logam; tidak menangkap variasi payability, TC-RC, atau bauran H2.")
+                "Untuk katoda dan emas dipakai estimasi Q2 net realized price dari harga Q1/H1 dan volume sales tertimbang; sumber dibulatkan sehingga harga Q2 ini turunan. Untuk konsentrat, basis H1 menggabungkan net realized Cu/Au dan volume logam; tidak menangkap variasi payability, TC-RC, atau bauran H2.",
+                f"H1 source: {actual.get('source_title')}, pp. 3-4; FY guidance: "
+                f"{actual.get('source_title')}, p. 7; "
+                f"{prose_lang.source(str(analyst_scenario.get('basis', 'asumsi analis')).rstrip('. '))}. "
+                "For cathode and gold, an estimated Q2 net realized price from Q1/H1 prices and "
+                "weighted sales volumes is used; the sources are rounded, so this Q2 price is derived. "
+                "For concentrate, the H1 basis combines Cu/Au net realized prices and metal volumes; it "
+                "does not capture variation in payability, TC-RC or the H2 mix.")
         }
         doc["exhibits"].append(bridge_exhibit)
         gold_sellthrough_h1 = (
@@ -3562,7 +3701,6 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
             opening_advance = advance.get("balance_2025_12_31")
             received_advance = advance.get("received_2026_04")
             closing_advance = advance.get("balance_2026_06_30")
-            from . import prose_lang
             commitment_text = _t(
                 "Kontrak Glencore mendukung keberadaan kanal penjualan katoda: komitmen pengiriman "
                 f"berlaku sampai {delivery_commitment.get('delivery_commitment_until')}; "
@@ -3597,7 +3735,7 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                 "and the reconciliation of advances received with deductions on deliveries are not "
                 "disclosed. The contract therefore does not prove the H2 cathode sales assumption in "
                 "the table. Source: "
-                f"{prose_lang.source(delivery_commitment.get('source_title'))}, p. "
+                f"{delivery_commitment.get('source_title')}, p. "
                 f"{delivery_commitment.get('source_page')}; {delivery_commitment.get('source_url')}."
             )
             bridge_paragraph += " " + commitment_text
@@ -3639,11 +3777,16 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                                   "Revenue / metrik (US$m)", "Revenue per unit, proxy",
                                   "Q2 implied net price"],
                          "rows": q2_rows},
-                "catatan_sumber": (
+                "catatan_sumber": _t(
                     "Q2 dihitung sebagai H1 2026 resmi dikurangi Q1 2026 resmi; volume dan finansial adalah angka turunan. "
                     "Revenue segmen dibulatkan dalam rilis, sehingga tidak sama persis dengan net sales; nilai konsentrat/dmt "
                     "adalah proxy campuran, bukan realized price/netback. Q1: AMMAN Q1 2026 Performance Release, hlm. 3-5; "
-                    "H1: AMMAN H1 2026 Earnings Release, hlm. 3-4."),
+                    "H1: AMMAN H1 2026 Earnings Release, hlm. 3-4.",
+                    "Q2 is official H1 2026 less official Q1 2026; volumes and financials are derived "
+                    "figures. Segment revenue is rounded in the releases, so it does not exactly match net "
+                    "sales; concentrate value/dmt is a blended proxy, not a realized price/netback. "
+                    "Q1: AMMAN Q1 2026 Performance Release, pp. 3-5; H1: AMMAN H1 2026 Earnings Release, "
+                    "pp. 3-4."),
             }
             doc["exhibits"].append(q2_exhibit)
             new_pages.append({
@@ -3674,13 +3817,19 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                                   "H2 produksi tersirat", "H2 penjualan skenario",
                                   "H2 terjual / output"],
                          "rows": output_sales_rows},
-                "catatan_sumber": (
+                "catatan_sumber": _t(
                     f"Sumber actual dan guidance: {actual.get('source_title')}, hlm. 3 dan 7. "
                     "H2 production adalah sisa panduan FY dikurangi output H1. Penjualan katoda/emas "
                     "memakai rasio sell-through Q2 yang diturunkan dari H1 dikurangi Q1. Base case tidak "
                     "mengasumsikan ekspor konsentrat tanpa bukti izin baru; penjualan nol adalah asumsi skenario, "
                     "bukan aktual. Kasus 120.079 dmt konsentrat H2 hanya conditional pada izin/kanal dan kontrak. "
-                    "Selisih output dan penjualan tidak otomatis sama dengan perubahan stockpile.")
+                    "Selisih output dan penjualan tidak otomatis sama dengan perubahan stockpile.",
+                    f"Actuals and guidance source: {actual.get('source_title')}, pp. 3 and 7. "
+                    "H2 production is the FY guidance balance less H1 output. Cathode/gold sales use the "
+                    "Q2 sell-through ratio derived as H1 less Q1. The base case assumes no concentrate "
+                    "exports without evidence of a new permit; zero sales is a scenario assumption, not an "
+                    "actual. The 120.079 dmt H2 concentrate case is only conditional on a permit/channel and "
+                    "contracts. The gap between output and sales is not automatically a stockpile change.")
             }
             doc["exhibits"].append(output_sales_exhibit)
             new_pages.append({
@@ -3734,11 +3883,15 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                 "data": {"cols": ["Produk", "H1 terjual", "Net realized price H1",
                                   "H2 terjual skenario", "H2 revenue (US$m)"],
                          "rows": price_detail_rows},
-                "catatan_sumber": (
+                "catatan_sumber": _t(
                     f"Volume: {actual.get('source_title')}, hlm. 3; harga net realized: AMMAN H1 2026 Earnings Presentation, hlm. 22. "
                     "Harga bersih konsentrat setelah TCR dan "
                     "penyesuaian MTM pengiriman sebelumnya; harga produk murni setelah MTM. Volume logam "
-                    "konsentrat H2 mempertahankan komposisi metal terjual per dmt H1; semua volume H2 adalah asumsi analis.")
+                    "konsentrat H2 mempertahankan komposisi metal terjual per dmt H1; semua volume H2 adalah asumsi analis.",
+                    f"Volume: {actual.get('source_title')}, p. 3; net realized prices: AMMAN H1 2026 Earnings Presentation, p. 22. "
+                    "Concentrate prices are net of TCR and MTM adjustments on earlier shipments; refined "
+                    "product prices are after MTM. H2 concentrate metal volumes keep the H1 metal sold per "
+                    "dmt; all H2 volumes are Analyst Assumptions.")
             }
             doc["exhibits"].append(price_detail_exhibit)
             new_pages.append({
@@ -3780,8 +3933,9 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                      "rows": price_rows},
             "catatan_sumber": "; ".join(
                 f"{row['source_title']}: {row['source_url']}"
-                for row in market_refs.values()) +
-                ". Benchmark adalah spot bertanggal, bukan kurva forward atau kontrak penjualan AMMN."
+                for row in market_refs.values()) + _t(
+                ". Benchmark adalah spot bertanggal, bukan kurva forward atau kontrak penjualan AMMN.",
+                ". Benchmarks are dated spot prices, not a forward curve or AMMN sales contracts.")
         }
         doc["exhibits"].append(price_exhibit)
         new_pages.append({
@@ -3818,10 +3972,13 @@ def _build_assumption_led(intake, fc, va, s1, method="auto"):
                 "data": {"cols": ["US$ juta", "1H26 aktual", "2H26 Sektoral",
                                   "FY26 Sektoral", "FY26 BRIDS", "Selisih"],
                          "rows": comparison_rows},
-                "catatan_sumber": (
+                "catatan_sumber": _t(
                     f"Sumber BRIDS: {brids['source_title']} ({brids['as_of']}), "
                     f"{brids['source_url']}. Satu house estimate, bukan konsensus; "
-                    "manajemen menerbitkan panduan produksi, bukan guidance keuangan FY26.")
+                    "manajemen menerbitkan panduan produksi, bukan guidance keuangan FY26.",
+                    f"BRIDS source: {brids['source_title']} ({brids['as_of']}), "
+                    f"{brids['source_url']}. A single house estimate, not consensus; management "
+                    "publishes production guidance, not FY26 financial guidance.")
             }
             doc["exhibits"].append(comparison_exhibit)
             new_pages.append({
