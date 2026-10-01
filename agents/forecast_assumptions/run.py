@@ -1748,7 +1748,7 @@ def translate_plan(plan, chat=None, official=None):
         return plan, notes
     english, reasons = {}, {}
 
-    def ask(batch, follow_up=(), label=""):
+    def ask(batch, follow_up=(), label="", retried=False):
         notes["calls"] += 1
         try:
             answer = _ask(chat, batch, follow_up)
@@ -1762,6 +1762,15 @@ def translate_plan(plan, chat=None, official=None):
                 return
             notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
                                      "ValueError: translation cut off (finish_reason=length)")
+            return
+        except OSError as error:
+            # A provider timeout or dropped connection is asked once more before
+            # its fields go without English (TimeoutError is an OSError).
+            if not retried:
+                ask(batch, follow_up, label, retried=True)
+                return
+            notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
+                                     f"{type(error).__name__}: {str(error)[:180]} (after a retry)")
             return
         except Exception as error:  # noqa: BLE001 — the plan stands without these twins
             notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
