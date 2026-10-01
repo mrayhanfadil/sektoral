@@ -972,7 +972,7 @@ def translate_intel(intel, chat=None):
     unique = list(first.values())
     english, reasons = {}, {}
 
-    def ask(batch, follow_up=(), label=""):
+    def ask(batch, follow_up=(), label="", retried=False):
         notes["calls"] += 1
         try:
             answer = _ask(chat, glossary, batch, follow_up)
@@ -986,6 +986,15 @@ def translate_intel(intel, chat=None):
                 return
             notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
                                      "ValueError: translation cut off (finish_reason=length)")
+            return
+        except OSError as error:
+            # A provider timeout or dropped connection is asked once more before
+            # its fields go without English (TimeoutError is an OSError).
+            if not retried:
+                ask(batch, follow_up, label, retried=True)
+                return
+            notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
+                                     f"{type(error).__name__}: {str(error)[:180]} (after a retry)")
             return
         except Exception as error:  # noqa: BLE001 — the result stands without these twins
             notes["problems"].append(f"{label}{batch[0].path} .. {batch[-1].path}: "
