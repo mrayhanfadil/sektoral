@@ -28,9 +28,10 @@ import subprocess
 from pathlib import Path
 
 from . import (assumption_review, exhibit_ids, host_lang, outputs, publication_archive,
-               publication_monitor, release_policy, report_extras, run_manifest)
+               publication_monitor, release_policy, report_extras, report_lang, run_manifest)
 
 TICKER = re.compile(r"^[A-Z0-9]{2,6}$")
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 PROFILE_LABEL = {"financial_ddm": "Bank", "finite_life_mining": "Tambang",
                  "going_concern_fcff": "Korporasi"}
 FILES = {"pdf": ("{t}.pdf", "application/pdf"),
@@ -66,7 +67,8 @@ def _freshness(folder, ticker) -> dict | None:
             "triggers_en": [host_lang.english(t) for t in triggers]}
 
 def _chain(doc):
-    """Method-chain rows as (step, decision, decision_code, value) from the report exhibit."""
+    """Method-chain rows as (step, decision, decision_code, value) from the report exhibit;
+    ``value_en`` is the value as the English report prints it ("Rp3,490")."""
     exhibit = exhibit_ids.find(doc.get("exhibits"), exhibit_ids.METHOD_CHAIN)
     rows = ((exhibit or {}).get("data") or {}).get("rows") or []
     out = []
@@ -74,8 +76,14 @@ def _chain(doc):
         if len(row) >= 3:
             step = re.sub(r"^\S+\.\s*", "", str(row[0])).replace(" (utama)", "")
             out.append({"step": step, "step_en": host_lang.english(step), "decision": str(row[1]),
-                        "decision_code": report_extras.decision_code(row[1]), "value": str(row[2])})
+                        "decision_code": report_extras.decision_code(row[1]), "value": str(row[2]),
+                        "value_en": report_lang.plain(str(row[2]))})
     return out
+
+
+def _iso_date(value) -> str | None:
+    """``value`` when it is an ISO date ("2026-09-24"), else None."""
+    return value if isinstance(value, str) and ISO_DATE.fullmatch(value) else None
 
 
 def _publication(doc, folder: Path, stored_ticker: str, db=None) -> dict:
@@ -193,6 +201,8 @@ def summary(doc, folder: Path, stored_ticker: str) -> dict | None:
         "analytically_eligible": releasable,
         "publication_state": publication["publication_state"],
         "price": meta.get("harga"),
+        # The close the price is (``harga_tanggal``), not the report date.
+        "price_date": _iso_date(meta.get("harga_tanggal")),
         "published": published,
         # Policy 1.3.0: "automatic" (gates passed, not analyst-reviewed) or
         # "analyst_reviewed" (an authenticated approval of this bundle).
