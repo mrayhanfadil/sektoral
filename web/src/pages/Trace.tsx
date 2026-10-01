@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, FileDown, FileText, Play, RefreshCw, Search, TriangleAlert } from "lucide-react";
-import { api, ApiError, readerFiles, reportFiles, type ProblemNote, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
+import { api, ApiError, jobFiles, readerFiles, reportFiles, type ProblemNote, type ReportItem, type RunReplay, type TraceView } from "../lib/api";
 import { rp } from "../lib/format";
 import { LOCALE, twin, useLang, type Bi } from "../lib/i18n";
 import { problemNotes, validatorNote } from "../lib/labels";
@@ -238,7 +238,8 @@ function forecastStatus(status: string | null): [Bi, Status] {
 /* ------------------------------------------------------------------ */
 
 type Links = {
-  reportUrl: string;
+  /** Absent for a job whose report is not in the published gallery bundle (yet). */
+  reportUrl?: string;
   pdfUrl?: string;
   replayUrl?: string;
   deckUrl?: string;
@@ -347,11 +348,13 @@ function TraceHeader({ trace, item, run, links }: { trace: TraceView; item?: Rep
                 <Play aria-hidden className="size-4" strokeWidth={2.2} />{t({ id: "Putar ulang run", en: "Replay run" })}
               </Link>
             )}
-            <a className={`btn ${links.replayUrl ? "btn-ghost" : "btn-primary"}`} href={links.reportUrl}>
-              <FileText aria-hidden className="size-4" strokeWidth={2.2} />
-              <span className="max-sm:hidden">{t({ id: "Buka company update", en: "Open Company Update" })}</span>
-              <span className="sm:hidden">{t({ id: "Buka laporan", en: "Open report" })}</span>
-            </a>
+            {links.reportUrl && (
+              <a className={`btn ${links.replayUrl ? "btn-ghost" : "btn-primary"}`} href={links.reportUrl}>
+                <FileText aria-hidden className="size-4" strokeWidth={2.2} />
+                <span className="max-sm:hidden">{t({ id: "Buka company update", en: "Open Company Update" })}</span>
+                <span className="sm:hidden">{t({ id: "Buka laporan", en: "Open report" })}</span>
+              </a>
+            )}
             {links.deckUrl && (
               <Link className="btn btn-ghost" to={links.deckUrl}>
                 <ArrowLeft aria-hidden className="size-4" strokeWidth={2.2} />{t({ id: "Kembali ke deck", en: "Back to deck" })}
@@ -966,15 +969,18 @@ function ReviewerPreviewAccess({ ticker, error, onUnlock }: {
 
 export function JobTrace() {
   const { id = "" } = useParams();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const state = useLoad(() => api.jobTrace(id), [id]);
-  const ticker = state.data?.ticker ?? "";
+  // The run folder itself is never served: the job links to the gallery bundle once it is published.
+  const job = useLoad(() => api.job(id).catch(() => undefined), [id]);
+  const reports = useLoad(() => api.reports().catch(() => [] as ReportItem[]), []);
+  const files = job.data ? jobFiles(job.data, reports.data?.find((r) => r.ticker === job.data!.ticker), lang) : {};
   return (
     <TracePage state={state} missing={t({
       id: "Jejak riset ini tidak ditemukan. Riset yang berjalan di server hanya disimpan selama server hidup.",
       en: "This Audit Trace was not found. Research run on the server is kept only while the server is up.",
     })}
-      links={{ reportUrl: `/files/jobs/${id}/${ticker}.html`, deckUrl: `/jobs/${id}` }} />
+      links={{ reportUrl: files.html, pdfUrl: files.pdf, deckUrl: `/jobs/${id}` }} />
   );
 }
 
