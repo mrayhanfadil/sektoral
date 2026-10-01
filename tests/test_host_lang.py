@@ -59,6 +59,15 @@ from app import host_lang  # noqa: E402
      "became effective after the Report Date",
      "the 8x multiple is an analyst assumption, not a validated peer multiple; house-assumption "
      "policy became effective after the Report Date"),
+    # ... but an Indonesian prefix on it is translated, not passed off as English.
+    ("driver ke depan (pertumbuhan kredit, NIM, pendapatan non-bunga, CIR, biaya kredit) adalah "
+     "panduan manajemen untuk tahun pertama dan asumsi analis berlabel sesudahnya; belum "
+     "Production-Ready: house-assumption policy became effective after the Report Date",
+     "forward drivers (loan growth, NIM, non-interest income, CIR, cost of credit) are management "
+     "guidance for the first year and labelled Analyst Assumptions after it; not yet "
+     "Production-Ready: house-assumption policy became effective after the Report Date"),
+    ("belum Production-Ready: house-assumption policy became effective after the Report Date",
+     "not yet Production-Ready: house-assumption policy became effective after the Report Date"),
     # The analyst: tool summaries, signals, change items, host fallback.
     ("2 sinyal, 2 bertanda: lonjakan, berbalik ke laba", "2 signals, 2 flagged: surge, back to profit"),
     ("1 sinyal", "1 signal"),
@@ -110,6 +119,8 @@ def test_host_text_has_english(indonesian, english):
     "PT Industri Jamu Dan Farmasi Sido Muncul Tbk",
     "Hasil 1H aktual + asumsi 2H; bukan forecast LoM, catatan agen",
     "distributable_assumption_led", "DDM", "", None, 12,
+    # A reason part with one Indonesian word is not English as it stands.
+    "peer dianggap sebanding; belum dimodelkan after the Report Date",
 ])
 def test_other_text_has_none(text):
     assert host_lang.english(text) is None

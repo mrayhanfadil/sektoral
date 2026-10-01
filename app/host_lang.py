@@ -527,10 +527,18 @@ _ENGLISH_WORD = re.compile(r"\b(the|a|an|of|to|in|on|for|and|or|is|are|not|after
 
 
 def _as_english(text):
-    """Text some host code already writes in English, else its English."""
-    if prose_lang.reads_english(text) and _ENGLISH_WORD.search(text):
+    """The English of host text, else the text itself when host code already
+    writes it in English: an English function word and no Indonesian one.
+
+    The tables come first: "belum Production-Ready: <an English blocker>" holds
+    English words and a single Indonesian one, which ``prose_lang.mixed`` (two
+    or more) lets through, so it would pass for English and keep its prefix."""
+    found = _nested(text)
+    if found:
+        return found
+    if _ENGLISH_WORD.search(text) and not prose_lang.indonesian_words(text):
         return text
-    return _nested(text)
+    return None
 
 
 def _display(text):

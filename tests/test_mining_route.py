@@ -5,9 +5,10 @@ route had no coverage and crashed on an undefined name once a scenario
 validated.
 """
 import json
+import re
 from pathlib import Path
 
-from app import build, commodity, fx, rates, store
+from app import build, commodity, fx, prose_lang, rates, server, store
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PLAN = json.loads((FIXTURES / "ammn_interim_plan.json").read_text())
@@ -84,3 +85,43 @@ def test_ammn_lom_grid_has_five_rate_steps_and_chart_four_reads_the_mine_plan(tm
     assert series["line"][2] is None and all(v is not None for v in series["line"][3:])
     assert "biaya tunai setahun penuh per pon tidak dihitung" in chart["narasi"]
     assert "bukan Adjusted C1" in chart["catatan_sumber"]
+
+
+_URL = re.compile(r"https?://\S+")
+
+
+def test_ammn_audit_appendix_has_english_for_its_template_text(tmp_path):
+    """The trace page's audit appendix (the FY26 H2 reconstruction): every
+    paragraph and source note has an English twin with no Indonesian clause,
+    every table cell an English label; document names and page numbers are
+    kept ("hlm." becomes "p.")."""
+    store.put(commodity.COLLECTION, "Copper", COPPER)
+    store.put(fx.COLLECTION, fx.KEY, USD_IDR)
+    store.put(rates.COLLECTION, rates.UST10Y, UST_10Y)
+    doc = build.build("AMMN", tmp_path, as_of="2026-09-24", assumption_plan=PLAN,
+                      assumption_status="validated")
+    pages = server._audit_appendix(doc)
+    exhibits = [e for page in pages for e in page["exhibits"]]
+    assert len([e for e in exhibits if e["note"]]) >= 20
+    for page in pages:
+        for indonesian, english in zip(page["paragraphs"], page["paragraphs_en"]):
+            assert english, indonesian[:120]
+            assert not prose_lang.indonesian_words(_URL.sub("", english)), english
+    for exhibit in exhibits:
+        if exhibit["note"]:
+            assert exhibit["note_en"], exhibit["note"][:120]
+            assert not prose_lang.indonesian_words(_URL.sub("", exhibit["note_en"])), \
+                exhibit["note_en"]
+            assert "hlm." not in exhibit["note_en"]
+        for row in exhibit["rows_en"]:
+            for cell in row:
+                assert not prose_lang.indonesian_words(cell), cell
+    notes = " ".join(e["note_en"] for e in exhibits if e["note_en"])
+    assert "AMMAN H1 2026 Earnings Release, pp. 3-4" in notes
+    assert "Note 2.s p. 40 and Note 30.a.ii p. 113" in notes
+    cells = {cell for e in exhibits for row in e["rows_en"] for cell in row}
+    assert "Q1 to H1 difference; both source figures rounded to US$ mn" in cells
+    assert any(cell.startswith("Detailed financial statement figure; it includes the US$")
+               for cell in cells)
+    assert any(cell.startswith("Against detailed long-term principal repayments of US$")
+               for cell in cells)

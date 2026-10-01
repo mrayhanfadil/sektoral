@@ -759,6 +759,8 @@ _AUDIT_APPENDIX = {
     "Tidak dirinci menurut produk/customer.": "Not itemised by product/customer.",
     "Note 18 merinci IRS/CCS/POS; bukan saldo provisional metal terpisah.":
         "Note 18 itemises IRS/CCS/POS; not a separate provisional metal balance.",
+    "Selisih Q1 ke H1; kedua angka sumber dibulatkan ke US$ juta":
+        "Q1 to H1 difference; both source figures rounded to US$ mn",
 }
 TERMS.update({k: v for k, v in _AUDIT_APPENDIX.items() if k not in TERMS})
 
@@ -959,6 +961,13 @@ _PATTERNS[:0] = [(re.compile(p), t) for p, t in (
     (r"Target harga berbasis hasil (FY\d+F?)", "Target Price based on {0} results"),
     (r"Asumsi skenario laba (FY\d+F?)-(FY\d+F?)", "Earnings scenario assumptions, {0}-{1}"),
     (r"(.+) \(lanjutan\)", "{0} (continued)"),
+    # Audit appendix cells with figures (app.narrative's H1 debt-flow reconciliation).
+    (r"Angka rinci laporan keuangan; (US\$\S+m) adalah pelunasan dipercepat yang termasuk di sini\.",
+     "Detailed financial statement figure; it includes the {0} accelerated repayment."),
+    (r"Dibanding pembayaran pokok jangka panjang rinci (US\$\S+m), selisih nominal (US\$\S+m) "
+     r"belum direkonsiliasi; basis keduanya belum terbukti sama\.",
+     "Against detailed long-term principal repayments of {0}, a nominal difference of {1} is "
+     "not yet reconciled; the two are not shown to share a basis."),
 )]
 
 _LEAD = re.compile(r"(\(\+\) |\(-\) |\(=\) |\(/\) |\(-/\+\) |\(\+/-\) |\(x\) |(?:\d+|x)\. )")
