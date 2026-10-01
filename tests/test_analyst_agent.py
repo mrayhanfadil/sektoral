@@ -665,3 +665,21 @@ def test_public_intel_passes_twins_and_serves_old_results():
     assert synthesis["headline_en"] == "Headline" and synthesis["next_checks_en"] == ["Next"]
     assert synthesis["findings"][0]["caveat_en"] == "Limit"
     assert synthesis["hypotheses"][0]["reason_en"] == "Partly supported: margin rose."
+
+
+def test_the_done_reason_carries_its_english(tmp_path):
+    chat = scripted(PLAN, {"done": True, "why": "Bukti sudah cukup untuk menjawab hipotesis.",
+                           "why_en": "The evidence is enough to answer the hypotheses."}, SYNTHESIS)
+    events = []
+    with progress.capture(events.append):
+        A.run("SIDO", chat=chat, db=tmp_path)
+    done = next(e for e in events if e["label"] == "Agent menilai bukti sudah cukup")
+    assert done["detail"] == "Bukti sudah cukup untuk menjawab hipotesis."
+    assert done["detail_en"] == "The evidence is enough to answer the hypotheses."
+    # An English reason that is not English is left out, the Indonesian stays.
+    chat = scripted(PLAN, {"done": True, "why": "Bukti cukup.", "why_en": "Bukti sudah cukup."}, SYNTHESIS)
+    events = []
+    with progress.capture(events.append):
+        A.run("SIDO", chat=chat, db=tmp_path)
+    done = next(e for e in events if e["label"] == "Agent menilai bukti sudah cukup")
+    assert done["detail"] == "Bukti cukup." and not done.get("detail_en")

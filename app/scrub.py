@@ -155,8 +155,11 @@ def english_problems(id_text, en_text):
         return ["is missing"]
     id_clean = normalize_prose(str(id_text or ""), english=False)
     en_clean = normalize_prose(en_text, english=True)
-    if en_clean.strip() == id_clean.strip() and not prose_lang.language_neutral(id_clean):
-        # A code or name ("3Q26", "FY2026") is its own English; prose is not.
+    if (en_clean.strip() == id_clean.strip() and not prose_lang.language_neutral(id_clean)
+            and (prose_lang.indonesian_words(id_clean) or prose_lang._indonesian_share(id_clean)[0]
+                 or not prose_lang.reads_english(id_clean))):
+        # A code or name ("3Q26", "FY2026") is its own English, and so is a source
+        # text already in English ("2H26 (forecast)"); Indonesian prose is not.
         return ["repeats the Indonesian instead of translating it"]
     problems = []
     if _CJK.search(en_text) or not prose_lang.reads_english(en_text):
