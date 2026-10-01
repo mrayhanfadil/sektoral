@@ -306,15 +306,16 @@ function ArchivedVersions({ ticker }: { ticker: string }) {
 /** The PDF cover as a row thumbnail; hover or focus lifts a readable preview beside it. */
 function Cover({ item }: { item: ReportItem }) {
   const { t, lang } = useLang();
-  const [broken, setBroken] = useState(false);
+  // The cover follows the reader's language, so a failed image is remembered by its URL.
+  const [broken, setBroken] = useState<string | null>(null);
   const files = readerFiles(item, lang);
-  if (!item.files.pdf || broken) {
+  if (!item.files.pdf || broken === files.cover) {
     return <span aria-hidden className="block h-[62px] w-11 rounded-[3px] border border-dashed border-rule" />;
   }
   return (
     <a href={files.pdf} className="group/cover relative block w-11 rounded-[3px] focus-visible:outline-offset-2">
       <img src={files.cover} alt={t({ id: `Sampul PDF company update ${item.ticker}`, en: `PDF cover of the ${item.ticker} company update` })} loading="lazy" width={44} height={62}
-        onError={() => setBroken(true)}
+        onError={() => setBroken(files.cover)}
         className="block h-[62px] w-11 rounded-[3px] border border-rule bg-white object-cover object-top transition-[border-color] group-hover/cover:border-brand-ink" />
       <span aria-hidden
         className="pointer-events-none absolute top-1/2 left-full z-30 ml-3 w-[250px] origin-left -translate-y-1/2 scale-[.96] overflow-hidden rounded-md border border-rule bg-white opacity-0 shadow-[var(--shadow-pop)] transition-[opacity,transform] duration-200 ease-[var(--ease-out-expo)] group-hover/cover:scale-100 group-hover/cover:opacity-100 group-focus-visible/cover:scale-100 group-focus-visible/cover:opacity-100">

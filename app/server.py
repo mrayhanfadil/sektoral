@@ -10,7 +10,8 @@ Routes:
   research jobs, audit traces). Only whitelisted fields are returned.
 * ``/files/...`` generated documents: company update HTML/PDF (the English
   edition too when it is in the published bundle), the standalone trace HTML
-  and report cover thumbnails, each confined to its folder.
+  and report cover thumbnails (``cover.en.png`` from the English PDF), each
+  confined to its folder.
 * everything else: the built single-page app from ``web/dist``.
 """
 from __future__ import annotations
@@ -432,16 +433,24 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         # Public traces use /api/reports/{ticker}/trace after the bundle passes review.
         raise HTTPException(404, "Jejak riset tidak ditemukan.")
 
-    @app.get("/files/reports/{ticker}/cover.png")
-    def cover(ticker: str):
+    def cover_png(ticker: str, lang: str):
         try:
-            png = gallery.cover(jobs.reports, ticker)
+            png = gallery.cover(jobs.reports, ticker, lang)
         except Exception:
             LOG.exception("cover thumbnail failed")
             png = None
         if png is None:
             raise HTTPException(404)
         return FileResponse(png, media_type="image/png", headers=_REVALIDATE)
+
+    @app.get("/files/reports/{ticker}/cover.png")
+    def cover(ticker: str):
+        return cover_png(ticker, "id")
+
+    # The English PDF's cover, while that PDF is in the published bundle.
+    @app.get("/files/reports/{ticker}/cover.en.png")
+    def cover_en(ticker: str):
+        return cover_png(ticker, "en")
 
     @app.get("/files/reports/{name}")
     def report_file(name: str):
