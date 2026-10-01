@@ -5,15 +5,16 @@ fields the standalone trace HTML shows (see ``research._trace_html``), each
 typed and length-bounded; nothing else leaves the server.
 
 Indonesian text the host wrote gets an English twin, ``<field>_en`` (#34),
-also for traces stored before twins existed (``app.host_lang``); source data
-(news titles, search queries, article text) and agent prose without its own
-twin stay Indonesian.
+also for traces stored before twins existed (``app.host_lang``), and so does
+curated source text with its English in ``data/source_text_en``
+(``prose_lang.known``); source data (news titles, search queries, article
+text) and agent prose without its own twin stay Indonesian.
 """
 from __future__ import annotations
 
 import re
 
-from . import host_lang
+from . import host_lang, prose_lang
 from .jobs import http_url, public_intel, text
 
 
@@ -141,8 +142,12 @@ def _forecast(result: dict) -> dict:
             "mechanism_en": text(e.get("mechanism_en"), 400),
             "uncertainty_en": text(e.get("uncertainty_en"), 300),
         } for e in _list(plan.get("news_effects"))[:12]],
-        "interim": {"rationale": text(interim.get("rationale"), 900),
-                    "rationale_en": text(interim.get("rationale_en"), 900),
+        # A curated rationale (data/analyst_scenarios) replaces the agent's and
+        # its twin; its English, when there is one, is in data/source_text_en.
+        # Curated text runs past the agent's 1400 characters: it is shown whole.
+        "interim": {"rationale": text(interim.get("rationale"), 2400),
+                    "rationale_en": text(interim.get("rationale_en")
+                                         or prose_lang.known(interim.get("rationale")), 2400),
                     "published_at": text(interim.get("published_at"), 30),
                     "url": http_url(interim.get("source_url"))} if interim else None,
         "outyears": [{
