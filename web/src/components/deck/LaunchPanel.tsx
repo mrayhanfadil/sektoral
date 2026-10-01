@@ -120,8 +120,8 @@ function CommandLine() {
               className="h-9 min-w-0 flex-1 rounded-md border border-rule bg-raised px-3 text-[14px] text-ink-strong placeholder:text-ink-faint focus:border-brand-ink" />
           </div>
           <p className="mt-1.5 text-ink-faint">{t({
-            id: "Dengan token, emiten apa pun dijalankan langsung oleh agent dan memakai kredit API.",
-            en: "With the token, any issuer runs live through the agents and uses API credits.",
+            id: "Dengan token, emiten apa pun dijalankan langsung oleh agent dan memakai kredit LLM.",
+            en: "With the token, any issuer runs live through the agents and uses LLM credits.",
           })}</p>
         </details>
       )}
