@@ -504,3 +504,20 @@ export const reportFiles = (t: string, lang: ReportLang = "id", english = false)
 /** A report's files in the reader's language, as far as its item says English is published. */
 export const readerFiles = (item: Pick<ReportItem, "ticker" | "languages" | "files">, lang: ReportLang) =>
   reportFiles(item.ticker, lang, hasEnglish(item));
+
+/**
+ * A finished job's report files in the reader's language. A job's own run
+ * folder is never served (`/files/jobs/...` answers 404: a run can be
+ * superseded, and only the gated gallery bundle is public), so the job
+ * snapshot links to the gallery bundle once it is publishable. An English
+ * reader gets that bundle's English edition when the gallery `item` lists it;
+ * a link the snapshot does not give stays absent.
+ */
+export function jobFiles(job: Pick<Job, "ticker" | "report_url" | "pdf_url">,
+  item: Pick<ReportItem, "ticker" | "languages" | "files"> | undefined, lang: ReportLang): { html?: string; pdf?: string } {
+  const files = item && item.ticker === job.ticker ? readerFiles(item, lang) : undefined;
+  return {
+    html: job.report_url && (files?.html ?? job.report_url),
+    pdf: job.pdf_url && (files?.pdf ?? job.pdf_url),
+  };
+}
