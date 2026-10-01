@@ -6,7 +6,8 @@ import type { EventData } from "./api";
 import type { Bi } from "./i18n";
 
 export type DecisionCode = "selected" | "stop_extreme" | "skipped" | "cross_check" | "not_needed" | "unavailable";
-export type GateCode = "pass" | "fail" | "not_applicable" | "not_assessable";
+/** `flagged`: a Gate 5 check that is disclosed in the report but does not block the rating. */
+export type GateCode = "pass" | "flagged" | "fail" | "not_applicable" | "not_assessable";
 export type VerdictCode = "supported" | "not_supported" | "partly_supported" | "unanswered";
 export type EventKind =
   | "tool_start" | "tool_done" | "tool_empty" | "tool_error" | "hypothesis"
@@ -23,6 +24,7 @@ export const DECISION_WORD: Record<DecisionCode, Bi> = {
 };
 export const GATE_WORD: Record<GateCode, Bi> = {
   pass: { id: "lolos", en: "pass" },
+  flagged: { id: "ditandai", en: "flagged" },
   fail: { id: "gagal", en: "fail" },
   not_applicable: { id: "tidak berlaku", en: "not applicable" },
   not_assessable: { id: "tidak dapat dinilai", en: "cannot be assessed" },

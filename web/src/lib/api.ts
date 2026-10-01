@@ -5,9 +5,12 @@ import { pick } from "./i18n";
 
 /**
  * One Method Chain row; `decision` is the Indonesian label, `decision_code` its stable code (#34).
- * `step_en` is the method's English name where the server has one.
+ * `step_en` is the method's English name and `value_en` the value in English figures ("Rp3,490"),
+ * where the server has them.
  */
-export type ChainStep = { step: string; step_en?: string | null; decision: string; decision_code?: string; value: string };
+export type ChainStep = {
+  step: string; step_en?: string | null; decision: string; decision_code?: string; value: string; value_en?: string | null;
+};
 
 /** Report languages: Bahasa Indonesia always, English once it is part of the published bundle. */
 export type ReportLang = "id" | "en";
@@ -20,6 +23,8 @@ export type ReportItem = {
   analytically_eligible: boolean;
   publication_state: "built" | "review_pending" | "auto_published" | "published" | "superseded" | "withdrawn";
   price: number | null;
+  /** ISO date of the close behind `price` and the upside; older servers omit it. */
+  price_date?: string | null;
   published: boolean;
   /** Policy 1.3.0: published on the automatic gates, or also approved by an analyst. */
   publication_basis?: "automatic" | "analyst_reviewed" | null;
@@ -188,10 +193,28 @@ export type Signal = {
   period: string | null;
   period_en?: string | null;
   median_display: string | null;
+  median_display_en?: string | null;
   rank: number | null;
   n: number | null;
   url?: string | null;
-  peers?: { symbol: string | null; display: string | null }[];
+  /** Peers ranked on the metric; `outlier` marks a value far outside the group's range, `outlier_note` says why. */
+  peers?: { symbol: string | null; display: string | null; display_en?: string | null; outlier?: boolean | null;
+    outlier_note?: string | null; outlier_note_en?: string | null }[];
+};
+
+/**
+ * The research run's peer group. `as_of` dates its source; when the source has no date,
+ * `as_of_note` says so (older servers send neither).
+ */
+export type PeerGroup = {
+  basis: string | null; basis_en?: string | null; group: string | null; group_en?: string | null;
+  as_of?: string | null; as_of_note?: string | null; as_of_note_en?: string | null;
+};
+
+/** The report's own peer group, when the research run ranked against another one. */
+export type CurrentPeers = {
+  group: string | null; group_en?: string | null; basis: string | null; basis_en?: string | null;
+  as_of: string | null; source: string | null; members: string[];
 };
 
 // Agent and host text fields may carry an English twin `<field>_en` (#34);
@@ -206,8 +229,15 @@ export type Intel = {
   steps: { tool: string | null; why: string | null; why_en?: string | null; summary: string | null; summary_en?: string | null;
     status: string | null; origin: string | null }[];
   signals: Signal[];
-  peers: { basis: string | null; basis_en?: string | null; group: string | null; group_en?: string | null };
-  web_news: { window: string | null; items: { title: string | null; url: string | null; domain: string | null; date: string | null }[] };
+  /** How many signals the run computed; `signals` lists at most 120. */
+  signals_total?: number | null;
+  peers: PeerGroup;
+  /** The research run ranked against another peer group than the report's (`peers_current`); null when unknown. */
+  peers_stale?: boolean | null;
+  peers_current?: CurrentPeers | null;
+  /** `total`: how many items the run found; `items` lists at most 40. */
+  web_news: { window: string | null; total?: number | null;
+    items: { title: string | null; url: string | null; domain: string | null; date: string | null }[] };
   synthesis: {
     headline: string | null;
     headline_en?: string | null;
@@ -343,7 +373,7 @@ export type TraceView = {
     endpoints: string[];
     insights: { title: string | null; title_en?: string | null; observation: string | null; observation_en?: string | null;
       implication: string | null; implication_en?: string | null; caveat: string | null; caveat_en?: string | null;
-      citations: { endpoint: string | null; field_path: string | null; value: string | null }[] }[];
+      citations: { endpoint: string | null; field_path: string | null; value: string | null; value_en?: string | null }[] }[];
     limitations: string[];
     limitations_en?: (string | null)[];
   };
@@ -361,13 +391,26 @@ export type TraceView = {
       date: string | null; url: string | null; factual_basis: string | null; factual_basis_en?: string | null;
       mechanism: string | null; mechanism_en?: string | null; uncertainty: string | null; uncertainty_en?: string | null }[];
     interim: { rationale: string | null; rationale_en?: string | null; published_at: string | null; url: string | null } | null;
-    outyears: { year: string | null; revenue_growth_pct: number | null; ebitda_margin_pct: number | null;
-      net_income_margin_pct: number | null; capex_to_revenue_pct: number | null; rationale: string | null; rationale_en?: string | null;
-      source_ids: string[] }[];
-    /** Bank Driver Scenario: the interim year's H2 drivers, then the out-years (percent). */
-    bank_drivers?: { year: string | null; loan_growth_pct: number | null; nim_pct: number | null; non_ii_to_nii_pct: number | null;
-      cost_to_income_pct: number | null; cost_of_credit_pct: number | null; deposit_growth_pct: number | null;
-      rationale: string | null; rationale_en?: string | null; source_ids: string[] }[];
+    /** The agent's out-year table (`analyst_assumption`: the row is the analyst's own scenario). */
+    outyears: OutyearRow[];
+    /** Whether the model forecast is the agent's table; false when it follows its own schedule (LoM, Operating Model). Null: unknown. */
+    outyears_used?: boolean | null;
+    outyears_note?: string | null;
+    outyears_note_en?: string | null;
+    /** The model's own out-years, set when `outyears_used` is false. */
+    outyears_model?: OutyearRow[] | null;
+    /** Bank Driver Scenario: the interim year's H2 drivers, then the out-years (percent), as the agent proposed them. */
+    bank_drivers?: BankDriverRow[];
+    /** Whether the bank model ran the agent's drivers; null when unknown. */
+    bank_drivers_used?: boolean | null;
+    /** The drivers the bank model ran, set when `bank_drivers_used` is false. */
+    bank_drivers_model?: BankDriverRow[] | null;
+    /** Why the agent's proposal was not used. */
+    bank_drivers_note?: string | null;
+    bank_drivers_note_en?: string | null;
+    /** The basis of the model's payout path (`payout_pct`). */
+    bank_payout_rationale?: string | null;
+    bank_payout_rationale_en?: string | null;
     /** Spec §5.4 key risks of the earnings scenario; older servers omit them. */
     key_risks?: { category: string | null; category_en?: string | null; headline: string | null; headline_en?: string | null;
       explanation: string | null; explanation_en?: string | null; source_ids: string[] }[];
@@ -377,6 +420,28 @@ export type TraceView = {
       source_ids: string[] }[];
   };
   deepdive: { title: string | null; date: string | null; url: string | null; status: string | null; length: number; preview: string | null }[];
+};
+
+/** One out-year of the earnings forecast (percent). */
+export type OutyearRow = {
+  year: string | null; revenue_growth_pct: number | null; ebitda_margin_pct: number | null;
+  net_income_margin_pct: number | null; capex_to_revenue_pct: number | null; rationale: string | null; rationale_en?: string | null;
+  source_ids: string[]; analyst_assumption?: boolean | null;
+};
+
+/** What a model driver rests on. */
+export type DriverKind = "company_guidance" | "sourced" | "analyst_assumption";
+
+/**
+ * One year of bank drivers (percent). Agent rows may be `analyst_assumption`; model rows carry
+ * `payout_pct`, each driver's `kinds` and the `source` file they come from.
+ */
+export type BankDriverRow = {
+  year: string | null; loan_growth_pct: number | null; nim_pct: number | null; non_ii_to_nii_pct: number | null;
+  cost_to_income_pct: number | null; cost_of_credit_pct: number | null; deposit_growth_pct: number | null;
+  payout_pct?: number | null; kinds?: Record<string, DriverKind | string | null> | null;
+  rationale: string | null; rationale_en?: string | null; source_ids?: string[]; source?: string | null;
+  analyst_assumption?: boolean | null;
 };
 
 /** A report section kept out of the printed Company Update; every text may carry an English twin. */

@@ -20,13 +20,15 @@ const CHECKS: Check[] = [
     { id: "Ditolak atau diperbaiki", en: "Rejected or corrected" },
     { id: "Asumsi tanpa sumber tidak masuk model; alasannya tercatat.", en: "Unsourced assumptions stay out of the model; the reason is logged." }],
   [{ id: "Metode valuasi", en: "Valuation method" }, { id: "Rantai dari gerbang framework", en: "Chain set by the framework gates" },
-    { id: "Metode terpilih lolos", en: "Selected method passes" }, { id: "Nilai, sensitivitas, dan silang cek ditampilkan.", en: "Value, sensitivity, and cross-checks are shown." },
+    { id: "Metode terpilih lolos", en: "Selected method passes" }, { id: "Nilai, sensitivitas, dan silang cek bila ada ditampilkan.", en: "Value, sensitivity, and any cross-checks are shown." },
     { id: "Semua metode gagal", en: "Every method fails" }, { id: "Tidak ada tebakan; tiap metode diberi alasan.", en: "No guessing; each method is given a reason." }],
   [{ id: "Rating & target harga", en: "Rating & target price" }, { id: "Gerbang forecast dan valuasi", en: "Forecast and valuation gates" },
     { id: "Ditampilkan", en: "Shown" },
-    { id: "Hanya setelah metode yang dipilih lolos seluruh pemeriksaan.", en: "Only after the selected method passes every check." },
+    { id: "Bila setiap pemeriksaan yang memblokir lolos. Forecast berbasis asumsi dan hasil yang ditandai (multiple keluar, porsi nilai terminal) diberi label di laporan.",
+      en: "When every blocking check passes. An assumption-led forecast and flagged results (exit multiple, terminal share) are labelled in the report." },
     { id: "Ditahan", en: "Held" },
-    { id: "Laporan terbit sebagai draf parsial dengan banner bukti belum lengkap dan alasan penahanan.", en: "The report is published as a partial draft with an incomplete-evidence banner and the reason it was held." }],
+    { id: "Laporan tetap draf dan tidak diterbitkan; rating dan target harga ditahan dan alasannya dicatat.",
+      en: "The report stays a draft and is not published; the rating and target price are held and the reason is logged." }],
 ];
 
 export function EvidenceChecks() {

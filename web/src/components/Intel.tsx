@@ -1,8 +1,9 @@
-import { CornerDownRight, ExternalLink } from "lucide-react";
+import { CornerDownRight, ExternalLink, TriangleAlert } from "lucide-react";
 import type { Intel, Signal } from "../lib/api";
 import { STATUS_WORD, type Status } from "../lib/agents";
 import { VERDICT_WORD, verdictCode, type VerdictCode } from "../lib/codes";
 import { twin, useLang, type Bi, type Lang } from "../lib/i18n";
+import { formatDay } from "./Reports";
 
 /** Section anchors, shared with the trace page's index so labels match headings. Pipeline order. */
 export const INTEL_SECTIONS: [string, Bi][] = [
@@ -107,17 +108,30 @@ const ORIGIN: Record<string, [ChipTone, Bi]> = {
   agent_adaptive: ["brand", { id: "keputusan baru agent", en: "new agent decision" }],
 };
 
-function Card({ id, count, children }: { id: string; count?: number; children: React.ReactNode }) {
+function Card({ id, count, aside, children }: { id: string; count?: number; aside?: React.ReactNode; children: React.ReactNode }) {
   const { t } = useLang();
-  return <Section id={id} title={t(TITLE[id])} count={count}>{children}</Section>;
+  return <Section id={id} title={t(TITLE[id])} count={count} aside={aside}>{children}</Section>;
 }
 
 /** A signal's host-written words in the reader's language (lib/i18n.ts `twin`). */
 function signalText(s: Signal, lang: Lang) {
   return {
     label: twin(s, "label", lang), display: twin(s, "display", lang), flag: twin(s, "flag", lang),
-    note: twin(s, "note", lang), period: twin(s, "period", lang),
+    note: twin(s, "note", lang), period: twin(s, "period", lang), median: twin(s, "median_display", lang),
   };
+}
+
+/** "Outlier" in the reader's words, as a small warning mark. */
+function OutlierMark({ title }: { title?: string }) {
+  const { t } = useLang();
+  return <Chip tone="warn" className="font-normal"><span title={title}>{t({ id: "outlier", en: "outlier" })}</span></Chip>;
+}
+
+/** The peers of a ranking whose value is an outlier: "XYZ 312,0x", and the server's note on why. */
+function outlierPeers(s: Signal, lang: Lang): { names: string[]; note?: string } {
+  const rows = (s.peers ?? []).filter((p) => p.outlier && p.symbol);
+  const note = rows.map((p) => twin(p, "outlier_note", lang)).find(Boolean) ?? undefined;
+  return { names: rows.map((p) => `${p.symbol} ${twin(p, "display", lang) ?? ""}`.trim()), note };
 }
 
 function Citations({ ids, signals }: { ids: string[]; signals: Record<string, Signal> }) {
@@ -195,6 +209,14 @@ export function IntelSections({ intel }: { intel: Intel }) {
   // Agent text in the reader's language: each `_en` twin where the agent wrote one (lib/i18n.ts `twin`).
   const hypotheses = twin(intel.plan, "hypotheses", lang);
   const next = twin(intel.synthesis, "next_checks", lang).filter(Boolean) as string[];
+  // The run computed more signals than this view lists: say so rather than cut them silently.
+  const total = intel.signals_total ?? 0;
+  const listed = total > intel.signals.length ? (
+    <span className="text-[13px] text-ink-soft tabular-nums">
+      {t({ id: `${intel.signals.length} dari ${total} sinyal ditampilkan`, en: `${intel.signals.length} of ${total} signals shown` })}
+    </span>
+  ) : undefined;
+  const current = intel.peers_stale ? intel.peers_current : undefined;
 
   return (
     <>
@@ -264,7 +286,7 @@ export function IntelSections({ intel }: { intel: Intel }) {
       )}
 
       {flagged.length > 0 && (
-        <Card id="sinyal" count={flagged.length}>
+        <Card id="sinyal" count={flagged.length} aside={listed}>
           <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[14px] [&_td]:border-t [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top">
             <thead><tr>
@@ -296,8 +318,38 @@ export function IntelSections({ intel }: { intel: Intel }) {
       )}
 
       {peers.length > 0 && (
-        <Card id="posisi-peer" count={peers.length}>
-          {intel.peers.basis && <p className="mb-3 text-[13.5px] text-ink-soft">{t({ id: "Basis", en: "Basis" })}: {twin(intel.peers, "basis", lang)}</p>}
+        <Card id="posisi-peer" count={peers.length} aside={flagged.length ? undefined : listed}>
+          {intel.peers_stale && (
+            <p className="mb-3 flex max-w-[80ch] items-start gap-2 rounded-md border border-warn-rule/60 bg-warn-bg/40 px-3.5 py-2.5 text-[14px] text-ink">
+              <TriangleAlert aria-hidden className="mt-[3px] size-3.5 flex-none text-warn-ink" strokeWidth={2.2} />
+              <span className="min-w-0">
+                {t({
+                  id: "Peringkat agent ini memakai grup peer dari run risetnya, yang berbeda dari grup peer yang kini dipakai laporan.",
+                  en: "The agent's ranking here used the peer group of its research run, which differs from the one the report now compares against.",
+                })}
+                {current && <>
+                  <span className="mt-1.5 block">
+                    {t({ id: "Grup peer laporan", en: "The report's peer group" })}
+                    {current.group && <>: <strong className="font-medium text-ink-strong">{twin(current, "group", lang)}</strong></>}
+                    {current.as_of && <>, {t({ id: "per", en: "as of" })} <time dateTime={current.as_of}>{formatDay(current.as_of, lang)}</time></>}
+                    {current.source && <> · <span className="font-mono text-[12.5px]">{current.source}</span></>}
+                  </span>
+                  {current.members.length > 0 && (
+                    <span className="mt-1.5 flex flex-wrap gap-1">{current.members.map((m) => <Chip key={m} mono>{m}</Chip>)}</span>
+                  )}
+                  {current.basis && <span className="mt-1.5 block text-[13px] text-ink-soft">{twin(current, "basis", lang)}</span>}
+                </>}
+              </span>
+            </p>
+          )}
+          {(intel.peers.basis || intel.peers.as_of || intel.peers.as_of_note) && <p className="mb-3 text-[13.5px] text-ink-soft">
+            {intel.peers_stale && intel.peers.group && <>{t({ id: "Grup run riset", en: "Research run group" })}: {twin(intel.peers, "group", lang)}. </>}
+            {intel.peers.basis && <>{t({ id: "Basis", en: "Basis" })}: {twin(intel.peers, "basis", lang)}</>}
+            {intel.peers.as_of
+              ? <>{intel.peers.basis ? ", " : ""}{t({ id: "per", en: "as of" })} <time dateTime={intel.peers.as_of}>{formatDay(intel.peers.as_of, lang)}</time>.</>
+              : intel.peers.basis ? "." : ""}
+            {!intel.peers.as_of && intel.peers.as_of_note && <> {twin(intel.peers, "as_of_note", lang)}</>}
+          </p>}
           <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[14px] [&_td]:border-t [&_td]:border-rule-soft [&_td]:px-2 [&_td]:py-2.5 [&_td]:align-top">
             <thead><tr>
@@ -312,12 +364,13 @@ export function IntelSections({ intel }: { intel: Intel }) {
             <tbody>
               {peers.map((signal) => {
                 const s = { ...signal, ...signalText(signal, lang) };
+                const outliers = outlierPeers(signal, lang);
                 return (
                   <tr key={s.id}>
                     <th scope="row" className="border-t border-rule-soft px-2 py-2.5 text-left align-top font-medium text-ink-strong">
                       {s.label}
                       <span className="mt-0.5 block text-[12.5px] font-normal text-ink-soft md:hidden">
-                        {t({ id: "Median peer", en: "Peer median" })} <span className="font-mono">{s.median_display || "—"}</span>
+                        {t({ id: "Median peer", en: "Peer median" })} <span className="font-mono">{s.median || "—"}</span>
                       </span>
                       {s.flag && <span className="mt-1 block md:hidden"><Chip tone="warn">{s.flag}</Chip></span>}
                     </th>
@@ -333,8 +386,13 @@ export function IntelSections({ intel }: { intel: Intel }) {
                           <span className="data text-ink-soft">{s.rank} / {s.n}</span>
                         </>
                       ) : <span className="text-[13px] text-ink-soft">{s.note || "n.a."}</span>}
+                      {outliers.names.length > 0 && (
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[12.5px] text-ink-soft">
+                          <OutlierMark title={outliers.note} /><span className="font-mono">{outliers.names.join(", ")}</span>
+                        </span>
+                      )}
                     </td>
-                    <td className="text-right font-mono text-[13.5px] whitespace-nowrap tabular-nums text-ink-soft max-md:hidden">{s.median_display || "—"}</td>
+                    <td className="text-right font-mono text-[13.5px] whitespace-nowrap tabular-nums text-ink-soft max-md:hidden">{s.median || "—"}</td>
                     <td className="max-md:hidden">{s.flag && <Chip tone="warn">{s.flag}</Chip>}</td>
                   </tr>
                 );
@@ -361,7 +419,12 @@ export function IntelSections({ intel }: { intel: Intel }) {
       )}
 
       {intel.web_news.items.length > 0 && (
-        <Card id="berita-web" count={intel.web_news.items.length}>
+        <Card id="berita-web" count={intel.web_news.items.length}
+          aside={(intel.web_news.total ?? 0) > intel.web_news.items.length && (
+            <span className="text-[13px] text-ink-soft tabular-nums">
+              {t({ id: `${intel.web_news.items.length} dari ${intel.web_news.total} ditampilkan`, en: `${intel.web_news.items.length} of ${intel.web_news.total} shown` })}
+            </span>
+          )}>
           <p className="mb-3 text-[13.5px] text-ink-soft">
             {t({ id: "Berita", en: "News" })} {intel.web_news.window ? <span className="font-mono">{intel.web_news.window}</span> : ""}.{" "}
             {t({
