@@ -3467,6 +3467,12 @@ def _signed_rp(value):
     return "n.m." if value is None else ("+" if value >= 0 else "-") + f"Rp{fmt._id(abs(value), 0)}"
 
 
+def _vs_price(ratio):
+    """A change as a signed percentage in the report's Indonesian form (+9,3%)."""
+    text = fmt.pct(ratio)
+    return text if text.startswith("-") else "+" + text
+
+
 def driver_value_page(doc, intake):
     """Plan §6: each material driver's range and effect, and the same-model cases."""
     dv = doc.get("driver_value") or {}
@@ -3497,14 +3503,18 @@ def driver_value_page(doc, intake):
                               _t("semua driver pada ujung menguntungkan rentang uji",
                                  "every driver at the favourable end of its tested range"))):
         c = cases[key]
-        vs = f"{(c['per_share'] / price - 1) * 100:+.1f}%" if price else "-"
+        # Rounded to the IDX tick like the Target Price, so the base case
+        # reads as the cover's target and upside.
+        value = fmt.tick(c["per_share"])
+        vs = _vs_price(value / price - 1) if price and value is not None else "-"
         profit = [fmt._id(c["fy1_profit"] / 1e9, 1)] if with_profit else []
-        case_rows.append([label, _rp(c["per_share"]), vs, *profit, text])
+        case_rows.append([label, _rp(value), vs, *profit, text])
     scenario = _exhibit("Kasus dasar, turun dan naik dari model yang sama",
                         ["Kasus", "Nilai per saham", "Terhadap harga"]
                         + (["Laba induk FY1 (Rp miliar)"] if with_profit else [])
                         + ["Perubahan driver"], case_rows,
-                        "Sumber: model yang sama dengan target; rentang uji bukan probabilitas.")
+                        "Sumber: model yang sama dengan target; nilai per saham dibulatkan ke "
+                        "fraksi harga seperti target; rentang uji bukan probabilitas.")
     return _page("Driver dan skenario nilai",
                  [_t("Setiap driver material digeser dalam rentang uji dan dinilai ulang dengan "
                      "kalkulasi referensi independen; kasus turun dan naik menggeser semua driver "
