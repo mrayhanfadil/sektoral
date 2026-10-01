@@ -56,6 +56,11 @@ describe("report files", () => {
     expect(readerFiles(en, "en").pdf).toBe("/files/reports/AAAA.en.pdf");
     expect(readerFiles(en, "id").html).toBe("/files/reports/AAAA.html");
   });
+  it("shows the cover of the PDF the reader opens", () => {
+    expect(readerFiles(en, "en").cover).toBe("/files/reports/AAAA/cover.en.png");
+    expect(readerFiles(en, "id").cover).toBe("/files/reports/AAAA/cover.png");
+    expect(readerFiles(item({ languages: ["id"] }), "en").cover).toBe("/files/reports/AAAA/cover.png");
+  });
   it("keeps the Indonesian files when English is not published or the server predates languages", () => {
     expect(readerFiles(item({ languages: ["id"] }), "en").pdf).toBe("/files/reports/AAAA.pdf");
     expect(readerFiles(item({}), "en").html).toBe("/files/reports/AAAA.html");
