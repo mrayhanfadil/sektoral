@@ -151,7 +151,7 @@ _DRIVERS = [
     (r"modal kerja non-kas FY(\d{4}) negatif \((-?\d+)% pendapatan\); tidak dihitung sebagai "
      r"sumber kas",
      "FY{0} non-cash working capital negative ({1}% of revenue); not counted as a source of cash"),
-    (r"modal kerja non-kas FY(\d{4}) data Sectors \((-?[\d.]+)% pendapatan\)",
+    (r"modal kerja non-kas FY(\d{4}) data Sectors \((-?[\d.,]+)% pendapatan\)",
      "FY{0} non-cash working capital, Sectors data ({1}% of revenue)"),
     (r"beban keuangan (\S+) resmi disetahunkan atas utang berbunga neraca resmi (\S+)",
      "official {0} finance costs annualised over interest-bearing debt on the official {1} "

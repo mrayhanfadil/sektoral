@@ -443,7 +443,7 @@ def nwc_intensity(intake):
     if ratio < 0:
         return 0.0, (f"modal kerja non-kas FY{a['year']} negatif ({ratio * 100:.0f}% pendapatan); "
                      "tidak dihitung sebagai sumber kas")
-    return ratio, f"modal kerja non-kas FY{a['year']} data Sectors ({ratio * 100:.1f}% pendapatan)"
+    return ratio, f"modal kerja non-kas FY{a['year']} data Sectors ({fmt.pct(ratio)} pendapatan)"
 
 
 def _schedule(rows, valuation_date, h2_share, dividends):
@@ -799,7 +799,7 @@ def fcff(intake, fc, rf, erp, beta, g, wacc_bps=0.0, rates=None, terminal_ronic=
               "distributions_basis": link.get("distributions_basis"),
               "debt_basis": link.get("debt_basis"),
               "nci_basis": link.get("nci_basis") or (
-                  f"porsi induk {share_parent * 100:.1f}% dari laba 1H resmi"
+                  f"porsi induk {fmt.pct(share_parent)} dari laba 1H resmi"
                   if share_parent < 1 else "tidak dilaporkan terpisah; dianggap tidak material"),
               "attributable_share": share_parent, "shares": shares,
               "shares_basis": link.get("shares_basis"), "fx": fx if fx != 1.0 else None,

@@ -17,10 +17,22 @@ from __future__ import annotations
 
 import copy
 
-from . import operating_model, reference_ddm, reference_fcff, reference_holding, reference_lom
+from . import fmt, operating_model, reference_ddm, reference_fcff, reference_holding, reference_lom
 
 KIND_LABEL = {"sourced": "bersumber", "company_guidance": "panduan emiten",
               "analyst_assumption": "asumsi analis"}
+
+
+def _figure(value) -> str:
+    """A driver figure as written (8.5 -> "8,5", 5.0 -> "5"), in the report's
+    Indonesian form; the English edition localizes it."""
+    dec = next(d for d in (0, 1, 2, 3) if round(value, d) == round(value, 3))
+    return fmt.num(value, dec)
+
+
+def _path(values) -> str:
+    """A driver's yearly values, "8,5/8,5/8/8%"."""
+    return "/".join(_figure(v) for v in values) + "%"
 
 
 def _row(name, basis, refs, years, base, low, high, v_low, v_high, v_base,
@@ -57,7 +69,7 @@ def _operating_cases(drivers):
         up["segments"][i]["volume_growth_pct"] = _shift(rec, 1.0)
         cases.append((f"{seg['name']}: pertumbuhan volume", rec["kind"],
                       rec.get("basis_refs") or rec.get("source_refs"), span,
-                      "/".join(f"{v:g}" for v in rec["values"]) + "%", down, up, "±1 pp per tahun",
+                      _path(rec["values"]), down, up, "±1 pp per tahun",
                       ("turun", "naik")))
         rec = seg["price_growth_pct"]
         down, up = copy.deepcopy(drivers), copy.deepcopy(drivers)
@@ -180,7 +192,7 @@ def bank(data, detail, model):
         rows.append(_row(name, " / ".join(KIND_LABEL.get(k, k) for k in sorted(kinds)),
                          sorted({r for row in data["drivers"] for r in row[key].get("source_refs") or []}),
                          f"FY{data['drivers'][0]['year'] % 100:02d}F-FY{data['drivers'][-1]['year'] % 100:02d}F",
-                         "/".join(f"{row[key]['value']:g}" for row in data["drivers"]) + "%",
+                         _path(row[key]["value"] for row in data["drivers"]),
                          "turun" if bad_sign < 0 else "naik", "naik" if bad_sign < 0 else "turun",
                          low["per_share"], high["per_share"], base_v,
                          low["rows"][0]["parent"], high["rows"][0]["parent"], base_p, unit))
@@ -198,11 +210,11 @@ def mining(inp, bridge, fx):
     base_v = reference_lom.value(inp, bridge, fx)["per_share"]
     cu, au = inp["cu_price"], inp["au_price"]
     cases = [
-        ("Harga tembaga", "asumsi analis (dek 12 bulan)", "LoM", f"US${cu:,.0f}/t",
+        ("Harga tembaga", "asumsi analis (dek 12 bulan)", "LoM", f"US${fmt.num(cu, 0)}/t",
          dict(deck=(cu * 0.9, au)), dict(deck=(cu * 1.1, au)), "±10%", ("turun", "naik")),
-        ("Harga emas", "asumsi analis (dek 12 bulan)", "LoM", f"US${au:,.0f}/oz",
+        ("Harga emas", "asumsi analis (dek 12 bulan)", "LoM", f"US${fmt.num(au, 0)}/oz",
          dict(deck=(cu, au * 0.9)), dict(deck=(cu, au * 1.1)), "±10%", ("turun", "naik")),
-        ("Tingkat diskonto US$", "kebijakan rumah", "LoM", f"{inp['discount'] * 100:.1f}%",
+        ("Tingkat diskonto US$", "kebijakan rumah", "LoM", fmt.pct(inp["discount"]),
          dict(rate=inp["discount"] + 0.01), dict(rate=inp["discount"] - 0.01), "±1 pp",
          ("naik", "turun")),
         ("Probabilitas pengembangan Elang", "asumsi analis", "LoM",
@@ -262,18 +274,18 @@ def holding(detail):
         li = land["inputs"]
         cases += [
             ("Laju penjualan lahan", "rata-rata marketing sales historis", "sampai lahan habis",
-             f"{li['pace_ha']:,.1f} ha/tahun".replace(".", ","),
+             f"{fmt.num(li['pace_ha'])} ha/tahun",
              dict(pace_ha=max(li["pace_ha"] - 25, 1.0)), dict(pace_ha=li["pace_ha"] + 25),
              "±25 ha/tahun", ("turun", "naik")),
             ("Pertumbuhan harga lahan", "CAGR harga marketing historis", "sampai lahan habis",
-             f"{li['asp_growth'] * 100:.1f}%".replace(".", ","),
+             fmt.pct(li["asp_growth"]),
              dict(asp_growth=li["asp_growth"] - 0.01), dict(asp_growth=li["asp_growth"] + 0.01),
              "±1 pp", ("turun", "naik")),
             ("Porsi lahan dapat dijual", "asumsi analis", "sampai lahan habis",
              f"{li['net_ratio'] * 100:.0f}%", dict(net_ratio=li["net_ratio"] - 0.05),
              dict(net_ratio=li["net_ratio"] + 0.05), "±5 pp", ("turun", "naik")),
             ("Tingkat diskonto landbank", "Cost of Equity kebijakan", "sampai lahan habis",
-             f"{land['rate'] * 100:.1f}%".replace(".", ","), dict(rate=land["rate"] + 0.01),
+             fmt.pct(land["rate"]), dict(rate=land["rate"] + 0.01),
              dict(rate=land["rate"] - 0.01), "±1 pp", ("naik", "turun"))]
     rows = [_row(name, basis, [], years, base, words[0], words[1], value(**down), value(**up),
                  base_v, unit=unit)
