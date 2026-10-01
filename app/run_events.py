@@ -400,6 +400,23 @@ def derive(audit: dict, doc: dict) -> list[dict]:
     return events
 
 
+def narrates_trace(events: list[dict], audit: dict) -> bool:
+    """False when recorded events tell another analyst run than the trace keeps.
+
+    A recording is saved per run, the trace per report; when a later run
+    replaced the trace but not the recording, the replay would show steps the
+    report never took. The tool calls' reasons are the run's fingerprint: if
+    the recording has some, the trace has step reasons too, and not one of
+    them matches, the recording belongs to another run."""
+    intel = audit.get("analyst") if isinstance(audit, dict) and isinstance(audit.get("analyst"), dict) else {}
+    plan = intel.get("plan") if isinstance(intel.get("plan"), dict) else {}
+    reasons = {str(step["why"])[:400] for step in [*(plan.get("steps") or []), *(intel.get("steps") or [])]
+               if isinstance(step, dict) and isinstance(step.get("why"), str) and step["why"].strip()}
+    told = {str(e["detail"])[:400] for e in events
+            if (e.get("data") or {}).get("kind") == "tool_start" and e.get("detail")}
+    return not (reasons and told) or bool(reasons & told)
+
+
 def replay(folder, ticker: str) -> dict | None:
     """{ticker, name, source, events, report} for a stored run, or None."""
     t = str(ticker).strip().upper()
@@ -414,6 +431,8 @@ def replay(folder, ticker: str) -> dict | None:
     events = progress.public(recorded) if isinstance(recorded, list) and recorded else []
     twins = prose_twins(audit)
     events = progress.public([englished(coded(e, doc), twins, doc) for e in events])
+    if events and not narrates_trace(events, audit):
+        events = []  # another run's recording: replay the run the report stands on
     source = "recorded" if events else "derived"
     if not events:
         events = derive(audit, doc)
