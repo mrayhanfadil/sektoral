@@ -26,7 +26,7 @@ The product combines a cache-constrained research agent with deterministic citat
 
 The current demo is a local browser workflow: enter an IDX ticker, follow research status, then review the company update and agent trace. Finished company updates are browsable in a report gallery (`/laporan`) with a PDF, a web version and the audit trace; a batch runner produces them for several tickers at once, and the landing page features one real report with its method chain.
 
-The UI and every report are written in Bahasa Indonesia; financial terms stay in English by market convention (EBITDA, FCFF, WACC, capex).
+The UI and every report are written in Bahasa Indonesia, with an English edition of each report (`*.en.html`, `*.en.pdf`) and an English UI toggle; financial terms stay in English by market convention (EBITDA, FCFF, WACC, capex).
 
 The product is a Sectors Hackathon 2026 submission in the AI Agents & Assistants track: custom agent logic and an LLM component must be central. Submissions close 8 October 2026, 23:59 WIB, and the repository must stay public through at least 15 January 2027.
 
