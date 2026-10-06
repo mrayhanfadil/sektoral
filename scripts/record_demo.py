@@ -87,11 +87,11 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
             )
             page = context.new_page()
             try:
-                page.goto(base_url, wait_until="networkidle")
-                page.get_by_role("link", name="Coba riset emiten").first.click()
-                page.wait_for_url("**/research")
-                page.get_by_label("Kode emiten IDX").fill(ticker)
-                page.get_by_role("button", name="Mulai riset").click()
+                # The research Deck takes the ticker directly; labels follow the
+                # browser language, so match both editions.
+                page.goto(base_url + "/research", wait_until="networkidle")
+                page.get_by_label(re.compile(r"^(IDX ticker|Kode emiten BEI)$")).fill(ticker)
+                page.get_by_role("button", name=re.compile(r"^(Run research|Jalankan riset)$")).click()
                 page.wait_for_url(re.compile(r"/jobs/[0-9a-f]{32}$"), timeout=15_000)
                 job_id = page.url.rsplit("/", 1)[-1]
 
@@ -112,7 +112,7 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
 
                 # Give the live status and its final honest quality label time
                 # to render before navigating to the generated pages.
-                page.get_by_text(re.compile(r"^(Selesai|Selesai, parsial|Tidak selesai)$")).first.wait_for(
+                page.get_by_text(re.compile(r"^(Done|Failed|Selesai|Gagal)$")).first.wait_for(
                     timeout=10_000)
                 if state["state"] == "error":
                     raise RuntimeError(
@@ -127,8 +127,8 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
                         "but no successful agent demo was produced."
                     )
 
-                report_link = page.get_by_role("link", name="Buka company update")
-                trace_link = page.get_by_role("link", name="Lihat jejak agent")
+                report_link = page.get_by_role("link", name=re.compile(r"^(Open Company Update|Buka company update)$")).first
+                trace_link = page.get_by_role("link", name=re.compile(r"^(View Audit Trace|Lihat jejak agent)$")).first
                 report_url = report_link.get_attribute("href")
                 trace_url = trace_link.get_attribute("href")
                 if not report_url or not trace_url:
@@ -150,7 +150,7 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
                         _scroll_and_hold(page, report_citations.first)
                 else:
                     research_heading = page.locator("h2.sec").filter(
-                        has_text="Ringkasan riset berbantuan AI"
+                        has_text=re.compile(r"Ringkasan riset berbantuan AI|AI-assisted research summary", re.I)
                     )
                     if research_heading.count():
                         _scroll_and_hold(page, research_heading.first)
@@ -160,7 +160,7 @@ def record(ticker: str, video_dir: Path, timeout_seconds: int = 900,
                         _scroll_and_hold(page, page.locator(".page").last)
 
                 page.goto(base_url + trace_url, wait_until="networkidle")
-                if page.get_by_text("Jejak riset tidak ditemukan").count():
+                if page.get_by_text(re.compile(r"Jejak riset tidak ditemukan|Research trace not found", re.I)).count():
                     raise RuntimeError("The generated agent trace could not be opened.")
                 trace_sections = page.locator("main article")
                 if trace_sections.count():
