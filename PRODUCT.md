@@ -35,7 +35,7 @@ The product is a Sectors Hackathon 2026 submission in the AI Agents & Assistants
 - A planning analyst agent writes a research question and hypotheses, chooses tool calls after seeing each result, ranks the company against its Sectors peer group, flags anomalies, and marks each hypothesis supported, not supported or unanswered with cited signals. It remembers earlier runs per ticker and reports what changed.
 - Agent Sectors tools read only the local Sectors snapshot; no run spends Sectors API credits. An optional `web_news` tool adds dated Tavily headlines from Indonesian business media as context only.
 
-- Market prices are read from `data/sectors_cache.db`; the report builder can also use dated official issuer facts in `data/issuer_evidence/`.
+- Market prices come from `data/sectors_cache.db`, or from a newer dated close in `data/market_quotes/` refreshed by `app.refresh`; the report builder can also use dated official issuer facts in `data/issuer_evidence/`.
 - The research agent may select only cache endpoints available for the ticker. The host executes reads and records them in the trace.
 - The LLM is used for agent reasoning, not as a market-data source.
 - Citation validation checks the brief against rows actually read. Insufficient evidence remains visibly partial or missing; it is not silently replaced with web research, memory, analyst assumptions, or another dataset. Optional Tavily web news appears only as labelled, dated context; no figure comes from it, and every conclusion must also cite a Sectors signal.
@@ -60,7 +60,7 @@ The supplied Sectoral Design System sets primary blue `#0928B1`, white `#FFFFFF`
 - Batch runner for gallery reports: `app/batch.py`.
 - Domain glossary and decisions: `CONTEXT.md`, `docs/adr/`.
 - Brand SVG and embedded Roboto assets: `app/assets/brand/sectoral-logo.svg`, `app/assets/fonts/`.
-- No verified customer testimonials, external benchmarks, or live market-data integrations are documented.
+- No verified customer testimonials or external benchmarks are documented. Market inputs beside the Sectors snapshot are dated Yahoo Finance snapshots that `app.refresh` stores; report builds never fetch prices live.
 
 ## Product Principles
 
