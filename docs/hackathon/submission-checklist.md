@@ -7,14 +7,14 @@ Verify details against the [official rules](https://hackathon.sectors.app/rules)
 ## Team decisions (2026-09-26)
 
 - **Ratings kept.** The reports keep Buy/Hold/Sell with a target price (commit 3fcf54a). The rules §12 risk is accepted by the team; each report carries the reader-responsibility statement, and public screens should still frame Sectoral as an information and analysis tool.
-- **Repository visibility.** Still private on 2026-09-26; Fadil will make it public before submitting.
+- **Repository visibility.** Public since 2026-10-06, after the third-party broker PDFs were scrubbed from `main`'s history. Old pull-request refs still hold them until GitHub Support purges them.
 - **Onboarding.** Confirmed done by Fadil on 2026-09-26.
-- **Videos, problem statement and social post.** Planned for the week of 28 Sep 2026.
+- **Videos, problem statement and social post.** Videos cut on 2026-10-06 from a live BBCA run (teaser 0:57, judging edit 2:55 awaiting voice-over); upload and the social post remain.
 
 ## Project and eligibility
 
 - [ ] Product is a working end-to-end prototype. The judged workflow is shown in the video and works in the submitted repository.
-- [ ] Sectors MCP or REST data is central to the product. For the current Sectoral workflow, the agent and report use only ticker-specific rows in `data/sectors_cache.db`; do not describe the demo as making live upstream Sectors requests.
+- [ ] Sectors MCP or REST data is central to the product. For the current Sectoral workflow, the agents and report read a snapshot of Sectors REST v2 responses in `data/sectors_cache.db`, alongside dated market quotes, issuer releases and cited news (README, Data sources and attribution); do not describe the demo as making live upstream Sectors requests.
 - [ ] AI/LLM and custom-built agent logic/orchestration are core to the declared AI Agents & Assistants track.
 - [ ] Every participant completed Sectors App onboarding, the team registration is valid, and the team has 2–4 participants (or one solo participant).
 - [ ] The project repository was created during the build period and the project contains no pre-event project code. Check commit history and provenance before submitting.
@@ -27,7 +27,7 @@ Verify details against the [official rules](https://hackathon.sectors.app/rules)
 - [ ] **Public repository URL.** Keep the repository public for at least 90 days after winners are announced on 17 October 2026 — through at least **15 January 2027**. Remove keys before making it public.
 - [ ] **60-second teaser.** A screen recording of the product working, published publicly on YouTube or social media. Keep it to 60 seconds or less.
 - [ ] **Judging video, up to three minutes.** Walk through the problem, intended audience, and core workflow. Accepted hosting: public or unlisted YouTube, Vimeo, Google Drive with link sharing enabled, or Loom. Check access while signed out; inaccessible videos are not judged.
-- [ ] **One-sentence problem statement.** Suggested: “Sectoral helps Indonesian equity analysts get a planned, peer-ranked, source-cited company update for any IDX ticker, with every conclusion traced to Sectors data and every evidence gap shown.”
+- [ ] **One-sentence problem statement.** Suggested: “Sectoral helps Indonesian equity analysts get a planned, peer-ranked, source-cited company update for any IDX ticker in its Sectors snapshot, with every conclusion traced to Sectors data and every evidence gap shown.”
 - [ ] **Track selection:** AI Agents & Assistants.
 - [ ] **Names of all team participants**, matching the registered team.
 - [ ] **Public social post URL.** Post on Instagram, LinkedIn, Threads, or TikTok; tag the official Sectors account and use the [official thumbnail template](https://www.canva.com/design/DAHUfZI9dJI/rcFmHic2Nn5Hdqj7DLwfmw/edit). Save the URL. A post on Twitter/X alone does not satisfy the channels listed in the rules.

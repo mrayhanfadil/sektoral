@@ -1,39 +1,11 @@
 {
   "ticker": "JPFA",
   "currency": "IDR",
-  "price": 2180,
-  "date": "2026-09-24",
+  "price": 2010,
+  "date": "2026-10-05",
   "source_title": "Yahoo Finance JPFA.JK daily close",
   "source_url": "https://finance.yahoo.com/quote/JPFA.JK/history/",
   "closes": [
-    {
-      "date": "2026-09-11",
-      "price": 2250
-    },
-    {
-      "date": "2026-09-14",
-      "price": 2270
-    },
-    {
-      "date": "2026-09-15",
-      "price": 2270
-    },
-    {
-      "date": "2026-09-16",
-      "price": 2300
-    },
-    {
-      "date": "2026-09-17",
-      "price": 2320
-    },
-    {
-      "date": "2026-09-18",
-      "price": 2280
-    },
-    {
-      "date": "2026-09-21",
-      "price": 2270
-    },
     {
       "date": "2026-09-22",
       "price": 2230
@@ -45,6 +17,34 @@
     {
       "date": "2026-09-24",
       "price": 2180
+    },
+    {
+      "date": "2026-09-25",
+      "price": 2130
+    },
+    {
+      "date": "2026-09-28",
+      "price": 2070
+    },
+    {
+      "date": "2026-09-29",
+      "price": 2060
+    },
+    {
+      "date": "2026-09-30",
+      "price": 2030
+    },
+    {
+      "date": "2026-10-01",
+      "price": 2040
+    },
+    {
+      "date": "2026-10-02",
+      "price": 1995
+    },
+    {
+      "date": "2026-10-05",
+      "price": 2010
     }
   ]
 }
