@@ -46,7 +46,7 @@ _ROB_BOLD_ITA = _b64_font("Roboto-BoldItalic.ttf")
 _ROB_BLACK = _b64_font("Roboto-Black.ttf")
 _ROB_BLACK_ITA = _b64_font("Roboto-BlackItalic.ttf")
 
-# Sectoral Design System (docs: "Sectoral Design System Documentation").
+# Sektoral Design System (docs: "Sektoral Design System Documentation").
 # Roboto only, on screen and in print: the static Google Fonts v51 faces keep
 # copied PDF words intact (the old variable build did not, which is why print
 # used to fall back to Arial / Liberation Sans). Sizes are the design's
@@ -1486,7 +1486,7 @@ def _topbar(report_date):
         display_date = str(report_date)
     return ("<div class='topbar'><span>Equity Research - Company Update<br>"
             f"{html.escape(display_date)}</span><span class='wordmark' "
-            f"aria-label='Sectoral'>{LOGO_SVG}</span></div>")
+            f"aria-label='Sektoral'>{LOGO_SVG}</span></div>")
 
 
 def _display_date(report_date):

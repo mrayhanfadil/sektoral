@@ -1,4 +1,4 @@
-"""Sectoral web server: JSON API, generated documents and the React app.
+"""Sektoral web server: JSON API, generated documents and the React app.
 
 Run with ``python -m app.server`` after building the frontend
 (``npm --prefix web run build``). The server binds to loopback unless told
@@ -173,7 +173,7 @@ def create_app(outdir: str | Path = "out/demo", reports: str | Path | None = Non
         yield
         jobs.close()
 
-    app = FastAPI(title="Sectoral", lifespan=lifespan, docs_url="/api/docs",
+    app = FastAPI(title="Sektoral", lifespan=lifespan, docs_url="/api/docs",
                   openapi_url="/api/openapi.json", redoc_url=None)
     app.state.jobs = jobs
 
@@ -500,7 +500,7 @@ def jobs_id_ok(job_id: str) -> bool:
 def main(argv=None):
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="Sectoral web app (API + React frontend)")
+    parser = argparse.ArgumentParser(description="Sektoral web app (API + React frontend)")
     parser.add_argument("--out", default=os.environ.get("SECTORAL_OUT", "out/demo"),
                         help="generated research output directory")
     parser.add_argument("--reports", default=os.environ.get("SECTORAL_REPORTS"),
@@ -514,7 +514,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     app = create_app(args.out, args.reports, args.pdf)
-    print(f"Sectoral: http://{args.host}:{args.port}", flush=True)
+    print(f"Sektoral: http://{args.host}:{args.port}", flush=True)
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 

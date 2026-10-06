@@ -16,7 +16,7 @@ Indonesian equity analysts who need company updates assembled from fragmented co
 
 ## Product Purpose
 
-Sectoral turns locally cached Sectors company data into sourced company updates. The research agent selects data reads, produces an evidence-linked brief, and a deterministic validator checks citations before the report builder creates an update.
+Sektoral turns locally cached Sectors company data into sourced company updates. The research agent selects data reads, produces an evidence-linked brief, and a deterministic validator checks citations before the report builder creates an update.
 
 ## Positioning
 
@@ -46,9 +46,9 @@ The product is a Sectors Hackathon 2026 submission in the AI Agents & Assistants
 
 ## Brand Commitments
 
-The product name is **Sectoral**. The repository and some report source lines still say "Sektoral" (for example "Sektoral Estimates"); those are known inconsistencies to fix, not a second name.
+The product name is **Sektoral**, everywhere a reader sees it: UI, reports, wordmark and docs. Internal identifiers keep their older `sectoral` spelling (the `SECTORAL_*` environment variables, `data/sectoral.db`, the logo file name) so existing `.env` files and databases keep working.
 
-The supplied Sectoral Design System sets primary blue `#0928B1`, white `#FFFFFF`, charcoal `#333333`, rule gray `#D9D9D9`, even table row `#B4C7FF`, Roboto typography, and chart series `#0928B1`, `#B4C7FF`, `#3ED628`, `#1DCD9F`, `#0047AB`, `#7596FF`. The wordmark uses an E-shaped three-bar mark in blue, teal, and green followed by `CTORAL`.
+The supplied Sektoral Design System sets primary blue `#0928B1`, white `#FFFFFF`, charcoal `#333333`, rule gray `#D9D9D9`, even table row `#B4C7FF`, Roboto typography, and chart series `#0928B1`, `#B4C7FF`, `#3ED628`, `#1DCD9F`, `#0047AB`, `#7596FF`. The wordmark is `S`, an E-shaped three-bar mark in blue, teal and green, then `KTORAL`.
 
 ## Evidence on Hand
 

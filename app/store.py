@@ -1,4 +1,4 @@
-"""Sectoral's own database: every document the app writes, in one SQLite file.
+"""Sektoral's own database: every document the app writes, in one SQLite file.
 
 Runtime caches (agent memory, forecast plans, fetched news, peer and FX
 snapshots) and run outputs (report, audit trace and manifest documents) are

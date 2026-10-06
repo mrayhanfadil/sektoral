@@ -149,7 +149,7 @@ def method_chain_exhibit(va):
     if override:
         proposed = (chain.get("proposed_order") or [None])[0]
         source += f"; Usulan sistem: {proposed}; dipilih analis: {override}."
-    # Brand constant: Sectoral (keputusan branding fase ini).
+    # Brand constant: Sektoral (keputusan branding fase ini).
     return exhibit_ids.tag(_exhibit("Rantai metode valuasi",
                                     ["Metode", "Keputusan", "Nilai/saham", "Alasan"], rows, source),
                            exhibit_ids.METHOD_CHAIN)

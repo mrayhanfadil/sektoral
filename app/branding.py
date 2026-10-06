@@ -1,4 +1,4 @@
-"""Brand constant: Sectoral (keputusan branding fase ini).
+"""Brand constant: Sektoral (keputusan branding fase ini).
 
 Satu tempat untuk logo, footer, dan source line agar jawaban branding lain
 hanya satu baris perubahan (plan §Decisions Still open).

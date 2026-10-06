@@ -38,7 +38,7 @@ def font_faces() -> str:
     return "\n".join(faces)
 
 
-# Sectoral Design System: primary #0928B1, charcoal #333333, rule #D9D9D9,
+# Sektoral Design System: primary #0928B1, charcoal #333333, rule #D9D9D9,
 # table tint #B4C7FF, accents #1DCD9F / #3ED628.
 TOKENS = """
 :root{

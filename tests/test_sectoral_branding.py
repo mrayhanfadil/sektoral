@@ -1,6 +1,6 @@
-"""Regression tests for Sectoral branding invariants (spec-to-repo audit).
+"""Regression tests for Sektoral branding invariants (spec-to-repo audit).
 
-Spec under test (Sectoral Design System):
+Spec under test (Sektoral Design System):
 - Primary deep blue #0928B1, paper white #FFFFFF, text #000000,
   grid/rules #E0E0E0, highlight #E1E9FF. The Figma report templates
   (Others, nodes 2592-2 / 2627-897) fill even table rows with the highlight
@@ -9,7 +9,7 @@ Spec under test (Sectoral Design System):
 - Charts use the six-color series
   #0928B1 / #B4C7FF / #3ED628 / #1DCD9F / #0047AB / #7596FF,
   with a black baseline and subtle grid.
-- Logo: "E" of blue/teal/green bars inside the S + E-bars + "CTORAL"
+- Logo: "E" of blue/teal/green bars inside the S + E-bars + "KTORAL"
   wordmark.
 
 These tests are read-only: they pin constants, generated CSS/SVG, the
@@ -21,7 +21,6 @@ from __future__ import annotations
 import re
 import sys
 
-import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -170,27 +169,21 @@ def test_chart_draws_issuer_and_index_in_series_colors(monkeypatch):
 
 def test_report_topbar_uses_canonical_repo_wordmark():
     bar = render._topbar("2026-09-23")
-    assert "CTORAL" in render.LOGO_SVG
+    assert "KTORAL" in render.LOGO_SVG
     assert render.LOGO_SVG in bar
     assert "S{" not in bar
-    assert "aria-label='Sectoral'" in bar
+    assert "aria-label='Sektoral'" in bar
 
 
 def test_report_logo_matches_canonical_asset_exactly():
     asset = (Path(render.__file__).resolve().parent
              / "assets" / "brand" / "sectoral-logo.svg")
-    # The canonical asset lives in the sibling sectors-hackathon checkout; look
-    # upward so the test also works from a git worktree, and skip when absent.
-    relative = Path("sectors-hackathon") / "assets" / "brand" / "sectoral-logo.svg"
-    source = next((parent / relative for parent in Path(__file__).resolve().parents
-                   if (parent / relative).is_file()), None)
-    if source is None:
-        pytest.skip("sectors-hackathon checkout not found next to this repo")
-    canonical = source.read_text(encoding="utf-8")
+    # The asset began as a copy of sectors-hackathon's logo; since the product
+    # is named Sektoral, its wordmark spells S, the E bars, then KTORAL.
     assert asset.is_file(), str(asset)
-    assert asset.read_text(encoding="utf-8") == canonical
-    assert render.LOGO_SVG == canonical
-    assert 'aria-label="Sectoral"' in render.LOGO_SVG
+    assert render.LOGO_SVG == asset.read_text(encoding="utf-8")
+    assert ">S</text>" in render.LOGO_SVG and ">KTORAL</text>" in render.LOGO_SVG
+    assert 'aria-label="Sektoral"' in render.LOGO_SVG
     assert 'fill="#0928B1"' in render.LOGO_SVG
     assert 'fill="#1DCD9F"' in render.LOGO_SVG
     assert 'fill="#3ED628"' in render.LOGO_SVG
@@ -205,7 +198,7 @@ def test_web_header_uses_the_canonical_logo_file():
     assert 'aria-label={t({ id: "Sektoral, beranda", en: "Sektoral, home" })}' in layout
     assert "<Logo" in layout
     logo = (Path(render.__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg").read_text()
-    assert "CTORAL" in logo
+    assert "KTORAL" in logo
     for color in ("#0928B1", "#1DCD9F", "#3ED628"):
         assert color in logo
 

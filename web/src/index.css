@@ -1,14 +1,14 @@
 @import "tailwindcss";
 @import "@fontsource-variable/roboto-mono/wght.css";
 
-/* Roboto is the Sectoral typeface; the files are shared with the PDF renderer. */
+/* Roboto is the Sektoral typeface; the files are shared with the PDF renderer. */
 @font-face { font-family: Roboto; src: url("../../app/assets/fonts/Roboto-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: Roboto; src: url("../../app/assets/fonts/Roboto-Bold.ttf") format("truetype"); font-weight: 500 900; font-style: normal; font-display: swap; }
 @font-face { font-family: Roboto; src: url("../../app/assets/fonts/Roboto-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Sectoral Command Deck. Brand (PRODUCT.md): primary #0928B1, charcoal
+/* Sektoral Command Deck. Brand (PRODUCT.md): primary #0928B1, charcoal
    #333333, rule #D9D9D9, tint #B4C7FF, series #3ED628 #1DCD9F #0047AB #7596FF.
    Roles:
    - `brand` fills buttons and bars; `brand-ink` is blue used as text or a thin

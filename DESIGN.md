@@ -1,5 +1,5 @@
 ---
-name: Sectoral
+name: Sektoral
 description: The Command Deck, a live research console for sourced IDX company updates.
 colors:
   brand: "#0928B1"
@@ -223,13 +223,13 @@ components:
     height: "52px"
 ---
 
-# Design System: Sectoral
+# Design System: Sektoral
 
 ## Overview
 
 **Creative North Star: "The Command Deck"**
 
-Sectoral is a research desk seen through one console. Every agent, tool call and Method Gate decision lands as a ruled row in a single instrument an analyst could audit, and the interface's job is to make that work legible while it happens. The grammar is a trading terminal's: function-key tabs (F1 Riset, F2 Laporan, F3 Cara kerja), a Cmd-K ticker palette, an agent rail that reads ANTRI / JALAN / SELESAI, and mono readings for tool names, endpoints, clocks and Rupiah figures. The materials are Sectoral's own: primary blue, Roboto, the E-mark's three bars, and the brand chart series.
+Sektoral is a research desk seen through one console. Every agent, tool call and Method Gate decision lands as a ruled row in a single instrument an analyst could audit, and the interface's job is to make that work legible while it happens. The grammar is a trading terminal's: function-key tabs (F1 Riset, F2 Laporan, F3 Cara kerja), a Cmd-K ticker palette, an agent rail that reads ANTRI / JALAN / SELESAI, and mono readings for tool names, endpoints, clocks and Rupiah figures. The materials are Sektoral's own: primary blue, Roboto, the E-mark's three bars, and the brand chart series.
 
 The system runs in two grounds. Light is paper: a cool grey canvas under white console panels. Dark is the console: a true dark charcoal field with only a trace of cool, surfaces that lift by lightness rather than shadow, and the brand blue kept as an accent. Density is high but ruled; regions are divided by 1px lines inside one bordered console, never scattered as a card grid. Motion is damped and informational: a changed row holds its light and then settles, a gate needle eases to its reading without overshoot, and nothing bounces.
 
@@ -248,8 +248,8 @@ The system rejects the category defaults it was built against: a chat transcript
 A single committed blue on cool paper or charcoal console, with a small, strictly assigned status set.
 
 ### Primary
-- **Sectoral Blue** (`brand`): fills primary buttons, the replay play control, the scrub bar and the E-mark's first bar. In dark it brightens to a saturated cobalt (`brand-dark`) so fills keep their weight on charcoal.
-- **Blue Ink** (`brand-ink`): blue used as text or a thin mark (links, active tab underline, focus ring, running status word, picked method row). Identical to Sectoral Blue in light; in dark it becomes a pale periwinkle (`brand-ink-dark`) that stays readable on every surface step.
+- **Sektoral Blue** (`brand`): fills primary buttons, the replay play control, the scrub bar and the E-mark's first bar. In dark it brightens to a saturated cobalt (`brand-dark`) so fills keep their weight on charcoal.
+- **Blue Ink** (`brand-ink`): blue used as text or a thin mark (links, active tab underline, focus ring, running status word, picked method row). Identical to Sektoral Blue in light; in dark it becomes a pale periwinkle (`brand-ink-dark`) that stays readable on every surface step.
 - **Blue Wash** (`brand-50`, `brand-100`): the running/selected field: pressed rail node, active filter chip, palette selection, the hold light for a running row, and `brand-100` as the 3px focus halo of inputs.
 - **Table Tint** (`tint`): the brand's even-row blue, carried for brand SVGs and chart series.
 
@@ -269,7 +269,7 @@ A single committed blue on cool paper or charcoal console, with a small, strictl
 - **Lifted Row** (`raised`): a row or control lifted inside a panel: search button, kbd caps, skeleton bars, palette footer.
 - **Ink ladder** (`ink-strong`, `ink`, `ink-soft`, `ink-faint`): headings and readings; body (the brand charcoal); secondary labels; timestamps and idle states. In dark, body and secondary ink hold at least 4.5:1 up to `brand-50-dark`.
 - **Rules** (`rule-soft`, `rule`, `rule-strong`): inner dividers; region and panel borders (the brand rule grey); hover borders and idle markers.
-- **Wordmark** (`wordmark`): the logo's black `CTORAL`, inverted to near-white in dark.
+- **Wordmark** (`wordmark`): the logo's black `KTORAL`, inverted to near-white in dark.
 
 ### Printed company update
 The PDF and HTML company update (`app/render.py`) follows the report Figma rather than the web tokens; it is print-only and has no dark variant.
@@ -349,7 +349,7 @@ The recurring silhouettes are the E-mark's three horizontal bars (live indicator
 ### Buttons
 Solid, compact, confident.
 - **Shape:** gently squared (6px), 44px tall (36px small), bold 15px (13.5px small), 8px icon gap with 16px lucide icons at stroke 2.2.
-- **Primary:** Sectoral Blue fill, white text, inset top sheen. Hover deepens to `brand-hover`; disabled drops to 60% opacity with a progress cursor.
+- **Primary:** Sektoral Blue fill, white text, inset top sheen. Hover deepens to `brand-hover`; disabled drops to 60% opacity with a progress cursor.
 - **Ghost:** `surface` fill, `rule` border, Blue Ink text; hover turns the border `brand-ink` and the fill `brand-50`.
 - **Press:** every button settles `translateY(1px) scale(.985)` on active; transitions run .18s on ease-out-expo.
 - **Icon button:** 36px square, 6px corners (replay play/pause, restart, theme toggle).

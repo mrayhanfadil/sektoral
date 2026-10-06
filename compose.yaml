@@ -1,4 +1,4 @@
-# Local Sectoral: `docker compose up --build`, then open http://localhost:8765
+# Local Sektoral: `docker compose up --build`, then open http://localhost:8765
 services:
   sectoral:
     build:

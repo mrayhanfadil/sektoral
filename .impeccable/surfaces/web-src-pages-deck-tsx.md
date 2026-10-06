@@ -5,9 +5,9 @@ primary_target: "web/src/pages/Deck.tsx"
 related_targets: ["web/src/pages/Landing.tsx","web/src/pages/Research.tsx","web/src/pages/Gallery.tsx","web/src/pages/Trace.tsx"]
 ---
 
-# Sectoral Command Deck (web app)
+# Sektoral Command Deck (web app)
 
-Scope: the React app in web/ (landing, research launcher, live run Deck, run replay, report gallery, audit trace). Visitor mode: Operate for the Deck, launcher, gallery and trace; Persuade for the landing page. Audience: Indonesian equity analysts and hackathon judges watching a recorded demo. Job: start a research run on an IDX ticker, watch every agent, tool call and Method Gate decision as it happens, then open the company update. Constraints: Bahasa Indonesia UI, PRODUCT.md brand commitments (Sectoral blue, Roboto, E-mark three bars, chart series), no invented claims, whitelisted API data only, light and dark, phone to desktop, reduced motion respected.
+Scope: the React app in web/ (landing, research launcher, live run Deck, run replay, report gallery, audit trace). Visitor mode: Operate for the Deck, launcher, gallery and trace; Persuade for the landing page. Audience: Indonesian equity analysts and hackathon judges watching a recorded demo. Job: start a research run on an IDX ticker, watch every agent, tool call and Method Gate decision as it happens, then open the company update. Constraints: Bahasa Indonesia UI, PRODUCT.md brand commitments (Sektoral blue, Roboto, E-mark three bars, chart series), no invented claims, whitelisted API data only, light and dark, phone to desktop, reduced motion respected.
 
 Memorable moment: a tool call goes out with its reason and comes back with its result while the agent rail lights the agent that made it.
 
@@ -17,7 +17,7 @@ Unresolved: none blocking. The user was not re-asked (session continued unattend
 
 THESIS: The Deck shows a research desk at work: each agent, tool call and Method Gate decision appears live in one console an analyst could audit. It refuses the category default: a chat transcript or a spinner with a step list.
 
-OWN-WORLD: The Command Deck grammar from sectors-hackathon: function-key tabs ([F1] Deck, [F2] Laporan, [F3] Cara kerja), a Cmd-K ticker palette, an agent status rail reading ANTRI / JALAN / SELESAI, and mono data (tool names, endpoints, timestamps, Rp figures). Its materials are Sectoral's:
+OWN-WORLD: The Command Deck grammar from sectors-hackathon: function-key tabs ([F1] Deck, [F2] Laporan, [F3] Cara kerja), a Cmd-K ticker palette, an agent status rail reading ANTRI / JALAN / SELESAI, and mono data (tool names, endpoints, timestamps, Rp figures). Its materials are Sektoral's:
 - a navy console ground drawn from #0928B1 in dark, and paper white in light;
 - brand blue #0928B1 / #7596FF for the active agent, teal #1DCD9F for done, and green #3ED628 only for the live pulse; amber is kept for warnings;
 - the E-mark's three bars become the live indicator;

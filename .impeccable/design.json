@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-09-25T06:03:37+00:00",
-  "title": "Design System: Sectoral",
+  "title": "Design System: Sektoral",
   "extensions": {
     "colorMeta": {
       "brand": {
         "role": "primary",
-        "displayName": "Sectoral Blue",
+        "displayName": "Sektoral Blue",
         "canonical": "#0928B1",
         "tonalRamp": [
           "#000035",
@@ -21,7 +21,7 @@
       },
       "brand-hover": {
         "role": "primary",
-        "displayName": "Sectoral Blue, pressed",
+        "displayName": "Sektoral Blue, pressed",
         "canonical": "#071F8A",
         "tonalRamp": [
           "#010036",
@@ -411,7 +411,7 @@
       },
       "brand-dark": {
         "role": "primary",
-        "displayName": "Sectoral Blue (dark)",
+        "displayName": "Sektoral Blue (dark)",
         "canonical": "#3552F0",
         "tonalRamp": [
           "#020231",
@@ -426,7 +426,7 @@
       },
       "brand-hover-dark": {
         "role": "primary",
-        "displayName": "Sectoral Blue, pressed (dark)",
+        "displayName": "Sektoral Blue, pressed (dark)",
         "canonical": "#4A66F6",
         "tonalRamp": [
           "#030131",
@@ -976,7 +976,7 @@
       "kind": "nav",
       "refersTo": "deck-bar",
       "description": "52px sticky bar: wordmark, F-key tabs with kbd caps, Cmd-K search.",
-      "html": "<nav class=\"ds-deckbar\"><strong class=\"ds-word\">S<span class=\"ds-e\"><i></i><i></i><i></i></span>CTORAL</strong><a class=\"ds-fkey is-active\" href=\"#\"><kbd class=\"ds-kbd\">F1</kbd>Riset</a><a class=\"ds-fkey\" href=\"#\"><kbd class=\"ds-kbd\">F2</kbd>Laporan</a><a class=\"ds-fkey\" href=\"#\"><kbd class=\"ds-kbd\">F3</kbd>Cara kerja</a><button class=\"ds-search\">Cari emiten <kbd class=\"ds-kbd\">⌘K</kbd></button></nav>",
+      "html": "<nav class=\"ds-deckbar\"><strong class=\"ds-word\">S<span class=\"ds-e\"><i></i><i></i><i></i></span>KTORAL</strong><a class=\"ds-fkey is-active\" href=\"#\"><kbd class=\"ds-kbd\">F1</kbd>Riset</a><a class=\"ds-fkey\" href=\"#\"><kbd class=\"ds-kbd\">F2</kbd>Laporan</a><a class=\"ds-fkey\" href=\"#\"><kbd class=\"ds-kbd\">F3</kbd>Cara kerja</a><button class=\"ds-search\">Cari emiten <kbd class=\"ds-kbd\">⌘K</kbd></button></nav>",
       "css": ".ds-deckbar { display:flex; align-items:stretch; gap:4px; height:52px; padding:0 24px; background:var(--color-surface, #fff); border-bottom:1px solid var(--color-rule, #D9D9D9); font-family:var(--font-sans, Roboto, sans-serif); } .ds-word { display:flex; align-items:center; gap:1px; margin-right:16px; font-weight:900; color:var(--color-wordmark, #000); } .ds-e { display:inline-flex; flex-direction:column; justify-content:space-between; width:12px; height:12px; } .ds-e i { display:block; height:22%; border-radius:9px; } .ds-e i:nth-child(1){ background:var(--color-brand, #0928B1); } .ds-e i:nth-child(2){ background:var(--color-teal, #1DCD9F); width:70%; } .ds-e i:nth-child(3){ background:var(--color-live, #3ED628); } .ds-fkey { position:relative; display:flex; align-items:center; gap:8px; padding:0 10px; font-size:14px; font-weight:500; color:var(--color-ink-soft, #565B69); text-decoration:none; transition:color .15s; } .ds-fkey:hover, .ds-fkey.is-active { color:var(--color-ink-strong, #14182A); } .ds-fkey.is-active::after { content:\"\"; position:absolute; left:8px; right:8px; bottom:-1px; height:2px; border-radius:9px; background:var(--color-brand-ink, #0928B1); } .ds-fkey.is-active .ds-kbd { border-color:rgb(9 40 177 / .4); color:var(--color-brand-ink, #0928B1); } .ds-fkey:focus-visible { outline:2px solid var(--color-brand-ink, #0928B1); outline-offset:2px; border-radius:4px; } .ds-kbd { display:inline-flex; align-items:center; justify-content:center; height:22px; min-width:22px; padding:0 6px; border:1px solid var(--color-rule, #D9D9D9); border-radius:4px; background:var(--color-raised, #F7F8FC); box-shadow:inset 0 -1px 0 var(--color-rule, #D9D9D9); font-family:var(--font-mono, \"Roboto Mono\", monospace); font-size:11px; font-weight:600; line-height:1; color:var(--color-ink-soft, #565B69); } .ds-search { margin-left:auto; align-self:center; display:flex; align-items:center; gap:10px; height:36px; padding:0 6px 0 12px; border:1px solid var(--color-rule, #D9D9D9); border-radius:6px; background:var(--color-raised, #F7F8FC); color:var(--color-ink-soft, #565B69); font:inherit; font-size:14px; cursor:pointer; } .ds-search:hover { border-color:var(--color-rule-strong, #B9BDC6); color:var(--color-ink-strong, #14182A); }"
     },
     {
@@ -1014,7 +1014,7 @@
   ],
   "narrative": {
     "northStar": "The Command Deck",
-    "overview": "**Creative North Star: \"The Command Deck\"**\n\nSectoral is a research desk seen through one console. Every agent, tool call and Method Gate decision lands as a ruled row in a single instrument an analyst could audit, and the interface's job is to make that work legible while it happens. The grammar is a trading terminal's: function-key tabs (F1 Riset, F2 Laporan, F3 Cara kerja), a Cmd-K ticker palette, an agent rail that reads ANTRI / JALAN / SELESAI, and mono readings for tool names, endpoints, clocks and Rupiah figures. The materials are Sectoral's own: primary blue, Roboto, the E-mark's three bars, and the brand chart series.\n\nThe system runs in two grounds. Light is paper: a cool grey canvas under white console panels. Dark is the console: a navy field drawn along the brand blue's hue, with surfaces that lift by lightness rather than shadow. Density is high but ruled; regions are divided by 1px lines inside one bordered console, never scattered as a card grid. Motion is damped and informational: a changed row holds its light and then settles, a gate needle eases to its reading without overshoot, and nothing bounces.\n\nThe system rejects the category defaults it was built against: a chat transcript, or a spinner with a step list.",
+    "overview": "**Creative North Star: \"The Command Deck\"**\n\nSektoral is a research desk seen through one console. Every agent, tool call and Method Gate decision lands as a ruled row in a single instrument an analyst could audit, and the interface's job is to make that work legible while it happens. The grammar is a trading terminal's: function-key tabs (F1 Riset, F2 Laporan, F3 Cara kerja), a Cmd-K ticker palette, an agent rail that reads ANTRI / JALAN / SELESAI, and mono readings for tool names, endpoints, clocks and Rupiah figures. The materials are Sektoral's own: primary blue, Roboto, the E-mark's three bars, and the brand chart series.\n\nThe system runs in two grounds. Light is paper: a cool grey canvas under white console panels. Dark is the console: a navy field drawn along the brand blue's hue, with surfaces that lift by lightness rather than shadow. Density is high but ruled; regions are divided by 1px lines inside one bordered console, never scattered as a card grid. Motion is damped and informational: a changed row holds its light and then settles, a gate needle eases to its reading without overshoot, and nothing bounces.\n\nThe system rejects the category defaults it was built against: a chat transcript, or a spinner with a step list.",
     "keyCharacteristics": [
       "One console, ruled regions: 1px rules and small corners, not floating cards.",
       "Two voices: Roboto for prose and headings, Roboto Mono for every machine reading.",
