@@ -82,7 +82,7 @@ Build period runs from **19 Aug 2026** through **8 Oct 2026, 23:59 WIB**. Teams 
 - Stack, tools, programming languages, licenses, and platforms are unrestricted. Public repo is sufficient; no specific OSS license required.
 - **Automated trade execution is prohibited in every track.** Products may analyze, screen, score, alert, and support decisions, but may **not** place, execute, or automate buy/sell orders on real or brokerage-connected accounts.
 
-### Track summary (full briefs in [`tracks/`](tracks/))
+### Track summary (full briefs in [`tracks/`](../../tracks/))
 
 - **Track 01 — AI Agents & Assistants.** Conversational or autonomous AI products for Indonesian financial markets, with an AI/LLM component at their core.
 - **Track 02 — Automation & Workflows.** Products in which Sectors data works inside real, recurring routines.

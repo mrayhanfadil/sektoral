@@ -63,8 +63,16 @@ TODO.local.md
 # App database (runtime caches and run outputs); see app/store.py.
 data/sectoral.db
 data/sectoral.db-*
+data/sectoral-backup-*
 
 # Local tool caches
 .impeccable/hook.cache.json
 web/.impeccable/
 web/tsconfig.tsbuildinfo
+
+# Third-party broker research used as local format references; never publish.
+spec/*.pdf
+spec/old/
+
+# Locally rendered report snapshots; finished samples live in samples/.
+reports/
