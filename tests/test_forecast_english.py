@@ -140,7 +140,8 @@ def _subagent_messages(module):
 
 def test_subagents_send_the_prompts_they_had_before_the_bilingual_change():
     """The digests were taken from the module of commit d0b7f64 (main before
-    #39) on these same inputs. A deliberate prompt change updates them."""
+    #39) on these same inputs. A deliberate prompt change updates them (last:
+    every role is told to cite a register row only by its source_id)."""
     expected = json.loads((FIXTURES / "forecast_prompts_pre39.json").read_text())
     sent = _subagent_messages(agent)
     assert set(sent) == set(expected)
