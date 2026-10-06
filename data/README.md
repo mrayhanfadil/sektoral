@@ -4,10 +4,10 @@ Export of ONLY the `sectors_cache` table from
 `sectors-hackathon:data/agent_runs.db` (sidestream tables `agent_runs`,
 `agent_events`, `memory_facts` NOT copied).
 
-- File: `data/sectors_cache.db` (~1.1 MB, 162 rows, ~0.97 MB payload)
+- File: `data/sectors_cache.db` (~4.2 MB, 314 rows from 150 endpoints, fetched 2026-09-12 to 2026-09-23)
 - Schema: `data/schema.sql` — `(cache_key PK, endpoint, fetched_at, expires_at, payload_json)`
 - Coverage: AMMN 38 + quintet/others (ADRO/ACES/AUTO/BBCA/CDIA/MTEL/PGEO/POWR/RATU/SSIA/SSMS/VKTR ×5, mining names ×2), endpoints: filings, index-daily/ihsg, company/report, daily, foreign-flow, broker-summary, news, financials/quarterly, corporate-actions, subsector/report, subsectors
-- Expiry: NEVER — semua 162 baris dilayani apa adanya, berapapun umurnya.
+- Expiry: NEVER — semua baris dilayani apa adanya, berapapun umurnya.
   `expires_at` hanya info umur. Refresh hanya eksplisit via
   `python3 -m app.topup <paket> <target> --live` (butuh SECTORS_API_KEY,
   tercatat di `data/credit_log.jsonl`). Tanpa itu, upstream tidak tersentuh.

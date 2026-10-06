@@ -1944,17 +1944,28 @@ def _render(doc, prose_fallback=0):
         h.append(_render_page_content(b))
         h.append("</div>")
 
-    disclosure = (_say("Laporan ini memuat rekomendasi model bersyarat berdasarkan "
-                       "asumsi dan sumber yang dinyatakan; keputusan investasi menjadi "
-                       "tanggung jawab pembaca. Kinerja masa lalu tidak menjamin hasil ke depan.",
-                       "This report carries a conditional model recommendation based on the "
-                       "stated assumptions and sources; investment decisions are the reader's "
-                       "responsibility. Past performance does not guarantee future results.")
+    disclosure = (_say("INFORMASI, BUKAN SARAN INVESTASI. Laporan ini adalah keluaran alat "
+                       "informasi dan analisis berbasis data Sectors Financial API (sectors.app) "
+                       "dan IDX. Rating dan target harga adalah hasil model bersyarat atas asumsi "
+                       "dan sumber yang dinyatakan, bukan rekomendasi atau saran investasi. "
+                       "Keputusan investasi sepenuhnya tanggung jawab pembaca; lakukan riset "
+                       "mandiri dan konsultasikan dengan penasihat keuangan berlisensi. Kinerja "
+                       "masa lalu tidak menjamin hasil ke depan.",
+                       "INFORMATION, NOT INVESTMENT ADVICE. This report is the output of an "
+                       "information and analysis tool built on Sectors Financial API "
+                       "(sectors.app) and IDX data. The Rating and Target Price are conditional "
+                       "model outputs of the stated assumptions and sources, not a "
+                       "recommendation or investment advice. Investment decisions are the "
+                       "reader's sole responsibility; do independent research and consult a "
+                       "licensed financial advisor. Past performance does not guarantee future "
+                       "results.")
                   if m.get("rating") else
-                  _say("Dokumen ini adalah bahan riset dalam peninjauan. Rating dan target "
-                       "harga belum diterbitkan karena syarat data atau model belum terpenuhi. "
-                       "Keputusan investasi menjadi tanggung jawab pembaca.",
-                       "This document is research material under review. The Rating and Target "
+                  _say("INFORMASI, BUKAN SARAN INVESTASI. Dokumen ini adalah bahan riset "
+                       "dalam peninjauan. Rating dan target harga belum diterbitkan karena "
+                       "syarat data atau model belum terpenuhi. Keputusan investasi menjadi "
+                       "tanggung jawab pembaca.",
+                       "INFORMATION, NOT INVESTMENT ADVICE. This document is research material "
+                       "under review. The Rating and Target "
                        "Price are not published because data or model requirements are not yet "
                        "met. Investment decisions are the reader's responsibility."))
     if SHOW_SOURCE_APPENDIX:

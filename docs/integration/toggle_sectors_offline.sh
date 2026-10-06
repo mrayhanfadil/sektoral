@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Toggle Sectors discipline modes in /home/fadil/.config/sectors-be/env and
+# Toggle Sectors discipline modes in ~/.config/sectors-be/env and
 # bounce the api container. Modes (any one can be set, or none):
 #
 #   SECTORS_OFFLINE=1      - refuse all UPSTREAM calls. Disk still serves: the

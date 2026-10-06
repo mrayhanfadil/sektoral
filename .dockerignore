@@ -27,4 +27,8 @@ data/news_analysis
 data/fx_usdidr.json
 data/sectoral.db
 data/sectoral.db-*
+data/sectoral-backup-*
 data/drivers
+spec/*.pdf
+spec/old
+samples

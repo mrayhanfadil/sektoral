@@ -20,9 +20,11 @@ services:
       # to the server too, which then listens where nothing is mapped.
       SECTORAL_PORT: "8765"
       SECTORAL_PDF: "1"
-      # Public deployment: visitors replay stored runs; a live (paid) run needs
-      # SECTORAL_RUN_TOKEN from .env. Set "open" for a private local server.
-      SECTORAL_LIVE_RUNS: "token"
+      # Local default "open": anyone reaching the localhost-only port can start
+      # a live run with the LLM key from .env. For a public deployment set
+      # SECTORAL_LIVE_RUNS=token in .env, so only SECTORAL_RUN_TOKEN starts a
+      # live (paid) run and other visitors replay stored runs.
+      SECTORAL_LIVE_RUNS: "${SECTORAL_LIVE_RUNS:-open}"
     # Run as your user so caches and reports written to the mounts stay yours.
     user: "${UID:-1000}:${GID:-1000}"
     volumes:

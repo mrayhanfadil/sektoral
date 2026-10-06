@@ -1,8 +1,8 @@
 """Test selective depth, KPI bands, number formatting guards, and exhibit provenance.
 
 Adapts rules from:
-- /home/fadil/projects/sectors-hackathon/docs/rules/house-report-format.md
-- /home/fadil/projects/sectors-hackathon/credit-calculator.md
+- sectors-hackathon: docs/rules/house-report-format.md
+- sectors-hackathon: credit-calculator.md
 - docs/plans/2026-09-23-sectors-hackathon-adoption.md (Task 4.1)
 
 Guards tested:

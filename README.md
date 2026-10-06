@@ -2,6 +2,20 @@
 
 Sektoral helps Indonesian equity analysts turn fragmented company data into a sourced company update, while showing what the evidence supports and where it is still incomplete.
 
+> **INFORMATION, NOT INVESTMENT ADVICE.** Sektoral is an information and analysis tool built on the Sectors Financial API. Its ratings and target prices are conditional model outputs, not recommendations. See [Disclaimer](#disclaimer).
+
+## See it without running anything
+
+[`samples/`](samples/) holds three finished company updates rebuilt from stored agent runs: a bank (BBRI), a copper and gold miner (AMMN) and an aviation-services company (GMFI). Each comes as a PDF and a web version in Indonesian and English (`*.en.*`), plus the audit trace that shows every tool call, agent decision and validation behind the report.
+
+| Ticker | Report (PDF) | English (PDF) | Audit trace |
+|---|---|---|---|
+| BBRI | [BBRI.pdf](samples/BBRI.pdf) | [BBRI.en.pdf](samples/BBRI.en.pdf) | [BBRI-trace.html](samples/BBRI-trace.html) |
+| AMMN | [AMMN.pdf](samples/AMMN.pdf) | [AMMN.en.pdf](samples/AMMN.en.pdf) | [AMMN-trace.html](samples/AMMN-trace.html) |
+| GMFI | [GMFI.pdf](samples/GMFI.pdf) | [GMFI.en.pdf](samples/GMFI.en.pdf) | [GMFI-trace.html](samples/GMFI-trace.html) |
+
+<!-- Demo videos: add the 60-second teaser and the judging video links here once uploaded. -->
+
 ## How it works
 
 The local browser flow is simple: enter an IDX ticker, watch the agents work, then review the market-intelligence view, the company update and the agent trace.
@@ -18,7 +32,7 @@ The builder shows Buy, Hold or Sell and a target price only when the selected me
 
 From the repository root, copy `.env.example` to `.env` and set `MINIMAX_API_KEY` (or `SEKTORAL_LLM_API_KEY`) for the research agent. Never commit `.env` or share it in a recording. The workflow uses the local Sectors cache and does not need a Sectors API key at run time.
 
-The quickest start is Docker, which builds the React app and runs it with the Python API and Chromium for PDFs in one image:
+The quickest start is Docker, which builds the React app and runs it with the Python API and Chromium for PDFs in one image. The port is published on localhost only, and anyone who opens it may start a live run with your LLM key (`SECTORAL_LIVE_RUNS=open`, the default; see below for a public deployment):
 
 ```bash
 docker compose up --build
@@ -31,6 +45,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/
 npm --prefix web ci && npm --prefix web run build
 .venv/bin/python -m app.server
 ```
+
+Run the tests with `.venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest -q` and `npm --prefix web test`.
 
 For frontend work, run `npm --prefix web run dev` next to the server; Vite serves the app on port 5173 and proxies `/api` and `/files` to it.
 
@@ -82,7 +98,7 @@ Every report also carries sections built directly from the local Sectors snapsho
 - A report that passes its Release Gate is eligible for review, not yet published. The review panel on `/laporan/<T>/jejak` requires a complete 15-area attestation and binds the approval to the exact manifest and HTML/PDF/trace hashes. The configured reviewer identity comes from a per-person `SECTORAL_REVIEWERS` JSON registry, never from a name entered in the browser. Keep raw tokens in a secret manager; store only their SHA-256 digests in the registry. Only `reviewer` and `compliance` roles can approve; an `analyst` role can inspect the bundle but cannot approve it. Example registry entry: `[{"id":"reviewer-1","name":"Analyst Name","role":"reviewer","token_sha256":"<64 lowercase hex characters>"}]`. Create a digest with `python3 -c 'import getpass,hashlib; print(hashlib.sha256(getpass.getpass("Reviewer token: ").encode()).hexdigest())'`.
 - The local CLI `python -m app.assumption_review approve --folder out/reports --reviewer "Nama" --attestation review.json [--edit "path=value:alasan"] <T>` records a self-asserted identity for local audit only; it cannot make the report public. Numeric edits rebuild offline and return the bundle to review pending. A new run or changed artifact requires a fresh authenticated review.
 - A published report stays visible but is labelled stale when a newer official period is due under the OJK filing calendar or has been published. `python -m app.publication_monitor --folder out/reports` lists each report as current, stale or withdrawal due; add `--candidate-folder <rebuild>` to measure materiality (5% of FY1 earnings or value per share, 50bp CAR for banks, 5% NAV for miners) against a rebuilt replacement, and `--apply` with a reviewer or compliance token in `SECTORAL_MONITOR_TOKEN` to record due withdrawals. Rules and thresholds live in `app/release_policy.py` (policy 1.2.0).
-- Live research runs from the web spend LLM and Tavily credits. `SECTORAL_LIVE_RUNS` sets who may start one: `open` (anyone; the local default), `token` (only with `SECTORAL_RUN_TOKEN`; `compose.yaml` sets this for the public deployment) or `off`. Visitors without the token still pick a covered issuer and watch its stored run replayed step by step from the audit trace.
+- Live research runs from the web spend LLM and Tavily credits. `SECTORAL_LIVE_RUNS` sets who may start one: `open` (anyone; the local default), `token` (only with `SECTORAL_RUN_TOKEN`; set `SECTORAL_LIVE_RUNS=token` in `.env` for any public deployment) or `off`. Visitors without the token still pick a covered issuer and watch its stored run replayed step by step from the audit trace.
 
 ## Project map
 
@@ -93,7 +109,9 @@ Every report also carries sections built directly from the local Sectors snapsho
 | `Dockerfile`, `compose.yaml` | One image with the built web app, the Python API and Chromium for PDFs |
 | `agents/analyst/` | Planning analyst agent: local-data tools, peer/anomaly signals, hypothesis verdicts, run memory |
 | `agents/research/` | Cache-constrained research agent, evidence checks, and trace data |
-| `data/sectors_cache.db` | Local Sectors cache used as the only market-data source |
+| `data/sectors_cache.db` | Snapshot of Sectors REST v2 responses, the core data source of every run |
+| `app/sectors.py`, `app/topup.py` | Sectors REST v2 client and the top-up command that fills the snapshot (credits logged in `data/credit_log.jsonl`) |
+| `samples/` | Finished sample reports and audit traces |
 | `data/issuer_evidence/` | Dated local copies of metrics transcribed from official issuer releases |
 | `data/sectoral.db` | App database (git-ignored): agent memory, forecast plans, fetched news, peer and FX snapshots, and the report, trace and manifest of every run. Import older JSON caches with `python -m app.store_import`. Run outputs are keyed by folder relative to the project (`out/reports::AMMN`), so the host and the Docker image share them; rewrite keys written by older versions once with `python -m app.outputs --migrate --root /app --root <host checkout path>` |
 | `spec/` | Report and output requirements |
@@ -101,9 +119,15 @@ Every report also carries sections built directly from the local Sectors snapsho
 | `docs/hackathon/` | Rules, submission checklist, and team operations |
 | `docs/plans/` | Implementation plans and project planning notes |
 
-## Sectors API and MCP reference
+## How Sectors data powers Sektoral
 
-The product's demo path reads the local cache. The API and MCP guides below are reference material for cache intake and other Sectors integrations; do not imply that the integrated report run calls an upstream endpoint live.
+Sectors is Sektoral's core data source; without it the agents have no tools and the report builder has no financials. `app/sectors.py` is a Sectors REST v2 client (`https://api.sectors.app/v2`), and `python -m app.topup <package> <target> --live` uses it to fetch the endpoints a ticker needs into `data/sectors_cache.db`. Every upstream call is recorded in `data/credit_log.jsonl`. The committed snapshot holds 314 responses from 150 endpoints, fetched 12 to 23 September 2026, across the `company`, `financials`, `daily`, `index-daily`, `foreign-flow`, `broker-summary`, `subsector(s)`, `mining`, `filings`, `news`, `close`, `listing-performance` and `suspensions` families.
+
+Research runs then read that snapshot instead of calling Sectors live. A run is reproducible, it spends no Sectors credits, and the release gate (`app/release.py`) blocks a rating unless the reported actuals cite a `sectors_cache` row or an official issuer release. The analyst agent's tools (`find_peers`, `rank_peers`, `quarterly_financials`, `price_history`, `foreign_flow`, `valuation_history`, `news`) are thin wrappers over these Sectors resources.
+
+### Sectors API and MCP reference
+
+The guides below are reference material for snapshot intake and other Sectors integrations.
 
 - [Sectors API and MCP overview](docs/sectors-api-and-mcp.md)
 - [MCP setup](docs/mcp/setup.md) and [tool catalogue](docs/mcp/tools.md)
@@ -114,3 +138,19 @@ The product's demo path reads the local cache. The API and MCP guides below are 
 ## Hackathon submission
 
 The declared track is **AI Agents & Assistants**: custom-built agent logic and an AI/LLM component must be central to the product. Before submission, check the [official rules](https://hackathon.sectors.app/rules) and [track requirements](https://hackathon.sectors.app/tracks/ai-agents-assistants), then use the [submission checklist](docs/hackathon/submission-checklist.md). The repository must be public at submission and remain public through at least 15 January 2027 (90 days after the announced 17 October winners date). Submissions close 8 October 2026, 23:59 WIB.
+
+The repository was created on 22 September 2026, inside the 19 August to 8 October build period. Part of the code and the Sectors snapshot (`data/README.md`) came from this team's earlier in-period repository `mrayhanfadil/sectors-hackathon`, created 29 August 2026 for the same hackathon.
+
+## Data sources and attribution
+
+- **Sectors Financial API** ([sectors.app](https://sectors.app)): company profiles, financials, prices, IHSG, foreign flow, broker summary, sub-sector reports, filings and news. This is the core data source.
+- **Issuer releases** (`data/issuer_evidence/`): metrics transcribed from official IDX filings, each with its source link and date.
+- **Yahoo Finance via `yfinance`** (`app.refresh`): dated closes, USD/IDR, the US 10-year Treasury yield, commodity prices and peer snapshots, stored with their dates.
+- **Consensus estimates** (`data/consensus/`): dated Investing.com snapshots, shown beside the model's target for comparison and cited by URL.
+- **News** (Tavily search and cited outlets): headlines and article text used only as dated context. Each item is cited by URL, and no number is taken from it.
+
+## Disclaimer
+
+**INFORMASI, BUKAN SARAN INVESTASI.** Sektoral adalah alat informasi dan analisis data pasar modal Indonesia berdasarkan data dari Sectors Financial API. Rating dan target harga di laporan adalah hasil model bersyarat atas asumsi dan sumber yang dinyatakan, bukan rekomendasi, prediksi, atau saran investasi. Keputusan investasi sepenuhnya tanggung jawab pembaca. Selalu lakukan riset mandiri dan konsultasikan dengan penasihat keuangan berlisensi sebelum berinvestasi. Kinerja masa lalu tidak menjamin hasil di masa depan. Data bersumber dari Sectors (https://sectors.app) dan IDX; akurasinya tunduk pada kualitas data sumber.
+
+**INFORMATION, NOT INVESTMENT ADVICE.** Sektoral is an information and analysis tool for Indonesian capital-market data sourced from the Sectors Financial API. The ratings and target prices in its reports are conditional model outputs of stated assumptions and sources, not recommendations, predictions or investment advice. Investment decisions are the reader's sole responsibility. Always do independent research and consult a licensed financial advisor before investing. Past performance does not guarantee future results. Data is sourced from Sectors (https://sectors.app) and IDX; its accuracy is subject to source quality. Sektoral is not connected to any broker and does not execute trades.
