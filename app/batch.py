@@ -68,7 +68,7 @@ def run_one(ticker, args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Parallel Sektoral research runs")
+    parser = argparse.ArgumentParser(description="Parallel Sectoral research runs")
     parser.add_argument("tickers", nargs="+")
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument("--out", default="out/batch")

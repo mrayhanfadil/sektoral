@@ -19,8 +19,8 @@ export default function NotFound() {
           <h1 className="text-[28px] font-black tracking-[-.02em]">{t({ id: "Halaman tidak ditemukan", en: "Page not found" })}</h1>
           <p className="mt-2 text-ink-soft">
             {t({
-              id: "Alamat ini tidak ada di Sektoral. Mulai riset emiten baru di deck, atau buka company update yang sudah terbit.",
-              en: "This address does not exist on Sektoral. Start research on a new issuer in the deck, or open a published company update.",
+              id: "Alamat ini tidak ada di Sectoral. Mulai riset emiten baru di deck, atau buka company update yang sudah terbit.",
+              en: "This address does not exist on Sectoral. Start research on a new issuer in the deck, or open a published company update.",
             })}
           </p>
           <div className="mt-6 flex flex-wrap gap-2.5 max-sm:flex-col">

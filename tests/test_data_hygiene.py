@@ -174,7 +174,7 @@ def test_render_no_long_dashes_u2013_u2014():
     doc = {
         "meta": {
             "ticker": "TEST",
-            "emiten": "PT Uji Sektoral",
+            "emiten": "PT Uji Sectoral",
             "tanggal": "2026-09-23",
             "harga_tanggal": "2026-09-23",
             "harga": 1500,
@@ -218,7 +218,7 @@ def test_render_no_long_dashes_u2013_u2014():
                         ["EBITDA", "300", "350", "400", "450"],
                     ],
                 },
-                "catatan_sumber": "Sumber: Laporan Keuangan \u2014 diolah oleh Sektoral",
+                "catatan_sumber": "Sumber: Laporan Keuangan \u2014 diolah oleh Sectoral",
             }
         ],
         "bagian": [],

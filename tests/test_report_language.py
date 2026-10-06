@@ -23,18 +23,18 @@ GOLDEN = Path(__file__).resolve().parent / "fixtures" / "render_id_golden.html"
 def _doc():
     """A small report document with every exhibit type and page layout."""
     key_fin = {"n": 2, "judul": "Key Financials", "tipe": "tabel", "exhibit_id": "key_financials",
-               "catatan_sumber": "Source: Company, Sektoral Estimates",
+               "catatan_sumber": "Source: Company, Sectoral Estimates",
                "data": {"cols": ["Tahun buku 31 Des", "2024", "2025", "FY26F"],
                         "rows": [["Pendapatan (Rp miliar)", "1.234,5", "1.300,0", "1.450,2"],
                                  ["Laba bersih (Rp miliar)", "(12,0)", "98,7", "120,4"],
                                  ["PER (x)", "n.m.", "12,8x", "belum dimodelkan"]]}}
     chain = {"n": 3, "judul": "Rantai metode valuasi", "tipe": "tabel", "exhibit_id": "method_chain",
-             "catatan_sumber": "Source: Sektoral Estimates",
+             "catatan_sumber": "Source: Sectoral Estimates",
              "data": {"cols": ["Metode", "Keputusan", "Nilai/saham", "Alasan"],
                       "rows": [["1. DCF FCFF (utama)", "Terpilih", "Rp1.200", "input lengkap"],
                                ["2. PER relatif", "Silang cek", "Rp1.050", "peer PER valid kurang dari tiga"]]}}
     sens = {"n": 4, "judul": "Sensitivitas nilai DCF: WACC x pertumbuhan terminal", "tipe": "tabel",
-            "catatan_sumber": "Source: Sektoral Estimates",
+            "catatan_sumber": "Source: Sectoral Estimates",
             "data": {"cols": ["WACC", "g 2,5%", "g 3,5% (basis)", "g 4,5%"],
                      "rows": [["WACC 9,9%", "Rp1.300", "Rp1.350", "Rp1.420"],
                               ["WACC 10,9% (basis)", "Rp1.150", "Rp1.200", "Rp1.260"],

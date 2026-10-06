@@ -174,9 +174,9 @@ def exhibit(ticker, as_of, va, data=None):
                     f"{b['weeks']} weekly returns against the JCI since {b['start']})")
                  if b else _t("riwayat harga IDX kurang dari satu tahun",
                               "less than one year of IDX price history"),
-                 f"regresi Sektoral, harga IDX s.d. {b['end']}" if b else "-"])
+                 f"regresi Sectoral, harga IDX s.d. {b['end']}" if b else "-"])
     if b:
-        sources.append(f"beta: regresi Sektoral atas {b['source']}")
+        sources.append(f"beta: regresi Sectoral atas {b['source']}")
     if usd:
         rows.append(["Equity risk premium (mature market)", pct(rates["erp"]),
                      f"{pct(erp['value'], 2)}: {_src(erp['label'])}" if erp else
@@ -226,7 +226,7 @@ def exhibit(ticker, as_of, va, data=None):
             "data": {"cols": ["Parameter", "Kebijakan", "Pembanding", "Sumber, tanggal"],
                      "rows": rows},
             "catatan_sumber": (
-                "Sumber: Sektoral Estimates. Nilai kebijakan adalah parameter analis yang dipakai "
+                "Sumber: Sectoral Estimates. Nilai kebijakan adalah parameter analis yang dipakai "
                 f"valuasi ({rates.get('method') or 'metode terpilih'}); pembanding ditampilkan "
                 "agar selisihnya terlihat, bukan untuk dirata-rata. "
                 + "; ".join(sources) + ". Pembanding bertanggal sesudah tanggal laporan tidak "

@@ -1063,7 +1063,7 @@ def attestation_draft(folder, ticker, db=None) -> dict | None:
     return {
         "checklist": checks,
         "disclosures": {
-            "author_role": "Pipeline model Sektoral (build otomatis), bukan analis manusia",
+            "author_role": "Pipeline model Sectoral (build otomatis), bukan analis manusia",
             "scope_limitations": (f"Review atas bundle publikasi {meta.get('tanggal') or '-'}: register "
                                   "bukti, ledger saham dan normalisasi, uji otomatis dan batasan "
                                   "yang tercatat; bukan audit laporan keuangan."),

@@ -81,7 +81,7 @@ function DeckBar() {
       </a>
       <header className="sticky top-0 z-50 border-b border-rule bg-surface">
         <div className="wrap flex h-[52px] items-center gap-5 max-sm:gap-2">
-          <Link to="/" aria-label={t({ id: "Sektoral, beranda", en: "Sektoral, home" })} className="flex-none">
+          <Link to="/" aria-label={t({ id: "Sectoral, beranda", en: "Sectoral, home" })} className="flex-none">
             <Logo className="h-[22px] max-sm:h-[19px]" />
           </Link>
           <nav aria-label={t({ id: "Navigasi utama", en: "Main navigation" })} className="flex h-full min-w-0 items-stretch gap-1 max-sm:ml-auto max-sm:gap-0 max-sm:overflow-x-auto max-sm:[scrollbar-width:none]">
@@ -132,8 +132,8 @@ function SiteFooter() {
         <p className="max-w-[88ch] text-[13.5px] text-ink-soft">
           <strong className="text-ink">{t({ id: "Bukan rekomendasi investasi.", en: "Not investment advice." })}</strong>{" "}
           {t({
-            id: "Sektoral menyajikan informasi dan analisis untuk mendukung kerja analis. Rating dan target harga hanya muncul bila pemeriksaan rilis yang memblokir lolos; forecast berbasis asumsi dan temuan yang ditandai diberi label di laporan. Sektoral tidak terhubung ke broker dan tidak mengeksekusi transaksi. Keputusan investasi tetap tanggung jawab pembaca.",
-            en: "Sektoral provides information and analysis to support analysts' work. A rating and target price appear only when the blocking release checks pass; an assumption-led forecast and flagged findings are labelled in the report. Sektoral is not connected to any broker and does not execute trades. Investment decisions remain the reader's responsibility.",
+            id: "Sectoral menyajikan informasi dan analisis untuk mendukung kerja analis. Rating dan target harga hanya muncul bila pemeriksaan rilis yang memblokir lolos; forecast berbasis asumsi dan temuan yang ditandai diberi label di laporan. Sectoral tidak terhubung ke broker dan tidak mengeksekusi transaksi. Keputusan investasi tetap tanggung jawab pembaca.",
+            en: "Sectoral provides information and analysis to support analysts' work. A rating and target price appear only when the blocking release checks pass; an assumption-led forecast and flagged findings are labelled in the report. Sectoral is not connected to any broker and does not execute trades. Investment decisions remain the reader's responsibility.",
           })}
         </p>
         <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-ink-soft">
@@ -144,7 +144,7 @@ function SiteFooter() {
             <Link to="/#cara-kerja">{t({ id: "Cara kerja", en: "How it works" })}</Link>
             <Link to="/#batasan">{t({ id: "Batasan", en: "Limits" })}</Link>
           </nav>
-          <span>{t({ id: "© 2026 Sektoral, dibuat untuk Sectors Hackathon 2026", en: "© 2026 Sektoral, built for Sectors Hackathon 2026" })}</span>
+          <span>{t({ id: "© 2026 Sectoral, dibuat untuk Sectors Hackathon 2026", en: "© 2026 Sectoral, built for Sectors Hackathon 2026" })}</span>
         </div>
       </div>
     </footer>

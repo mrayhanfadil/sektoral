@@ -53,7 +53,7 @@
  },
  "INET": {
   "checked_at": "2026-09-26",
-  "missing": "network and subscriber volumes and prices (homes passed, ports, subscribers, ARPU or lease rates per segment); the operating model needs volume x price per segment, so the peer EV/EBITDA method stays primary (Sektoral Team decision D6)",
+  "missing": "network and subscriber volumes and prices (homes passed, ports, subscribers, ARPU or lease rates per segment); the operating model needs volume x price per segment, so the peer EV/EBITDA method stays primary (Sectoral Team decision D6)",
   "checked": [
    {
     "title": "PT Sinergi Inti Andalan Prima Tbk Consolidated Financial Statements as of June 30, 2026 (audited)",

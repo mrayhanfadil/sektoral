@@ -88,7 +88,7 @@ def _doc():
                     "Sumber: rilis 1H26, hlm. 3; https://issuer.example/blobs/proxy/abc/"
                     "H1%202026%20RELEASE.pdf?disposition=inline. Angka turunan, bukan final.")
     small_b = table(3, "Rasio", ["Rasio", "1H25", "1H26"],
-                    [["Marjin bersih", "10,0%", "10,0%"]], "Source: Company, Sektoral Estimates")
+                    [["Marjin bersih", "10,0%", "10,0%"]], "Source: Company, Sectoral Estimates")
     prose = table(4, "Ketentuan", ["Pengungkapan", "Dampak pada forecast"],
                   [["Harga provisional", "Konsentrat dan katoda awalnya dicatat pada harga "
                     "provisional; pengakuan revenue tetap mensyaratkan delivery dan title "
@@ -121,12 +121,12 @@ def test_every_exhibit_footer_is_the_house_line_and_detail_moves_to_the_appendix
             "?disposition=inline'") in appendix
     assert ">issuer.example/…/H1 2026 RELEASE.pdf</a>." in appendix
     # An exhibit whose note is only the house line still gets an entry.
-    assert "Exhibit 3. Rasio</dt><dd>Data perusahaan dan estimasi Sektoral.</dd>" in appendix
+    assert "Exhibit 3. Rasio</dt><dd>Data perusahaan dan estimasi Sectoral.</dd>" in appendix
 
 
 def test_provenance_detail_strips_the_house_line():
-    assert fmt.provenance_detail("Source: Company, Sektoral Estimates") == ""
-    assert fmt.provenance_detail("Source: Sectors, Sektoral Estimates") == "Sectors"
+    assert fmt.provenance_detail("Source: Company, Sectoral Estimates") == ""
+    assert fmt.provenance_detail("Source: Sectors, Sectoral Estimates") == "Sectors"
     assert fmt.provenance_detail("Sumber: rilis 1H26; hlm. 3") == "rilis 1H26; hlm. 3"
     assert fmt.house_source_line("Sumber: rilis 1H26") == HOUSE + "; rilis 1H26"
 
@@ -270,7 +270,7 @@ def test_a_table_with_nm_prints_only_the_nm_reason_under_the_source_line():
 
 
 def test_nm_note_takes_the_nm_clause_of_a_multi_clause_sentence():
-    note = ("Sumber: grup peer kurasi Sektoral; per 2026-09-25; P/E negatif tidak diperingkat; "
+    note = ("Sumber: grup peer kurasi Sectoral; per 2026-09-25; P/E negatif tidak diperingkat; "
             "rasio di atas 500% ditulis n.m. karena basis sangat kecil. Median memakai peer valid.")
     assert render._nm_note({"catatan_sumber": note}) == (
         "<p class='nm-note'>rasio di atas 500% ditulis n.m. karena basis sangat kecil.</p>")

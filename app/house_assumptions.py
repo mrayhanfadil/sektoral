@@ -29,8 +29,8 @@ _POLICY = {
     "documented_as_of": DOCUMENTED_AS_OF,
     "status": "approved_not_independently_validated",
     "effective_from": "2026-09-26",
-    "effective_date_note": "Approved by the Sektoral Team on 2026-09-26 for Report Dates on or after that date; earlier runs used the same values without an approved policy.",
-    "approved_by": "Sektoral Team",
+    "effective_date_note": "Approved by the Sectoral Team on 2026-09-26 for Report Dates on or after that date; earlier runs used the same values without an approved policy.",
+    "approved_by": "Sectoral Team",
     "approved_at": "2026-09-26",
     "discount_rates": {
         "IDR": {
@@ -131,7 +131,7 @@ _POLICY = {
     "production_validation": {
         "status": "approved",
         "approval_required": True,
-        "approved_by": "Sektoral Team",
+        "approved_by": "Sectoral Team",
         "effective_from": "2026-09-26",
         "independent_reference_validation": "per_run",
         "independent_reference_basis": "app.reference_fcff (going concern); other profiles have none yet",
@@ -139,7 +139,7 @@ _POLICY = {
         "terminal_economics_basis": "app.terminal_economics on the selected valuation of each run",
         "review_owner": "research_governance",
     },
-    "terminal_restatement": "An FCFF terminal that fails the reinvestment or return-on-new-capital check is restated to NOPAT x (1 - g / RONIC) at the ceiling return (decided by the Sektoral Team on 2026-09-26); a rate or currency failure is labelled, not restated.",
+    "terminal_restatement": "An FCFF terminal that fails the reinvestment or return-on-new-capital check is restated to NOPAT x (1 - g / RONIC) at the ceiling return (decided by the Sectoral Team on 2026-09-26); a rate or currency failure is labelled, not restated.",
     "unresolved": [
         "whether and when dated benchmark observations replace or only challenge policy inputs",
         "whether issuer-specific betas or costs of debt may deviate from the uniform policy, and who approves them",

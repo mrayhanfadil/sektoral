@@ -260,7 +260,7 @@ def _method_examples():
         (source("sectors", "yahoo", None), "Sectors data and Yahoo Finance and unrecorded sources"),
         (source("yahoo"), "Yahoo Finance"),
         (source(), "no peers"),
-        (method_chain.peer_multiple_source({"peer_basis": "grup peer kurasi Sektoral"}),
+        (method_chain.peer_multiple_source({"peer_basis": "grup peer kurasi Sectoral"}),
          "curated Peer Group (Sectors peer table and Yahoo Finance snapshots)"),
     ]
 
@@ -422,7 +422,7 @@ def _investability_examples():
          "suspension status and special notations are not in the data; normal trading is not "
          "assumed"),
         (reasons["governance"],
-         "unanswered: the Sektoral Team has not yet set an acceptable dated source for governance "
+         "unanswered: the Sectoral Team has not yet set an acceptable dated source for governance "
          "assessments (decision D8, 2026-09-26)"),
         (reasons["pricing_power"],
          "unanswered: not yet reviewed; the business-quality file holds no dated evidence for "

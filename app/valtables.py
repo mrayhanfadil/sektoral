@@ -17,7 +17,7 @@ from . import fmt
 from . import valuation as _valuation
 
 
-def _exhibit(judul, cols, rows, note="Source: Company, Sektoral Estimates", exhibit_id=None):
+def _exhibit(judul, cols, rows, note="Source: Company, Sectoral Estimates", exhibit_id=None):
     return {"n": None, "judul": judul, "tipe": "tabel",
             "data": {"cols": cols, "rows": rows},
             "catatan_sumber": note, "exhibit_id": exhibit_id}
@@ -182,7 +182,7 @@ def fcff_exhibit(intake, fc, val):
               [fmt.rp(val.get("dcf_blend", val["tp"]))])
     return _exhibit("Proyeksi FCFF, Nilai Terminal, dan Jembatan Nilai Skenario",
                     cols, R,
-                    "Source: Company, Sektoral Estimates; Delta NWC = plug "
+                    "Source: Company, Sectoral Estimates; Delta NWC = plug "
                     "penyeimbang; konvensi diskonto mid-year; silang cek "
                     "Gordon vs exit multiple tampil berdampingan", "fcff_bridge")
 
@@ -211,7 +211,7 @@ def wacc_exhibit(intake, fc, val):
         ["WACC", fmt.pct(val["wacc"])],
     ]
     return _exhibit("Komponen WACC", ["Komponen", "Nilai"], rows,
-                    "Source: Company, Sektoral Estimates; Rf = house policy parameter, compared with dated INDOGB 10Y in the policy benchmark table; "
+                    "Source: Company, Sectoral Estimates; Rf = house policy parameter, compared with dated INDOGB 10Y in the policy benchmark table; "
                     "ERP = Damodaran, Beta = Bloomberg; tanpa CRP ganda", "wacc_components")
 
 
@@ -238,7 +238,7 @@ def sens_matrix_5x3(intake, fc, val):
                  for gg in ggs]
         rows.append([lab] + cells)
     return _exhibit("Sensitivitas Nilai Skenario per Saham (Rp)", cols, rows,
-                    "Source: Sektoral Estimates; sel base (*) = skenario dasar; "
+                    "Source: Sectoral Estimates; sel base (*) = skenario dasar; "
                     "rerata Gordon + exit, basis skenario sama", "value_sensitivity")
 
 
@@ -273,7 +273,7 @@ def ddm_exhibits(payout, roae_fwd, bvps, coe, g=0.035):
     ]
     return _exhibit("Prakiraan Dividen, Nilai Terminal, dan Inverse CoE",
                     ["Uraian", "Nilai"], rows,
-                    "Source: Company, Sektoral Estimates; DDM = valuasi "
+                    "Source: Company, Sectoral Estimates; DDM = valuasi "
                     "ekuitas langsung, bukan WACC", "ddm_bridge")
 
 
@@ -308,5 +308,5 @@ def rnav_exhibits(assets, cash, debt, overhead, shares, discount):
     ]
     return _exhibit("Rincian Aset dan Jembatan RNAV", ["Uraian", "Nilai"],
                     rows,
-                    "Source: Company, Sektoral Estimates; diskon RNAV = "
+                    "Source: Company, Sectoral Estimates; diskon RNAV = "
                     "judgment analis", "rnav_bridge")

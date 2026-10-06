@@ -46,7 +46,7 @@ The product is a Sectors Hackathon 2026 submission in the AI Agents & Assistants
 
 ## Brand Commitments
 
-The product name is **Sectoral**. The repository and some report source lines still say "Sektoral" (for example "Sektoral Estimates"); those are known inconsistencies to fix, not a second name.
+The product name is **Sectoral**, in the UI, reports, wordmark and docs. Only the repository URL (`mrayhanfadil/sektoral`) and a few internal identifiers (`SEKTORAL_LLM_*` variables) keep the older spelling.
 
 The supplied Sectoral Design System sets primary blue `#0928B1`, white `#FFFFFF`, charcoal `#333333`, rule gray `#D9D9D9`, even table row `#B4C7FF`, Roboto typography, and chart series `#0928B1`, `#B4C7FF`, `#3ED628`, `#1DCD9F`, `#0047AB`, `#7596FF`. The wordmark uses an E-shaped three-bar mark in blue, teal, and green followed by `CTORAL`.
 

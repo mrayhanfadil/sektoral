@@ -17,7 +17,7 @@ from app.harness import template as T  # noqa: E402
 
 YEARS = ["2024A", "2025A", "FY26F", "FY27F", "FY28F"]
 FC5 = ["FY26F", "FY27F", "FY28F", "FY29F", "FY30F"]
-SRC = "Source: Company, Sektoral Estimates"
+SRC = "Source: Company, Sectoral Estimates"
 
 
 def idn(v, dec=0):

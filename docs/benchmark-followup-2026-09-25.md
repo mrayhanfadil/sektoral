@@ -1,17 +1,17 @@
 # Benchmark terhadap riset broker: GMFI, BBCA, SIDO (lanjutan e2e 25 September 2026)
 
-Lanjutan dari `docs/e2e-self-review-2026-09-25.md` (benchmark AMMN ada di sana). Target Sektoral di sini adalah hasil rebuild sesudah rencana perbaikan 1.1 (batas modal bank), 1.2, 2.1 dan 3.2 (POWR US$), tanggal laporan 24 September 2026. Setiap selisih digolongkan sebagai **data** (angka sumber salah atau berbeda), **metodologi** (cara menilai berbeda) atau **asumsi** (input berbeda pada metode yang sama). Aturan rencana: setiap selisih di atas 20% target harus dijelaskan atau diperbaiki.
+Lanjutan dari `docs/e2e-self-review-2026-09-25.md` (benchmark AMMN ada di sana). Target Sectoral di sini adalah hasil rebuild sesudah rencana perbaikan 1.1 (batas modal bank), 1.2, 2.1 dan 3.2 (POWR US$), tanggal laporan 24 September 2026. Setiap selisih digolongkan sebagai **data** (angka sumber salah atau berbeda), **metodologi** (cara menilai berbeda) atau **asumsi** (input berbeda pada metode yang sama). Aturan rencana: setiap selisih di atas 20% target harus dijelaskan atau diperbaiki.
 
 ## Ringkasan
 
-| Emiten | Sektoral | Pembanding | Selisih terhadap pembanding | Penyebab utama | Golongan |
+| Emiten | Sectoral | Pembanding | Selisih terhadap pembanding | Penyebab utama | Golongan |
 |---|---|---|---|---|---|
 | GMFI | Buy Rp103 | BRI Danareksa (Kompas Saham), Buy Rp88, 24 Sep 2026 | +17% | g 3,0% vs 2,5%, WACC 9,3% vs 9,6%, terminal Gordon penuh vs campuran 50/50 dengan exit 7,0x; sebagian tertutup margin EBITDA broker yang lebih tinggi | asumsi dan metodologi |
 | BBCA | Hold Rp6.575 | BRI Danareksa dan Mandiri, Buy Rp8.600, 29 Jul 2026 | −24% | CoE: CAPM kebijakan 10,9% vs band CoE broker (rata-rata dikurangi 1 SD); Rp8.600 membutuhkan CoE sekitar 9,2% pada g 3,5% di model kami | asumsi (tingkat diskonto) |
 | SIDO | Buy Rp448 | Kiwoom, Hold Rp394; Panin, Rp650; 9 Sep 2026 | +14% vs Kiwoom; −31% vs Panin | Panin adalah pandangan kepala cabang tanpa metode tertulis; Kiwoom lebih rendah karena menilai 2026 sebagai tahun penurunan penuh | asumsi (tahun pemulihan) |
 | AMMN | Sell Rp2.830 | BRI Danareksa, 29 Jun 2026 (lihat e2e) | jauh di bawah | Elang, izin ekspor, horizon lisensi | metodologi dan asumsi |
 
-Tidak ada selisih yang berasal dari kesalahan data Sektoral.
+Tidak ada selisih yang berasal dari kesalahan data Sectoral.
 
 ## GMFI: Kompas Saham (BRI Danareksa), Buy Rp88
 
@@ -23,7 +23,7 @@ Sumber: *Kompas Saham Retail Research Insight, GMFI IJ*, 24 September 2026 (`spe
 
 | Langkah | Nilai per saham |
 |---|---|
-| Target Sektoral (WACC 9,3%, g 3,0%, terminal Gordon) | Rp103 |
+| Target Sectoral (WACC 9,3%, g 3,0%, terminal Gordon) | Rp103 |
 | g 2,5% seperti broker | Rp94 (−9) |
 | WACC 9,6% seperti broker | Rp89 (−5) |
 | Terminal 50% Gordon, 50% exit EV/EBITDA 7,0x seperti broker | Rp75 (−14) |

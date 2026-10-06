@@ -1,8 +1,8 @@
-# Sektoral
+# Sectoral
 
-Sektoral helps Indonesian equity analysts turn fragmented company data into a sourced company update, while showing what the evidence supports and where it is still incomplete.
+Sectoral helps Indonesian equity analysts turn fragmented company data into a sourced company update, while showing what the evidence supports and where it is still incomplete.
 
-> **INFORMATION, NOT INVESTMENT ADVICE.** Sektoral is an information and analysis tool built on the Sectors Financial API. Its ratings and target prices are conditional model outputs, not recommendations. See [Disclaimer](#disclaimer).
+> **INFORMATION, NOT INVESTMENT ADVICE.** Sectoral is an information and analysis tool built on the Sectors Financial API. Its ratings and target prices are conditional model outputs, not recommendations. See [Disclaimer](#disclaimer).
 
 ## See it without running anything
 
@@ -119,9 +119,9 @@ Every report also carries sections built directly from the local Sectors snapsho
 | `docs/hackathon/` | Rules, submission checklist, and team operations |
 | `docs/plans/` | Implementation plans and project planning notes |
 
-## How Sectors data powers Sektoral
+## How Sectors data powers Sectoral
 
-Sectors is Sektoral's core data source; without it the agents have no tools and the report builder has no financials. `app/sectors.py` is a Sectors REST v2 client (`https://api.sectors.app/v2`), and `python -m app.topup <package> <target> --live` uses it to fetch the endpoints a ticker needs into `data/sectors_cache.db`. Every upstream call is recorded in `data/credit_log.jsonl`. The committed snapshot holds 314 responses from 150 endpoints, fetched 12 to 23 September 2026, across the `company`, `financials`, `daily`, `index-daily`, `foreign-flow`, `broker-summary`, `subsector(s)`, `mining`, `filings`, `news`, `close`, `listing-performance` and `suspensions` families.
+Sectors is Sectoral's core data source; without it the agents have no tools and the report builder has no financials. `app/sectors.py` is a Sectors REST v2 client (`https://api.sectors.app/v2`), and `python -m app.topup <package> <target> --live` uses it to fetch the endpoints a ticker needs into `data/sectors_cache.db`. Every upstream call is recorded in `data/credit_log.jsonl`. The committed snapshot holds 314 responses from 150 endpoints, fetched 12 to 23 September 2026, across the `company`, `financials`, `daily`, `index-daily`, `foreign-flow`, `broker-summary`, `subsector(s)`, `mining`, `filings`, `news`, `close`, `listing-performance` and `suspensions` families.
 
 Research runs then read that snapshot instead of calling Sectors live. A run is reproducible, it spends no Sectors credits, and the release gate (`app/release.py`) blocks a rating unless the reported actuals cite a `sectors_cache` row or an official issuer release. The analyst agent's tools (`find_peers`, `rank_peers`, `quarterly_financials`, `price_history`, `foreign_flow`, `valuation_history`, `news`) are thin wrappers over these Sectors resources.
 
@@ -151,6 +151,6 @@ The repository was created on 22 September 2026, inside the 19 August to 8 Octob
 
 ## Disclaimer
 
-**INFORMASI, BUKAN SARAN INVESTASI.** Sektoral adalah alat informasi dan analisis data pasar modal Indonesia berdasarkan data dari Sectors Financial API. Rating dan target harga di laporan adalah hasil model bersyarat atas asumsi dan sumber yang dinyatakan, bukan rekomendasi, prediksi, atau saran investasi. Keputusan investasi sepenuhnya tanggung jawab pembaca. Selalu lakukan riset mandiri dan konsultasikan dengan penasihat keuangan berlisensi sebelum berinvestasi. Kinerja masa lalu tidak menjamin hasil di masa depan. Data bersumber dari Sectors (https://sectors.app) dan IDX; akurasinya tunduk pada kualitas data sumber.
+**INFORMASI, BUKAN SARAN INVESTASI.** Sectoral adalah alat informasi dan analisis data pasar modal Indonesia berdasarkan data dari Sectors Financial API. Rating dan target harga di laporan adalah hasil model bersyarat atas asumsi dan sumber yang dinyatakan, bukan rekomendasi, prediksi, atau saran investasi. Keputusan investasi sepenuhnya tanggung jawab pembaca. Selalu lakukan riset mandiri dan konsultasikan dengan penasihat keuangan berlisensi sebelum berinvestasi. Kinerja masa lalu tidak menjamin hasil di masa depan. Data bersumber dari Sectors (https://sectors.app) dan IDX; akurasinya tunduk pada kualitas data sumber.
 
-**INFORMATION, NOT INVESTMENT ADVICE.** Sektoral is an information and analysis tool for Indonesian capital-market data sourced from the Sectors Financial API. The ratings and target prices in its reports are conditional model outputs of stated assumptions and sources, not recommendations, predictions or investment advice. Investment decisions are the reader's sole responsibility. Always do independent research and consult a licensed financial advisor before investing. Past performance does not guarantee future results. Data is sourced from Sectors (https://sectors.app) and IDX; its accuracy is subject to source quality. Sektoral is not connected to any broker and does not execute trades.
+**INFORMATION, NOT INVESTMENT ADVICE.** Sectoral is an information and analysis tool for Indonesian capital-market data sourced from the Sectors Financial API. The ratings and target prices in its reports are conditional model outputs of stated assumptions and sources, not recommendations, predictions or investment advice. Investment decisions are the reader's sole responsibility. Always do independent research and consult a licensed financial advisor before investing. Past performance does not guarantee future results. Data is sourced from Sectors (https://sectors.app) and IDX; its accuracy is subject to source quality. Sectoral is not connected to any broker and does not execute trades.

@@ -134,7 +134,7 @@ def _fetch_html(url: str) -> tuple[str, str]:
         raise ValueError("unsupported URL scheme")
     request = urllib.request.Request(
         str(url),
-        headers={"User-Agent": "Sektoral-deepdive/1.0 (+local research)",
+        headers={"User-Agent": "Sectoral-deepdive/1.0 (+local research)",
                  "Accept": "text/html,application/xhtml+xml"},
         method="GET",
     )

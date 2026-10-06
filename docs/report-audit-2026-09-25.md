@@ -18,7 +18,7 @@ The baseline arithmetic was generally reproducible, but it carried shared templa
 | Repo created in build period, no previous-project code (§05) | Pass for observed history; provenance caveat | `sektoral` first commit `2160fdc` is 2026-09-22 23:02 WIB; first report-pipeline commit is also 22 Sep. The `docs/integration/` and `data/sectors_cache.db` imports are documentation/data snapshots from `sectors-hackathon`, dated 29 Aug (inside the build period). Confirm they contain no code/work from a separate prior project; date alone does not satisfy the no-previous-project-work rule. |
 | Public repository, public for ≥90 days after 17 Oct (§08) | **Unverified blocker** | Baseline `gh repo view` reported PRIVATE; the 26 Sep check failed to connect to GitHub. The repository must be public at submission and stay public through 15 Jan 2027. |
 | No API keys in repo (§08) | Pass | No key patterns in HEAD or history. The `eyJ…` hits are Rails blob IDs in amman.co.id URLs, not JWTs. `.env` was never tracked. |
-| Sectors data is core, not decorative (§06) | Pass, with demo caveat | 314 cached Sectors responses cover all nine tickers and core report inputs. Rebuilt exhibit footers credit Sectors and Sektoral. The current demo is cache-backed; do not claim it makes a live upstream request. |
+| Sectors data is core, not decorative (§06) | Pass, with demo caveat | 314 cached Sectors responses cover all nine tickers and core report inputs. Rebuilt exhibit footers credit Sectors and Sectoral. The current demo is cache-backed; do not claim it makes a live upstream request. |
 | Working end-to-end prototype (§06) | Pass for HTML workflow | Nine current HTML reports and traces rebuild from pinned stored runs; all pass template/rendered-HTML checks. New PDF workflow is unverified because the browser renderer cannot launch here. |
 | AI/LLM custom agent at the core (track 01) | Pass | Planning analyst agent with its own tools, validators, run memory, forecast-assumption agents, method gates and run replay. This is not a wrapper around a stock client. |
 | No automated trade execution (§06) | Pass | No broker or order code in `app/`, `agents/` or `web/`. The footer states it too. |
@@ -46,11 +46,11 @@ These are template bugs: fixing the code fixes every report.
 | S10 | **One policy beta (1,10) for all nine issuers.** | Regression or Blume betas range from 0,25/0,49 (POWR) to 1,15/1,10 (AMMN). POWR's CoE is 12,1% against a 9,7% benchmark (−235 bp). | CAPM inputs |
 | S11 | **Two exchange rates for the same source and date.** | AMMN and GMFI use Rp17.837/US$ and POWR Rp17.893/US$, all cited as "Yahoo Finance IDR=X, 2026-09-24". | FX snapshot |
 | S12 | **The gallery mixes report dates.** | AMMN and JPFA are dated 25 Sep, the other seven 24 Sep. The consensus was fetched on 25 Sep, so only AMMN and JPFA show it; the rest say "tidak tersedia". JPFA reports 13 analysts but 14/0/0 recommendations. | batch `--as-of` |
-| S13 | **Sectors is never credited.** | "Source: Company, Sektoral Estimates" appears under pure-Sectors tables: peers, ownership, foreign flow, sub-sector, commodity. | exhibit footer |
+| S13 | **Sectors is never credited.** | "Source: Company, Sectoral Estimates" appears under pure-Sectors tables: peers, ownership, foreign flow, sub-sector, commodity. | exhibit footer |
 | S14 | **Stray glyphs in PDF footers.** | AMMN p3 "(   )", INET p6 "(   ) … See", POWR p5 "(   $)". | PDF render |
 | S15 | **Methodology note contradicts page 1.** | GMFI, JPFA and SIDO: "Exit EV/EBITDA historis emiten tampil berdampingan" vs "kurang dari tiga titik, sehingga cross-check exit tidak dihitung". | methodology block |
 | S16 | **Zero working capital in growing DCFs.** | GMFI and INET use 0,0% working-capital intensity because FY2025 non-cash WC was negative, while revenue grows 12–29% a year. | `forecast_statements` |
-| S17 | **Mixed languages and product names.** | "Public", "Treasury Stock"; English sentences in AMMN Exh. 50/51. The UI says "Sectoral" (29 occurrences) while the reports and README say "Sektoral" (87), next to a data partner called "Sectors". | copy |
+| S17 | **Mixed languages and product names.** | "Public", "Treasury Stock"; English sentences in AMMN Exh. 50/51. The UI says "Sectoral" (29 occurrences) while the reports and README say "Sectoral" (87), next to a data partner called "Sectors". | copy |
 
 ## 4. Anomalies by report
 
@@ -177,15 +177,15 @@ These are template bugs: fixing the code fixes every report.
 | S5 internal IDs, agent rationale, and bank FCFF checklist leaked to client copy | Shared prose is sanitized after enrichment; bank-specific gaps and calculated constraints replace conflicting agent text. Rebuilt HTML has no legacy “Kami menetapkan target” phrasing. |
 | S7 market-cap issuance was called peer outperformance | The narrative describes market-cap change and its share-count context without claiming outperformance. |
 | S9 Rupiah DCFs used the U.S. benchmark/extra CRP | Current IDR discount-rate code uses INDOGB and no separate CRP; JPFA and SIDO exhibits show the IDR policy inputs. The baseline labels are stale. US$ mine models retain UST + CRP. |
-| S13 Sectors was not credited | Shared exhibit footers now credit Sectors market/financial data, issuer disclosures, and Sektoral analysis/estimates. All rebuilt HTML passed the source-line check. |
+| S13 Sectors was not credited | Shared exhibit footers now credit Sectors market/financial data, issuer disclosures, and Sectoral analysis/estimates. All rebuilt HTML passed the source-line check. |
 | S15 methodology note claimed an unavailable exit multiple was shown | The note claims an exit EV/EBITDA cross-check only when the data exists. |
 | S16 zero working-capital intensity could read as a proven zero requirement | The report now says a negative or missing historical basis does not establish that future working-capital needs are zero. The 0.0% scenario assumption itself remains a model limitation. |
-| S17 mixed brand/product copy | Shared web labels use “Sektoral”; the source partner remains “Sectors”. |
+| S17 mixed brand/product copy | Shared web labels use “Sectoral”; the source partner remains “Sectors”. |
 | S6 cover quote differed from chart's final close | Current rebuilt HTML uses the same dated close in both places for all nine; price date is shown as 24 Sep 2026. The old-PDF status remains unverified. |
 | AMMN “PV overhead” was accused of representing one undiscounted year | The valuation sums annualized 1H26 general expense across each LoM year and discounts each year. The basis note now says so. The separate data-completeness wording still needs a page-by-page PDF review. |
 | SSIA projected non-controlling interest was called zero | Current forecast rolls forward the 30 Jun 2026 interim NCI balance and projected minority earnings. The baseline zero-NCI claim is stale. |
 | Published approval remained valid after the result changed (P1) | The fingerprint now covers plan, release state, model label and per-share value; old approvals become pending. Draft candidate values are withheld from the report body as well as the cover. |
-| Consensus exhibit exposed action ratings | The shared exhibit now compares the Sektoral model value with sourced consensus values without printing Buy/Hold/Sell recommendation counts. |
+| Consensus exhibit exposed action ratings | The shared exhibit now compares the Sectoral model value with sourced consensus values without printing Buy/Hold/Sell recommendation counts. |
 | `.env.example`, source credit, disclaimer and roster issues | Obsolete environment variables were removed; public copy calls the output information/analysis and a model scenario; the roster now uses the current registration deadline and repository name. Participant identity and onboarding remain unverified. |
 
 The baseline claim that BBCA's terminal payout “goes back” to its FY2025 historical payout is not a confirmed defect: the terminal policy computes sustainable payout as `1 - g / terminal-year ROE`, capped at historical payout. It is now disclosed separately from the yearly payouts. Because BBCA's final explicit-year payout is reduced by the capital constraint while its terminal payout rises, an analyst should still review whether that steady-state transition is appropriate.

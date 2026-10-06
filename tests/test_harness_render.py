@@ -33,7 +33,7 @@ def html(**over):
     parts = [f"<html><head><style>{o['css']}</style></head><body>",
              "<div class='report-header'><div class='report-title'>TEST IJ | BUY · TP Rp 1.200</div>"
              f"<div class='report-subtitle'>Equity Research - Company Update | {o['date']}</div>"
-             + ("<img class='report-wordmark' alt='Sektoral' src='x.png'>" if o["logo"] else "") + "</div>",
+             + ("<img class='report-wordmark' alt='Sectoral' src='x.png'>" if o["logo"] else "") + "</div>",
              "<div class='cover'><div class='left'>",
              "<div class='rating-row'><span>Harga Terakhir (Rp)</span><b>1.000</b></div>",
              "<div class='rating-row'><span>Target Harga (Rp)</span><b>1.200</b></div>",
@@ -42,7 +42,7 @@ def html(**over):
              "<svg class='price-chart'><title>akses</title><text>Nov-25</text><text>Jan-26</text>"
              "<text>Mar-26</text></svg>",
              f"<div class='info-src'>{s[0]}</div>",
-             f"<div class='analyst'><b>Tim Riset Sektoral</b><br>{o['analyst']}</div></div>",
+             f"<div class='analyst'><b>Tim Riset Sectoral</b><br>{o['analyst']}</div></div>",
              f"<div class='right'><h1 class='emit'>{o['h1']}</h1>",
              "<div class='exhibit'><table class='exhibit-table'>"
              f"<caption>Exhibit {n[1]}. Key Financials</caption>"

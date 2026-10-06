@@ -430,19 +430,19 @@ def _analyst(members, **extra):
     return {"plan": {"question": "Q"}, "market_date": "2026-09-22", "signals": [],
             "peers": {"basis": "peer dipilih menurut model bisnis; alasan tiap peer dan yang "
                                "dikeluarkan ada di paket grup", "group": "Perawatan pesawat (MRO)",
-                      "source": "grup peer kurasi Sektoral data/peer_groups/GMFI.json",
+                      "source": "grup peer kurasi Sectoral data/peer_groups/GMFI.json",
                       "members": [{"symbol": "GMFI", "is_self": True}]
                       + [{"symbol": s, "is_self": False} for s in members]}, **extra}
 
 
 PEER_DOC = {"exhibits": [
     {"judul": "Grup peer: alasan pemilihan", "data": {"rows": []},
-     "catatan_sumber": "Sumber: data/peer_groups/GMFI.json (kurasi Sektoral, 2026-09-25). "
+     "catatan_sumber": "Sumber: data/peer_groups/GMFI.json (kurasi Sectoral, 2026-09-25). "
                        "Peer hanya emiten BEI."},
     {"judul": "Perbandingan peer Jasa penerbangan di BEI, diperlebar dari MRO pesawat",
      "data": {"rows": [["Garuda Indonesia (GIAA)", "1"], ["Garuda Maintenance (GMFI) (emiten)", "2"],
                        ["Cahaya Aero Services (CASS)", "3"], ["Median peer (tanpa emiten)", "4"]]},
-     "catatan_sumber": "Sumber: grup peer kurasi Sektoral data/peer_groups/GMFI.json (tabel peer "
+     "catatan_sumber": "Sumber: grup peer kurasi Sectoral data/peer_groups/GMFI.json (tabel peer "
                        "Sectors GMFI) (peer dipilih menurut model bisnis); per 2026-09-24; kriteria"}]}
 
 

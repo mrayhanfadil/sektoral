@@ -177,7 +177,7 @@ Semua angka dari `va`/`fc`, nol konstanta baru.
 **Objective:** Cover menyatakan positioning D5 dalam 1 baris, bahasa awam.
 
 **Files:**
-- Modify: `app/render.py:208` (blok `Analis Sektoral<br>Tim Riset Sektoral`) — tambah 1 baris kecil: `Snapshot otomatis dari data cache — bukan riset inisiasi penuh`.
+- Modify: `app/render.py:208` (blok `Analis Sectoral<br>Tim Riset Sectoral`) — tambah 1 baris kecil: `Snapshot otomatis dari data cache — bukan riset inisiasi penuh`.
 
 **Step 1–3: Edit → rebuild → screenshot cover cold-read → commit.** (Tanpa test baru; string statis.)
 

@@ -142,7 +142,7 @@ def test_review_roles_and_permissions():
     assert may("reviewer", "approve") and may("compliance", "withdraw")
     assert not may("guest", "view_review")
     roles = release_policy.policy_snapshot()["review_roles"]
-    assert roles["policy_owner"] == "Sektoral Team"
+    assert roles["policy_owner"] == "Sectoral Team"
     assert roles["permissions"]["reviewer"] == ["approve", "view_review", "withdraw"]
 
 

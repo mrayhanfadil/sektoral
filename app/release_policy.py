@@ -702,7 +702,7 @@ _POLICY = {
 # calendar, and public staleness/withdrawal. The snapshot is filled from the
 # same constants the checks use, so the documented rule cannot drift from the
 # enforced one.
-_DECISION_OWNER = "Sektoral Team"
+_DECISION_OWNER = "Sectoral Team"
 for _name, _rules in MATERIALITY.items():
     _POLICY["profiles"][_name]["quantitative_materiality_threshold"] = {
         basis: {"unit": unit, "threshold": threshold, "inclusive": True,

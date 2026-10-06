@@ -17,7 +17,7 @@ from . import fmt, prose_lang
 from .prose_lang import t as _t
 
 ROOT = Path(__file__).resolve().parent.parent / "data" / "consensus"
-TITLE = "Target harga Sektoral dan konsensus analis"
+TITLE = "Target harga Sectoral dan konsensus analis"
 
 
 def load(ticker, as_of, root=ROOT):
@@ -43,10 +43,10 @@ def exhibit(ticker, as_of, target, rating, price, root=ROOT):
     """House target vs consensus, or a one-row table saying why it is absent."""
     doc, why = load(ticker, as_of, root)
     rp = lambda v: f"Rp{fmt.rp(v)}"
-    rows = [["Target harga Sektoral", f"{rating or '-'} {rp(target)}" if target else "-"]]
+    rows = [["Target harga Sectoral", f"{rating or '-'} {rp(target)}" if target else "-"]]
     if not doc:
         rows.append(["Konsensus analis", _t(f"tidak tersedia: {why}", f"not available: {why}")])
-        note = "Sumber: Sektoral Estimates."
+        note = "Sumber: Sectoral Estimates."
     else:
         avg = doc["target_avg"]
         rows += [
@@ -54,10 +54,10 @@ def exhibit(ticker, as_of, target, rating, price, root=ROOT):
             ["Rentang target konsensus", _t(f"{rp(doc['target_low'])} s.d. {rp(doc['target_high'])}",
                                             f"{rp(doc['target_low'])} to {rp(doc['target_high'])}")],
             ["Rekomendasi (beli / tahan / jual)", f"{doc['buy']} / {doc['hold']} / {doc['sell']}"],
-            ["Target Sektoral terhadap rata-rata konsensus",
+            ["Target Sectoral terhadap rata-rata konsensus",
              fmt.pct(target / avg - 1) if target and avg else
-             _t("tidak dihitung: target harga Sektoral ditahan",
-                "not computed: the Sektoral Target Price is withheld")],
+             _t("tidak dihitung: target harga Sectoral ditahan",
+                "not computed: the Sectoral Target Price is withheld")],
             ["Upside rata-rata konsensus terhadap harga",
              fmt.pct(avg / price - 1) if price else
              _t("tidak dihitung: harga pasar tidak tersedia",
@@ -67,6 +67,6 @@ def exhibit(ticker, as_of, target, rating, price, root=ROOT):
              prose_lang.source(doc.get("estimates_note")) or "-"],
             ["Sumber konsensus", _t(f"{doc['source_title']}, diambil {doc['as_of']}",
                                     f"{doc['source_title']}, retrieved {doc['as_of']}")]]
-        note = f"Sumber: {doc['source_title']} ({doc['source_url']}), diambil {doc['as_of']}; Sektoral Estimates."
+        note = f"Sumber: {doc['source_title']} ({doc['source_url']}), diambil {doc['as_of']}; Sectoral Estimates."
     return {"n": 0, "judul": TITLE, "tipe": "tabel",
             "data": {"cols": ["Keterangan", "Nilai"], "rows": rows}, "catatan_sumber": note}

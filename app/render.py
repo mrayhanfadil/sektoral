@@ -1,4 +1,4 @@
-"""Renderer HTML laporan multipage A4. Brand Sektoral, bukan BRIDS.
+"""Renderer HTML laporan multipage A4. Brand Sectoral, bukan BRIDS.
 
 Struktur: header → status → cover 2 kolom (data pasar + narasi) → Key
 Financials → halaman 2-6 → metodologi + disclaimer. Chart SVG native dari
@@ -1531,7 +1531,7 @@ def _report_header(report_date, meta=None):
             f"<div class='report-title'>{html.escape(_header_title(meta))}</div>"
             f"<div class='report-subtitle'>{html.escape(_header_subtitle(report_date))}</div></div>"
             f"<img class='report-wordmark' src='data:image/png;base64,{REPORT_WORDMARK}' "
-            "alt='Sektoral'>"
+            "alt='Sectoral'>"
             f"<img class='report-divider' src='data:image/svg+xml;base64,{REPORT_DIVIDER}' "
             "alt=''>"
             "</div>")
@@ -1755,8 +1755,8 @@ def _source_appendix(notes, meta):
         seen.add((number, title))
         if detail and detail[0].islower() and not _URL_RE.match(detail):
             detail = detail[0].upper() + detail[1:]
-        body = _linked(detail) if detail else _say("Data perusahaan dan estimasi Sektoral.",
-                                                    "Company data and Sektoral estimates.")
+        body = _linked(detail) if detail else _say("Data perusahaan dan estimasi Sectoral.",
+                                                    "Company data and Sectoral estimates.")
         entries.append(f"<dt>Exhibit {html.escape(str(number))}. {html.escape(title)}</dt>"
                        f"<dd>{body}</dd>")
     if not entries:
@@ -1908,7 +1908,7 @@ def _render(doc, prose_fallback=0):
                           source=(chart or {}).get("catatan_sumber"),
                           latest_close=m.get("harga"), latest_date=m.get("harga_tanggal")))
     h.append(sep + "</div>")
-    h.append(f"<div class='analyst'><b>{_say('Tim Riset Sektoral', 'Sektoral Research Team')}</b>"
+    h.append(f"<div class='analyst'><b>{_say('Tim Riset Sectoral', 'Sectoral Research Team')}</b>"
              "<br>Equity Analyst</div>")
     h.append("</div><div class='right'>")
     h.append(f"<h1 class='emit'>{html.escape(m['emiten'])} ({html.escape(m['ticker'])} IJ)</h1>")

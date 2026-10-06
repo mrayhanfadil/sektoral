@@ -109,7 +109,7 @@ def _trace_html(ticker, research, report_name, forecast_assumptions=None,
     parts = [
         "<!doctype html><html lang='id'><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width,initial-scale=1'>",
-        f"<title>{esc(ticker)} | Jejak riset Sektoral</title>",
+        f"<title>{esc(ticker)} | Jejak riset Sectoral</title>",
         f"<style>{ui.font_faces()}{ui.TOKENS}{_TRACE_CSS}</style><main>",
         f"<header><div class='eyebrow'>Jejak agent</div><h1>Riset {esc(ticker)}</h1><div class='meta'>"
         f"<span>Data per {esc(as_of)}</span><span>{esc(status)}</span>"
@@ -531,7 +531,7 @@ def _run(ticker, outdir, want_pdf=False, as_of=None,
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Sektoral research agent + report")
+    parser = argparse.ArgumentParser(description="Sectoral research agent + report")
     parser.add_argument("ticker")
     parser.add_argument("--out", default="out/demo")
     parser.add_argument("--pdf", action="store_true")

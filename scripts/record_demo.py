@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record the real local Sektoral research workflow with Playwright.
+"""Record the real local Sectoral research workflow with Playwright.
 
 Example: ``python3 scripts/record_demo.py --ticker AMMN``
 
@@ -207,7 +207,7 @@ def _scroll_and_hold(page, locator, milliseconds: int = 2500) -> None:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Record a real local Sektoral research run")
+    parser = argparse.ArgumentParser(description="Record a real local Sectoral research run")
     parser.add_argument("--ticker", default="AMMN", help="IDX ticker to research (default: AMMN)")
     parser.add_argument("--timeout-seconds", type=int, default=900,
                         help="maximum wait for the actual research job")

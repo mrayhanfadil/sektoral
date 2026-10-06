@@ -120,7 +120,7 @@ def _curated(ticker):
     kinds = sorted({c.get("source_kind") for c in others})
     source = " dan ".join({"sectors": f"tabel peer Sectors {ticker}",
                            "yahoo": "snapshot Yahoo Finance"}[k] for k in kinds if k)
-    return {"source": f"grup peer kurasi Sektoral data/peer_groups/{ticker}.json ({source})",
+    return {"source": f"grup peer kurasi Sectoral data/peer_groups/{ticker}.json ({source})",
             "basis": "peer dipilih menurut model bisnis; alasan tiap peer dan yang dikeluarkan "
                      "ada di paket grup"
                      + (f"; tanpa data: {', '.join(missing)}" if missing else ""),
