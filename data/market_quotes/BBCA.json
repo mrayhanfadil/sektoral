@@ -1,39 +1,11 @@
 {
   "ticker": "BBCA",
   "currency": "IDR",
-  "price": 6225,
-  "date": "2026-09-24",
+  "price": 6175,
+  "date": "2026-10-05",
   "source_title": "Yahoo Finance BBCA.JK daily close",
   "source_url": "https://finance.yahoo.com/quote/BBCA.JK/history/",
   "closes": [
-    {
-      "date": "2026-09-11",
-      "price": 6325
-    },
-    {
-      "date": "2026-09-14",
-      "price": 6500
-    },
-    {
-      "date": "2026-09-15",
-      "price": 6400
-    },
-    {
-      "date": "2026-09-16",
-      "price": 6325
-    },
-    {
-      "date": "2026-09-17",
-      "price": 6350
-    },
-    {
-      "date": "2026-09-18",
-      "price": 6300
-    },
-    {
-      "date": "2026-09-21",
-      "price": 6225
-    },
     {
       "date": "2026-09-22",
       "price": 6200
@@ -45,6 +17,34 @@
     {
       "date": "2026-09-24",
       "price": 6225
+    },
+    {
+      "date": "2026-09-25",
+      "price": 6250
+    },
+    {
+      "date": "2026-09-28",
+      "price": 6225
+    },
+    {
+      "date": "2026-09-29",
+      "price": 6150
+    },
+    {
+      "date": "2026-09-30",
+      "price": 6075
+    },
+    {
+      "date": "2026-10-01",
+      "price": 6000
+    },
+    {
+      "date": "2026-10-02",
+      "price": 6100
+    },
+    {
+      "date": "2026-10-05",
+      "price": 6175
     }
   ]
 }

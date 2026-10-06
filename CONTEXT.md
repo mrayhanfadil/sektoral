@@ -1,6 +1,6 @@
-# Sektoral
+# Sectoral
 
-Sektoral turns a locally held snapshot of Sectors data on an IDX-listed issuer into a sourced Company Update for Indonesian equity analysts, and shows where the evidence stops.
+Sectoral turns a locally held snapshot of Sectors data on an IDX-listed issuer into a sourced Company Update for Indonesian equity analysts, and shows where the evidence stops.
 
 ## Language
 

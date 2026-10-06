@@ -142,7 +142,7 @@ def method_chain_exhibit(va):
                x.get("why") or "cross-check wajib framework")
         rows.append([f"x. {x['short']} (cross-check)",
                      _DECISION.get(x["decision"], x["decision"]), value, why])
-    source = ("Source: Sektoral Estimates; urutan metode dikunci dari verdict Method Gates 0-5 "
+    source = ("Source: Sectoral Estimates; urutan metode dikunci dari verdict Method Gates 0-5 "
               "sebelum nilai dihitung; metode berikutnya hanya dipakai bila metode "
               "sebelumnya tidak memadai, bukan karena hasilnya tidak disukai")
     override = chain.get("override")
@@ -201,7 +201,7 @@ def holding_sotp_exhibit(va):
         ("SOTP holding: anak usaha tercatat pada nilai pasar" if primary else
          "Cross-check SOTP holding: anak usaha tercatat pada nilai pasar"),
         ["Komponen", "Basis", "Rp miliar"], rows,
-        f"Source: Company, Sektoral Estimates; kepemilikan: {stake_sources}; kapitalisasi dan "
+        f"Source: Company, Sectoral Estimates; kepemilikan: {stake_sources}; kapitalisasi dan "
         f"ekuitas anak usaha: {', '.join(sorted({c['market_source'] for c in d['components']}))}; "
         "ekuitas induk: neraca interim emiten. "
         + ("Tanah untuk pengembangan dinilai dengan RNAV landbank (tabel terpisah) menggantikan "
@@ -301,7 +301,7 @@ def landbank_exhibits(va):
                  ["Laju penjualan"] + [f"Harga +{fmt.pct(g)}/tahun"
                                        + (" (basis)" if round(g, 4) == base_g else "")
                                        for g in growths], grid_rows,
-                 "Sumber: estimasi Sektoral; tambahan nilai per saham di atas nilai buku, porsi SSIA. "
+                 "Sumber: estimasi Sectoral; tambahan nilai per saham di atas nilai buku, porsi SSIA. "
                  f"Basis: {fmt._id(li['pace_ha'], 1)} ha/tahun dan +{fmt.pct(li['asp_growth'])}/tahun."),
     ]
 
@@ -817,7 +817,7 @@ def peer_page(intake, valuation_inputs=None):
           prose_lang.source(p["reason"])] for p in curated["peers"]]
         + [[x["symbol"], "BEI", "dikeluarkan", prose_lang.source(x["reason"])]
            for x in curated.get("excluded") or []],
-        f"Sumber: data/peer_groups/{ticker}.json (kurasi Sektoral, {curated.get('as_of')}). "
+        f"Sumber: data/peer_groups/{ticker}.json (kurasi Sectoral, {curated.get('as_of')}). "
         + curated["basis"])] if curated else []
     exhibits += [_exhibit(
         f"Perbandingan peer {peers.get('group') or ''}".strip(),
@@ -919,7 +919,7 @@ def peer_page(intake, valuation_inputs=None):
         exhibits.append(_exhibit(
             "Cross-check nilai per saham dengan multiple peer",
             ["Basis", "Multiple", "Nilai per saham"], cross,
-            f"Sumber: {peers['source']} dan estimasi Sektoral. Cross-check tidak dirata-ratakan "
+            f"Sumber: {peers['source']} dan estimasi Sectoral. Cross-check tidak dirata-ratakan "
             "dengan metode utama; P/E dan P/B peer bukan EV/EBITDA dan berbeda struktur modal."
             + _thin_peer_note(stats, ("pe", "pb"))))
         peer_ev = [p for p in intake.get("peers") or []
@@ -1987,7 +1987,7 @@ def financials_page(intake, fc=None, va=None, statements=None):
         exhibits.append(_exhibit(
             "Asumsi proyeksi laporan keuangan", ["Asumsi dan sumbernya"],
             [[a] for a in assumptions],
-            "Sumber: model laporan keuangan Sektoral; asumsi analis atau screening yang "
+            "Sumber: model laporan keuangan Sectoral; asumsi analis atau screening yang "
             "dilabeli, dari sumber yang sama dengan valuasi."))
     tie = ("laba bersih, dividen dan ekuitas" if bank else
            "pendapatan, EBITDA dan laba bersih")
@@ -2042,12 +2042,12 @@ def sensitivity_page(inputs):
         _exhibit(f"Sensitivitas EBITDA dan laba {label} terhadap harga komoditas",
                  ["Skenario harga 2H", f"EBITDA {label} (US$ juta)", f"Laba bersih {label} (US$ juta)"],
                  earnings_rows,
-                 "Sumber: estimasi Sektoral. Guncangan harga diterapkan pada pendapatan 2H; biaya "
+                 "Sumber: estimasi Sectoral. Guncangan harga diterapkan pada pendapatan 2H; biaya "
                  f"dianggap tetap dan pajak {fmt.pct(TAX_RATE)} (tarif statutori) dipakai untuk laba bersih."),
         _exhibit(f"Sensitivitas target harga: harga komoditas x kurs USD/IDR",
                  ["Harga 2H \\ USD/IDR"] + [("Base" if fx == 0 else f"{'+' if fx > 0 else ''}{fmt.pct(fx)}")
                                             for fx in fx_shocks], grid,
-                 f"Sumber: estimasi Sektoral; multiple {fmt.mult(inputs['multiple'])} EV/EBITDA, "
+                 f"Sumber: estimasi Sectoral; multiple {fmt.mult(inputs['multiple'])} EV/EBITDA, "
                  f"utang bersih dan minoritas neraca {inputs.get('balance_period')}, kurs dasar "
                  f"{fmt._id(inputs['fx_rate'], 0)}. Biaya dalam rupiah tidak dimodelkan terpisah."),
     ]
@@ -2154,7 +2154,7 @@ def mining_catalysts(doc, intake):
                 exhibit["data"]["rows_en"] = rows_en
             exhibit["catatan_sumber"] = (
                 f"Sumber fakta: {actual.get('source_title')} (terbit {published}); Sectors untuk "
-                "harga komoditas. Kolom driver dan arah adalah analisis Sektoral.")
+                "harga komoditas. Kolom driver dan arah adalah analisis Sectoral.")
 
 
 def _guidance_period(evidence):
@@ -3130,7 +3130,7 @@ def combo_charts_page(intake, fc=None, va=None, statements=None):
 
     panels = [(title, panel, cols, explain(panel, cols, text))
               for title, panel, cols, text in panels]
-    source = (f"Source: Company, Sektoral Estimates; periode {span}; aktual solid, forecast "
+    source = (f"Source: Company, Sectoral Estimates; periode {span}; aktual solid, forecast "
               "lebih terang; "
               + (f"pendapatan, EBITDA dan laba dalam US$ seperti Key Financials (forecast rupiah "
                  f"dibagi kurs Rp{fmt.rp(fx)}/US$); " if usd else "")
@@ -3264,7 +3264,7 @@ def price_chart_exhibit(intake):
     return {"n": 0, "judul": f"{intake['ticker']} relatif terhadap IHSG",
             "tipe": "price_chart", "data": {"ticker": intake["ticker"],
                                             "as_of": intake.get("as_of")},
-            "catatan_sumber": "Source: Sectors, Sektoral Estimates"}
+            "catatan_sumber": "Source: Sectors, Sectoral Estimates"}
 
 
 def fallback_risks(intake):

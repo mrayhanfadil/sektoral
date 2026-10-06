@@ -64,7 +64,7 @@ Adapts remote `templates/DATA_CONTRACT.md` validation rules to local `narrative.
 ## Phase 3 — Exhibit provenance + credit discipline (P1)
 
 ### Task 3.1: House-format hardening
-* Modify: `app/render.py`, `app/narrative.py` — renderer owns figure counter; visible line always `Source: Company, Sektoral Estimates`; `title` never generic (`Chart`/`Table` reject); port `templates/helpers.py` number guards (`n.m.` for `pe<=0` or `>200`, cf. absorpsi plan A4).
+* Modify: `app/render.py`, `app/narrative.py` — renderer owns figure counter; visible line always `Source: Company, Sectoral Estimates`; `title` never generic (`Chart`/`Table` reject); port `templates/helpers.py` number guards (`n.m.` for `pe<=0` or `>200`, cf. absorpsi plan A4).
 * Test: extend `tests/test_pipeline.py` + `tests/test_pdf_copy_text.py` — grep PDF text for `kurasi skor`, `tanpa tanggal`, `$`-for-Rp, raw `9.141`.
 
 ### Task 3.2: Credit-policy doc sync

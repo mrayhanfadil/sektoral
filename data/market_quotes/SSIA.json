@@ -1,39 +1,11 @@
 {
   "ticker": "SSIA",
   "currency": "IDR",
-  "price": 1750,
-  "date": "2026-09-24",
+  "price": 1735,
+  "date": "2026-10-05",
   "source_title": "Yahoo Finance SSIA.JK daily close",
   "source_url": "https://finance.yahoo.com/quote/SSIA.JK/history/",
   "closes": [
-    {
-      "date": "2026-09-11",
-      "price": 1695
-    },
-    {
-      "date": "2026-09-14",
-      "price": 1695
-    },
-    {
-      "date": "2026-09-15",
-      "price": 1720
-    },
-    {
-      "date": "2026-09-16",
-      "price": 1720
-    },
-    {
-      "date": "2026-09-17",
-      "price": 1725
-    },
-    {
-      "date": "2026-09-18",
-      "price": 1730
-    },
-    {
-      "date": "2026-09-21",
-      "price": 1680
-    },
     {
       "date": "2026-09-22",
       "price": 1600
@@ -45,6 +17,34 @@
     {
       "date": "2026-09-24",
       "price": 1750
+    },
+    {
+      "date": "2026-09-25",
+      "price": 1680
+    },
+    {
+      "date": "2026-09-28",
+      "price": 1650
+    },
+    {
+      "date": "2026-09-29",
+      "price": 1665
+    },
+    {
+      "date": "2026-09-30",
+      "price": 1680
+    },
+    {
+      "date": "2026-10-01",
+      "price": 1695
+    },
+    {
+      "date": "2026-10-02",
+      "price": 1660
+    },
+    {
+      "date": "2026-10-05",
+      "price": 1735
     }
   ]
 }

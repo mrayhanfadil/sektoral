@@ -25,7 +25,7 @@ HOUSE_SOURCE = DEFAULT_SOURCE
 DISCLOSURE = "See important disclosure at the back of this report"
 
 RENDER_CHECKS: dict[str, tuple[str, str, str]] = {
-    "T1.source_line": (BLOCKER, "layout", "source line memberi kredit Sectors dan Sektoral di bawah tiap exhibit"),
+    "T1.source_line": (BLOCKER, "layout", "source line memberi kredit Sectors dan Sectoral di bawah tiap exhibit"),
     "T1.numbering_rendered": (BLOCKER, "layout", "caption Exhibit N berurutan 1..N"),
     "T1.exhibit_label_rendered": (WARNING, "layout", "setiap objek punya caption 'Exhibit N. judul'"),
     "T1.nm_note_rendered": (BLOCKER, "layout", "tabel dengan sel n.m. mencetak alasannya di bawah source line"),
@@ -365,7 +365,7 @@ def check_rendered(html: str, doc: dict | None = None) -> dict:
     if not caps:
         r.add("T1.source_line", False, "tidak ada exhibit berlabel")
     else:
-        r.add("T1.source_line", not bad, f"{len(caps)} exhibit dengan atribusi Sectors dan Sektoral" if not bad
+        r.add("T1.source_line", not bad, f"{len(caps)} exhibit dengan atribusi Sectors dan Sectoral" if not bad
               else f"{len(bad)} exhibit: {_short(bad)}")
     bad = _labels(lines)
     r.add("T1.exhibit_label_rendered", not bad, "setiap objek berlabel" if not bad else _short(bad))
@@ -562,7 +562,7 @@ def check_pdf_text(pages: list[str], doc: dict | None = None) -> dict:
         r.add("T1.source_line.pdf", False, "tidak ada exhibit berlabel di PDF")
     else:
         problems = bad or ([f"source line lain: {_short(stray, 3)}"] if stray else [])
-        r.add("T1.source_line.pdf", not problems, f"{len(caps)} exhibit dengan atribusi Sectors dan Sektoral"
+        r.add("T1.source_line.pdf", not problems, f"{len(caps)} exhibit dengan atribusi Sectors dan Sectoral"
               if not problems else f"{len(problems)} temuan: {_short(problems)}")
     head_bad, foot_bad = [], []
     for i, page in enumerate(pages, 1):

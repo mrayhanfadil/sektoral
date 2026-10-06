@@ -32,14 +32,14 @@ const suspend = (node: React.ReactNode) => <Suspense fallback={<PageLoading />}>
 
 const TITLES: [RegExp, Bi][] = [
   [/^\/$/, {
-    id: "Sektoral: company update emiten BEI dengan metode valuasi berbasis gerbang",
-    en: "Sektoral: company updates on IDX issuers with gate-selected valuation methods",
+    id: "Sectoral: company update emiten BEI dengan metode valuasi berbasis gerbang",
+    en: "Sectoral: company updates on IDX issuers with gate-selected valuation methods",
   }],
-  [/^\/research$/, { id: "Deck riset | Sektoral", en: "Research deck | Sektoral" }],
-  [/\/putar$/, { id: "Putar ulang riset | Sektoral", en: "Research replay | Sektoral" }],
-  [/^\/laporan$/, { id: "Laporan | Sektoral", en: "Reports | Sektoral" }],
-  [/\/jejak$/, { id: "Jejak riset | Sektoral", en: "Research trace | Sektoral" }],
-  [/^\/jobs\//, { id: "Riset emiten | Sektoral", en: "Issuer research | Sektoral" }],
+  [/^\/research$/, { id: "Deck riset | Sectoral", en: "Research deck | Sectoral" }],
+  [/\/putar$/, { id: "Putar ulang riset | Sectoral", en: "Research replay | Sectoral" }],
+  [/^\/laporan$/, { id: "Laporan | Sectoral", en: "Reports | Sectoral" }],
+  [/\/jejak$/, { id: "Jejak riset | Sectoral", en: "Research trace | Sectoral" }],
+  [/^\/jobs\//, { id: "Riset emiten | Sectoral", en: "Issuer research | Sectoral" }],
 ];
 
 function DocumentTitle() {
@@ -47,7 +47,7 @@ function DocumentTitle() {
   const { t } = useLang();
   useEffect(() => {
     const title = TITLES.find(([re]) => re.test(pathname))?.[1];
-    document.title = title ? t(title) : "Sektoral";
+    document.title = title ? t(title) : "Sectoral";
   }, [pathname, t]);
   return null;
 }

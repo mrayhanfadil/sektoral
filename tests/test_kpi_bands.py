@@ -8,7 +8,7 @@ Adapts rules from:
 Guards tested:
 1. P/E ratio <= 0 or > 200 must format as "n.m." (not meaningful).
 2. Revenue/margins formatted with standard Indonesian notation (dot thousands, comma decimals).
-3. Source citation lines always conform to "Source: Company, Sektoral Estimates" or verified provenance.
+3. Source citation lines always conform to "Source: Company, Sectoral Estimates" or verified provenance.
 4. Zero em-dash (U+2014, U+2015) in any formatted outputs.
 """
 from __future__ import annotations
@@ -145,12 +145,12 @@ class TestIndonesianNotationGuards:
 
 
 class TestSourceCitationProvenanceGuards:
-    """Source citation lines must always conform to 'Source: Company, Sektoral Estimates'
+    """Source citation lines must always conform to 'Source: Company, Sectoral Estimates'
     or verified provenance.
     """
 
     def test_default_source_citation_constant(self):
-        assert fmt.DEFAULT_SOURCE == "Source: Sectors (market and financial data), issuer disclosures; Sektoral analysis and estimates."
+        assert fmt.DEFAULT_SOURCE == "Source: Sectors (market and financial data), issuer disclosures; Sectoral analysis and estimates."
 
     def test_source_citation_empty_defaults_to_house_standard(self):
         assert fmt.source_citation("") == fmt.DEFAULT_SOURCE
@@ -158,23 +158,23 @@ class TestSourceCitationProvenanceGuards:
         assert fmt.source_citation(None) == fmt.DEFAULT_SOURCE
 
     def test_source_citation_normalizes_missing_source_prefix(self):
-        res = fmt.source_citation("Company, Sektoral Estimates")
-        assert res == "Source: Company, Sektoral Estimates"
+        res = fmt.source_citation("Company, Sectoral Estimates")
+        assert res == "Source: Company, Sectoral Estimates"
 
-        res_custom = fmt.source_citation("Sectors mining data, Sektoral Estimates")
-        assert res_custom == "Source: Sectors mining data, Sektoral Estimates"
+        res_custom = fmt.source_citation("Sectors mining data, Sectoral Estimates")
+        assert res_custom == "Source: Sectors mining data, Sectoral Estimates"
 
     def test_source_citation_preserves_verified_provenance(self):
-        verified = "Source: Sectors mining data, Sektoral Estimates; Rf = INDOGB 10Y"
+        verified = "Source: Sectors mining data, Sectoral Estimates; Rf = INDOGB 10Y"
         assert fmt.source_citation(verified) == verified
 
     def test_is_valid_source_citation_validator(self):
-        assert fmt.is_valid_source_citation("Source: Company, Sektoral Estimates") is True
-        assert fmt.is_valid_source_citation("Source: Sectors mining data, Sektoral Estimates") is True
-        assert fmt.is_valid_source_citation("Source: Sektoral Estimates; sel base (*) = skenario dasar") is True
+        assert fmt.is_valid_source_citation("Source: Company, Sectoral Estimates") is True
+        assert fmt.is_valid_source_citation("Source: Sectors mining data, Sectoral Estimates") is True
+        assert fmt.is_valid_source_citation("Source: Sectoral Estimates; sel base (*) = skenario dasar") is True
 
         # Invalid citations
-        assert fmt.is_valid_source_citation("Company, Sektoral Estimates") is False
+        assert fmt.is_valid_source_citation("Company, Sectoral Estimates") is False
         assert fmt.is_valid_source_citation("Random notes without source prefix") is False
         assert fmt.is_valid_source_citation("Source:") is False
         assert fmt.is_valid_source_citation("Source: ") is False
@@ -187,7 +187,7 @@ class TestSourceCitationProvenanceGuards:
         ex = valtables._exhibit("Test Exhibit", ["Col1"], [["Val1"]])
         assert "catatan_sumber" in ex
         assert fmt.is_valid_source_citation(ex["catatan_sumber"])
-        assert ex["catatan_sumber"] == "Source: Company, Sektoral Estimates"
+        assert ex["catatan_sumber"] == "Source: Company, Sectoral Estimates"
 
 
 class TestSelectiveDepthAndKPIBands:

@@ -1,6 +1,6 @@
 # Video recording guide
 
-The submission needs two real product recordings: a public teaser of up to 60 seconds and a judging walkthrough of up to three minutes. The main demo should use Sektoral's local browser UI: enter ticker → watch status → open report or agent trace. Record a fresh run from the current checkout and use only outputs it actually produced.
+The submission needs two real product recordings: a public teaser of up to 60 seconds and a judging walkthrough of up to three minutes. The main demo should use Sectoral's local browser UI: enter ticker → watch status → open report or agent trace. Record a fresh run from the current checkout and use only outputs it actually produced.
 
 ## Before recording
 
@@ -16,13 +16,13 @@ For a terminal-only run, the one-command workflow is `python3 -m app.research BB
 
 | Time | Screen and narration |
 |---|---|
-| 0:00–0:15 | Show the Sektoral landing page. Say: “Equity analysts need to connect company data to evidence they can check. Sektoral helps Indonesian equity analysts turn cached Sectors data into a sourced company update, with evidence gaps visible.” |
+| 0:00–0:15 | Show the Sectoral landing page. Say: “Equity analysts need to connect company data to evidence they can check. Sectoral helps Indonesian equity analysts turn cached Sectors data into a sourced company update, with evidence gaps visible.” |
 | 0:15–0:35 | Enter the ticker used for the real run and click **Mulai riset**. Say that this run reads the ticker's Sectors data already in the local cache; the LLM helps the agent reason over that evidence. |
 | 0:35–1:00 | Show the actual status page as it moves through processing to completion. Explain the UI's displayed state. If the run is partial, keep the partial label on screen and say what the page tells you. |
 | 1:00–1:40 | Open **Lihat jejak agent**. Show the selected cache endpoints and one actual observation, implication, caveat, and citation (endpoint, field path, and value). Describe what the source supports without adding facts from outside the cache. |
 | 1:40–2:20 | Open **Buka company update**. Follow the cited evidence into the report and show a relevant section. If the report marks a draft, partial section, or limitation, explain that evidence gap instead of presenting the output as complete. |
 | 2:20–2:40 | Return briefly to the browser status or trace. Explain that market data is read from the local Sectors cache and that each run leaves a report and trace to review. Do not imply a live Sectors API call. |
-| 2:40–2:55 | Close: “Sektoral is an information and analysis tool, not investment advice.” Show the public repository URL and AI Agents & Assistants track. |
+| 2:40–2:55 | Close: “Sectoral is an information and analysis tool, not investment advice.” Show the public repository URL and AI Agents & Assistants track. |
 
 If the LLM run takes longer than the available time, keep the submitted video within three minutes and preserve truthful sequencing. Show the real status/result relationship; do not splice artifacts from different runs or hide a failure as a successful completion.
 
@@ -31,10 +31,10 @@ If the LLM run takes longer than the available time, keep the submitted video wi
 | Time | Screen and narration |
 |---|---|
 | 0:00–0:07 | Show the actual browser landing page. On-screen title: “Sourced company updates from cached Sectors data.” |
-| 0:07–0:17 | Say: “Sektoral is for Indonesian equity analysts who need to see what company data supports—and where the evidence runs out.” |
+| 0:07–0:17 | Say: “Sectoral is for Indonesian equity analysts who need to see what company data supports—and where the evidence runs out.” |
 | 0:17–0:31 | Enter the demo ticker, click **Mulai riset**, and show the actual status page. Keep the ticker and status visible. |
 | 0:31–0:48 | Open the report or trace produced by that run. Show one real citation and its corresponding insight, or the visible partial/missing-evidence state if the run is incomplete. |
-| 0:48–1:00 | End card: Sektoral, AI Agents & Assistants, team name, public repository URL, and “Information and analysis only; not investment advice.” |
+| 0:48–1:00 | End card: Sectoral, AI Agents & Assistants, team name, public repository URL, and “Information and analysis only; not investment advice.” |
 
 The teaser must show the product working and be publicly accessible on YouTube or social media. A teaser can use a pre-run artifact only if it is clearly the output of a real run from the submitted build; do not present it as a different run.
 

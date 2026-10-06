@@ -672,9 +672,9 @@ _INVESTABILITY = [
     ("status suspensi dan notasi khusus tidak ada di data; tidak diasumsikan normal",
      "suspension status and special notations are not in the data; normal trading is not "
      "assumed"),
-    ("tidak dijawab: Sektoral Team belum menetapkan sumber penilaian tata kelola bertanggal yang "
+    ("tidak dijawab: Sectoral Team belum menetapkan sumber penilaian tata kelola bertanggal yang "
      "dapat diterima (keputusan D8, 2026-09-26)",
-     "unanswered: the Sektoral Team has not yet set an acceptable dated source for governance "
+     "unanswered: the Sectoral Team has not yet set an acceptable dated source for governance "
      "assessments (decision D8, 2026-09-26)"),
     ("tidak dijawab: belum ditelaah; berkas kualitas bisnis tidak memuat bukti bertanggal untuk "
      "dimensi ini",

@@ -410,7 +410,7 @@ def _report_peers(doc: dict) -> dict | None:
     The comparison table names each member "Name (CODE)", the issuer's row
     ends "(emiten)", and its source note reads "Sumber: <source> (<basis>);
     per <date>; ...". A curated pack also has its selection table, whose note
-    reads "Sumber: data/peer_groups/<T>.json (kurasi Sektoral, <as_of>). <basis>"."""
+    reads "Sumber: data/peer_groups/<T>.json (kurasi Sectoral, <as_of>). <basis>"."""
     exhibits = _list(doc.get("exhibits")) if isinstance(doc, dict) else []
     table = next((e for e in exhibits if str(e.get("judul") or "").startswith(_PEER_TABLE)), None)
     if table is None:
@@ -429,7 +429,7 @@ def _report_peers(doc: dict) -> dict | None:
            "basis": listed.group(2) if listed else None,
            "as_of": listed.group(3) if listed else None, "members": members}
     pack = next((e for e in exhibits if e.get("judul") == _PEER_PACK), None)
-    curated = re.match(r"Sumber: (data/peer_groups/\S+\.json) \(kurasi Sektoral, ([^)]+)\)\. (.+)",
+    curated = re.match(r"Sumber: (data/peer_groups/\S+\.json) \(kurasi Sectoral, ([^)]+)\)\. (.+)",
                        str((pack or {}).get("catatan_sumber") or ""), re.DOTALL)
     if curated:
         out.update(source=curated.group(1), as_of=curated.group(2), basis=curated.group(3).strip())

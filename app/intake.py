@@ -570,7 +570,7 @@ def load(ticker, as_of=None):
     if curated:
         peers, peer_median_pe, peer_median_pb = _curated_peers(curated)
         own_row, rows, missing, group = curated
-        peer_basis = (f"grup peer kurasi Sektoral ({group['group']}; data/peer_groups/{t}.json)"
+        peer_basis = (f"grup peer kurasi Sectoral ({group['group']}; data/peer_groups/{t}.json)"
                       + (f"; tanpa data: {', '.join(missing)}" if missing else ""))
     else:
         peers, peer_median_pe, peer_median_pb = _peers(rep, t)

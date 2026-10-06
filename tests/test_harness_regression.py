@@ -32,7 +32,7 @@ def test_bare_dollar_flagged_but_usd_allowed():
     ok["bagian"] = [{"halaman": 2, "judul": "Op", "paragraf": [],
                      "exhibit": [{"n": 1, "judul": "E", "tipe": "tabel",
                                   "data": {"cols": ["A"], "rows": [["1"]]},
-                                  "catatan_sumber": "Source: Company, Sektoral Estimates"}]}]
+                                  "catatan_sumber": "Source: Company, Sectoral Estimates"}]}]
     assert check_narrative(ok)["status"] == "lolos"
 
     bad = copy.deepcopy(ok)
@@ -46,7 +46,7 @@ def test_exhibit_numbering_uses_canonical_list_after_json_roundtrip():
     import copy, json
     ex = {"n": 1, "judul": "E1", "tipe": "tabel",
           "data": {"cols": ["A"], "rows": [["1"]]},
-          "catatan_sumber": "Source: Company, Sektoral Estimates"}
+          "catatan_sumber": "Source: Company, Sectoral Estimates"}
     doc = {
         "meta": {"ticker": "T", "emiten": "E", "tanggal": "2026-09-24",
                  "status": "draft_non_distributable"},

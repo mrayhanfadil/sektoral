@@ -90,7 +90,7 @@ def free_float(intake):
 
 # Why a dimension is unanswered when its file gives no dated evidence (plan
 # Checkpoint 4: never unanswered without a stated reason).
-GOVERNANCE_REASON = ("tidak dijawab: Sektoral Team belum menetapkan sumber penilaian tata kelola "
+GOVERNANCE_REASON = ("tidak dijawab: Sectoral Team belum menetapkan sumber penilaian tata kelola "
                      "bertanggal yang dapat diterima (keputusan D8, 2026-09-26)")
 DEFAULT_REASON = ("tidak dijawab: belum ditelaah; berkas kualitas bisnis tidak memuat bukti "
                   "bertanggal untuk dimensi ini")

@@ -117,7 +117,7 @@ def words(s):
     return len(s.split())
 
 
-DEFAULT_SOURCE = "Source: Sectors (market and financial data), issuer disclosures; Sektoral analysis and estimates."
+DEFAULT_SOURCE = "Source: Sectors (market and financial data), issuer disclosures; Sectoral analysis and estimates."
 
 
 def pe(v, dec=1, lang="id"):
@@ -168,7 +168,7 @@ def revenue_idr(v, dec=1, in_miliar=True, lang="id"):
 def source_citation(note: str = "") -> str:
     """Baris sitasi sumber sesuai standar house report format.
 
-    Selalu berkonformasi ke 'Source: Company, Sektoral Estimates' atau
+    Selalu berkonformasi ke 'Source: Company, Sectoral Estimates' atau
     provenansi terverifikasi ('Source: ...').
     """
     if not note or not str(note).strip():
@@ -184,9 +184,9 @@ def provenance_detail(note) -> str:
     house line taken off: what the report's source appendix prints for it.
     The exhibit footer itself is always DEFAULT_SOURCE (spec §5.5)."""
     detail = re.sub(r"^\s*(Source|Sumber)\s*:\s*", "", str(note or "")).strip()
-    detail = re.sub(r"^Company,\s*Sektoral Estimates[.;,]?\s*", "", detail)
-    detail = re.sub(r"^Sectors,\s*Sektoral Estimates", "Sectors", detail)
-    detail = re.sub(r"^Sektoral Estimates[.;,]?\s*", "", detail)
+    detail = re.sub(r"^Company,\s*Sectoral Estimates[.;,]?\s*", "", detail)
+    detail = re.sub(r"^Sectors,\s*Sectoral Estimates", "Sectors", detail)
+    detail = re.sub(r"^Sectoral Estimates[.;,]?\s*", "", detail)
     return detail if detail.strip(" ;.") else ""
 
 

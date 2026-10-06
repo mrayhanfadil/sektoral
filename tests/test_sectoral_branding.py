@@ -202,7 +202,7 @@ def test_web_header_uses_the_canonical_logo_file():
     layout = (web / "src" / "components" / "Layout.tsx").read_text(encoding="utf-8")
     assert "app/assets/brand/sectoral-logo.svg?raw" in brand
     # The home link's label is bilingual (web/src/lib/i18n.ts).
-    assert 'aria-label={t({ id: "Sektoral, beranda", en: "Sektoral, home" })}' in layout
+    assert 'aria-label={t({ id: "Sectoral, beranda", en: "Sectoral, home" })}' in layout
     assert "<Logo" in layout
     logo = (Path(render.__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg").read_text()
     assert "CTORAL" in logo
@@ -212,11 +212,11 @@ def test_web_header_uses_the_canonical_logo_file():
 
 def test_source_lines_open_with_the_house_line_and_keep_provenance():
     from app import fmt
-    assert fmt.house_source_line("Source: Sectors, Sektoral Estimates") == \
+    assert fmt.house_source_line("Source: Sectors, Sectoral Estimates") == \
         fmt.DEFAULT_SOURCE + "; Sectors"
     assert fmt.house_source_line("Sumber: PER TTM data Sectors") == \
         fmt.DEFAULT_SOURCE + "; PER TTM data Sectors"
-    assert fmt.house_source_line("Source: Company, Sektoral Estimates") == \
+    assert fmt.house_source_line("Source: Company, Sectoral Estimates") == \
         fmt.DEFAULT_SOURCE
 
 

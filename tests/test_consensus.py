@@ -29,7 +29,7 @@ def test_consensus_on_or_before_the_report_date_is_shown_with_source(tmp_path):
     e = C.exhibit("UJI", "2026-09-25", 1000, "Buy", 800, tmp_path)
     rows = dict((r[0], r[1]) for r in e["data"]["rows"])
     assert rows["Rata-rata target konsensus (5 analis)"] == "Rp1.200"
-    assert rows["Target Sektoral terhadap rata-rata konsensus"] == "-16,7%"
+    assert rows["Target Sectoral terhadap rata-rata konsensus"] == "-16,7%"
     assert rows["Rekomendasi (beli / tahan / jual)"] == "3 / 1 / 1"
     assert rows["Estimasi konsensus pendapatan, EBITDA, laba"] == "estimasi tidak tersedia"
     assert "diambil 2026-09-25" in rows["Sumber konsensus"]
@@ -52,4 +52,4 @@ def test_a_withheld_target_says_why_instead_of_nm(tmp_path):
     e = C.exhibit("UJI", "2026-09-25", None, None, 800, tmp_path)
     cells = [c for row in e["data"]["rows"] for c in row]
     assert "n.m." not in cells
-    assert "tidak dihitung: target harga Sektoral ditahan" in cells
+    assert "tidak dihitung: target harga Sectoral ditahan" in cells

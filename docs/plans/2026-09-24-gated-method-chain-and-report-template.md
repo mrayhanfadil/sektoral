@@ -28,7 +28,7 @@ Live result before the stop: JPFA published as Buy, TP Rp2.890 (+29,6%) on the L
 | 4 | Report language | Indonesian, with market-standard English financial terms (EBITDA, FCFF, PER, WACC) |
 | 5 | Build order | Chain logic first (Phase 1), report template second (Phase 2) |
 
-**Still open:** branding (Sectors.app logo, `sectors.app` footer and "Source: Company, Team Estimates" per the template, versus the current Sectoral / "Sektoral Estimates"). Phase 2 keeps a single brand constant so either answer is a one-line change.
+**Still open:** branding (Sectors.app logo, `sectors.app` footer and "Source: Company, Team Estimates" per the template, versus the current Sectoral / "Sectoral Estimates"). Phase 2 keeps a single brand constant so either answer is a one-line change.
 
 **Fixed by the spec, not a choice:** forecast statement rows without sourced inputs show "belum dimodelkan" (§2 "jangan pernah mengarang angka"); they are never filled from screening ratios.
 

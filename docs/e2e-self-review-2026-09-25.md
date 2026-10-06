@@ -135,7 +135,7 @@ Target utama tidak berubah: hanya INET yang dinilai dengan multiple peer (EV/EBI
 
 ## Perbandingan dengan target publik
 
-| Emiten | Sektoral | Target publik | Sumber selisih |
+| Emiten | Sectoral | Target publik | Sumber selisih |
 |---|---|---|---|
 | AMMN | Sell Rp2.990 | rata-rata Rp6.829 | Elang dinilai sebagai proyek pra-FID dengan probabilitas 50% dan tanpa izin ekspor; lihat benchmark di bawah |
 | BBCA | Hold Rp5.925 | Buy Rp8.600 | Harga menyiratkan CoE 10,5%, hampir sama dengan kebijakan 10,9%: model dan pasar sejalan, sedangkan Rp8.600 pada jalur dividen yang sama menyiratkan CoE 8,6%, atau pertumbuhan yang lebih tinggi |
@@ -151,7 +151,7 @@ Tingkat diskonto tersirat harga pada DCF lainnya: JPFA WACC 11,7% (kebijakan 9,6
 
 ## Benchmark AMMN: BRI Danareksa, 29 Juni 2026 (`spec/20260629-AMMN.pdf`)
 
-| | BRI Danareksa | Sektoral (24 Sep) |
+| | BRI Danareksa | Sectoral (24 Sep) |
 |---|---|---|
 | Rating / target | Buy / Rp6.000 | Sell / Rp2.990 |
 | Harga pada tanggal laporan | Rp3.340 | Rp4.730 |
@@ -164,7 +164,7 @@ Tingkat diskonto tersirat harga pada DCF lainnya: JPFA WACC 11,7% (kebijakan 9,6
 
 Rekonsiliasi (US$ juta; Rp/saham pada Rp17.803/USD dan 72,41 miliar saham):
 
-| Komponen | BRI Danareksa | Sektoral | Beda (Rp/saham) |
+| Komponen | BRI Danareksa | Sectoral | Beda (Rp/saham) |
 |---|---|---|---|
 | Batu Hijau sesudah utang bersih | 6.355 | 9.590 | −800 |
 | Elang | 22.663 | 2.559 | +4.940 |
