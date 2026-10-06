@@ -1,39 +1,11 @@
 {
   "ticker": "AMMN",
   "currency": "IDR",
-  "price": 4730,
-  "date": "2026-09-24",
+  "price": 4210,
+  "date": "2026-10-05",
   "source_title": "Yahoo Finance AMMN.JK daily close",
   "source_url": "https://finance.yahoo.com/quote/AMMN.JK/history/",
   "closes": [
-    {
-      "date": "2026-09-11",
-      "price": 4860
-    },
-    {
-      "date": "2026-09-14",
-      "price": 5100
-    },
-    {
-      "date": "2026-09-15",
-      "price": 5050
-    },
-    {
-      "date": "2026-09-16",
-      "price": 5150
-    },
-    {
-      "date": "2026-09-17",
-      "price": 4900
-    },
-    {
-      "date": "2026-09-18",
-      "price": 4680
-    },
-    {
-      "date": "2026-09-21",
-      "price": 4660
-    },
     {
       "date": "2026-09-22",
       "price": 4710
@@ -45,6 +17,34 @@
     {
       "date": "2026-09-24",
       "price": 4730
+    },
+    {
+      "date": "2026-09-25",
+      "price": 4720
+    },
+    {
+      "date": "2026-09-28",
+      "price": 4530
+    },
+    {
+      "date": "2026-09-29",
+      "price": 4480
+    },
+    {
+      "date": "2026-09-30",
+      "price": 4510
+    },
+    {
+      "date": "2026-10-01",
+      "price": 4370
+    },
+    {
+      "date": "2026-10-02",
+      "price": 4240
+    },
+    {
+      "date": "2026-10-05",
+      "price": 4210
     }
   ]
 }

@@ -1,39 +1,11 @@
 {
   "ticker": "GMFI",
   "currency": "IDR",
-  "price": 56,
-  "date": "2026-09-24",
+  "price": 51,
+  "date": "2026-10-05",
   "source_title": "Yahoo Finance GMFI.JK daily close",
   "source_url": "https://finance.yahoo.com/quote/GMFI.JK/history/",
   "closes": [
-    {
-      "date": "2026-09-11",
-      "price": 58
-    },
-    {
-      "date": "2026-09-14",
-      "price": 58
-    },
-    {
-      "date": "2026-09-15",
-      "price": 59
-    },
-    {
-      "date": "2026-09-16",
-      "price": 58
-    },
-    {
-      "date": "2026-09-17",
-      "price": 59
-    },
-    {
-      "date": "2026-09-18",
-      "price": 58
-    },
-    {
-      "date": "2026-09-21",
-      "price": 56
-    },
     {
       "date": "2026-09-22",
       "price": 56
@@ -45,6 +17,34 @@
     {
       "date": "2026-09-24",
       "price": 56
+    },
+    {
+      "date": "2026-09-25",
+      "price": 54
+    },
+    {
+      "date": "2026-09-28",
+      "price": 51
+    },
+    {
+      "date": "2026-09-29",
+      "price": 52
+    },
+    {
+      "date": "2026-09-30",
+      "price": 52
+    },
+    {
+      "date": "2026-10-01",
+      "price": 51
+    },
+    {
+      "date": "2026-10-02",
+      "price": 51
+    },
+    {
+      "date": "2026-10-05",
+      "price": 51
     }
   ]
 }

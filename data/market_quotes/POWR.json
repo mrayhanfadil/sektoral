@@ -1,39 +1,11 @@
 {
   "ticker": "POWR",
   "currency": "IDR",
-  "price": 955,
-  "date": "2026-09-24",
+  "price": 975,
+  "date": "2026-10-05",
   "source_title": "Yahoo Finance POWR.JK daily close",
   "source_url": "https://finance.yahoo.com/quote/POWR.JK/history/",
   "closes": [
-    {
-      "date": "2026-09-11",
-      "price": 995
-    },
-    {
-      "date": "2026-09-14",
-      "price": 1020
-    },
-    {
-      "date": "2026-09-15",
-      "price": 970
-    },
-    {
-      "date": "2026-09-16",
-      "price": 985
-    },
-    {
-      "date": "2026-09-17",
-      "price": 1015
-    },
-    {
-      "date": "2026-09-18",
-      "price": 1025
-    },
-    {
-      "date": "2026-09-21",
-      "price": 975
-    },
     {
       "date": "2026-09-22",
       "price": 980
@@ -45,6 +17,34 @@
     {
       "date": "2026-09-24",
       "price": 955
+    },
+    {
+      "date": "2026-09-25",
+      "price": 945
+    },
+    {
+      "date": "2026-09-28",
+      "price": 935
+    },
+    {
+      "date": "2026-09-29",
+      "price": 920
+    },
+    {
+      "date": "2026-09-30",
+      "price": 950
+    },
+    {
+      "date": "2026-10-01",
+      "price": 935
+    },
+    {
+      "date": "2026-10-02",
+      "price": 950
+    },
+    {
+      "date": "2026-10-05",
+      "price": 975
     }
   ]
 }
