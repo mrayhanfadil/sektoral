@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / "data" / "sectors_cache.db"
 CREDIT_LOG = ROOT / "data" / "credit_log.jsonl"
 
-# TTL per prefix, mirror sectors-hackathon server/sectors.py (+3 endpoint baru
+# TTL per prefix (+3 endpoint baru
 # yang kita pakai). Sejak never-expired, ini hanya stempel info umur.
 TTL_BY_PREFIX = [
     ("/daily/", 6 * 3600),

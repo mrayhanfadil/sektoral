@@ -67,7 +67,7 @@ SERIES = ["#0928B1", "#B4C7FF", "#3ED628", "#1DCD9F", "#0047AB", "#7596FF"]
 ISSUER_COLOR = SERIES[0]
 INDEX_COLOR = SERIES[1]  # Figma: relative-vs-IHSG line in light blue
 
-# Use the canonical wordmark from sectors-hackathon/assets/brand/sectoral-logo.svg.
+# The canonical wordmark: app/assets/brand/sectoral-logo.svg.
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "brand" / "sectoral-logo.svg"
 LOGO_SVG = LOGO_PATH.read_text(encoding="utf-8")
 REPORT_WORDMARK = _b64_brand_asset("report-wordmark.png")
@@ -197,7 +197,7 @@ CSS = (FONT_FACES + PAGE_NUM +
        ".pair-col{min-width:0}.pair-col>.exhibit:last-child{margin-bottom:0}"
        ".band-chart{display:block;width:100%;height:auto}"
        ".panel-text{font-size:6.7pt;line-height:1.3;margin:1.2mm 0 0;text-align:left}"
-       # Table styling follows sectors-hackathon's .fin-table: a solid header
+       # Table styling (.fin-table): a solid header
        # band, horizontal hairlines only (no vertical grid), spec zebra fill
        # and a ruled total line. The old full grid made every figure read as a
        # spreadsheet cell instead of a column.

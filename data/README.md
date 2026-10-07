@@ -1,8 +1,7 @@
 # sectors_cache — snapshot DB (read-only, 0 credits)
 
-Export of ONLY the `sectors_cache` table from
-`sectors-hackathon:data/agent_runs.db` (sidestream tables `agent_runs`,
-`agent_events`, `memory_facts` NOT copied).
+Sectors REST v2 responses fetched by `app/sectors.py` and `app/topup.py`, one
+row per request, in a single `sectors_cache` table.
 
 - File: `data/sectors_cache.db` (~4.2 MB, 314 rows from 150 endpoints, fetched 2026-09-12 to 2026-09-23)
 - Schema: `data/schema.sql` — `(cache_key PK, endpoint, fetched_at, expires_at, payload_json)`
@@ -77,13 +76,10 @@ Reads are local SQLite only — no `SECTORS_API_KEY`, no network, no credits.
 
 ## Refresh (explicit only — costs nothing to read, costs credits to refresh)
 
-1. In `sectors-hackathon`, run cache-first collect for the ticker(s).
-2. Re-export just the table:
-   `python3 -c "...copy sectors_cache into data/sectors_cache.db..."`
-   (see git history of this folder for the exact one-liner).
-3. Commit the new `.db` + updated counts below.
+1. With `SECTORS_API_KEY` set, run `python3 -m app.topup <paket> <target> --live`;
+   every upstream call is logged in `data/credit_log.jsonl`.
+2. Commit the new `.db` + updated counts below.
 
 ## Snapshot provenance
 
-- Source rev: `sectors-hackathon@614aca7` (22 Sep 2026)
-- Exported: 162 rows. Update this count + rev on every refresh.
+- 314 rows from 150 endpoints, fetched 2026-09-12 to 2026-09-23. Update this on every refresh.
