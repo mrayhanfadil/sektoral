@@ -139,8 +139,6 @@ The guides below are reference material for snapshot intake and other Sectors in
 
 The declared track is **AI Agents & Assistants**: custom-built agent logic and an AI/LLM component must be central to the product. Before submission, check the [official rules](https://hackathon.sectors.app/rules) and [track requirements](https://hackathon.sectors.app/tracks/ai-agents-assistants), then use the [submission checklist](docs/hackathon/submission-checklist.md). The repository must be public at submission and remain public through at least 15 January 2027 (90 days after the announced 17 October winners date). Submissions close 8 October 2026, 23:59 WIB.
 
-The repository was created on 22 September 2026, inside the 19 August to 8 October build period. Part of the code and the Sectors snapshot (`data/README.md`) came from this team's earlier in-period repository `mrayhanfadil/sectors-hackathon`, created 29 August 2026 for the same hackathon.
-
 ## Data sources and attribution
 
 - **Sectors Financial API** ([sectors.app](https://sectors.app)): company profiles, financials, prices, IHSG, foreign flow, broker summary, sub-sector reports, filings and news. This is the core data source.
