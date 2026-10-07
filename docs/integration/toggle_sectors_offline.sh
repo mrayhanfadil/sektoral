@@ -90,7 +90,6 @@ fi
 if [[ -f /tmp/restart-api.sh ]]; then
     bash /tmp/restart-api.sh
 else
-    echo "[toggle] /tmp/restart-api.sh missing - bounce api container manually:" >&2
-    echo "         cd ~/projects/sectors-hackathon && make up" >&2
+    echo "[toggle] /tmp/restart-api.sh missing - bounce the api container manually" >&2
     exit 1
 fi

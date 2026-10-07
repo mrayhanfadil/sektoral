@@ -1,9 +1,6 @@
 """Test selective depth, KPI bands, number formatting guards, and exhibit provenance.
 
 Adapts rules from:
-- sectors-hackathon: docs/rules/house-report-format.md
-- sectors-hackathon: credit-calculator.md
-- docs/plans/2026-09-23-sectors-hackathon-adoption.md (Task 4.1)
 
 Guards tested:
 1. P/E ratio <= 0 or > 200 must format as "n.m." (not meaningful).

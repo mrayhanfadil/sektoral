@@ -21,7 +21,6 @@ from __future__ import annotations
 import re
 import sys
 
-import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -179,17 +178,9 @@ def test_report_topbar_uses_canonical_repo_wordmark():
 def test_report_logo_matches_canonical_asset_exactly():
     asset = (Path(render.__file__).resolve().parent
              / "assets" / "brand" / "sectoral-logo.svg")
-    # The canonical asset lives in the sibling sectors-hackathon checkout; look
-    # upward so the test also works from a git worktree, and skip when absent.
-    relative = Path("sectors-hackathon") / "assets" / "brand" / "sectoral-logo.svg"
-    source = next((parent / relative for parent in Path(__file__).resolve().parents
-                   if (parent / relative).is_file()), None)
-    if source is None:
-        pytest.skip("sectors-hackathon checkout not found next to this repo")
-    canonical = source.read_text(encoding="utf-8")
     assert asset.is_file(), str(asset)
-    assert asset.read_text(encoding="utf-8") == canonical
-    assert render.LOGO_SVG == canonical
+    assert render.LOGO_SVG == asset.read_text(encoding="utf-8")
+    assert ">S</text>" in render.LOGO_SVG and ">CTORAL</text>" in render.LOGO_SVG
     assert 'aria-label="Sectoral"' in render.LOGO_SVG
     assert 'fill="#0928B1"' in render.LOGO_SVG
     assert 'fill="#1DCD9F"' in render.LOGO_SVG

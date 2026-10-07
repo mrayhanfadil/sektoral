@@ -11,13 +11,13 @@ Scope: the React app in web/ (landing, research launcher, live run Deck, run rep
 
 Memorable moment: a tool call goes out with its reason and comes back with its result while the agent rail lights the agent that made it.
 
-Unresolved: none blocking. The user was not re-asked (session continued unattended); the user-pinned direction is the Command Deck from mrayhanfadil/sectors-hackathon.
+Unresolved: none blocking. The user was not re-asked (session continued unattended); the user-pinned direction is the Command Deck.
 
 ## Direction contract
 
 THESIS: The Deck shows a research desk at work: each agent, tool call and Method Gate decision appears live in one console an analyst could audit. It refuses the category default: a chat transcript or a spinner with a step list.
 
-OWN-WORLD: The Command Deck grammar from sectors-hackathon: function-key tabs ([F1] Deck, [F2] Laporan, [F3] Cara kerja), a Cmd-K ticker palette, an agent status rail reading ANTRI / JALAN / SELESAI, and mono data (tool names, endpoints, timestamps, Rp figures). Its materials are Sectoral's:
+OWN-WORLD: The Command Deck grammar: function-key tabs ([F1] Deck, [F2] Laporan, [F3] Cara kerja), a Cmd-K ticker palette, an agent status rail reading ANTRI / JALAN / SELESAI, and mono data (tool names, endpoints, timestamps, Rp figures). Its materials are Sectoral's:
 - a navy console ground drawn from #0928B1 in dark, and paper white in light;
 - brand blue #0928B1 / #7596FF for the active agent, teal #1DCD9F for done, and green #3ED628 only for the live pulse; amber is kept for warnings;
 - the E-mark's three bars become the live indicator;
@@ -42,6 +42,6 @@ FIRST VIEWPORT: The Deck at 1440px:
 - the primary action, open the report, in the header once the run is done.
 The landing page's first viewport pairs the offer and a ticker launcher with a live replay of a real run.
 
-FORM: The user-pinned Command Deck of sectors-hackathon. A pinned brief beats the roll, so the assigned grounded index 4 was not built. Seed key 499f07da.
+FORM: The user-pinned Command Deck. A pinned brief beats the roll, so the assigned grounded index 4 was not built. Seed key 499f07da.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

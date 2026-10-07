@@ -1,7 +1,6 @@
 """Report contract validator.
 
-Adapts the validation rules from DATA_CONTRACT.md and Phase 2 of the
-sectors-hackathon adoption plan:
+Adapts the validation rules from DATA_CONTRACT.md:
 Rule 1: Blended weights sum == 100 when valuation.blended is present;
         assert sum == 100, flag/reject if divergence > 30% without explicit thesis.
 Rule 2: Every exhibit has non-empty catatan_sumber or source (internal provenance)
